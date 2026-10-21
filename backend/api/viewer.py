@@ -36,7 +36,6 @@ from backend.dispatcher.contract import AnchorError, format_anchor, parse_anchor
 # The format is owned by backend.dispatcher.contract (parse_anchor / format_anchor / Anchor).
 
 
-
 def viewer_path(doc_id: UUID | str, fields: dict[str, Any]) -> str:
     """Path of the Console viewer for an anchor's locator fields; prefix it with the Console base URL."""
     return f"/docs/{doc_id}/viewer?anchor={quote(format_anchor(fields), safe=':!')}"

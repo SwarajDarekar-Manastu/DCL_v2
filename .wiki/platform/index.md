@@ -2,7 +2,7 @@
 
 | Feature | Status | Owner | Purpose |
 |---------|--------|-------|---------|
-| [Docker Compose stack with GPU model services](compose-stack.md) | planned | S4 | All services of file 01 §6 in compose. |
+| [Docker Compose stack with GPU model services](compose-stack.md) | in-progress | S4 | All services of file 01 §6 in compose. |
 | [Environment contract loader and .env.example](env-contract.md) | in-progress | S4 | Typed settings from . |
 | [Gemini gateway client and capability probe](gemini-gateway-client.md) | in-progress | S4 | The only module that talks to the Manastu Cloud Run gateway: structured output, function calling, thinking level, image/PDF parts, streaming, retry/backoff, budget guard, llm_calls hook, capability flags from a probe. |
 | [CI pipeline and gates](ci.md) | planned | S4 | Lint, unit tests, alembic upgrade/check on the pinned ParadeDB image, FK-index query, image secret scan, benchmark gate. |

@@ -240,3 +240,14 @@ Merged / ready: OneDrive delegated sign-in completed by the user (option B); v2 
 Blocked on: nothing
 Needs from others: S4 to build ManastuGatewayAdapter per 09 §H.1; S1 to run the metadata crawl when it resumes
 Next: merge rounds; relay S1's crawl listing to S5 for the allowlist
+## 2026-10-21 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: not yet requested. Compose stack is on the branch and verified live: 13 services healthy (ParadeDB 0.26.2-pg17, Redis 8.6.7, MinIO built from the pinned archived tag, LibreOffice/unoserver, models with GPU, api, beat, six queue workers per file 10 §4), GPU visible only to `models`, all workers answer ping, no `.env`/key files in the backend image. `uv run pytest` green; `DCL_STACK_PROJECT=dcl-v2 uv run pytest backend/tests/integration/stack` 9 passed
+Blocked on: nothing (session paused on usage limit)
+Needs from others: nothing new
+Next: add `libmagic1` to the backend image (S1 request), CI service MinIO + DCL_TEST_MINIO_* (S1 request), finish the compose-stack map page, delete plan sheet `platform__compose-stack__m0-stack`, request merge; tell S2 the models service uses `/models/health` with a 900 s start period and the `hf-cache` volume
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: Compose stack (project `dcl-v2`) running on the dev host with the real `.env`: ParadeDB 0.26.2-pg17 (host 5435, db `dcl_v2`, migrated to head by the one-shot `migrate`), Redis (6381), MinIO from the pinned archived tag (9100/9101; `minio-init` creates the five buckets, versioning on dcl-raw/dcl-cir, vision-cache lifecycle, separate app user), LibreOffice/unoserver, models on the only GPU (8500), API (8200), beat, six queue workers per file 10 §4; in-network URLs set per container; token dir mounted only into `worker-io-light`; libmagic1 in the image; builder stage compiles `quickxorhash`. Test: `uv run pytest` green; `DCL_STACK_PROJECT=dcl-v2 uv run pytest backend/tests/integration/stack` 11 passed
+Blocked on: nothing
+Needs from others: S3 — Console SPA and Open WebUI service definitions (port 8600) when their builds exist
+Next: gateway client rework to the verified Manastu contract (ManastuGatewayAdapter, X-API-Key, /generate, /stream; production-patterns checklist; real probe run), then CI (incl. disposable MinIO for S1's tests), observability, MinIO replacement comparison by end of M4
