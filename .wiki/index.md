@@ -61,6 +61,7 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
+| [platform__compose-stack__m0-stack](plans/platform__compose-stack__m0-stack.md) | `platform/compose-stack` | S4 | 2026-10-21 |
 
 ## Maintenance
 

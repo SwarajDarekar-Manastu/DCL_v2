@@ -1,0 +1,223 @@
+# DCL v2 stack (docs/architecture/01 §6, 10 §4). Run from the repository root:
+#   docker compose --env-file .env -f backend/devops/compose.yaml [-f backend/devops/compose.dev.yaml] up -d --wait
+# Secrets come from ../../.env at runtime (never from an image). The GPU is reserved for `models` only.
+# Worker pools, concurrency and memory limits mirror backend/celery_redis/queues.py (a unit test checks).
+
+name: dcl-v2
+
+x-backend: &backend
+  image: dcl-v2-backend:local
+  build:
+    context: ../..
+    dockerfile: backend/devops/docker/backend.Dockerfile
+    target: backend
+  env_file:
+    - path: ../../.env
+      required: false
+  environment: &backend-env
+    DCL_ENV: ${DCL_ENV:-dev}
+    DCL_DATABASE_URL: ""
+    DCL_TOKEN_DIR: /var/lib/dcl/tokens
+    DCL_TOKEN_CACHE_PATH: /var/lib/dcl/tokens/msal_token_cache.bin
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    minio:
+      condition: service_healthy
+
+x-worker-health: &worker-health
+  interval: 60s
+  timeout: 30s
+  retries: 3
+  start_period: 30s
+
+services:
+  postgres:
+    image: paradedb/paradedb:0.26.2-pg17
+    environment:
+      POSTGRES_USER: ${DCL_DB_USER:-}
+      POSTGRES_PASSWORD: ${DCL_DB_PASSWORD:-}
+      POSTGRES_DB: dcl
+    ports:
+      - "${DCL_BIND_HOST:-127.0.0.1}:${DCL_DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d dcl"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.6.7
+    command: ["redis-server", "--appendonly", "yes", "--save", "300", "100"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: dcl-v2-minio:RELEASE.2025-10-15T17-29-55Z
+    build:
+      context: ../..
+      dockerfile: backend/devops/docker/minio.Dockerfile
+    environment:
+      MINIO_ROOT_USER: ${DCL_MINIO_ROOT_USER:-}
+      MINIO_ROOT_PASSWORD: ${DCL_MINIO_ROOT_PASSWORD:-}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  libreoffice:
+    image: dcl-v2-libreoffice:local
+    build:
+      context: ../..
+      dockerfile: backend/devops/docker/libreoffice.Dockerfile
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; socket.create_connection(('127.0.0.1', 2003), 3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+    restart: unless-stopped
+
+  models:
+    <<: *backend
+    image: dcl-v2-models:local
+    build:
+      context: ../..
+      dockerfile: backend/devops/docker/backend.Dockerfile
+      target: models
+    environment:
+      <<: *backend-env
+      DCL_ROLE: models
+    depends_on: {}
+    volumes:
+      - hf-cache:/home/app/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8500/models/health', timeout=60)"]
+      interval: 30s
+      timeout: 90s
+      retries: 5
+      start_period: 900s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, utility]
+
+  api:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      DCL_ROLE: api
+    ports:
+      - "${DCL_BIND_HOST:-127.0.0.1}:8200:8200"
+    volumes:
+      - dcl-tokens:/var/lib/dcl/tokens
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8200/healthz', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "backend.celery_redis.app", "beat", "--loglevel", "INFO", "--schedule", "/home/app/celerybeat-schedule"]
+
+  worker-io-light:
+    <<: *backend
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "io_light@%h", "--loglevel", "INFO", "--queues", "io_light", "--pool", "threads", "--concurrency", "4", "--soft-time-limit", "300", "--time-limit", "360"]
+    healthcheck:
+      <<: *worker-health
+      test: ["CMD-SHELL", "celery -A backend.celery_redis.app inspect ping --timeout 10 -d io_light@$$HOSTNAME"]
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    volumes:
+      - dcl-tokens:/var/lib/dcl/tokens
+
+  worker-cpu-parse:
+    <<: *backend
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "cpu_parse@%h", "--loglevel", "INFO", "--queues", "cpu_parse", "--pool", "prefork", "--concurrency", "4", "--soft-time-limit", "1800", "--time-limit", "2100", "--max-memory-per-child", "6291456"]
+    healthcheck:
+      <<: *worker-health
+      test: ["CMD-SHELL", "celery -A backend.celery_redis.app inspect ping --timeout 10 -d cpu_parse@$$HOSTNAME"]
+    deploy:
+      resources:
+        limits:
+          memory: 24576M
+
+  worker-telemetry-stream:
+    <<: *backend
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "telemetry_stream@%h", "--loglevel", "INFO", "--queues", "telemetry_stream", "--pool", "prefork", "--concurrency", "2", "--soft-time-limit", "3600", "--time-limit", "3900", "--max-memory-per-child", "3145728"]
+    healthcheck:
+      <<: *worker-health
+      test: ["CMD-SHELL", "celery -A backend.celery_redis.app inspect ping --timeout 10 -d telemetry_stream@$$HOSTNAME"]
+    deploy:
+      resources:
+        limits:
+          memory: 6144M
+
+  worker-media:
+    <<: *backend
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "media@%h", "--loglevel", "INFO", "--queues", "media", "--pool", "prefork", "--concurrency", "2", "--soft-time-limit", "3600", "--time-limit", "3900", "--max-memory-per-child", "2097152"]
+    healthcheck:
+      <<: *worker-health
+      test: ["CMD-SHELL", "celery -A backend.celery_redis.app inspect ping --timeout 10 -d media@$$HOSTNAME"]
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
+
+  worker-vision-batch:
+    <<: *backend
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "vision_batch@%h", "--loglevel", "INFO", "--queues", "vision_batch", "--pool", "threads", "--concurrency", "2", "--soft-time-limit", "900", "--time-limit", "1000"]
+    healthcheck:
+      <<: *worker-health
+      test: ["CMD-SHELL", "celery -A backend.celery_redis.app inspect ping --timeout 10 -d vision_batch@$$HOSTNAME"]
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  worker-embed:
+    <<: *backend
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "embed@%h", "--loglevel", "INFO", "--queues", "embed", "--pool", "threads", "--concurrency", "2", "--soft-time-limit", "600", "--time-limit", "660"]
+    healthcheck:
+      <<: *worker-health
+      test: ["CMD-SHELL", "celery -A backend.celery_redis.app inspect ping --timeout 10 -d embed@$$HOSTNAME"]
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+
+volumes:
+  pgdata:
+  redis-data:
+  minio-data:
+  hf-cache:
+  dcl-tokens:
