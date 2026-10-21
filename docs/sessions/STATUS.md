@@ -257,3 +257,9 @@ Merged / ready: migration 0002 pipeline_config (+ typed access, gate seeding fro
 Blocked on: nothing. Live crawl of the four real roots is running against a disposable DB (read-only Graph, metadata only); the listing goes to S5 when it finishes; the crawl into the stack DB (5435/dcl_v2) follows once 0002/0003 are on main and the stack's migrate service has run
 Needs from others: Lead — merge so the stack migrates to 0003
 Next: tasks_sync.py (crawl/delta/download tasks on io_light), BM25 migration with S2, review_flags/rules tables
+
+## 2026-10-22 01:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: enrichment (`backend/llm_engine/enrichment/{extract,entities,numeric_facts}.py`, prompt `enrichment/parent.v1.md`), 37 tests; `resolve_anchor` over document_nodes; trace_id on ConfirmationEvent; torch-free local-model tests; vision cache on BucketStore; `indexing/tables.py`.
+Blocked on: nothing
+Needs from others: S1: who seeds `config/aerospace_synonyms.yaml` into entities/entity_aliases, and whether `sanity_ranges` is seeded into pipeline_config; your commit consumes `EntityDecisions` and `FactDecision`s
+Next: index_document (chunk → enrich → normalize → facts → embed → hand to commit), then retrieval and the BM25 DDL for S1
