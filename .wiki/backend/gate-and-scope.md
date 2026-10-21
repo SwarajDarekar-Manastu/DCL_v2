@@ -17,7 +17,7 @@ Reject junk from Graph metadata (tiers 1–3), quarantine paths and secrets (tie
 Code:
 - `backend/sync/gate.py` (`GateConfig`, `GateInput`, `gate_item()` tiers 1–3, `folder_flags()`)
 - `backend/sync/scope.py` (`in_scope()`, `HELD_BY_DOWNLOAD_SCOPE`)
-- `config/gate.yaml` (S5 owns it; schema in the gate.py docstring)
+- `config/gate.yaml` (S5 owns it; schema in the gate.py docstring); it seeds the `gate.*` keys of `pipeline_config`, and the gate reads `backend.postgres.pipeline_config.gate_config()` at run time
 - Tier 4: secret scan in `backend/sync/gate.py` (`should_scan`, `scan_secrets`, `SECRET_VERDICT`); magic bytes in `backend/dispatcher/type_resolution.py`; blob move under `_restricted/` + flag write come with the M2 review tables
 
 Tests and fixtures:
@@ -33,7 +33,7 @@ Provides:
 - HELD_BY_SCOPE handling
 
 Consumes:
-- pipeline_config keys sync.download_scope, processing.scope
+- pipeline_config keys `gate.*`, `sync.download_scope`, `processing.scope` (`backend/postgres/pipeline_config.py`)
 
 ## Workspace (files to touch when modifying this feature)
 

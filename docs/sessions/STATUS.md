@@ -251,3 +251,9 @@ Merged / ready: Compose stack (project `dcl-v2`) running on the dev host with th
 Blocked on: nothing
 Needs from others: S3 — Console SPA and Open WebUI service definitions (port 8600) when their builds exist
 Next: gateway client rework to the verified Manastu contract (ManastuGatewayAdapter, X-API-Key, /generate, /stream; production-patterns checklist; real probe run), then CI (incl. disposable MinIO for S1's tests), observability, MinIO replacement comparison by end of M4
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: migration 0002 pipeline_config (+ typed access, gate seeding from config/gate.yaml), migration 0003 (document, node, asset, entity, fact, audit tables; HNSW), metadata crawl backend/sync/delta.py, S5's folder listing backend/sync/folder_listing.py, reviewer may deactivate rules. Test: `DCL_TEST_DATABASE_URL=… uv run pytest && uv run ruff check backend`
+Blocked on: nothing. Live crawl of the four real roots is running against a disposable DB (read-only Graph, metadata only); the listing goes to S5 when it finishes; the crawl into the stack DB (5435/dcl_v2) follows once 0002/0003 are on main and the stack's migrate service has run
+Needs from others: Lead — merge so the stack migrates to 0003
+Next: tasks_sync.py (crawl/delta/download tasks on io_light), BM25 migration with S2, review_flags/rules tables

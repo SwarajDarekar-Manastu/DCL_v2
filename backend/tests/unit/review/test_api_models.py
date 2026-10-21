@@ -124,11 +124,10 @@ def test_reviewer_gets_501_until_the_tables_exist():
     assert client.post("/review/cases/doc:4/undo").status_code == 501
 
 
-def test_viewer_cannot_use_review_routes_and_reviewer_cannot_deactivate_rules():
+def test_viewer_cannot_use_review_routes_and_reviewers_may_deactivate_rules():
     assert _app(auth.ConsoleRole.VIEWER).get("/review/cases").status_code == 403
-    reviewer = _app(auth.ConsoleRole.REVIEWER)
-    assert reviewer.post(f"/review/rules/{FLAG}/deactivate").status_code == 403
-    assert _app(auth.ConsoleRole.ADMIN).post(f"/review/rules/{FLAG}/deactivate").status_code == 501
+    assert _app(auth.ConsoleRole.VIEWER).post(f"/review/rules/{FLAG}/deactivate").status_code == 403
+    assert _app(auth.ConsoleRole.REVIEWER).post(f"/review/rules/{FLAG}/deactivate").status_code == 501
 
 
 def test_allowed_actions_hide_admin_only_actions_from_reviewers():
