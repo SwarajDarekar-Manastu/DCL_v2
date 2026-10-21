@@ -178,3 +178,9 @@ Merged / ready: backend/common/units.py (pint + config/units.txt with S5's alias
 Blocked on: Lead answers of 100eae2 (crawl) and on whether the M4 entity tables may be created now (S2 asked)
 Needs from others: nothing new
 Next: M2 models documents/document_sources/document_relations/document_nodes/assets once the Lead confirms the table timing; otherwise Tier 4 (magic bytes, secret scan)
+
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: type resolution (4d9d56e) and the Tier 4 secret scan (pure functions, redacted previews). Test: `uv run pytest && uv run ruff check backend`
+Blocked on: Lead answers: 100eae2 questions (permission option, pipeline_config in M1, gate source); creating the M2/M4 tables now; the document_nodes bbox column name
+Needs from others: S4 — libmagic1 in the images, a disposable MinIO in CI
+Next: after the answers: delta crawl, dispatch after landing, M2 tables, review flags write path
