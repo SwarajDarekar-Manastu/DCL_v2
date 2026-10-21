@@ -108,3 +108,14 @@ def test_confirmation_carries_the_trace_id_the_reply_goes_to():
     done = events[-1]
     assert confirmation.trace_id == done.trace_id
     assert events.index(confirmation) < events.index(done)
+
+
+def test_trace_lookup_by_chat_and_message_and_feedback_are_signed_routes(client):
+    query = "/v1/traces?chat_id=c1&message_id=m1"
+    assert client.get(query).status_code == 422
+    assert client.get(query, headers=signed_headers(b"")).status_code == 501
+    body = json.dumps({"kind": "wrong_unit", "comment": "bar(g) not bar(a)", "citation_id": "1"}).encode()
+    path = "/v1/traces/0b6d9f0e-1111-4222-8333-444455556666/feedback"
+    assert client.post(path, content=body, headers=signed_headers(body)).status_code == 501
+    bad = json.dumps({"kind": "rude"}).encode()
+    assert client.post(path, content=bad, headers=signed_headers(bad)).status_code == 422

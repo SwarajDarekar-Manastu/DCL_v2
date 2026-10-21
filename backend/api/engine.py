@@ -26,7 +26,7 @@ import uuid
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.config import Group, get_settings
@@ -248,6 +248,24 @@ class TraceView(BaseModel):
     created_at: str
 
 
+class FeedbackKind(StrEnum):
+    """Reasons of the Report-issue Action (file 08 §2.2)."""
+
+    WRONG_NUMBER = "wrong_number"
+    WRONG_CITATION = "wrong_citation"
+    MISSING_DOCUMENT = "missing_document"
+    WRONG_UNIT = "wrong_unit"
+    WRONG_TRANSLATION = "wrong_translation"
+
+
+class FeedbackRequest(BaseModel):
+    """Appended to `answer_traces.feedback`; `wrong_unit` also opens a SOFT CONFLICT flag on the page."""
+
+    kind: FeedbackKind
+    comment: str | None = Field(default=None, max_length=4000)
+    citation_id: str | None = Field(default=None, description="the citation the report is about, if any")
+
+
 # ---------------------------------------------------------------- identity
 
 
@@ -305,4 +323,20 @@ async def confirm(trace_id: uuid.UUID, reply: ConfirmationReply, identity: Ident
 
 @router.get("/traces/{trace_id}")
 async def trace(trace_id: uuid.UUID, identity: Identity) -> TraceView:
+    raise HTTPException(status_code=501, detail="answer_traces arrives with the workflow (M8)")
+
+
+@router.get("/traces")
+async def trace_for_message(
+    chat_id: Annotated[str, Query(min_length=1)],
+    message_id: Annotated[str, Query(min_length=1)],
+    identity: Identity,
+) -> TraceView:
+    """The trace of one Open WebUI message; the Show-trace Action knows chat and message ids, not the
+    trace id. 404 when the message has no trace."""
+    raise HTTPException(status_code=501, detail="answer_traces arrives with the workflow (M8)")
+
+
+@router.post("/traces/{trace_id}/feedback", status_code=202)
+async def feedback(trace_id: uuid.UUID, report: FeedbackRequest, identity: Identity) -> None:
     raise HTTPException(status_code=501, detail="answer_traces arrives with the workflow (M8)")
