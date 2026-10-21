@@ -1,0 +1,10 @@
+data: {"text": "1,", "candidates": [{"content": {"parts": [{"text": "1,"}], "role": "model"}}]}
+
+data: {"text": " 2, 3, 4, 5, 6, 7,", "candidates": [{"content": {"parts": [{"text": " 2, 3, 4, 5, 6, 7,"}], "role": "model"}}]}
+
+data: {"text": " 8, 9, 10, 11, 12", "candidates": [{"content": {"parts": [{"text": " 8, 9, 10, 11, 12"}], "role": "model"}}]}
+
+data: {"text": "", "candidates": [{"content": {"parts": [{"text": "", "thought_signature": "sig-redacted"}], "role": "model"}, "finish_reason": "STOP"}]}
+
+data: {"done": true, "usage": {"total": 49}, "quota": {"used_today": 10000, "limit": 1000000, "remaining": 990000}}
+

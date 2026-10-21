@@ -78,6 +78,17 @@ class BudgetExhausted(GeminiError):
     """Raised before a call once the daily token budget is used; callers retry later so queues wait."""
 
 
+class GatewayUnavailable(GatewayError):
+    """The circuit breaker is open: recent calls failed, so new calls fail fast until the cool-down ends."""
+
+    def __init__(self, message: str):
+        super().__init__(message, status_code=None, retryable=True)
+
+
+class RequestTooLarge(GeminiError):
+    """Inline media above the gateway's inline limit; send page windows instead (file 09 §H.1 item 5)."""
+
+
 class StructuredOutputError(GeminiError):
     def __init__(self, message: str, *, raw_text: str):
         super().__init__(message)
@@ -89,16 +100,21 @@ class Text:
     text: str
 
 
+MediaResolution = Literal["low", "medium", "high"]
+
+
 @dataclass(frozen=True)
 class Image:
     data: bytes
     mime_type: str = "image/png"
+    media_resolution: MediaResolution | None = None
 
 
 @dataclass(frozen=True)
 class Pdf:
     data: bytes
     filename: str = "document.pdf"
+    media_resolution: MediaResolution | None = None
 
 
 Part = Text | Image | Pdf
@@ -116,6 +132,7 @@ class ToolCall:
     id: str
     name: str
     arguments: dict[str, Any]
+    thought_signature: str | None = None
 
 
 @dataclass(frozen=True)
@@ -124,6 +141,7 @@ class Message:
     parts: tuple[Part, ...] = ()
     tool_calls: tuple[ToolCall, ...] = ()
     tool_call_id: str | None = None
+    tool_name: str | None = None
 
     @classmethod
     def system(cls, text: str) -> "Message":
@@ -138,8 +156,9 @@ class Message:
         return cls("assistant", (Text(text),) if text else (), tool_calls)
 
     @classmethod
-    def tool_result(cls, tool_call_id: str, content: str) -> "Message":
-        return cls("tool", (Text(content),), tool_call_id=tool_call_id)
+    def tool_result(cls, tool_call_id: str, content: str, name: str | None = None) -> "Message":
+        """`name` is the called function; Gemini-style adapters need it."""
+        return cls("tool", (Text(content),), tool_call_id=tool_call_id, tool_name=name)
 
 
 @dataclass(frozen=True)
@@ -157,6 +176,7 @@ class Usage:
     output_tokens: int = 0
     cached_tokens: int = 0
     thinking_tokens: int = 0
+    estimated: bool = False
 
     @property
     def total_tokens(self) -> int:
@@ -174,6 +194,7 @@ class GenerateResult:
     request_id: str | None
     latency_ms: int
     thoughts: str | None = None
+    quota: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -208,6 +229,24 @@ class LlmCallRecord:
     status: Literal["ok", "error"]
     error: str | None
     request_id: str | None
+    usage_estimated: bool = False
+
+
+@dataclass(frozen=True)
+class GenerateRequest:
+    """Everything an adapter needs to build one wire request."""
+
+    model: str
+    messages: tuple["Message", ...]
+    schema: "SchemaArg" = None
+    tools: tuple[ToolSpec, ...] = ()
+    tool_choice: Literal["auto", "required", "none"] | None = None
+    thinking: str | None = None
+    include_thoughts: bool = False
+    media_resolution: MediaResolution | None = None
+    temperature: float | None = None
+    max_output_tokens: int | None = None
+    cached_content: str | None = None
 
 
 @dataclass(frozen=True)

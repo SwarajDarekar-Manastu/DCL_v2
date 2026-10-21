@@ -1,51 +1,94 @@
 {
-  "probed_at": null,
-  "model": null,
-  "baseline": {},
+  "probed_at": "2026-10-21T19:39:18+00:00",
+  "model": "gemini-3.8-flash",
+  "api_style": {
+    "configured": "manastu",
+    "detected": "manastu"
+  },
+  "discovery": {
+    "health": {
+      "status": "supported",
+      "evidence": "ok without credentials"
+    },
+    "models_list_manastu": {
+      "status": "supported",
+      "evidence": "GET /models: ok"
+    },
+    "models_list_gemini": {
+      "status": "unsupported",
+      "evidence": "GET /v1beta/models: endpoint missing"
+    },
+    "models_list_openai": {
+      "status": "inconclusive",
+      "evidence": "GET /models: key rejected"
+    },
+    "api_style": {
+      "status": "supported",
+      "evidence": "configured manastu matches the gateway"
+    }
+  },
+  "baseline": {
+    "plain_chat": {
+      "status": "supported",
+      "evidence": "reply 'OK'; tokens in/out 7/75"
+    },
+    "lite_model": {
+      "status": "supported",
+      "evidence": "reply 'OK'; tokens in/out 7/37"
+    },
+    "request_id": {
+      "status": "supported",
+      "evidence": "gateway returns its own id"
+    },
+    "usage_endpoint": {
+      "status": "supported",
+      "evidence": "GET /usage: ok"
+    }
+  },
   "capabilities": {
     "structured_output": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+      "status": "supported",
+      "evidence": "parsed ProbeAnswer(city='Tokyo', population_millions=14.1)"
     },
     "function_calling": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+      "status": "supported",
+      "evidence": "call {'run_id': 'HT-042'}; round trip used the result: True"
     },
     "thinking_level": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+      "status": "supported",
+      "evidence": "thinking tokens low=168 high=468"
     },
     "include_thoughts": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+      "status": "supported",
+      "evidence": "thought text returned"
     },
     "image_input": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
-    },
-    "pdf_input": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+      "status": "supported",
+      "evidence": "reply 'Red'"
     },
     "media_resolution": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+      "status": "supported",
+      "evidence": "prompt tokens low=267 high=1100"
+    },
+    "pdf_input": {
+      "status": "supported",
+      "evidence": "reply '4217' (inline_data)"
     },
     "streaming": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+      "status": "supported",
+      "evidence": "8 deltas"
     },
     "stream_usage": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+      "status": "inconclusive",
+      "evidence": "total only (162); split estimated"
     },
     "context_cache": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+      "status": "inconclusive",
+      "evidence": "GET /caches: ok; explicit cache creation not exercised; implicit caching needs no flag"
     },
     "batch": {
-      "status": "unknown",
-      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+      "status": "unsupported",
+      "evidence": "GET /batches: endpoint missing"
     }
   }
 }

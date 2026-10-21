@@ -50,7 +50,13 @@ def fixture(name: str) -> dict:
 
 
 def make_settings(drop: tuple[str, ...] = (), **overrides) -> Settings:
-    values = {"GEMINI_BACKEND": "gateway", "GEMINI_GATEWAY_URL": URL, "GEMINI_GATEWAY_KEY": KEY, **overrides}
+    values = {
+        "GEMINI_BACKEND": "gateway",
+        "GEMINI_GATEWAY_URL": URL,
+        "GEMINI_GATEWAY_KEY": KEY,
+        "GEMINI_API_STYLE": "openai",
+        **overrides,
+    }
     return Settings(_env_file=None, **{k: v for k, v in values.items() if k not in drop})
 
 
@@ -479,10 +485,14 @@ async def test_stream_without_capability_falls_back_to_one_plain_call():
     assert "stream" not in gateway.bodies[0]
 
 
-def test_committed_capabilities_file_enables_nothing_until_probed():
+def test_committed_capabilities_file_comes_from_a_real_probe_and_enables_only_supported():
+    from backend.llm_engine.gemini_types import CAPABILITIES_FILE
+
+    document = json.loads(CAPABILITIES_FILE.read_text())
     caps = Capabilities.load()
-    assert caps.enabled == frozenset()
-    assert caps.probed_at is None
+    assert caps.probed_at == document["probed_at"] is not None
+    supported = {name for name, entry in document["capabilities"].items() if entry["status"] == "supported"}
+    assert {str(c) for c in caps.enabled} == supported
 
 
 def test_capabilities_load_enables_only_supported(tmp_path):

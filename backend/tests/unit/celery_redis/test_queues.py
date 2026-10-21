@@ -159,3 +159,21 @@ def test_only_existing_task_modules_are_included(monkeypatch):
         celery_app.importlib.util, "find_spec", lambda name: object() if name in found else None
     )
     assert celery_app.present_task_modules() == ["backend.celery_redis.tasks_sync"]
+
+
+def test_beat_schedule_runs_the_sync_tasks_on_io_light_in_local_time():
+    from celery.schedules import crontab
+
+    schedule = celery_app.app.conf.beat_schedule
+    assert {e["task"] for e in schedule.values()} == {
+        "dcl.sync.delta_all",
+        "dcl.sync.token_health",
+        "dcl.sync.enqueue_downloads",
+    }
+    assert all(e["options"]["queue"] == "io_light" for e in schedule.values())
+    daily = schedule["sync-delta-all-daily"]["schedule"]
+    assert isinstance(daily, crontab) and daily.hour == {2} and daily.minute == {0}
+    assert schedule["sync-token-health"]["schedule"] == 900.0
+    assert schedule["sync-enqueue-downloads"]["schedule"] == 600.0
+    assert celery_app.app.conf.timezone == "Asia/Kolkata"
+    assert celery_app.app.conf.enable_utc is True

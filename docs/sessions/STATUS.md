@@ -299,3 +299,8 @@ Merged / ready: sync Celery tasks (tasks_sync.py), host download CLI + read-only
 Blocked on: nothing
 Needs from others: S4 — beat entries for the sync tasks (sent); S2 — BM25 DDL, entities.load_seed() on main for the seed-entities command
 Next: download the rest of the accepted items (H11), Tier 4 on landed blobs, dispatcher (folder context, assembler, route gating, CIR writer), then Route C
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: gateway client rework to the verified contract (ManastuGatewayAdapter default with X-API-Key, /generate, /stream; native and OpenAI adapters kept); production checklist on `.wiki/platform/gemini-gateway-client.md` implemented (retry classification incl. upstream codes in 502, jittered backoff, Retry-After, circuit breaker, per-model concurrency, idempotency key, timeouts, 20 MB inline guard, thought-signature echo, temperature dropped for 3.6+, estimated usage, quota stop); tests on recordings from the real gateway; real probe run wrote `gemini_capabilities.json`; beat schedule for S1's sync tasks. Test: `uv run pytest` green except S2's vision tests until S2 lands a one-line conftest fix (sent)
+Blocked on: S2 conftest change (`GEMINI_API_STYLE="openai"` in their vision test settings) before this can merge green
+Needs from others: operator — `.env` has `GEMINI_API_STYLE=gemini`; it must be `manastu` (or removed, the default) for the real gateway
+Next: CI pipeline (incl. disposable MinIO for S1's tests), observability, MinIO replacement comparison by end of M4
