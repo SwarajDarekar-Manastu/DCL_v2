@@ -25,7 +25,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/route-b-code` | planned | S1 | [Route B: Python scripts and tooling docs](backend/route-b-code.md) |
 | `backend/route-e-diagrams` | planned | S1 | [Route E: draw.io diagrams and XSD](backend/route-e-diagrams.md) |
 | `backend/route-g-archives` | planned | S1 | [Route G: archives and ANSYS packages](backend/route-g-archives.md) |
-| `backend/review-backend` | planned | S1 | [Review backend: flags, fingerprints, staged payloads, rules, resume](backend/review-backend.md) |
+| `backend/review-backend` | in-progress | S1 | [Review backend: flags, fingerprints, staged payloads, rules, resume](backend/review-backend.md) |
 | `backend/index-commit` | planned | S1 | [Index commit path (transaction, overlays, vector reuse)](backend/index-commit.md) |
 | `backend/vision-service` | planned | S2 | [VisionService on Gemini (triage, handwriting, tables, plots, photos, video)](backend/vision-service.md) |
 | `backend/route-a1-office` | planned | S2 | [Route A1: PDF, DOCX, PPTX, PPT](backend/route-a1-office.md) |

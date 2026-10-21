@@ -5,7 +5,6 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from backend.api.viewer import parse_anchor_param
 from backend.dispatcher.contract import (
     Anchor,
     AnchorError,
@@ -207,22 +206,30 @@ def test_bbox_must_be_normalized_and_ordered():
 
 # ---------- stable anchors ----------
 
-LINKS = [
-    "page:12:9f86d081884c7d65",
-    "line:120:ab12cd34ef56ab78",
-    "t:83500:",
-    "cells:Run 1!A1:D20:0c1d2e3f4a5b6c7d",
-    "page:3:",
-]
+LINKS = {
+    "page:12:9f86d081884c7d65": {"page_no": 12, "content_sha256": "9f86d081884c7d65"},
+    "line:120:ab12cd34ef56ab78": {"line_start": 120, "content_sha256": "ab12cd34ef56ab78"},
+    "t:83500:": {"t_start_ms": 83500},
+    "cells:Run 1!A1:D20:0c1d2e3f4a5b6c7d": {
+        "sheet_name": "Run 1",
+        "cell_range": "A1:D20",
+        "content_sha256": "0c1d2e3f4a5b6c7d",
+    },
+    "page:3:": {"page_no": 3},
+}
 
 
-@pytest.mark.parametrize("link", LINKS)
-def test_anchor_format_matches_the_viewer_contract(link):
-    assert parse_anchor(link) == parse_anchor_param(link)
+@pytest.mark.parametrize(("link", "fields"), LINKS.items())
+def test_anchor_links_parse_to_field_names_and_back(link, fields):
+    assert parse_anchor(link) == fields
     anchor = Anchor.parse(DOC_ID, link)
-    assert anchor.locator_fields() == parse_anchor_param(link)
+    assert anchor.locator_fields() == fields
     assert anchor.serialize() == link
-    assert format_anchor(parse_anchor(link)) == link
+    assert format_anchor(fields) == link
+
+
+def test_link_without_a_hash_part_parses():
+    assert parse_anchor("page:7") == {"page_no": 7}
 
 
 @pytest.mark.parametrize(

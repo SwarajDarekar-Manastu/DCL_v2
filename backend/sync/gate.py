@@ -41,7 +41,7 @@ class GateConfig:
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "GateConfig":
         def lower(key: str) -> tuple[str, ...]:
-            return tuple(str(value).casefold() for value in data.get(key, ()))
+            return tuple(_text(value, key) for value in data.get(key, ()))
 
         return cls(
             junk_path_segments=lower("junk_path_segments"),
@@ -50,7 +50,9 @@ class GateConfig:
             junk_names=frozenset(lower("junk_names")),
             junk_name_prefixes=lower("junk_name_prefixes"),
             junk_extensions_under={
-                str(ending).casefold(): tuple(str(glob).casefold() for glob in globs)
+                _text(ending, "junk_extensions_under"): tuple(
+                    _text(g, "junk_extensions_under") for g in globs
+                )
                 for ending, globs in (data.get("junk_extensions_under") or {}).items()
             },
             shortcut_extensions=lower("shortcut_extensions"),
@@ -60,6 +62,13 @@ class GateConfig:
     @classmethod
     def load(cls, path: Path) -> "GateConfig":
         return cls.from_mapping(yaml.safe_load(path.read_text(encoding="utf-8")))
+
+
+def _text(value: object, key: str) -> str:
+    """Gate patterns must be strings: YAML reads a bare ``.1`` as the float 0.1, a silent wrong ending."""
+    if not isinstance(value, str):
+        raise ValueError(f"gate config {key}: {value!r} is not a string; quote it in the YAML")
+    return value.casefold()
 
 
 @dataclass(frozen=True)

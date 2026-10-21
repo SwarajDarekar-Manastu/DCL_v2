@@ -108,3 +108,9 @@ Merged / ready: publish-first item 2: backend/dispatcher/contract.py (ProcessedD
 Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
 Needs from others: S3 — import parse_anchor/format_anchor from backend.dispatcher.contract in backend/api/viewer.py and drop the local copies (one owner of the format, as S2 asked)
 Next: backend/review/api_models.py (publish-first item 3, for S3), MinIO get/put for S2's vision cache, then the documents/nodes/assets models
+
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: publish-first item 3: backend/review/api_models.py (queue, case detail, the file 06 §6 resolution actions as a union on `action` with ALLOWED_ACTIONS, resolve/assign/reject/undo, dry-run, rules) + backend/api/review.py with every file 08 §4.4 review route typed and role-gated (501 until the M2 tables); review enums. Gate: S5's findings fixed (patterns must be strings; .xlsm only under lib/lib64/library/*-packages). Contract test no longer depends on viewer.py. Test: `uv run pytest && uv run ruff check backend` (498 passed, 18 skipped)
+Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
+Needs from others: nothing new
+Next: backend/storage/minio.py get/put for S2's vision cache; then documents/document_sources/document_nodes/assets models (M2)

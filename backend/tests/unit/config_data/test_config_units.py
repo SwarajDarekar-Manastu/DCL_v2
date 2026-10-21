@@ -4,8 +4,23 @@ import pint
 import pytest
 
 # 04 §8: "The project unit registry includes ..." — every one must parse (after aliases).
-MANUAL_UNITS = ["psig", "psia", "bara", "barg", "kgf/cm²", "kp/cm²", "at", "atm", "mmHg",
-                "Torr", "lbf", "°F", "kcal", "sccm", "slpm"]
+MANUAL_UNITS = [
+    "psig",
+    "psia",
+    "bara",
+    "barg",
+    "kgf/cm²",
+    "kp/cm²",
+    "at",
+    "atm",
+    "mmHg",
+    "Torr",
+    "lbf",
+    "°F",
+    "kcal",
+    "sccm",
+    "slpm",
+]
 
 
 @pytest.mark.parametrize("unit", MANUAL_UNITS)
@@ -15,9 +30,18 @@ def test_manual_unit_list_parses(ureg, apply_unit_aliases, unit):
 
 @pytest.mark.parametrize(
     "unit, pascal",
-    [("psig", 6894.757293168361), ("psia", 6894.757293168361), ("barg", 1e5), ("bara", 1e5),
-     ("ata", 98066.5), ("atu", 98066.5), ("atü", 98066.5), ("Torr", 101325 / 760),
-     ("kp/cm**2", 98066.5), ("kgf/cm**2", 98066.5)],
+    [
+        ("psig", 6894.757293168361),
+        ("psia", 6894.757293168361),
+        ("barg", 1e5),
+        ("bara", 1e5),
+        ("ata", 98066.5),
+        ("atu", 98066.5),
+        ("atü", 98066.5),
+        ("Torr", 101325 / 760),
+        ("kp/cm**2", 98066.5),
+        ("kgf/cm**2", 98066.5),
+    ],
 )
 def test_project_pressure_units_have_expected_magnitude(ureg, unit, pascal):
     assert ureg.Quantity(1, unit).to("Pa").magnitude == pytest.approx(pascal, rel=1e-12)
@@ -54,8 +78,8 @@ def test_bar_g_is_misparsed_without_the_alias(ureg, apply_unit_aliases):
 
 def test_degree_c_spellings(ureg, apply_unit_aliases, unit_aliases):
     surfaces = {a[0] for a in unit_aliases}
-    assert "°С" in surfaces      # Cyrillic С, an OCR and copy-paste trap
-    assert "°C" not in surfaces       # Latin °C is pint-native and must not be aliased
+    assert "°С" in surfaces  # Cyrillic С, an OCR and copy-paste trap
+    assert "°C" not in surfaces  # Latin °C is pint-native and must not be aliased
     for s in ("°C", "℃", "°С", "deg C"):
         assert ureg.Quantity(25, apply_unit_aliases(s)).to("K").magnitude == pytest.approx(298.15)
 
