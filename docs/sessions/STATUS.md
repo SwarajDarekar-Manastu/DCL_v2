@@ -251,3 +251,9 @@ Merged / ready: Compose stack (project `dcl-v2`) running on the dev host with th
 Blocked on: nothing
 Needs from others: S3 — Console SPA and Open WebUI service definitions (port 8600) when their builds exist
 Next: gateway client rework to the verified Manastu contract (ManastuGatewayAdapter, X-API-Key, /generate, /stream; production-patterns checklist; real probe run), then CI (incl. disposable MinIO for S1's tests), observability, MinIO replacement comparison by end of M4
+
+## 2026-10-22 01:05 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: allowlist chosen from S1's crawl listing: 11 folder-id entries, about 247 files (table in `.wiki/plans/quality__fixtures__allowlist.md`, sent to DCL Lead for DECISIONS.md); synthetic `c_telemetry/unlabeled_npy` fixture with a numpy cross-check (not yet requested; merges with the allowlist close-out)
+Blocked on: Lead — (1) drop the `.npy` slot (all 6 corpus .npy are under `_to_delete`) or have the user move one; (2) accept the APU Heater substitute (no telemetry under that root); (3) non-English library documents: S1 first-page language/DOI check after download, or a ruling on M5's "two non-English brochures"
+Needs from others: Lead — the three rulings and the DECISIONS.md entry; S1 — the library language/DOI check if the Lead agrees
+Next: on the rulings, close the allowlist sheet, then copy small real fixtures from the allowlisted folders (user approval) and verify the first 15 telemetry cases with own Python over the raw .dat

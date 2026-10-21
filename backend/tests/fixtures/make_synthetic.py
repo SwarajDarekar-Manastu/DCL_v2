@@ -13,6 +13,7 @@ import argparse
 import io
 import pickle
 import re
+import struct
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -386,6 +387,26 @@ def malicious_pickle(out: Path) -> None:
     write(out, "c_telemetry/malicious_pickle/T03.plotdata", pickle.dumps(_Exploit(), protocol=4))
 
 
+# ---- C: unlabeled .npy array --------------------------------------------------------------------
+
+NPY_SHAPE = (300, 4)
+
+
+def npy_bytes(rows: list[tuple[float, ...]]) -> bytes:
+    """NumPy .npy format 1.0 written directly: magic, header dict, little-endian float64 C order."""
+    header = f"{{'descr': '<f8', 'fortran_order': False, 'shape': ({len(rows)}, {len(rows[0])}), }}"
+    pad = 64 - (10 + len(header) + 1) % 64
+    header_bytes = (header + " " * pad + "\n").encode("latin1")
+    body = struct.pack(f"<{len(rows) * len(rows[0])}d", *[v for row in rows for v in row])
+    return b"\x93NUMPY\x01\x00" + struct.pack("<H", len(header_bytes)) + header_bytes + body
+
+
+def unlabeled_npy(out: Path) -> None:
+    # Four unnamed columns: time (s), a pressure-like ramp, a temperature-like ramp, a 0/1 state.
+    rows = [(i / 100, 1.0 + 0.04 * i, 300.0 + 1.5 * i, float(i >= 50)) for i in range(NPY_SHAPE[0])]
+    write(out, "c_telemetry/unlabeled_npy/T01.npy", npy_bytes(rows))
+
+
 # ---- G: archive guards ----------------------------------------------------------------------------
 
 BOMB_SIZE = 10 * 1024 * 1024
@@ -445,6 +466,7 @@ GENERATORS = [
     headerless_csv,
     merged_cells_fmea,
     malicious_pickle,
+    unlabeled_npy,
     zip_bomb_ratio,
     zip_path_traversal,
     zip_nested_depth,
