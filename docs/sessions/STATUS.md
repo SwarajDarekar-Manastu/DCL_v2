@@ -154,3 +154,9 @@ Merged / ready: `config/gate.yaml` without `.ini` and `.1` (manual at be5ce14), 
 Blocked on: S1 — `parent_kind` in GateConfig/GateInput (the `.wbpz` `.out` exception needs a key or a fixed rule) and the crawl folder listing
 Needs from others: S1 — tell S5 whether the `.wbpz` exception is configured in gate.yaml (proposed key below in the message) or fixed in code
 Next: idle until S1 answers or the listing arrives
+
+## 2026-10-21 22:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: 31ed593 (gate.yaml header wording), not yet requested
+Blocked on: Lead — the `.wbpz` `.out` exception: Lead ruled "fixed rule in code, no gate.yaml key"; S1 implemented a gate.yaml key `kept_endings_by_parent_kind` (S1 c861d3a, merge requested). S5 adds the entry and three decision cases once the Lead confirms which one stands
+Needs from others: Lead — that confirmation; S1 — the crawl folder listing
+Next: idle
