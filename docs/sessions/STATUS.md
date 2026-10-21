@@ -263,3 +263,9 @@ Merged / ready: sync Celery tasks (tasks_sync.py), host download CLI + read-only
 Blocked on: nothing
 Needs from others: S4 — beat entries for the sync tasks (sent); S2 — BM25 DDL, entities.load_seed() on main for the seed-entities command
 Next: download the rest of the accepted items (H11), Tier 4 on landed blobs, dispatcher (folder context, assembler, route gating, CIR writer), then Route C
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: 410 + forced resync (delta.py, CLI `resync`), downloader lock re-check, migration 0004 BM25 (S2's DDL). E1–E11 downloads landed (247). M1 procedure commands sent to S5. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend`
+Blocked on: nothing; asked the Lead whether to land the remaining ~4,826 items host-side or wait for the workers
+Needs from others: S2 — seed_rows() on main (then seed-entities)
+Next: dispatcher (folder context, assembler, route gating, document rows, CIR writer), Route C, queue load test
