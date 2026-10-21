@@ -257,3 +257,15 @@ Merged / ready: migration 0002 pipeline_config (+ typed access, gate seeding fro
 Blocked on: nothing. Live crawl of the four real roots is running against a disposable DB (read-only Graph, metadata only); the listing goes to S5 when it finishes; the crawl into the stack DB (5435/dcl_v2) follows once 0002/0003 are on main and the stack's migrate service has run
 Needs from others: Lead — merge so the stack migrates to 0003
 Next: tasks_sync.py (crawl/delta/download tasks on io_light), BM25 migration with S2, review_flags/rules tables
+
+## 2026-10-22 01:05 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: allowlist chosen from S1's crawl listing: 11 folder-id entries, about 247 files (table in `.wiki/plans/quality__fixtures__allowlist.md`, sent to DCL Lead for DECISIONS.md); synthetic `c_telemetry/unlabeled_npy` fixture with a numpy cross-check (not yet requested; merges with the allowlist close-out)
+Blocked on: Lead — (1) drop the `.npy` slot (all 6 corpus .npy are under `_to_delete`) or have the user move one; (2) accept the APU Heater substitute (no telemetry under that root); (3) non-English library documents: S1 first-page language/DOI check after download, or a ruling on M5's "two non-English brochures"
+Needs from others: Lead — the three rulings and the DECISIONS.md entry; S1 — the library language/DOI check if the Lead agrees
+Next: on the rulings, close the allowlist sheet, then copy small real fixtures from the allowlisted folders (user approval) and verify the first 15 telemetry cases with own Python over the raw .dat
+
+## 2026-10-22 01:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: allowlist close-out (recorded by the Lead in DECISIONS.md; plan sheet deleted) and the synthetic `c_telemetry/unlabeled_npy` fixture that replaces the dropped .npy slot. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: nothing for the next task
+Needs from others: S1 — first-page language/DOI check over the downloaded library PDFs (Lead ruling 3), and word when the allowlisted blobs have landed in MinIO
+Next: real fixtures from E1–E11 (user approves the copies; nothing proprietary in git) and the first 15 telemetry cases verified with own Python over the raw .dat of E1–E3
