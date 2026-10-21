@@ -257,3 +257,9 @@ Merged / ready: gateway client rework to the verified contract (ManastuGatewayAd
 Blocked on: S2 conftest change (`GEMINI_API_STYLE="openai"` in their vision test settings) before this can merge green
 Needs from others: operator — `.env` has `GEMINI_API_STYLE=gemini`; it must be `manastu` (or removed, the default) for the real gateway
 Next: CI pipeline (incl. disposable MinIO for S1's tests), observability, MinIO replacement comparison by end of M4
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: CI pipeline v1 (`.github/workflows/ci.yml`: lint; disposable ParadeDB 0.26.2-pg17 + MinIO with `DCL_TEST_*`; schema gate = upgrade head + `alembic check` + FK-without-index; pytest; image build + layer secret scan), every step a script in `backend/devops/ci/` verified on the dev host; all four images clean against the real `.env` values. Correction to the previous entry: S2 needs no conftest change (S2's 455f896 replaces their mock), so merge S2's branch with or before this one
+Blocked on: nothing
+Needs from others: Lead — merge order S2 455f896, then this branch; first GitHub run happens after the merge
+Next: observability (OTel, Prometheus metrics of file 02 §10, Grafana, alert routing), then backups/retention/runbooks, MinIO replacement comparison by end of M4
