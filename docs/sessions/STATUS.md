@@ -102,3 +102,9 @@ Merged / ready: `backend/llm_engine/local_models.py` + `backend/api/models.py` (
 Blocked on: nothing
 Needs from others: S4: GPU image pins (torch 2.14.1 cu130, transformers 5.20.2, sentence-transformers 6.1.0, torchvision 0.29.1, pillow, numpy), HF cache volume, compose healthcheck on `/models/health` with ~60 s start period. Lead: pyproject `models` dependency group with the same pins.
 Next: chunker + anchors + identifiers (S3 waits on `resolve_anchor`), then VisionService on S4's gateway client
+
+## 2026-10-21 20:40 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: VisionService (`backend/llm_engine/vision/{service,schemas}.py`), prompt loader + nine v1 prompt files (`backend/llm_engine/prompts`), 23 tests on a mock gateway; full suite green.
+Blocked on: nothing for code; real vision calls wait for S4's probe to enable image input
+Needs from others: S1: `backend/storage/minio.py` get/put on dcl-cir (cache adapter), `document_nodes` model (resolve_anchor)
+Next: chunker against S1's contract (ProcessedNode), anchors (make_anchor, resolve_anchor), identifiers

@@ -27,7 +27,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/route-g-archives` | planned | S1 | [Route G: archives and ANSYS packages](backend/route-g-archives.md) |
 | `backend/review-backend` | planned | S1 | [Review backend: flags, fingerprints, staged payloads, rules, resume](backend/review-backend.md) |
 | `backend/index-commit` | planned | S1 | [Index commit path (transaction, overlays, vector reuse)](backend/index-commit.md) |
-| `backend/vision-service` | planned | S2 | [VisionService on Gemini (triage, handwriting, tables, plots, photos, video)](backend/vision-service.md) |
+| `backend/vision-service` | in-progress | S2 | [VisionService on Gemini (triage, handwriting, tables, plots, photos, video)](backend/vision-service.md) |
 | `backend/route-a1-office` | planned | S2 | [Route A1: PDF, DOCX, PPTX, PPT](backend/route-a1-office.md) |
 | `backend/route-d-photos` | planned | S2 | [Route D: hardware inspection photos](backend/route-d-photos.md) |
 | `backend/route-f-video` | planned | S2 | [Route F: test-cell and workshop videos](backend/route-f-video.md) |
