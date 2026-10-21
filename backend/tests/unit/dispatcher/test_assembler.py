@@ -74,3 +74,29 @@ def test_a_lone_section_file_and_ordinary_files_are_single_documents():
     )
     assert {p.primary.path for p in plans} == {"x/objectives.json", "x/run.dat"}
     assert all(p.parts == [] for p in plans)
+
+
+def test_includes_relative_to_the_project_root_are_found_for_a_master_in_main_files():
+    files = [
+        ref("TP12/Main_Files/1.tex"),
+        ref("TP12/Sections/Tables/Revision_History.tex"),
+        ref("TP12/Sections/A.tex"),
+    ]
+    content = {
+        "TP12/Main_Files/1.tex": (
+            "\\documentclass{article}\n\\input{Sections/Tables/Revision_History.tex}\n\\input{Sections/A}"
+        )
+    }
+    (plan,) = assemble(files, texts(content))
+    assert [f.path for f, _ in plan.parts] == [
+        "TP12/Sections/Tables/Revision_History.tex",
+        "TP12/Sections/A.tex",
+    ]
+    assert (plan.missing_includes, plan.conflicts) == ([], [])
+
+
+def test_tex_files_no_master_includes_are_reported_as_such_when_a_master_exists():
+    content = {"p/main.tex": "\\documentclass{article}"}
+    plans = assemble([ref("p/main.tex"), ref("p/Sections/unused.tex")], texts(content))
+    orphan = next(p for p in plans if p.primary.path == "p/Sections/unused.tex")
+    assert orphan.conflicts == ["not included by any master in folder p/Sections, assembled by filename"]

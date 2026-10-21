@@ -398,6 +398,23 @@ Blocked on: S4 — stack redeploy from main before the live dispatch over E1–E
 Needs from others: S4 — beat entries dcl.process.dispatch (every 30 min) and dcl.process.sweep_documents (daily)
 Next: live dispatch + counts; Route C
 
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: Benchmark API over migration 0006. backend/benchmark/catalog.py (CaseSpec, models, queries; S3 file in S2's package, flagged to the Lead) and backend/api/benchmark.py (15 thin routes). It covers suites, versioned cases with audit, Pipe-only chat drafts, run snapshots, results, compare, and export/import. 1018 backend unit tests and 16 ParadeDB integration tests pass; Console types regenerated (benchmark `CaseList` renamed `BenchmarkCaseList` to avoid the OpenAPI clash with review).
+Blocked on: nothing.
+Needs from others: S2 to confirm the runner contract (queued → running → completed, results with failure_class and metrics, aggregate keys); S5 to author suites in the SuiteExport format.
+Next: Benchmark UI screens and the Retrieval lab.
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: live dispatch over E1–E11 on the stack DB (0008): 182 documents WAITING_FOR_ROUTE (A1 25, A2 23, B 4, C 40, D 84, E 2, F 4), 44 parts, 1 visual twin, 8 SOFT CONFLICTs, 0 HALTED. Fixes from the live run: ZIP-member typing in dispatch (18 xlsx/docx had gone to G; repaired with `retype`), .scdoc, LaTeX includes vs ancestor folders, orphan wording; `reassemble` command. Downloads (stack workers): 1,729 landed, 3,343 pending
+Blocked on: nothing
+Needs from others: nothing
+Next: Route C
+
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: Benchmark UI. Suites, cases with drafts to approve, the case editor covering every CaseSpec field (edit = new version), the results dashboard with a baseline ribbon, failure classes, per-category counts and newly failing cases, the drilldown, compare runs and the Retrieval lab over S2's /v1/retrieval/search; run pages refresh on the live `run` topic. 90 Vitest; check and build clean; browser run against a mock API.
+Blocked on: nothing. A real benchmark run waits for S2's runner (M10).
+Needs from others: S2 to publish `run` events (progress, finished) through publish_event when the runner lands.
+Next: Open WebUI "Add to benchmark" action against POST /benchmark/drafts; Settings editing once S1 publishes the settings API.
 ## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
 Merged / ready: observability (telemetry module + metric catalogue of file 02 §10, collector, Prometheus + 7 operational alerts with promtool tests, Alertmanager → Teams, Tempo, Grafana dashboard; verified live in a throwaway project); `parse` image for cpu_parse (Docling 2.141 + RapidOCR + onnxruntime on CPU torch, Tesseract OSD + Latin/Cyrillic/Devanagari/Arabic; scanned page OCR'd correctly by both engines); `HF_HUB_DISABLE_XET=1` in model images; `_incoming/` lifecycle rule; S1's process schedules; parse image in CI scan. Stack on the host runs main 65dd09f at migration 0008. Test: `uv run pytest` green (alert-rule tests need Docker)
 Blocked on: nothing

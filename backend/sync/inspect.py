@@ -84,9 +84,10 @@ def _read(minio: Minio, key: str, length: int) -> bytes:
         response.release_conn()
 
 
-def _zip_names(minio: Minio, key: str, size: int) -> list[str] | None:
+def zip_member_names(minio: Minio, key: str, size: int, bucket: str = RAW) -> list[str] | None:
+    """Member names of a ZIP-based blob through ranged reads of its central directory."""
     try:
-        with zipfile.ZipFile(RangeReader(minio, RAW, key, size)) as archive:
+        with zipfile.ZipFile(RangeReader(minio, bucket, key, size)) as archive:
             return archive.namelist()
     except (zipfile.BadZipFile, OSError, ValueError):
         return None
@@ -110,7 +111,7 @@ def inspect_item(session: Session, minio: Minio, location_id: uuid.UUID) -> Insp
     blob = session.get(Blob, item.blob_sha256)
     _, key = parse_uri(blob.minio_uri)
     head = _read(minio, key, HEAD_BYTES)
-    zip_names = _zip_names(minio, key, blob.size_bytes) if head.startswith(b"PK\x03\x04") else None
+    zip_names = zip_member_names(minio, key, blob.size_bytes) if head.startswith(b"PK\x03\x04") else None
     resolved = resolve_type(head, item.name, zip_names)
     item.detected_mime, item.ext_mime_mismatch = resolved.mime, resolved.ext_mismatch
 
