@@ -35,6 +35,9 @@ M2_M4_TABLES = {
     "audit_events",
     "rules",
     "review_flags",
+    "benchmark_cases",
+    "benchmark_runs",
+    "benchmark_results",
 }
 EXPECTED_TABLES = M1_TABLES | M2_M4_TABLES
 
@@ -74,6 +77,10 @@ CHECKED_COLUMNS: dict[tuple[str, str], type[StrEnum]] = {
     ("review_flags", "flag_type"): enums.FlagType,
     ("review_flags", "severity"): enums.FlagSeverity,
     ("review_flags", "status"): enums.FlagStatus,
+    ("benchmark_cases", "status"): enums.BenchmarkCaseStatus,
+    ("benchmark_cases", "category"): enums.BenchmarkCategory,
+    ("benchmark_runs", "status"): enums.BenchmarkRunStatus,
+    ("benchmark_results", "failure_class"): enums.FailureClass,
 }
 # Hand-written CHECKs that are not enum lists.
 OTHER_CHECKS = {
@@ -148,6 +155,7 @@ ASSET = "00000000-0000-4000-8000-0000000000a5"
 NODE = "00000000-0000-4000-8000-0000000000a6"
 ENTITY = "00000000-0000-4000-8000-0000000000e1"
 RULE = "00000000-0000-4000-8000-0000000000c1"
+RUN = "00000000-0000-4000-8000-0000000000b1"
 
 
 def _insert(conn, table: str, **values):
@@ -228,6 +236,20 @@ def _seed(conn) -> None:
         fingerprint="f1",
         flag_type="CONFLICT",
         severity="SOFT",
+    )
+    _insert(
+        conn,
+        "benchmark_cases",
+        case_id="TM-001",
+        version=1,
+        suite="telemetry",
+        category="TELEMETRY_MATH",
+        question="Peak chamber pressure of TP07_T01?",
+        created_by="s5",
+    )
+    _insert(conn, "benchmark_runs", run_id=RUN, suite="telemetry")
+    _insert(
+        conn, "benchmark_results", run_id=RUN, case_id="TM-001", case_version=1, failure_class="UNIT_ERROR"
     )
 
 

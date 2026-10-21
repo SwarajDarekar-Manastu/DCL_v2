@@ -377,3 +377,49 @@ class AuditEntityType(StrEnum):
     CONFIG = "config"
     BENCHMARK_CASE = "benchmark_case"
     DOCUMENT = "document"
+
+
+# ---------- benchmarks (file 05 §4.7, file 08 §5) ----------
+
+
+class BenchmarkCategory(StrEnum):
+    TELEMETRY_MATH = "TELEMETRY_MATH"
+    FACT_LOOKUP = "FACT_LOOKUP"
+    CODE = "CODE"
+    FAILURE_ANALYSIS = "FAILURE_ANALYSIS"
+    STANDARDS = "STANDARDS"
+    DESIGN_SYNTHESIS = "DESIGN_SYNTHESIS"
+    NAVIGATIONAL = "NAVIGATIONAL"
+    VISUAL = "VISUAL"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+    HALTED_DATA_BEHAVIOR = "HALTED_DATA_BEHAVIOR"
+    CONFLICT_BEHAVIOR = "CONFLICT_BEHAVIOR"
+    MULTILINGUAL = "MULTILINGUAL"
+    LIBRARY_VS_INTERNAL = "LIBRARY_VS_INTERNAL"
+
+
+class BenchmarkCaseStatus(StrEnum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    RETIRED = "retired"
+
+
+class BenchmarkRunStatus(StrEnum):
+    """Not listed in the manual; chosen by S1 (2026-10-22) and reported to the Lead."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class FailureClass(StrEnum):
+    RETRIEVAL_MISS = "RETRIEVAL_MISS"
+    RERANK_MISS = "RERANK_MISS"
+    TOOL_MISROUTE = "TOOL_MISROUTE"
+    TOOL_ERROR = "TOOL_ERROR"
+    SYNTHESIS_ERROR = "SYNTHESIS_ERROR"
+    VERIFIER_FALSE_NEGATIVE = "VERIFIER_FALSE_NEGATIVE"
+    UNIT_ERROR = "UNIT_ERROR"
+    BEHAVIOR_FAIL = "BEHAVIOR_FAIL"
