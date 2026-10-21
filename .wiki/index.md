@@ -61,6 +61,7 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
+| [frontend__console-shell-auth__shell-login-ws.md](plans/frontend__console-shell-auth__shell-login-ws.md) | `frontend/console-shell-auth` | S3 | 2026-10-21 |
 
 ## Maintenance
 
