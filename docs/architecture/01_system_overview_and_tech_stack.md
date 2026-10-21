@@ -123,7 +123,7 @@ Every row states what the component does here, why it was chosen, and the verifi
 
 | Component | Role |
 |-----------|------|
-| **MinIO** | Buckets `dcl-raw` (content-addressed originals), `dcl-cir` (parsed representations), `dcl-assets` (page renders, crops, photos, thumbnails, video frames), `dcl-telemetry` (Parquet), `dcl-exports`. Presigned URLs for the UI |
+| **MinIO** (built in-house from the archived, pinned source tag, see file 09 §H.1; replacement evaluated before M6) | Buckets `dcl-raw` (content-addressed originals), `dcl-cir` (parsed representations), `dcl-assets` (page renders, crops, photos, thumbnails, video frames), `dcl-telemetry` (Parquet), `dcl-exports`. Presigned URLs for the UI |
 | **PostgreSQL + pgvector 0.8.x** | `halfvec(768)` HNSW (`m=16, ef_construction=128`) for text and image vectors; `hnsw.ef_search` raised per query when filtering; iterative scans (`relaxed_order`) for filtered searches; exact-distance path when a filter selects only a few thousand nodes; HNSW limit 2,000 dims for `vector`, 4,000 for `halfvec` |
 | **pg_search (ParadeDB)** | BM25 index over `document_nodes.content` (+ `title`, `breadcrumb`, `content_codes`, `content_en`) using several tokenizers on one column: ICU plus per-language Snowball stemmer fields and Lindera/Jieba dictionary tokenizers for CJK; scores via the `pdb.score()` / `paradedb.score()` function depending on the pinned version; **AGPL-3** licensed; index DDL changed across 0.1x → 0.2x releases, so pin the version and keep the DDL in one migration file. Fallback: `tsvector` GIN with language configurations + `ts_rank_cd` |
 | **Redis** | Celery broker/result backend, rate-limit tokens, MSAL token cache (encrypted), short-lived locks |
@@ -204,9 +204,9 @@ The shared `.env` lives at the **repository root** (the compose files under `bac
 
 | Group | Variables | Used by |
 |-------|-----------|---------|
-| Graph identity | `DCL_TENANT_ID`, `DCL_CLIENT_ID`, `DCL_AUTH_MODE` (`delegated`), `DCL_DELEGATED_USERNAME`, `DCL_PERMISSION_OPTION` (`A` = `Files.SelectedOperations.Selected` on the shared folders, preferred; `B` = `Files.Read.All`), `DCL_TOKEN_CACHE_PATH`, `DCL_TOKEN_DIR` | sync service (file 02 §1) |
+| Graph identity | `DCL_TENANT_ID`, `DCL_CLIENT_ID`, `DCL_AUTH_MODE` (`delegated`), `DCL_DELEGATED_USERNAME`, `DCL_PERMISSION_OPTION` (`A` = `Files.SelectedOperations.Selected` on the shared folders, preferred; `B` = `Files.Read.All`), `DCL_TOKEN_CACHE_PATH`, `DCL_TOKEN_DIR`, `DCL_TOKEN_CACHE_KEY` (Fernet key; the v2 cache file is encrypted at rest and separate from the v1 pipeline's plain cache) | sync service (file 02 §1) |
 | Graph roots | `DCL_DRIVE_ID`, `DCL_FOLDER_IDS`, `DCL_FOLDER_PATHS` (the four shared folders, recorded once by the admin; the pipeline never resolves sharing links itself) | seeds `sync_roots` on first start (file 02 §2) |
-| Graph negative test | `DCL_TEST_OUTSIDE_ITEM_ID` (an item the identity must **not** be able to read) | CI and the M1 acceptance test |
+| Graph negative test | `DCL_TEST_OUTSIDE_ITEM_ID` (an item the identity must **not** be able to read), `DCL_TEST_OUTSIDE_DRIVE_ID` (its drive; defaults to `DCL_DRIVE_ID`; the check counts only when the request targets the item's real drive) | CI and the M1 acceptance test |
 | Future application-permission variant | `DCL_SECRET_STORE`, `DCL_CERTIFICATE_PATH`, `DCL_CERTIFICATE_THUMBPRINT` | unused until decision H4 changes |
 | Gemini | `GEMINI_BACKEND=gateway`, `GEMINI_GATEWAY_URL`, `GEMINI_GATEWAY_KEY` (primary; `DCL_GEMINI_API_KEY` is accepted as a legacy alias for the same gateway credential when the primary is empty; either is refused if it has the Google Developer-key format `AIza…`), `GEMINI_THINKING_LEVEL`, `GEMINI_INCLUDE_THOUGHTS`, `GEMINI_CONTEXT_CACHE`, `GEMINI_CACHE_TTL_S`; `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` are informational for the gateway backend. **`GOOGLE_API_KEY` must never be set**; the client refuses to start if it is | Gemini wrapper |
 | Alerts | `DCL_ALERT_WEBHOOK_URL` (Teams, operational alerts only: auth failure, 410 resync, queue stall, budget cap) | ops |
