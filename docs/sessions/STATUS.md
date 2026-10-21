@@ -257,3 +257,9 @@ Merged / ready: migration 0002 pipeline_config (+ typed access, gate seeding fro
 Blocked on: nothing. Live crawl of the four real roots is running against a disposable DB (read-only Graph, metadata only); the listing goes to S5 when it finishes; the crawl into the stack DB (5435/dcl_v2) follows once 0002/0003 are on main and the stack's migrate service has run
 Needs from others: Lead — merge so the stack migrates to 0003
 Next: tasks_sync.py (crawl/delta/download tasks on io_light), BM25 migration with S2, review_flags/rules tables
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: sync Celery tasks (tasks_sync.py), host download CLI + read-only export, sanity_ranges seeding (seed-config), get_session dependency for routers. Live in the stack: crawl into 5435/dcl_v2 matches the first run (110,867 items, 5,073 accepted, 0 orphans); processing.scope = the 11 E1–E11 folder ids, sync.download_scope = []; gate.* and sanity_ranges seeded; the 247 accepted files of E1–E11 landed in MinIO. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend`
+Blocked on: nothing
+Needs from others: S4 — beat entries for the sync tasks (sent); S2 — BM25 DDL, entities.load_seed() on main for the seed-entities command
+Next: download the rest of the accepted items (H11), Tier 4 on landed blobs, dispatcher (folder context, assembler, route gating, CIR writer), then Route C

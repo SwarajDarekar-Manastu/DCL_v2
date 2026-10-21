@@ -405,8 +405,8 @@ def main(argv: list[str]) -> int:
         normalize_url(os.environ.get("DCL_DATABASE_URL") or settings.stack_database_url().get_secret_value())
     )
     with Session(engine, expire_on_commit=False) as session, GraphClient(provider.access_token) as graph:
-        if not pipeline_config.get_prefix(session, pipeline_config.GATE_PREFIX):
-            pipeline_config.seed_gate(session, pipeline_config.load_gate_yaml())
+        pipeline_config.seed_gate(session, pipeline_config.load_gate_yaml())
+        pipeline_config.seed_sanity_ranges(session)
         roots = seed_roots(session, settings)
         session.commit()
         for root in roots:
