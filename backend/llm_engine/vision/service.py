@@ -6,7 +6,12 @@ llm_calls row from the CallContext built here (purpose, prompt_version, doc_id, 
 
 Cache: `dcl-cir/_vision_cache/{model}/{prompt_version}/{input_sha256}.json`. A hit makes no gateway call and
 no ledger row, so identical crops (the same logo on 300 pages) cost once. The store is anything with
-`get(key) -> bytes | None` and `put(key, data)`; in the workers it is the dcl-cir bucket.
+`get(key) -> bytes | None` and `put(key, data)`; in the workers it is `vision_cache()`, S1's BucketStore on
+dcl-cir.
+
+Only the client's adapter-neutral interface is used (`generate_sync(model=, messages=, context=, schema=,
+**options)` with `Message`/`Text`/`Image` parts and the options thinking, media_resolution, temperature), so
+the gateway's wire format (S4's adapters) never leaks in here.
 
 Methods are synchronous (Celery prefork workers on cpu_parse and media). CapabilityUnavailable (image input
 not enabled on the gateway), BudgetExhausted (retry later) and StructuredOutputError propagate to the route.
@@ -19,7 +24,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Protocol
 
-from backend.config import ThinkingLevel
+from backend.config import Settings, ThinkingLevel, get_settings
 from backend.llm_engine.gemini_client import GeminiClient
 from backend.llm_engine.gemini_types import CallContext, Image, Message, Text
 from backend.llm_engine.prompts import load_prompt
@@ -107,6 +112,13 @@ class VisionOutput[R: Reading]:
     prompt_version: str
     input_sha256: str
     cached: bool
+
+
+def vision_cache(settings: Settings | None = None):
+    """The production cache: S1's BucketStore on dcl-cir (MinIO settings from the env contract)."""
+    from backend.storage.minio import CIR, BucketStore, client_from_settings
+
+    return BucketStore(client_from_settings(settings or get_settings()), CIR)
 
 
 def cache_key(model: str, prompt_version: str, input_sha256: str) -> str:

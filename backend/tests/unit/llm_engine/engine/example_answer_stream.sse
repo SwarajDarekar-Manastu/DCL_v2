@@ -16,6 +16,9 @@ data: {"text": "[1]."}
 event: citation
 data: {"citation_id": "1", "doc_id": "6f1c2a3e-0000-4000-8000-000000000001", "title": "Test Report 37", "label": "Test Report 37, p. 8", "anchor": "page:8:3f2a9c1b7d4e5f60", "page_no": 8, "provenance": "internal_report", "language": "en", "translated": false, "needs_review": false, "quote": "steady state 12.5 bar", "url_viewer": "https://console.manastu.test/docs/6f1c2a3e-0000-4000-8000-000000000001/viewer?anchor=page:8:3f2a9c1b7d4e5f60", "url_onedrive": null, "url_asset": null}
 
+event: needs_confirmation
+data: {"trace_id": "0b6d9f0e-1111-4222-8333-444455556666", "confirmation_id": "c1", "title": "Unverified value", "message": "The bed temperature of run T04 comes from a handwritten entry that is not reviewed yet. Use it anyway?"}
+
 event: embed
 data: {"embed_id": "e1", "kind": "plot", "html": null, "url": "https://minio.manastu.test/dcl-assets/plots/tp07_t04.png?sig=x", "alt": "PT-101 chamber pressure, TP07 T04, steady window shaded", "height": 360}
 

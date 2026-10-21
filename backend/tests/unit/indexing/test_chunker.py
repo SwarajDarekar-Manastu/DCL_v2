@@ -8,9 +8,8 @@ from backend.indexing.chunker import (
     chunk_document,
     contextual_header,
     split_sentences,
-    split_table,
-    table_rows,
 )
+from backend.indexing.tables import split_table, table_rows
 from backend.postgres.enums import NodeType
 
 

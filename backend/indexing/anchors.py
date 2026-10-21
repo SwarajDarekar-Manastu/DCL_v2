@@ -9,8 +9,8 @@ content hash, builds anchors from index nodes, and resolves an anchor against a 
    re-chunked, for example after a chunk-size change); the viewer opens the page without a highlight;
 3. document_only: nothing covers the locator; the viewer opens the document.
 
-`resolve_among` is the pure step; the database lookup over `document_nodes` wraps it once S1 publishes
-the model.
+`resolve_among` is the pure step; `resolve_anchor(session, anchor)` loads the candidate rows of
+`document_nodes` (hash prefix match or locator cover, one query) and runs it.
 """
 
 import hashlib
@@ -22,7 +22,11 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Protocol
 
+from sqlalchemy import and_, false, func, or_, select
+from sqlalchemy.orm import Session
+
 from backend.dispatcher.contract import Anchor, AnchorError, PageBox
+from backend.postgres.models import DocumentNode
 
 WHITESPACE = re.compile(r"\s+")
 DASHES = dict.fromkeys(map(ord, "‐‑‒–—―−"), "-")
@@ -122,3 +126,74 @@ def resolve_among(anchor: Anchor, nodes: Sequence[Locatable]) -> AnchorResolutio
     if covering:
         return AnchorResolution(ResolutionStatus.PAGE_FALLBACK, anchor, anchor.page_no, covering)
     return AnchorResolution(ResolutionStatus.DOCUMENT_ONLY, anchor, None)
+
+
+@dataclass(frozen=True)
+class NodeView:
+    """A `document_nodes` row as `resolve_among` reads it; `node_id` is request-scoped, never stored."""
+
+    node_id: uuid.UUID
+    node_type: str
+    ordinal: int
+    content_sha256: str
+    breadcrumb: str
+    page_no: int | None
+    page_end: int | None
+    line_start: int | None
+    line_end: int | None
+    t_start_ms: int | None
+    t_end_ms: int | None
+    sheet_name: str | None
+    cell_range: str | None
+    bboxes: list[PageBox]
+
+    @classmethod
+    def from_row(cls, row: DocumentNode) -> "NodeView":
+        return cls(
+            node_id=row.node_id,
+            node_type=row.node_type,
+            ordinal=row.ordinal,
+            content_sha256=row.content_sha256 or "",
+            breadcrumb=row.breadcrumb or "",
+            page_no=row.page_no,
+            page_end=row.page_end,
+            line_start=row.line_start,
+            line_end=row.line_end,
+            t_start_ms=row.t_start_ms,
+            t_end_ms=row.t_end_ms,
+            sheet_name=row.sheet_name,
+            cell_range=row.cell_range,
+            bboxes=[PageBox.model_validate(box) for box in row.bbox or []],
+        )
+
+
+def _locator_clause(anchor: Anchor):
+    n = DocumentNode
+    if anchor.page_no is not None:
+        return and_(n.page_no <= anchor.page_no, func.coalesce(n.page_end, n.page_no) >= anchor.page_no)
+    if anchor.line_start is not None:
+        return and_(
+            n.line_start <= anchor.line_start, func.coalesce(n.line_end, n.line_start) >= anchor.line_start
+        )
+    if anchor.t_start_ms is not None:
+        return and_(
+            n.t_start_ms <= anchor.t_start_ms, func.coalesce(n.t_end_ms, n.t_start_ms) >= anchor.t_start_ms
+        )
+    return and_(n.sheet_name == anchor.sheet_name, n.cell_range == anchor.cell_range)
+
+
+def resolve_anchor(session: Session, anchor: Anchor) -> AnchorResolution:
+    """Resolve a stored anchor against the document's current nodes (exact → page fallback → document).
+
+    `matches` are `NodeView`s in reading order; the viewer uses `page_no` and `boxes`, the benchmark
+    compares retrieved nodes against `matches`.
+    """
+    by_hash = (
+        DocumentNode.content_sha256.startswith(anchor.content_sha256) if anchor.content_sha256 else false()
+    )
+    rows = session.scalars(
+        select(DocumentNode)
+        .where(DocumentNode.doc_id == anchor.doc_id, or_(by_hash, _locator_clause(anchor)))
+        .order_by(DocumentNode.ordinal)
+    ).all()
+    return resolve_among(anchor, [NodeView.from_row(row) for row in rows])
