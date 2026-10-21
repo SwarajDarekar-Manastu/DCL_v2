@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `platform/env-contract` |
-| Status | planned |
+| Status | in-progress |
 | Owner session | S4 |
 | Spec | docs/architecture/01_system_overview_and_tech_stack.md §7.1 |
 | Last updated | 2026-10-21 |
@@ -15,16 +15,19 @@ Typed settings from .env per file 01 §7.1: refuses placeholders, refuses GOOGLE
 ## Location
 
 Code:
-- `backend/config.py`
+- `backend/config.py` (skeleton: `ROLE` only; full contract in progress)
 - `.env.example`
+- `.gitignore`
+- `pyproject.toml`, `uv.lock` (shared dependency list; owners add their deps in their merge requests)
 
 Tests and fixtures:
-- `backend/tests/unit/config/test_settings.py`
+- `backend/tests/unit/config/test_settings.py` (planned)
+- `backend/tests/unit/test_main.py` (ROLE handling of `backend/main.py`)
 
 ## Interfaces
 
 Provides:
-- Settings object used by every service
+- `backend.config.get_settings()` → frozen `Settings`; `Role` (`api` | `models` | `all`); `ConfigError` raised at startup with variable names only
 
 Consumes:
 - (none yet)
@@ -35,7 +38,10 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 - `backend/config.py`
 - `.env.example`
+- `.gitignore`
+- `pyproject.toml`, `uv.lock`
 - `backend/tests/unit/config/test_settings.py`
+- `backend/tests/unit/test_main.py`
 
 ## Rubric (what "done" means for this feature)
 
@@ -48,6 +54,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-21 | S4 | Repository skeleton of file 10 §2: packages, `backend/main.py` mounting routers by `ROLE`, stub routers, `pyproject.toml`/`uv.lock`, `.env.example` (names only), `.gitignore` data patterns anchored to the root so `backend/postgres/models/` is tracked |
 
 ## Related
 

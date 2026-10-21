@@ -20,3 +20,9 @@ Merged / ready (cont.): .wiki map with 39 feature pages, repository initialized 
 Blocked on: nothing
 Needs from others: each role session to message "S<n> started"
 Next: first merge round after S4 publishes the settings loader and S1 the M1 models; wiki lint at that round
+
+## 2026-10-21 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c (S4 → this branch, kept per README)
+Merged / ready: repository skeleton of file 10 §2 (packages, `backend/main.py` mounting `backend/api/*` routers by ROLE api|models|all, one stub `router = APIRouter()` per planned router for owners to fill, `/healthz`, `pyproject.toml` + `uv.lock`, `.env.example` names only, `.gitignore` data patterns root-anchored so `backend/postgres/models/` is tracked). Test: `uv sync && uv run pytest && uv run ruff check backend`
+Blocked on: nothing
+Needs from others: owners fill their stub routers in place (do not edit `backend/main.py`); add dependencies to `pyproject.toml` in your own merge request; `backend/api/models.py` must not load weights at import
+Next: full env contract in `backend/config.py` with refusal tests; env-name questions to DCL Lead
