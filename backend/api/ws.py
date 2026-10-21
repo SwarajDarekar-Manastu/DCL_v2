@@ -18,13 +18,22 @@ import logging
 import time
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, ValidationError
 
-from backend.api.auth import AuthConfig, AuthError, ConsoleUser, KeyResolver, ConsoleRole, get_auth_config, get_key_resolver, verify_token
+from backend.api.auth import (
+    AuthConfig,
+    AuthError,
+    ConsoleRole,
+    ConsoleUser,
+    KeyResolver,
+    get_auth_config,
+    get_key_resolver,
+    verify_token,
+)
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +46,7 @@ CLOSE_BAD_FRAME = 4400
 class Topic(StrEnum):
     CASE = "case"  # key = case_key; events: updated, resolved, reopened, siblings_resumed
     RUN = "run"  # key = benchmark run_id; events: progress, finished
-    OPS = "ops"  # key = counter name; events: counters
+    OPS = "ops"  # key = counter name; events: counters. key "review_counts" carries {hard, soft} open cases
 
 
 TOPIC_ROLE = {Topic.CASE: ConsoleRole.REVIEWER, Topic.RUN: ConsoleRole.VIEWER, Topic.OPS: ConsoleRole.VIEWER}
@@ -93,7 +102,9 @@ hub = Hub()
 router = APIRouter(tags=["ws"])
 
 
-async def _authenticate(websocket: WebSocket, config: AuthConfig, resolve_key: KeyResolver) -> tuple[ConsoleUser, int] | None:
+async def _authenticate(
+    websocket: WebSocket, config: AuthConfig, resolve_key: KeyResolver
+) -> tuple[ConsoleUser, int] | None:
     try:
         frame = await asyncio.wait_for(websocket.receive_json(), AUTH_DEADLINE_S)
     except (TimeoutError, json.JSONDecodeError):
@@ -119,8 +130,8 @@ def _parse_topics(frame: dict[str, Any]) -> list[Topic]:
 @router.websocket("/ws")
 async def console_socket(
     websocket: WebSocket,
-    config: AuthConfig = Depends(get_auth_config),
-    resolve_key: KeyResolver = Depends(get_key_resolver),
+    config: Annotated[AuthConfig, Depends(get_auth_config)],
+    resolve_key: Annotated[KeyResolver, Depends(get_key_resolver)],
 ) -> None:
     await websocket.accept()
     authenticated = await _authenticate(websocket, config, resolve_key)
@@ -147,7 +158,8 @@ async def console_socket(
                 denied = [t for t in topics if not user.has(TOPIC_ROLE[t])]
                 connection.topics.update(t for t in topics if t not in denied)
                 if denied:
-                    await websocket.send_json({"type": "error", "detail": f"not allowed: {', '.join(denied)}"})
+                    detail = f"not allowed: {', '.join(denied)}"
+                    await websocket.send_json({"type": "error", "detail": detail})
             await websocket.send_json({"type": "subscribed", "topics": sorted(connection.topics)})
     except WebSocketDisconnect:
         pass

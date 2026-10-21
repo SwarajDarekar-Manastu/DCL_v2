@@ -42,3 +42,18 @@ def make_token(*, groups=(), lifetime_s=3600, signed_by=None, **overrides) -> st
 @pytest.fixture
 def other_key():
     return _OTHER_KEY
+
+
+@pytest.fixture
+def auth_config() -> AuthConfig:
+    return CONFIG
+
+
+@pytest.fixture
+def token():
+    return make_token
+
+
+@pytest.fixture
+def key_resolver():
+    return resolve_key

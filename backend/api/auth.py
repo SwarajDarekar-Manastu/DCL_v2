@@ -2,14 +2,15 @@
 
 Roles: any authenticated user of the tenant is `viewer`; members of `dcl-reviewers` are
 `reviewer`; members of `dcl-admins` are `admin` (admin implies reviewer). Other routers
-protect themselves with `Depends(require_role(ConsoleRole.REVIEWER))`.
+protect themselves with `user: Annotated[ConsoleUser, Depends(require_role(ConsoleRole.REVIEWER))]`
+or, for any signed-in user, `user: CurrentUser`.
 """
 
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
-from typing import Any
+from typing import Annotated, Any
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -83,7 +84,7 @@ def _jwks_client(jwks_url: str) -> jwt.PyJWKClient:
     return jwt.PyJWKClient(jwks_url, cache_keys=True, lifespan=3600)
 
 
-def get_key_resolver(config: AuthConfig = Depends(get_auth_config)) -> KeyResolver:
+def get_key_resolver(config: Annotated[AuthConfig, Depends(get_auth_config)]) -> KeyResolver:
     client = _jwks_client(config.jwks_url)
     return lambda token: client.get_signing_key_from_jwt(token).key
 
@@ -139,12 +140,14 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 def current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    config: AuthConfig = Depends(get_auth_config),
-    resolve_key: KeyResolver = Depends(get_key_resolver),
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    config: Annotated[AuthConfig, Depends(get_auth_config)],
+    resolve_key: Annotated[KeyResolver, Depends(get_key_resolver)],
 ) -> ConsoleUser:
     if credentials is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing bearer token", {"WWW-Authenticate": "Bearer"})
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "missing bearer token", {"WWW-Authenticate": "Bearer"}
+        )
     try:
         user, _ = verify_token(credentials.credentials, config, resolve_key)
     except AuthError as exc:
@@ -153,8 +156,11 @@ def current_user(
     return user
 
 
+CurrentUser = Annotated[ConsoleUser, Depends(current_user)]
+
+
 def require_role(role: ConsoleRole) -> Callable[..., ConsoleUser]:
-    def dependency(user: ConsoleUser = Depends(current_user)) -> ConsoleUser:
+    def dependency(user: CurrentUser) -> ConsoleUser:
         if not user.has(role):
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"requires role {role}")
         return user
@@ -166,5 +172,5 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("/me")
-def me(user: ConsoleUser = Depends(current_user)) -> ConsoleUser:
+def me(user: CurrentUser) -> ConsoleUser:
     return user
