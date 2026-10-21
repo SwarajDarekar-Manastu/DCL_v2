@@ -201,3 +201,18 @@ def test_illegible_handwriting_drops_the_raw_value_and_caps_confidence():
 def test_box_2d_must_be_ordered_and_within_0_1000(box):
     with pytest.raises(ValueError):
         PageTriage.model_validate({**TRIAGE, "handwriting_regions": [{"box_2d": box, "kind": "value"}]})
+
+
+def test_media_resolution_per_capability_follows_file_03_section_3():
+    expected = {
+        "triage_page": "low",
+        "transcribe_handwriting": "high",
+        "transcribe_page": "high",
+        "read_table_image": "high",
+        "digitize_plot": "high",
+        "read_schematic": "high",
+        "inspect_hardware_photo": "medium",
+        "describe_slide": "medium",
+        "video_timeline": "low",
+    }
+    assert {str(c): t.media_resolution for c, t in TASKS.items()} == expected

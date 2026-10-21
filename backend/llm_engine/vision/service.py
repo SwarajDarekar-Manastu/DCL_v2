@@ -76,7 +76,7 @@ TASKS: dict[VisionCapability, Task] = {
     VisionCapability.READ_TABLE_IMAGE: Task(
         "read_table_image.v1", TableReading, FLASH, "high", ThinkingLevel.LOW
     ),
-    VisionCapability.DIGITIZE_PLOT: Task("digitize_plot.v1", PlotReading, FLASH, "medium", ThinkingLevel.LOW),
+    VisionCapability.DIGITIZE_PLOT: Task("digitize_plot.v1", PlotReading, FLASH, "high", ThinkingLevel.LOW),
     VisionCapability.READ_SCHEMATIC: Task(
         "read_schematic.v1", SchematicReading, FLASH, "high", ThinkingLevel.LOW
     ),
@@ -87,7 +87,7 @@ TASKS: dict[VisionCapability, Task] = {
         "describe_slide.v1", SlideReading, FLASH, "medium", ThinkingLevel.LOW
     ),
     VisionCapability.VIDEO_TIMELINE: Task(
-        "video_timeline.v1", VideoTimeline, FLASH, "medium", ThinkingLevel.LOW
+        "video_timeline.v1", VideoTimeline, FLASH, "low", ThinkingLevel.LOW
     ),
 }
 
