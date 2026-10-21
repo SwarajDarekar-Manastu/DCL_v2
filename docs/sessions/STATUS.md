@@ -364,3 +364,9 @@ Merged / ready: download fixes (temp version removal, ASCII metadata, resilient 
 Blocked on: nothing. Accepted corpus = 5,072 items, 24.0 GB (19.45 GB downloadable + one 4.57 GB held video; videos 13.4 GB in total); host download in progress
 Needs from others: S2/S5 — `ruff format --check backend` fails on 4 of their files (llm_engine/vision/service.py, tests/acceptance/m1_state.py, tests/acceptance/test_m1_checks_on_seeded_db.py, tests/fixtures/test_fixture_integrity.py)
 Next: dispatcher (folder context, assembler, route gating, documents/document_sources rows, CIR writer), then Route C
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: dispatcher v1 (folder context, assembler, routing with gating and flags, dcl.process.dispatch), migrations 0006 (benchmark) and 0007 (documents.route nullable). Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend` (1,144 passed with servers)
+Blocked on: Lead — `drive_items.previous_blob_sha256` column for supersession (asked)
+Needs from others: nothing
+Next: after the merge: live dispatch over E1–E11 on the stack DB; supersession once answered; then Route C. Host download stopped (stack workers continue the remaining ~4,100 at ≤8 parallel)
