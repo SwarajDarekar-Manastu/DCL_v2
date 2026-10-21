@@ -16,6 +16,7 @@ from sqlalchemy import create_engine, pool, text
 
 import backend.postgres.models  # noqa: F401  registers every table on Base.metadata
 from backend.postgres.base import Base
+from backend.postgres.session import normalize_url
 
 HAND_WRITTEN_INDEX_PREFIXES = ("hnsw_", "bm25_")
 
@@ -37,9 +38,7 @@ def database_url() -> str:
     url = os.environ.get("DCL_DATABASE_URL")
     if not url:
         raise RuntimeError("DCL_DATABASE_URL is not set")
-    if url.startswith("postgresql://"):
-        url = "postgresql+psycopg://" + url.removeprefix("postgresql://")
-    return url
+    return normalize_url(url)
 
 
 def include_name_for(own_tables: set[str]):

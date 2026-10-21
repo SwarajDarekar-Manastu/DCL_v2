@@ -1,0 +1,24 @@
+event: step
+data: {"step_id": "s1", "name": "query_analysis", "description": "Understanding the question", "done": false, "tool": null, "duration_ms": null}
+
+event: step
+data: {"step_id": "s1", "name": "query_analysis", "description": "Understanding the question", "done": true, "tool": null, "duration_ms": 1240}
+
+event: step
+data: {"step_id": "s2", "name": "tool", "description": "Running DuckDB on TP07_T04", "done": true, "tool": "query_telemetry", "duration_ms": 310}
+
+event: token
+data: {"text": "TP07 run T04: steady-state mean 12.4 bar(a) over +1.0 to +9.8 s "}
+
+event: token
+data: {"text": "[1]."}
+
+event: citation
+data: {"citation_id": "1", "doc_id": "6f1c2a3e-0000-4000-8000-000000000001", "title": "Test Report 37", "label": "Test Report 37, p. 8", "anchor": "page:8:3f2a9c1b7d4e5f60", "page_no": 8, "provenance": "internal_report", "language": "en", "translated": false, "needs_review": false, "quote": "steady state 12.5 bar", "url_viewer": "https://console.manastu.test/docs/6f1c2a3e-0000-4000-8000-000000000001/viewer?anchor=page:8:3f2a9c1b7d4e5f60", "url_onedrive": null, "url_asset": null}
+
+event: embed
+data: {"embed_id": "e1", "kind": "plot", "html": null, "url": "https://minio.manastu.test/dcl-assets/plots/tp07_t04.png?sig=x", "alt": "PT-101 chamber pressure, TP07 T04, steady window shaded", "height": 360}
+
+event: done
+data: {"trace_id": "0b6d9f0e-1111-4222-8333-444455556666", "mode": "answered", "answer_markdown": "TP07 run T04: steady-state mean 12.4 bar(a) over +1.0 to +9.8 s [1].", "caveats": [], "followups": ["Compare with T05?"], "verifier": {"claims": 1, "entailed": 1, "contradicted": 0, "not_supported": 0}, "usage": {"tokens_in": 5200, "tokens_out": 180, "cost_estimate": null}, "latency_ms": 6100}
+

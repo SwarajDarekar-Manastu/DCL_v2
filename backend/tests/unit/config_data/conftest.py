@@ -81,11 +81,6 @@ def unit_alias(request):
     return request.param
 
 
-@pytest.fixture(params=sorted(_load_yaml("sanity_ranges.yaml")["quantities"]))
-def sanity_quantity(request):
-    return request.param
-
-
 @pytest.fixture(params=_load_yaml("propellants.yaml")["propellants"], ids=lambda p: p["id"])
 def propellant(request):
     return request.param

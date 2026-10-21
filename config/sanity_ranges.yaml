@@ -1,43 +1,62 @@
-# Sanity bounds per physical quantity.
+# Sanity bounds per channel role.
 # Owner: S5 (DCL S5 Quality), values agreed with the propulsion SME.
 # Consumers: Route C normalizer (S1, 03 §C.1 step 4) and numeric-fact quality control (S2, 04 §8).
 # Effect: a telemetry channel whose 99th percentile falls outside [min, max] after conversion
 # raises UNIT_AMBIGUITY HARD (03 §C.1 step 4); a numeric fact outside the range is stored with
 # suspect = true (04 §8).
 #
-# Fields per quantity:
-#   dimension      pint dimension the unit must have (checked by the load test)
-#   unit           unit of min and max, parsed with config/units.txt
-#   min, max       inclusive bounds in that unit
-#   source         where the value comes from
-#   sme_confirmed  false until the SME has reviewed the entry
+# Matching (Route C): a channel matches a range when its physical_quantity equals the range's
+# physical_quantity and its canonical_name matches canonical_name_glob (shell glob,
+# case-insensitive). The FIRST matching range in file order applies, so list specific roles
+# before generic ones. A channel that matches no range is not bounds-checked.
+# physical_quantity and canonical_name follow S1's channel_map body (backend/review/rules.py):
+# quantities are dimension-level (pressure, force, temperature, mass_flow_rate, ...), the role
+# lives in the canonical name (pt_101_chamber_bar_abs, thrust_n, tc_bed_k, mdot_g_s).
+# Pressure bounds apply to the normalized absolute value.
+# Numeric facts (S2) use `id` as the quantity label.
 #
-# Quantity names are provisional until S1 publishes the physical_quantity values of Route C.
+# Fields per range:
+#   id                   role name, unique
+#   physical_quantity    S1 channel_map physical_quantity
+#   canonical_name_glob  glob over the channel's canonical_name
+#   dimension            pint dimension the unit must have (checked by the load test)
+#   unit                 unit of min and max, parsed with config/units.txt
+#   min, max             inclusive bounds in that unit
+#   source               where the value comes from
+#   sme_confirmed        false until the SME has reviewed the entry
 
-version: 1
-quantities:
-  chamber_pressure:
+version: 2
+ranges:
+  - id: chamber_pressure
+    physical_quantity: pressure
+    canonical_name_glob: "*chamber*"
     dimension: "[pressure]"
     unit: bar
     min: 0
     max: 150
     source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
     sme_confirmed: false
-  thrust:
+  - id: thrust
+    physical_quantity: force
+    canonical_name_glob: "thrust*"
     dimension: "[force]"
     unit: N
     min: 0
     max: 200
     source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
     sme_confirmed: false
-  temperature:
+  - id: temperature
+    physical_quantity: temperature
+    canonical_name_glob: "*"
     dimension: "[temperature]"
     unit: K
     min: 200
     max: 2000
     source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
     sme_confirmed: false
-  mass_flow:
+  - id: mass_flow
+    physical_quantity: mass_flow_rate
+    canonical_name_glob: "*"
     dimension: "[mass] / [time]"
     unit: g/s
     min: 0

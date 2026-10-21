@@ -35,7 +35,6 @@ from backend.dispatcher.contract import AnchorError, format_anchor, parse_anchor
 # ---------------------------------------------------------------- anchor parameter
 # The format is owned by backend.dispatcher.contract (parse_anchor / format_anchor / Anchor).
 
-parse_anchor_param = parse_anchor  # kept for S1's equivalence test in test_contract.py
 
 
 def viewer_path(doc_id: UUID | str, fields: dict[str, Any]) -> str:
