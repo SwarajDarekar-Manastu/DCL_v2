@@ -50,7 +50,7 @@ jobs:
           cache-to: type=gha,scope=minio,mode=max
       - run: uv sync --frozen
       - name: Fonts for the synthetic fixture generator
-        run: sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+        run: sudo apt-get install -y --no-install-recommends fonts-dejavu-core fonts-noto-cjk
       - name: Start disposable ParadeDB and MinIO
         run: |
           backend/devops/ci/test_services.sh up > "$RUNNER_TEMP/test_services.env"
