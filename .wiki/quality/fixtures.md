@@ -22,7 +22,7 @@ Code:
 Tests and fixtures:
 - `backend/tests/fixtures/test_fixture_integrity.py`
 
-Synthetic fixtures (2026-10-21): `a1_office/{rotated_scan, japanese_scanned_page, german_datasheet, doi_paper}`, `a2_source/two_latex_masters`, `c_telemetry/{headerless_csv, merged_cells_fmea, malicious_pickle, unlabeled_npy}`, `g_archives/{zip_bomb_ratio, zip_path_traversal, zip_nested_depth}`, `dispatcher/pdf_is_html`. Real samples: none yet (allowlist pending with the SME).
+Synthetic fixtures (2026-10-21): `a1_office/{rotated_scan, japanese_scanned_page, german_datasheet, doi_paper}`, `a2_source/two_latex_masters`, `c_telemetry/{headerless_csv, merged_cells_fmea, malicious_pickle, unlabeled_npy}`, `g_archives/{zip_bomb_ratio, zip_path_traversal, zip_nested_depth}`, `dispatcher/pdf_is_html`. Real samples: none yet. Allowlist recorded in docs/sessions/DECISIONS.md (2026-10-22, entries E1–E11, chosen from S1's crawl); real samples come from those folders with user approval.
 
 ## Interfaces
 
@@ -58,6 +58,7 @@ Verification: `uv run pytest backend/tests/fixtures && uv run ruff check backend
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S5 | processing.scope allowlist chosen from S1's crawl and recorded by the Lead (DECISIONS.md); .npy slot dropped per ruling |
 | 2026-10-22 | S5 | unlabeled_npy synthetic fixture (no accepted corpus .npy exists; all are under _to_delete); numpy cross-check with allow_pickle=False |
 | 2026-10-21 | S5 | merged_cells_fmea expects no flag: S/O/D/RPN are on the dimensionless list (03 §C.4 step 8, Lead decision) |
 | 2026-10-21 | S5 | Synthetic edge-case fixtures, generator, expected.yaml format, 30 integrity tests |

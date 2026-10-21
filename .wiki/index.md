@@ -61,7 +61,6 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
-| [quality__fixtures__allowlist](plans/quality__fixtures__allowlist.md) | `quality/fixtures` | S5 | 2026-10-21 |
 
 ## Maintenance
 
