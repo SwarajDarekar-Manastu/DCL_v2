@@ -166,3 +166,9 @@ Merged / ready: publish-first item 4: backend/review/rules.py (precedence resolv
 Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl and the downloader's dispatch step
 Needs from others: nothing new
 Next: downloader core (streamed SHA-256 + local quickXorHash, conflict-safe blob insert), job_key builder; then the M2 documents/nodes/assets models
+
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: task 4 core: backend/sync/downloader.py land_item() (zero-download link, tokenless 302 fetch, one-pass SHA-256 + quickXorHash, verify, content-addressed copy, conflict-safe blob insert); backend/postgres/session.py; Job.key_for(); quickxorhash dep. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend` (627 passed, 3 skipped with both servers)
+Blocked on: Lead answers of 100eae2 for the crawl and for dispatch after landing (processing.scope)
+Needs from others: Lead — may the M4 entity tables (entities, entity_aliases, entity_mentions, numeric_facts) be created now? S2 is building enrichment in parallel and asked for the models
+Next: backend/common/units.py (pint + config/units.txt, S2 needs it), S2's entity enums

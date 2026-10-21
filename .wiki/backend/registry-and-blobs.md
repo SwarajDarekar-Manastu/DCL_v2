@@ -15,13 +15,13 @@ Download accepted items into MinIO keyed by SHA-256, verify quickXorHash, dedupl
 ## Location
 
 Code:
-- `backend/sync/downloader.py` (planned)
+- `backend/sync/downloader.py` (`land_item()`: zero-download link by (quickXorHash, size), 302 target fetched without the token, one-pass SHA-256 + quickXorHash, verify, server-side copy to the content address, conflict-safe blob insert, item LANDED)
 - `backend/postgres/models/registry.py` (M1 tables, done with backend/schema-and-migrations)
 - `backend/storage/minio.py` (client from `Group.MINIO`, `BucketStore.get/put`, `presign_get` 15 min, `ensure_buckets`, `raw_key`, `uri`/`parse_uri`)
 
 Tests and fixtures:
 - `backend/tests/unit/storage/test_minio.py` (server tests need `DCL_TEST_MINIO_ENDPOINT` on a disposable MinIO)
-- `backend/tests/unit/sync/test_downloader.py` (planned)
+- `backend/tests/unit/sync/test_downloader.py` (server tests need `DCL_TEST_DATABASE_URL` + `DCL_TEST_MINIO_ENDPOINT`)
 - `backend/tests/integration/registry/`
 
 ## Interfaces
@@ -31,7 +31,8 @@ Provides:
 - `presign_get(client, minio_uri)` (S3 viewer and assets; the caller checks the session)
 - blobs rows
 - location→blob links
-- jobs idempotency keys
+- jobs idempotency keys: `Job.key_for(stage, parser_version, pipeline_version, blob_sha256=… | doc_id=…)`
+- `land_item(session, graph, minio, location_id, content_http) -> Landed`; raises `DownloadMismatch`; the caller commits and decides dispatch
 
 Consumes:
 - MinIO buckets (platform/compose-stack)
@@ -61,6 +62,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | MinIO store module (get/put/presign/buckets); 11 tests, green against S4's pinned MinIO image |
+| 2026-10-21 | S1 | Downloader core and job keys; 6 tests, green against ParadeDB pg17 + pinned MinIO |
 
 ## Related
 

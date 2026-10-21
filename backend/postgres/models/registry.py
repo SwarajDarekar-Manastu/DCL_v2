@@ -197,3 +197,20 @@ class Job(Base):
     duration_ms: Mapped[int | None] = mapped_column(Integer)
     peak_rss_mb: Mapped[int | None] = mapped_column(Integer)
     error: Mapped[str | None] = mapped_column(Text)
+
+    @staticmethod
+    def key_for(
+        stage: JobStage,
+        parser_version: int,
+        pipeline_version: int,
+        *,
+        blob_sha256: str | None = None,
+        doc_id: uuid.UUID | None = None,
+    ) -> str:
+        """``{stage}:{blob_sha256 or doc_id}:v{parser_version}.{pipeline_version}`` (file 02 §7.1).
+
+        Content, not location: a second copy of known content is the same job.
+        """
+        if (blob_sha256 is None) == (doc_id is None):
+            raise ValueError("a job key names exactly one of blob_sha256 or doc_id")
+        return f"{stage}:{blob_sha256 or doc_id}:v{parser_version}.{pipeline_version}"
