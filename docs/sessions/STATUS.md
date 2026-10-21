@@ -229,3 +229,8 @@ Merged / ready: `backend/llm_engine/engine/{sanitizer,verifier}.py` (outbound IP
 Blocked on: nothing (S1's enums and units.py are on their branch, merge requested)
 Needs from others: S1: entity tables when the Lead rules on M4 timing
 Next: enrichment extraction (schema, prompt, grounding, unit validation with S1's units.py)
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: type resolution (4d9d56e) and the Tier 4 secret scan (pure functions, redacted previews). Test: `uv run pytest && uv run ruff check backend`
+Blocked on: Lead answers: 100eae2 questions (permission option, pipeline_config in M1, gate source); creating the M2/M4 tables now; the document_nodes bbox column name
+Needs from others: S4 — libmagic1 in the images, a disposable MinIO in CI
+Next: after the answers: delta crawl, dispatch after landing, M2 tables, review flags write path

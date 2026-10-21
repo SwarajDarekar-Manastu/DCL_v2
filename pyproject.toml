@@ -21,6 +21,7 @@ dependencies = [
     "cryptography>=43",
     "minio>=7.2",
     "quickxorhash>=0.3",
+    "python-magic>=0.4.27",
 ]
 
 [dependency-groups]
