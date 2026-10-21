@@ -1,0 +1,48 @@
+# Operational alerts only (docs/architecture/02 §10, 06 §9): they go to the Teams webhook. Review aging is
+# shown in the Console, never sent (decision H6).
+groups:
+  - name: dcl-operations
+    rules:
+      - alert: DclGraphAuthFailure
+        expr: min by (root) (sync_auth_ok) == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "Graph sign-in failed for root {{ $labels.root }}"
+          runbook: backend/devops/runbooks/stack.md (re-auth)
+      - alert: DclGraphRootUnreachable
+        expr: min by (root) (sync_root_reachable) == 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "Root {{ $labels.root }} has not answered for 15 minutes"
+      - alert: DclResyncStarted
+        expr: sum by (root) (increase(sync_resync_started_total[15m])) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "A 410 or forced resync started for root {{ $labels.root }}"
+      - alert: DclDownloadFailureRate
+        expr: |
+          sum(increase(downloads_total{result="failed"}[1h])) / sum(increase(downloads_total[1h])) > 0.05
+          and sum(increase(downloads_total[1h])) >= 20
+        labels: {severity: warning}
+        annotations:
+          summary: "More than 5% of downloads failed in the last hour"
+      - alert: DclWebhookSilence
+        expr: |
+          (time() - max by (root) (webhook_last_notification_timestamp_seconds)) > 36 * 3600
+          and on (root) sum by (root) (increase(delta_pages_total[7d])) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "No Graph notification for root {{ $labels.root }} in 36 hours despite recent activity"
+      - alert: DclQueueStall
+        expr: max by (queue) (celery_queue_depth{queue="io_light"}) > 2000
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "io_light holds more than 2,000 waiting tasks for 30 minutes"
+      - alert: DclGeminiBudgetCap
+        expr: sum(increase(llm_budget_exhausted_total[15m])) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Gemini calls are being refused by the daily budget or the gateway quota"

@@ -1,6 +1,7 @@
 """First-start MinIO setup for the dcl-v2 stack (docs/architecture/05 §1, §6; 10 §3). Idempotent.
 
-Creates the five buckets, enables versioning on dcl-raw and dcl-cir, sets the lifecycle rules (vision cache
+Creates the five buckets, enables versioning on dcl-raw and dcl-cir, sets the lifecycle rules (download temp
+objects under dcl-raw/_incoming/ lose noncurrent versions after 1 day and their delete markers; vision cache
 expires 180 days after last write; exports 180 days), and creates the application user with a policy limited
 to the five buckets. Runs in the one-shot `minio-init` compose service with the root pair; the application
 itself only ever holds DCL_MINIO_ACCESS_KEY / DCL_MINIO_SECRET_KEY. Prints names, never credentials.
@@ -14,7 +15,7 @@ from minio import Minio
 from minio.commonconfig import ENABLED, Filter
 from minio.credentials import StaticProvider
 from minio.error import MinioAdminException
-from minio.lifecycleconfig import Expiration, LifecycleConfig, Rule
+from minio.lifecycleconfig import Expiration, LifecycleConfig, NoncurrentVersionExpiration, Rule
 from minio.minioadmin import MinioAdmin
 from minio.versioningconfig import VersioningConfig
 
@@ -23,6 +24,15 @@ from backend.storage.minio import BUCKETS, CIR, EXPORTS, RAW
 VERSIONED = (RAW, CIR)
 APP_POLICY = "dcl-app"
 LIFECYCLE = {
+    RAW: [
+        Rule(
+            ENABLED,
+            rule_filter=Filter(prefix="_incoming/"),
+            rule_id="incoming-temp-cleanup",
+            noncurrent_version_expiration=NoncurrentVersionExpiration(noncurrent_days=1),
+            expiration=Expiration(expired_object_delete_marker=True),
+        )
+    ],
     CIR: [
         Rule(
             ENABLED,

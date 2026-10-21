@@ -61,6 +61,7 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
+| [platform__observability__otel-metrics-alerts](plans/platform__observability__otel-metrics-alerts.md) | `platform/observability` | S4 | 2026-10-22 |
 
 ## Maintenance
 

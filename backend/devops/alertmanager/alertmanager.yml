@@ -1,0 +1,14 @@
+# Operational alerts go to the Teams webhook only (DCL_ALERT_WEBHOOK_URL). The URL is written to
+# /tmp/teams_webhook_url by the container command at start; it never appears in this file or an image.
+route:
+  receiver: teams
+  group_by: [alertname, root, queue]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: teams
+    msteamsv2_configs:
+      - webhook_url_file: /tmp/teams_webhook_url
+        send_resolved: true

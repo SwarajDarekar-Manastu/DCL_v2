@@ -1,0 +1,76 @@
+# promtool test rules backend/devops/prometheus/alerts_test.yml (run by the unit tests through Docker)
+rule_files:
+  - alerts.yml
+evaluation_interval: 30s
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'sync_auth_ok{root="APU"}'
+        values: '1 1 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: DclGraphAuthFailure
+        exp_alerts:
+          - exp_labels: {severity: critical, root: APU}
+            exp_annotations:
+              summary: "Graph sign-in failed for root APU"
+              runbook: backend/devops/runbooks/stack.md (re-auth)
+  - interval: 1m
+    input_series:
+      - series: 'sync_resync_started_total{root="APU"}'
+        values: '0 0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: DclResyncStarted
+        exp_alerts:
+          - exp_labels: {severity: warning, root: APU}
+            exp_annotations:
+              summary: "A 410 or forced resync started for root APU"
+  - interval: 1m
+    input_series:
+      - series: 'celery_queue_depth{queue="io_light"}'
+        values: '2500x40'
+      - series: 'celery_queue_depth{queue="cpu_parse"}'
+        values: '9000x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DclQueueStall
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: DclQueueStall
+        exp_alerts:
+          - exp_labels: {severity: warning, queue: io_light}
+            exp_annotations:
+              summary: "io_light holds more than 2,000 waiting tasks for 30 minutes"
+  - interval: 1m
+    input_series:
+      - series: 'llm_budget_exhausted_total{model="gemini-3.8-flash"}'
+        values: '0 0 3 5'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: DclGeminiBudgetCap
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Gemini calls are being refused by the daily budget or the gateway quota"
+  - interval: 5m
+    input_series:
+      - series: 'downloads_total{result="failed"}'
+        values: '0+1x24'
+      - series: 'downloads_total{result="ok"}'
+        values: '0+10x24'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: DclDownloadFailureRate
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "More than 5% of downloads failed in the last hour"
+  - interval: 1m
+    input_series:
+      - series: 'sync_auth_ok{root="APU"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: DclGraphAuthFailure
+        exp_alerts: []

@@ -127,6 +127,7 @@ def test_published_host_ports_follow_the_lead_allocation():
         "${DCL_MINIO_CONSOLE_PORT:-9101}",
         "8500",
         "8200",
+        "${DCL_GRAFANA_PORT:-3300}",
     }
     assert all(
         p.startswith("${DCL_BIND_HOST:-127.0.0.1}:")
