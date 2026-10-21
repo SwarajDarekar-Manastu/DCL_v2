@@ -19,7 +19,7 @@ Code:
 - `backend/api/models.py` (router, mounted by `backend/main.py` for `models` and `all`)
 
 Tests and fixtures:
-- `backend/tests/unit/llm_engine/local_models/` (fakes in `conftest.py`; `test_gpu_models.py` needs CUDA; `measure_throughput.py` prints the table below)
+- `backend/tests/unit/llm_engine/local_models/` (torch-free fakes in `conftest.py`; only `test_gpu_models.py` needs torch, CUDA and 3 GiB free; `measure_throughput.py` prints the table below)
 
 ## Interfaces
 
@@ -69,6 +69,7 @@ Consumes:
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | Unit tests run without torch (dtype check before import, CUDA OOM recognized by name, torch-free fakes); only `test_gpu_models.py` needs torch |
 | 2026-10-21 | S2 | Built `local_models.py`, `/embed/text`, `/embed/image`, `/models/health`, `ModelsClient`; GPU throughput measured |
 
 ## Related

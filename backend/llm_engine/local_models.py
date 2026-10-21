@@ -59,20 +59,39 @@ class ModelRequestRejected(ValueError):
     """The models role refused the request (4xx): a caller bug, not an outage."""
 
 
-def resolve_dtype(name: str, device: str):
-    """Map a dtype name to torch; refuse float16 and anything else outside bfloat16/float32."""
-    import torch
-
+def check_dtype(name: str) -> ModelDtype:
+    """Refuse float16 and anything else outside bfloat16/float32; needs no torch."""
     try:
-        dtype = ModelDtype(name)
+        return ModelDtype(name)
     except ValueError:
         raise ValueError(
             f"dtype {name!r} is not allowed for EmbeddingGemma 2; use bfloat16 or float32 "
             "(float16 overflows its activations and returns NaN or degraded vectors)"
         ) from None
+
+
+def resolve_dtype(name: str, device: str):
+    """The torch dtype for an allowed name; bfloat16 only where the GPU supports it."""
+    dtype = check_dtype(name)
+    import torch
+
     if dtype is ModelDtype.BFLOAT16 and device.startswith("cuda") and not torch.cuda.is_bf16_supported():
         raise ValueError("bfloat16 requested but this GPU does not support it; use float32")
     return {ModelDtype.BFLOAT16: torch.bfloat16, ModelDtype.FLOAT32: torch.float32}[dtype]
+
+
+def _is_cuda_oom(exc: BaseException) -> bool:
+    """torch.cuda.OutOfMemoryError, recognized without importing torch (it subclasses RuntimeError)."""
+    return type(exc).__name__ == "OutOfMemoryError"
+
+
+def _release_cuda_cache() -> None:
+    try:
+        import torch
+    except ImportError:
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def default_device_and_dtype() -> tuple[str, str]:
@@ -177,8 +196,6 @@ class LocalModels:
 
     def _encode(self, inputs: list, batch_size: int) -> list[list[float]]:
         """Encode under the GPU lock; on CUDA out-of-memory halve the batch (the card is shared, 09 §H12)."""
-        import torch
-
         with self._lock:
             while True:
                 try:
@@ -186,10 +203,10 @@ class LocalModels:
                         inputs, batch_size=batch_size, normalize_embeddings=True, convert_to_numpy=True
                     )
                     return vectors.tolist()
-                except torch.cuda.OutOfMemoryError:
-                    torch.cuda.empty_cache()
-                    if batch_size == 1:
+                except RuntimeError as exc:
+                    if not _is_cuda_oom(exc) or batch_size == 1:
                         raise
+                    _release_cuda_cache()
                     batch_size //= 2
 
     def _refuse_long(self, texts: list[str], inputs: list[str]) -> None:
@@ -215,6 +232,8 @@ def load_models(device: str | None = None, dtype: str | None = None) -> LocalMod
     with _load_lock:
         if _models is not None:
             return _models
+        if dtype is not None:
+            check_dtype(dtype)
         from sentence_transformers import CrossEncoder, SentenceTransformer
 
         default_device, default_dtype = default_device_and_dtype()
