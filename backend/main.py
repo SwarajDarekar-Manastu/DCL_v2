@@ -1,4 +1,4 @@
-"""The one FastAPI app. ROLE decides which routers of backend/api are mounted (file 10 §2.1)."""
+"""The one FastAPI app. DCL_ROLE decides which routers of backend/api are mounted (file 10 §2.1)."""
 
 from contextlib import asynccontextmanager
 from types import ModuleType
@@ -53,7 +53,7 @@ async def lifespan(_: FastAPI):
 def _role() -> Role:
     role = get_settings().role
     if role is None:
-        raise ConfigError("ROLE is required to start backend.main (api | models | all)")
+        raise ConfigError("DCL_ROLE is required to start backend.main (api | models | all)")
     return role
 
 

@@ -1,7 +1,17 @@
+import re
+
 import pytest
 
 from backend import config
-from backend.config import ConfigError, Group, PermissionOption, ThinkingLevel, load_settings
+from backend.config import (
+    ConfigError,
+    Environment,
+    Group,
+    PermissionOption,
+    Role,
+    ThinkingLevel,
+    load_settings,
+)
 
 SECRET = "s3cr3t-value-that-must-never-leak"
 
@@ -218,3 +228,165 @@ def test_settings_are_frozen(monkeypatch):
     settings = load_with(monkeypatch)
     with pytest.raises(Exception, match="frozen"):
         settings.tenant_id = "other"
+
+
+REPO = config.DEFAULT_ENV_FILE.parent
+
+
+def contract_names_in_manual() -> set[str]:
+    text = (REPO / "docs/architecture/01_system_overview_and_tech_stack.md").read_text()
+    section = text.split("### 7.1", 1)[1].split("\n## 8", 1)[0]
+    return set(re.findall(r"`((?:DCL|GEMINI|GOOGLE)_[A-Z0-9_]+)", section))
+
+
+def test_env_example_lists_every_manual_name_without_values():
+    example = (REPO / ".env.example").read_text()
+    names = dict(line.split("=", 1) for line in example.splitlines() if line and not line.startswith("#"))
+    expected = contract_names_in_manual() - set(config.FORBIDDEN_NAMES)
+    assert expected <= set(names), sorted(expected - set(names))
+    assert {k for k, v in names.items() if v.strip()} == set()
+
+
+def test_loader_reads_every_manual_name():
+    assert contract_names_in_manual() - set(config.FORBIDDEN_NAMES) <= config.CONTRACT_NAMES
+
+
+def test_dev_defaults_apply_only_in_dev(monkeypatch):
+    dev = load_settings(env_file=None)
+    assert dev.env is Environment.DEV
+    assert dev.redis_url == "redis://redis:6379/0"
+    assert str(dev.minio_endpoint) == "http://minio:9000/"
+    assert str(dev.models_url) == "http://models:8500/"
+    assert dev.console_allowed_origins == ["http://localhost:8100"]
+    assert dev.require(Group.REDIS, Group.MODELS, Group.LINKS) is dev
+    monkeypatch.setenv("DCL_ENV", "prod")
+    prod = load_settings(env_file=None)
+    assert prod.redis_url is None and prod.minio_endpoint is None and prod.console_allowed_origins == []
+    with pytest.raises(ConfigError, match="DCL_REDIS_URL"):
+        prod.require(Group.REDIS)
+    with pytest.raises(ConfigError, match="DCL_API_BASE_URL, DCL_CONSOLE_BASE_URL"):
+        prod.require("links")
+
+
+def test_explicit_values_override_dev_defaults(monkeypatch):
+    monkeypatch.setenv("DCL_REDIS_URL", "redis://localhost:6390/2")
+    assert load_settings(env_file=None).redis_url == "redis://localhost:6390/2"
+
+
+@pytest.mark.parametrize("value", ["qa", "production", "DEV2"])
+def test_unknown_environment_is_refused(monkeypatch, value):
+    monkeypatch.setenv("DCL_ENV", value)
+    with pytest.raises(ConfigError, match="DCL_ENV"):
+        load_settings(env_file=None)
+
+
+def test_redis_url_scheme_is_checked(monkeypatch):
+    monkeypatch.setenv("DCL_REDIS_URL", "http://redis:6379")
+    with pytest.raises(ConfigError, match="DCL_REDIS_URL"):
+        load_settings(env_file=None)
+
+
+def test_minio_group_needs_the_access_key_pair_even_in_dev(monkeypatch):
+    with pytest.raises(ConfigError, match="DCL_MINIO_ACCESS_KEY, DCL_MINIO_SECRET_KEY"):
+        load_settings(env_file=None).require(Group.MINIO)
+    set_env(
+        monkeypatch,
+        {"DCL_MINIO_ACCESS_KEY": "dcl-app", "DCL_MINIO_SECRET_KEY": SECRET, "DCL_MINIO_SECURE": "true"},
+    )
+    settings = load_settings(env_file=None).require(Group.MINIO)
+    assert settings.minio_secure is True
+    assert SECRET not in repr(settings)
+
+
+def test_console_auth_group_and_attribute_names(monkeypatch):
+    set_env(
+        monkeypatch,
+        {
+            "DCL_TENANT_ID": "tenant-1",
+            "DCL_CONSOLE_API_AUDIENCE": "api://dcl-console",
+            "DCL_CONSOLE_GROUP_REVIEWERS": "g-rev",
+            "DCL_CONSOLE_GROUP_ADMINS": "g-adm",
+            "DCL_CONSOLE_GROUP_EXTERNAL_SEARCH": "g-ext",
+            "DCL_CONSOLE_ALLOWED_ORIGINS": "https://console.manastu.test, http://localhost:8100",
+            "DCL_ENV": "staging",
+        },
+    )
+    s = load_settings(env_file=None).require(Group.CONSOLE_AUTH)
+    assert (s.tenant_id, s.console_api_audience) == ("tenant-1", "api://dcl-console")
+    assert (s.console_group_reviewers, s.console_group_admins, s.console_group_external_search) == (
+        "g-rev",
+        "g-adm",
+        "g-ext",
+    )
+    assert s.console_allowed_origins == ["https://console.manastu.test", "http://localhost:8100"]
+    monkeypatch.delenv("DCL_CONSOLE_GROUP_EXTERNAL_SEARCH")
+    with pytest.raises(ConfigError, match="DCL_CONSOLE_GROUP_EXTERNAL_SEARCH"):
+        load_settings(env_file=None).require(Group.CONSOLE_AUTH)
+
+
+def test_pipe_secret_is_secret_and_required_by_its_group(monkeypatch):
+    with pytest.raises(ConfigError, match="DCL_PIPE_SHARED_SECRET"):
+        load_settings(env_file=None).require(Group.PIPE)
+    monkeypatch.setenv("DCL_PIPE_SHARED_SECRET", SECRET)
+    settings = load_settings(env_file=None).require(Group.PIPE)
+    assert settings.pipe_shared_secret.get_secret_value() == SECRET
+    assert SECRET not in repr(settings)
+
+
+def test_dcl_role_wins_over_deprecated_role(monkeypatch, caplog):
+    monkeypatch.setenv("ROLE", "models")
+    assert load_settings(env_file=None).role is Role.MODELS
+    assert "ROLE is deprecated" in caplog.text
+    monkeypatch.setenv("DCL_ROLE", "api")
+    assert load_settings(env_file=None).role is Role.API
+
+
+def test_gateway_key_falls_back_to_legacy_alias(monkeypatch):
+    monkeypatch.setenv("DCL_GEMINI_API_KEY", "legacy-gateway-credential")
+    assert load_settings(env_file=None).gemini_gateway_key.get_secret_value() == "legacy-gateway-credential"
+    monkeypatch.setenv("GEMINI_GATEWAY_KEY", "")
+    assert load_settings(env_file=None).gemini_gateway_key.get_secret_value() == "legacy-gateway-credential"
+    monkeypatch.setenv("GEMINI_GATEWAY_KEY", "primary-credential")
+    assert load_settings(env_file=None).gemini_gateway_key.get_secret_value() == "primary-credential"
+
+
+def test_legacy_alias_satisfies_the_gemini_group(monkeypatch):
+    set_env(
+        monkeypatch,
+        {"GEMINI_BACKEND": "gateway", "GEMINI_GATEWAY_URL": "https://gw.test", "DCL_GEMINI_API_KEY": "k"},
+    )
+    assert load_settings(env_file=None).require(Group.GEMINI)
+
+
+@pytest.mark.parametrize("name", ["GEMINI_GATEWAY_KEY", "DCL_GEMINI_API_KEY"])
+def test_developer_key_format_is_refused_for_both_names(monkeypatch, tmp_path, name):
+    developer_key = "AIzaSyD-" + "x" * 31
+    monkeypatch.setenv(name, developer_key)
+    with pytest.raises(ConfigError, match=f"{name} has the Google Developer API key format") as exc:
+        load_settings(env_file=None)
+    assert developer_key not in str(exc.value)
+    monkeypatch.delenv(name)
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"{name}={developer_key}\n")
+    with pytest.raises(ConfigError, match=name):
+        load_settings(env_file=env_file)
+
+
+def test_stack_database_url_is_built_from_parts_and_escaped(monkeypatch):
+    set_env(monkeypatch, {"DCL_DB_USER": "dcl", "DCL_DB_PASSWORD": "p@ss/w:rd"})
+    url = load_settings(env_file=None).stack_database_url().get_secret_value()
+    assert url == "postgresql+psycopg://dcl:p%40ss%2Fw%3Ard@postgres:5432/dcl"
+
+
+def test_database_url_wins_when_set(monkeypatch):
+    set_env(
+        monkeypatch,
+        {"DCL_DB_USER": "dcl", "DCL_DB_PASSWORD": "x", "DCL_DATABASE_URL": "postgresql+psycopg://h/db"},
+    )
+    assert load_settings(env_file=None).stack_database_url().get_secret_value() == "postgresql+psycopg://h/db"
+
+
+def test_database_group_names_missing_parts(monkeypatch):
+    monkeypatch.setenv("DCL_DB_USER", "dcl")
+    with pytest.raises(ConfigError, match="DCL_DB_PASSWORD"):
+        load_settings(env_file=None).stack_database_url()
