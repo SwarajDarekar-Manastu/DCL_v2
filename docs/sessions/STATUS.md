@@ -174,3 +174,9 @@ Merged / ready: `config/gate.yaml` with `kept_endings_by_parent_kind: {wbpz: [".
 Blocked on: S1 crawl folder listing (allowlist)
 Needs from others: nothing else
 Next: idle until the listing arrives
+
+## 2026-10-22 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` v2 for S1's channel_map body (a7cf42d): ordered ranges keyed by `physical_quantity` + `canonical_name_glob`, first match wins, same four manual values; selection cases on S1-style names. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend` (246 passed)
+Blocked on: S1 crawl folder listing (allowlist); S1 CIR snapshot format (with the CIR writer)
+Needs from others: nothing else; `config/rules/` stays empty until operator rules exist (format now known from S1)
+Next: idle until the listing arrives
