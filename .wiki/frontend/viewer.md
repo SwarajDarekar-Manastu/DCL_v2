@@ -74,7 +74,7 @@ Deployment note: presigned MinIO URLs must be reachable from engineers' browsers
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S3 | Deep-link contract, payload models, Console viewer page and components, tests; endpoint 501 until wired |
-| 2026-10-21 | S3 | Anchor codec delegated to `backend/dispatcher/contract.py`; viewer keeps `viewer_path` and a `parse_anchor_param` alias for S1's test |
+| 2026-10-21 | S3 | Anchor codec delegated to `backend/dispatcher/contract.py`; viewer keeps `viewer_path` (the temporary `parse_anchor_param` alias is removed) |
 
 ## Related
 
