@@ -30,6 +30,7 @@ from backend.sync.auth import GraphAuthConfig, ReauthRequired, TokenProvider
 from backend.sync.delta import ResyncRequired, run_root, seed_roots
 from backend.sync.downloader import DownloadMismatch, land_item
 from backend.sync.graph_client import GraphClient
+from backend.sync.inspect import inspect_item
 
 log = logging.getLogger(__name__)
 
@@ -119,6 +120,8 @@ def download_one(
         return Outcome.SKIPPED
     try:
         land_item(session, graph, minio, location_id, content_http)
+        session.commit()
+        inspect_item(session, minio, location_id)  # Tier 4 before any dispatch
         session.commit()
         return Outcome.LANDED
     except DownloadMismatch as exc:

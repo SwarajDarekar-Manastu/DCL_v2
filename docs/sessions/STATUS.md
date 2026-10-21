@@ -352,6 +352,12 @@ Blocked on: the user's answer on the sample list
 Needs from others: nothing new (S2 told of the id rename)
 Next: on the answer, export and verify the telemetry cases; the retrieval set once allowlisted documents are indexed (S2's anchor format received)
 
+## 2026-10-22 03:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/indexing/index_document.py` (ProcessedDocument → IndexPlan: chunk, enrich per parent, entities, facts, route mentions, question proxies, headers, vector reuse, image vectors, aggregation), 11 tests; trace lookup and feedback routes for S3; sanity range by origin and role.
+Blocked on: nothing
+Needs from others: S1: `commit.py` consuming `IndexPlan` (shape in `.wiki/backend/chunker-and-anchors.md`); the pipeline task that calls `index_document`
+Next: Retrieval-lab data for S3, `tasks_embed.py`, then Route A1 (pre-flight, triage, Docling by script)
+
 ## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
 Merged / ready (after S1's presign_put lands): Open WebUI actions Show trace and Report issue (manastu_actions bundle, against S2's trace routes); chat attachments in the Pipe (only the user's own files, size cap, failures skipped) and `POST /assets/upload` (Pipe identity, 25 MB, slot in dcl-exports/uploads/{user}/{uuid}). 57 Open WebUI tests pass on source and bundle.
 Blocked on: S1's presign_put (2827fa9, merge requested). backend/api/assets.py imports it, so this branch is not mergeable until it is on main.
