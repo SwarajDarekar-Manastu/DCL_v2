@@ -234,3 +234,9 @@ Merged / ready: type resolution (4d9d56e) and the Tier 4 secret scan (pure funct
 Blocked on: Lead answers: 100eae2 questions (permission option, pipeline_config in M1, gate source); creating the M2/M4 tables now; the document_nodes bbox column name
 Needs from others: S4 — libmagic1 in the images, a disposable MinIO in CI
 Next: after the answers: delta crawl, dispatch after landing, M2 tables, review flags write path
+
+## 2026-10-22 — DCL Lead — main
+Merged / ready: OneDrive delegated sign-in completed by the user (option B); v2 encrypted token cache exists; access check: all four roots HTTP 200, outside-share item 404 (pass). Gateway contract verified live and written to file 09 §H.1.
+Blocked on: nothing
+Needs from others: S4 to build ManastuGatewayAdapter per 09 §H.1; S1 to run the metadata crawl when it resumes
+Next: merge rounds; relay S1's crawl listing to S5 for the allowlist
