@@ -30,6 +30,7 @@ dependencies = [
 parse = [
     "pypdfium2==5.14.0",
     "pikepdf==10.17.0",
+    "docling==2.141.0",
 ]
 models = [
     "torch==2.14.1",
