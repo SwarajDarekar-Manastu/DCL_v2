@@ -6,13 +6,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import auth, viewer
-from backend.api.viewer import (
-    AnchorParamError,
-    ViewerPayload,
-    format_anchor_param,
-    parse_anchor_param,
-    viewer_path,
-)
+from backend.api.viewer import ViewerPayload, viewer_path
+from backend.dispatcher.contract import AnchorError, format_anchor, parse_anchor
 
 HASH = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
 DOC = uuid.UUID("0b6f1d3e-2a4c-4e8f-9c1a-5d7e3f2b1a90")
@@ -36,8 +31,8 @@ DOC = uuid.UUID("0b6f1d3e-2a4c-4e8f-9c1a-5d7e3f2b1a90")
     ],
 )
 def test_parse_and_round_trip(param, fields):
-    assert parse_anchor_param(param) == fields
-    assert parse_anchor_param(format_anchor_param(fields)) == fields
+    assert parse_anchor(param) == fields
+    assert parse_anchor(format_anchor(fields)) == fields
 
 
 @pytest.mark.parametrize(
@@ -58,20 +53,20 @@ def test_parse_and_round_trip(param, fields):
     ],
 )
 def test_malformed_anchors_are_refused(param):
-    with pytest.raises(AnchorParamError):
-        parse_anchor_param(param)
+    with pytest.raises(AnchorError):
+        parse_anchor(param)
 
 
 def test_format_refuses_an_anchor_without_locator():
-    with pytest.raises(AnchorParamError):
-        format_anchor_param({"content_sha256": HASH})
+    with pytest.raises(AnchorError):
+        format_anchor({"content_sha256": HASH})
 
 
 def test_viewer_path_is_a_readable_link_the_viewer_parses_back():
     path = viewer_path(DOC, {"sheet_name": "Run 1", "cell_range": "A1:D20", "content_sha256": HASH[:16]})
     assert path == f"/docs/{DOC}/viewer?anchor=cells:Run%201!A1:D20:{HASH[:16]}"
     anchor = parse_qs(urlsplit(path).query)["anchor"][0]
-    assert parse_anchor_param(anchor)["sheet_name"] == "Run 1"
+    assert parse_anchor(anchor)["sheet_name"] == "Run 1"
 
 
 def test_payload_serializes_each_view_kind():

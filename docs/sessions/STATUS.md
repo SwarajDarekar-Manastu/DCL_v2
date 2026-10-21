@@ -130,3 +130,8 @@ Merged / ready: `config/gate.yaml` for S1's GateConfig (file 02 §4 lists; `.1` 
 Blocked on: S1 folder-level listing of the real crawl (allowlist); S1 rules YAML schema and CIR snapshot format (M2)
 Needs from others: Lead — decide `.out` (LaTeX junk in 02 §4 vs ANSYS solver logs kept in 03 §11 step 5; archive members pass the same gate) and `.ini` (Tier-2 junk vs Tier-4 secret-scan list)
 Next: allowlist from the crawl listing, then real fixtures and the first 15 telemetry cases; meanwhile idle
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: viewer anchor codec delegated to `backend/dispatcher/contract.py` (S1 owns the format); `viewer_path()` unchanged, `parse_anchor_param` kept as an alias for S1's equivalence test; 437 backend tests pass.
+Blocked on: Review UI waits for S1's `backend/review/api_models.py` (in progress); viewer body waits for S2's `resolve_anchor`; Pipe waits for S2's `/v1/answer` schema.
+Needs from others: S1 may drop the equivalence test in `test_contract.py`, after which S3 deletes the alias.
+Next: idle until one of the inputs above lands on main.
