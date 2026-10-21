@@ -1,0 +1,17 @@
+fixture: zip_path_traversal
+edge_case: zip member with a path-traversal name (bomb guard, file 03 §11)
+origin: synthetic
+generator: make_synthetic.py::zip_path_traversal
+byte_stable: true
+files: [scripts_bundle.zip]
+simulated_location: {root: APU, folder: Archives}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §11 step 1 (path traversal rejected)"
+expected:
+  route: G
+  detected_mime: application/zip
+  document_status: HALTED
+  flags:
+    - {type: PARSE_FAILURE, severity: HARD, reason: "bomb guard: path traversal in ../../outside_the_scratch_dir.txt"}
+  flags_exact: true
+  never: [write any file outside the scratch directory, extract any member]

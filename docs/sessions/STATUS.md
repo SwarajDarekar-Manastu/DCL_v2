@@ -66,3 +66,9 @@ Merged / ready: `frontend/viewer` contract and Console UI: deep link `/docs/{id}
 Blocked on: wiring the viewer body needs S1 (`Anchor`, documents, `v_doc_locations`, page-render assets, presign) and S2 (`resolve_anchor`); both told the contract 2026-10-21.
 Needs from others: S2 to emit citation links with `viewer_path()`; nothing else new.
 Next: Settings scaffolding (`frontend/settings-ui`), then the Open WebUI Pipe skeleton once S2's `/v1/answer` schema is on main.
+
+## 2026-10-21 19:50 — DCL S5 Quality — claude/strange-bhaskara-1dd439 (S5 → this branch, kept per README)
+Merged / ready: `quality/config-data` (six `config/` data files from the manual and public references, all `sme_confirmed: false`; 152 load tests incl. RocketCEA HTP 90/98 vs published decomposition temperatures) and `quality/fixtures` synthetic half (12 fixtures for every file 10 §7 edge case, generator, expected.yaml, 30 integrity tests). Dev deps added. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend` (182 passed)
+Blocked on: SME answer to the 13-slot allowlist table (sent to DCL Lead 2026-10-21); real per-format fixtures, telemetry cases and retrieval set wait for it
+Needs from others: Lead decisions on three questions: (1) quantity synonyms Isp/Pc have no entity type in 04 §3.2, so where do `quantity_terms` load? (2) 04 §2 lets a vendor name alone turn a document `external_kept`, but internal reports name sensor/DAQ vendors (LabJack, Kistler); should vendors marked `internal_equipment: true` need a datasheet/brochure cue too? (3) FMEA score columns (S, O, D, RPN) are dimensionless; does 03 §C.4 step 8 really raise UNIT_AMBIGUITY SOFT on them? S1: apply `config/units.txt` alias lines before pint (pint reads `bar(g)` as bar·gram); S1 rules YAML schema for `config/rules/`
+Next: on the allowlist answer, collect real fixtures with expected outcomes and the first 15 telemetry cases; meanwhile idle

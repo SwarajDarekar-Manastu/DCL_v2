@@ -1,0 +1,26 @@
+fixture: two_latex_masters
+edge_case: two LaTeX masters in one folder (file 10 §7)
+origin: synthetic
+generator: make_synthetic.py::two_latex_masters
+byte_stable: true
+files: [report_main.tex, report_draft.tex, sections/results.tex]
+simulated_location: {root: APU, folder: Test Plan 37/report}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §1.3 (assembler unsure: index both, CONFLICT SOFT)"
+  - "docs/architecture/03_phase2_processing_routes.md §A2.2 (master detection, include resolution, siunitx)"
+expected:
+  route: A2
+  detected_mime: text/x-tex
+  documents: 2
+  document_status: ACTIVE_WITH_SOFT_FLAGS
+  flags:
+    - {type: CONFLICT, severity: SOFT, reason: two masters in folder}
+  flags_exact: true
+  metadata:
+    masters: [report_main.tex, report_draft.tex]
+    parts_of_report_main: [sections/results.tex]  # document_sources(role = part); not indexed separately
+    test_plan_id: TP37
+  text_contains: ["\\documentclass", "\\input{sections/results}", "\\SI{12.4}{\\bar}"]
+  numeric_facts:
+    - {quantity: chamber_pressure, value: 12.4, unit: bar}
+    - {quantity: temperature, value: 845, unit: K}
