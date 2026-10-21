@@ -20,6 +20,7 @@ from backend.storage.minio import (
     ensure_buckets,
     parse_uri,
     presign_get,
+    presign_put,
     raw_key,
     uri,
 )
@@ -96,3 +97,22 @@ def test_presigned_get_downloads_and_expires_in_15_minutes(client):
     assert httpx.get(url).content == b"\x89PNG fake"
     with pytest.raises(StorageError, match="at most 15 minutes"):
         presign_get(client, minio_uri, ttl=timedelta(hours=1))
+
+
+def test_presigned_puts_only_for_user_uploads(client):
+    for uri_ in (
+        "s3://dcl-raw/01/23/x",
+        "s3://dcl-cir/_vision_cache/x.json",
+        "s3://dcl-exports/benchmarks/run.json",
+    ):
+        with pytest.raises(StorageError, match="uploads"):
+            presign_put(client, uri_)
+    with pytest.raises(StorageError, match="at most 15 minutes"):
+        presign_put(client, "s3://dcl-exports/uploads/u1/a", ttl=timedelta(hours=1))
+
+
+def test_presigned_put_uploads_and_expires_in_15_minutes(client):
+    url = presign_put(client, "s3://dcl-exports/uploads/user-1/attachment-1")
+    assert parse_qs(urlsplit(url).query)["X-Amz-Expires"] == ["900"]
+    assert httpx.put(url, content=b"attachment").status_code == 200
+    assert BucketStore(client, "dcl-exports").get("uploads/user-1/attachment-1") == b"attachment"

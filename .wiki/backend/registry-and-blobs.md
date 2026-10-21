@@ -30,6 +30,7 @@ Tests and fixtures:
 Provides:
 - `BucketStore(client, "dcl-cir").get(key) -> bytes | None` / `.put(key, data, content_type, metadata) -> s3 URI` (S2 vision cache, staged payloads)
 - `presign_get(client, minio_uri)` (S3 viewer and assets; the caller checks the session)
+- `presign_put(client, minio_uri)` only for `s3://dcl-exports/uploads/…` (S3 chat attachments)
 - blobs rows
 - location→blob links
 - jobs idempotency keys: `Job.key_for(stage, parser_version, pipeline_version, blob_sha256=… | doc_id=…)`
@@ -67,6 +68,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | MinIO store module (get/put/presign/buckets); 11 tests, green against S4's pinned MinIO image |
 | 2026-10-21 | S1 | Downloader core and job keys; 6 tests, green against ParadeDB pg17 + pinned MinIO |
+| 2026-10-22 | S1 | presign_put for user uploads; temp version removal on the versioned dcl-raw; parallel host downloads |
 | 2026-10-22 | S1 | Host download CLI and read-only export; live: the 247 accepted files of the 11 allowlisted subtrees landed in the stack MinIO, all quickXorHash-verified |
 
 ## Related
