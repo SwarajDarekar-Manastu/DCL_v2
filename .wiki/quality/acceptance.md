@@ -48,7 +48,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 - [x] M1 checklist: every criterion mapped; DB-state checks automated, read-only, opt-in
 - [x] Each automated M1 check proven to pass on a good and fail on a bad seeded state
-- [ ] M1 checks green on the live stack (Lead runs them); procedure 7 SUPERSEDES half after the dispatcher; procedure 10 after the load-test harness
+- [ ] M1 checks green on the live stack (Lead runs them); procedure 7 SUPERSEDES half after the dispatcher; procedure 10 once S4's harness is on main and the stack is redeployed
 - [ ] M2 checklist executable (draft written; waits on dispatcher, CIR writer, Route C)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
@@ -59,6 +59,7 @@ Verification: `DCL_TEST_DATABASE_URL=<disposable db> uv run pytest backend/tests
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S5 | M1.md procedure 10 gets S4's queue load-test harness and expected report |
 | 2026-10-22 | S5 | M1.md procedures 6–9 get S1's commands (delta crawl, downloader, resync) |
 | 2026-10-22 | S5 | M1 checklist with 5 automated checks (read-only, opt-in) and 5 procedures with a snapshot/compare CLI; 7 seeded-DB proofs; M2 draft |
 
