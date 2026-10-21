@@ -100,6 +100,11 @@ class DriveItem(Base):
     __table_args__ = (
         UniqueConstraint("drive_id", "item_id"),
         enum_check("status", DriveItemStatus),
+        Index(
+            "ix_drive_items_previous_blob_sha256",
+            "previous_blob_sha256",
+            postgresql_where=text("previous_blob_sha256 IS NOT NULL"),
+        ),
         {"info": tier(Tier.REGISTRY)},
     )
 
@@ -122,6 +127,7 @@ class DriveItem(Base):
     detected_mime: Mapped[str | None] = mapped_column(Text)
     ext_mime_mismatch: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     blob_sha256: Mapped[str | None] = mapped_column(SHA256, ForeignKey("blobs.sha256"), index=True)
+    previous_blob_sha256: Mapped[str | None] = mapped_column(SHA256)  # in-place replacement, pending dispatch
     resync_gen: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     last_seen_delta_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
     deleted_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)

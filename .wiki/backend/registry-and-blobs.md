@@ -34,7 +34,7 @@ Provides:
 - blobs rows
 - location→blob links
 - jobs idempotency keys: `Job.key_for(stage, parser_version, pipeline_version, blob_sha256=… | doc_id=…)`
-- `land_item(session, graph, minio, location_id, content_http) -> Landed`; raises `DownloadMismatch`; the caller commits and decides dispatch
+- `land_item(session, graph, minio, location_id, content_http) -> Landed`; raises `DownloadMismatch`; the caller commits and decides dispatch; sets `drive_items.previous_blob_sha256` when new content replaces a different blob (a pending value is never overwritten)
 - host CLIs: `python -m backend.sync.downloader [--folder-id ID …] [--limit N]`, `python -m backend.sync.export_blobs --folder-id ID OUT_DIR`
 
 Consumes:

@@ -156,3 +156,71 @@ def test_restricted_or_uninspected_blobs_are_not_dispatched(session, minio):
         item.detected_mime = None
     session.commit()
     assert dispatch(session, minio).created == 0
+
+
+def _modify_in_place(session, minio, item_id, new_data):
+    item = session.scalars(select(DriveItem).where(DriveItem.item_id == item_id)).one()
+    new_sha = _put(session, minio, new_data)
+    item.previous_blob_sha256 = item.previous_blob_sha256 or item.blob_sha256
+    item.blob_sha256, item.size_bytes = new_sha, len(new_data)
+    session.commit()
+    return item
+
+
+def test_content_modified_in_place_supersedes_the_old_document(session, minio):
+    from backend.postgres.models import DocumentRelation
+
+    _seed(session, minio)
+    dispatch(session, minio)
+    old = _docs(session)["Test_Report_12"]
+    item = _modify_in_place(session, minio, "html-pdf", b"%PDF-1.7\n% the real report now\n")
+
+    result = dispatch(session, minio)
+
+    new = next(
+        d for d in session.scalars(select(Document)) if d.doc_id != old.doc_id and d.title == "Test_Report_12"
+    )
+    relation = session.scalars(select(DocumentRelation)).one()
+    assert (relation.doc_id_a, relation.doc_id_b, relation.relation) == (new.doc_id, old.doc_id, "SUPERSEDES")
+    session.refresh(old)
+    assert old.status == "SUPERSEDED"
+    assert (new.route, new.status) == ("A1", "WAITING_FOR_ROUTE")
+    session.refresh(item)
+    assert item.previous_blob_sha256 is None
+    assert result.superseded == 1
+
+
+def test_a_copy_of_the_old_content_keeps_the_old_document_live(session, minio):
+    from backend.postgres.models import DocumentRelation
+
+    _seed(session, minio)
+    dispatch(session, minio)
+    old = _docs(session)["TP12_T01"]  # its content also sits at "TP12_T01 copy.dat"
+    _modify_in_place(session, minio, "dat", b"time\tAIN0\n0.000\t2.00\n0.001\t2.01\n0.002\t2.02\n")
+    dispatch(session, minio)
+    session.refresh(old)
+    assert old.status == "WAITING_FOR_ROUTE"
+    assert session.scalar(select(func.count()).select_from(DocumentRelation)) == 1
+
+
+def test_sweep_settles_documents_no_live_location_holds(session, minio):
+    from backend.dispatcher.routing import sweep_documents
+
+    _seed(session, minio)
+    dispatch(session, minio)
+    docs = _docs(session)
+    for item in session.scalars(select(DriveItem).where(DriveItem.item_id.in_(["report_main.tex"]))):
+        item.status = S.DELETED
+    for item in session.scalars(select(DriveItem).where(DriveItem.item_id == "report_draft.tex")):
+        item.status = S.QUARANTINED
+    session.commit()
+    counts = sweep_documents(session)
+    session.commit()
+    session.refresh(docs["report_main"])
+    session.refresh(docs["report_draft"])
+    assert (docs["report_main"].status, docs["report_draft"].status) == ("DELETED", "QUARANTINED")
+    assert (counts["deleted"], counts["quarantined"]) == (1, 1)
+    for item in session.scalars(select(DriveItem).where(DriveItem.item_id == "report_draft.tex")):
+        item.status = S.LANDED
+    session.commit()
+    assert sweep_documents(session)["reactivated"] == 1
