@@ -385,3 +385,9 @@ Merged / ready: Open WebUI actions (Show trace, Report issue), chat attachments 
 Blocked on: Benchmark API waits for S1's migration 0006 (benchmark tables, merge requested); Retrieval lab screen waits for S2's /v1/retrieval/search (merge requested).
 Needs from others: nothing new.
 Next: Benchmark API the day 0006 lands, then the Benchmark UI with the Retrieval lab.
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: dispatcher v1 (folder context, assembler, routing with gating and flags, dcl.process.dispatch), migrations 0006 (benchmark) and 0007 (documents.route nullable). Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend` (1,144 passed with servers)
+Blocked on: Lead — `drive_items.previous_blob_sha256` column for supersession (asked)
+Needs from others: nothing
+Next: after the merge: live dispatch over E1–E11 on the stack DB; supersession once answered; then Route C. Host download stopped (stack workers continue the remaining ~4,100 at ≤8 parallel)

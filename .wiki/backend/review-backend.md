@@ -17,6 +17,7 @@ Flag models with deterministic fingerprints and case keys, staged payloads for h
 Code:
 - `backend/review/api_models.py` (published: queue, case detail, resolutions, rules, dry-run models)
 - `backend/api/review.py` (routes of file 08 §4.4 with their models and roles; 501 until the M2 tables)
+- `backend/review/flags.py` (`upsert_location_flag`, `upsert_document_flag`: by fingerprint, status and resolution kept)
 - `backend/review/models.py` (planned)
 - `backend/review/rules.py` (published: `resolve()` precedence resolver, `RuleScope`, `RuleTarget`, `RuleRecord`, bodies per rule_type, YAML export for `config/rules/`)
 - `backend/review/resume.py` (planned)
