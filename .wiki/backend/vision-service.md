@@ -26,7 +26,7 @@ Tests and fixtures:
 ## Interfaces
 
 Provides:
-- `VisionService(client: GeminiClient, cache=vision_cache())` with `triage_page`, `transcribe_page`, `transcribe_handwriting`, `read_table_image`, `digitize_plot`, `read_schematic`, `inspect_hardware_photo`, `describe_slide`, `video_timeline`; each takes `Image` parts, keyword context, `doc_id`, `anchor` and returns `VisionOutput(reading, model, prompt_version, input_sha256, cached)`
+- `VisionService(client: GeminiClient, cache=vision_cache())` with `triage_page`, `transcribe_page`, `transcribe_handwriting`, `read_table_image`, `digitize_plot`, `read_schematic`, `inspect_hardware_photo`, `describe_slide`, `video_timeline`, `classify_image` (Route D, Flash-Lite); each takes `Image` parts, keyword context, `doc_id`, `anchor` and returns `VisionOutput(reading, model, prompt_version, input_sha256, cached)`
 - Schemas in `vision/schemas.py`: `PageTriage`, `PageTranscription`, `HandwritingReading`, `TableReading`, `PlotReading`, `SchematicReading`, `HardwarePhotoReading`, `SlideReading`, `VideoTimeline`; boxes are `box_2d` [ymin, xmin, ymax, xmax] 0–1000, top-left
 - Cache key `_vision_cache/{model}/{prompt_version}/{input_sha256}.json` in `dcl-cir`; a hit makes no gateway call and no ledger row
 - Prompt files: system text, `--- user ---`, `$variable` template; version = file stem; changing a prompt = new file + new pin in `TASKS`
@@ -63,6 +63,7 @@ Consumes:
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | `classify_image` capability for Route D (file 03 §8 step 3) |
 | 2026-10-22 | S2 | `vision_cache()` on S1's BucketStore; tests moved to an adapter-neutral fake client (S4's gateway adapters change the wire format) |
 | 2026-10-21 | S2 | Schemas, nine v1 prompt files, prompt loader, VisionService with cache and ledger context; 23 tests on a mock gateway |
 

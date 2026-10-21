@@ -207,6 +207,22 @@ class TestStage(StrEnum):
     UNKNOWN = "unknown"
 
 
+class ImageClass(StrEnum):
+    HARDWARE_PHOTO = "hardware_photo"
+    PLOT_OR_SCREENSHOT = "plot_or_screenshot"
+    DOCUMENT_SCAN = "document_scan"
+    DIAGRAM = "diagram"
+    PEOPLE_OR_OTHER = "people_or_other"
+
+
+class ImageClassification(Reading):
+    """`classify_image` (Flash-Lite, low resolution): Route D's first step (file 03 §8 step 3)."""
+
+    image_class: ImageClass
+    confidence: Confidence
+    shows_people: bool
+
+
 class HardwarePhotoReading(Reading):
     """`inspect_hardware_photo` (3.8 Flash, medium resolution, photo and folder context), no people."""
 
