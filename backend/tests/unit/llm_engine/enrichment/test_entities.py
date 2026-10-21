@@ -2,7 +2,13 @@ import uuid
 
 import pytest
 
-from backend.llm_engine.enrichment.entities import canonical_key, index_from_seed, load_seed, normalize
+from backend.llm_engine.enrichment.entities import (
+    canonical_key,
+    index_from_seed,
+    load_seed,
+    normalize,
+    seed_rows,
+)
 from backend.llm_engine.enrichment.extract import EntityExtract
 from backend.postgres.enums import AliasCreatedBy, EntityType
 
@@ -90,3 +96,15 @@ def test_a_new_entity_is_reused_by_later_mentions_in_the_same_document(seed):
 def test_types_never_mix(seed):
     decisions = resolve(index_from_seed(seed), EntityExtract(type=EntityType.VENDOR, surface="C-103"))
     assert len(decisions.new_entities) == 1
+
+
+def test_seed_rows_are_unique_on_the_table_keys(seed):
+    rows = seed_rows(seed)
+    entity_keys = [(r["type"], r["canonical_key"]) for r in rows.entities]
+    alias_keys = [(r["type"], r["alias_key"]) for r in rows.aliases]
+    assert len(entity_keys) == len(set(entity_keys)) == len(seed)
+    assert len(alias_keys) == len(set(alias_keys))
+    assert {r["created_by"] for r in rows.entities + rows.aliases} == {"seed"}
+    c103 = next(r for r in rows.aliases if r["alias_key"] == "c-103" and r["type"] == "material")
+    assert c103["entity_canonical_key"] == "c-103"
+    assert set(entity_keys) >= {(r["entity_type"], r["entity_canonical_key"]) for r in rows.aliases}

@@ -229,6 +229,8 @@ def test_production_cache_is_the_cir_bucket():
     assert vision_cache(settings).bucket == "dcl-cir"
 
 
-def test_no_capability_asks_for_minimal_thinking():
-    """The gateway rejects thinking level "minimal" on Gemini 3.x with a non-retryable 400 (S4 probe)."""
-    assert all(task.thinking is not ThinkingLevel.MINIMAL for task in TASKS.values())
+def test_only_flash_lite_tasks_ask_for_minimal_thinking():
+    """gemini-3.8-flash rejects "minimal" thinking with a non-retryable 400; 3.5 Flash-Lite accepts it."""
+    minimal = {str(c) for c, t in TASKS.items() if t.thinking is ThinkingLevel.MINIMAL}
+    assert minimal == {"triage_page"}
+    assert all(TASKS[c].model == "gemini-3.5-flash-lite" for c in minimal)
