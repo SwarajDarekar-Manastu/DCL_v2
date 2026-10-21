@@ -22,6 +22,7 @@ from frontend.openwebui.api_endpoint import (  # inline
     EngineError,
     Identity,
     confirm,
+    open_webui_groups,
     put_upload,
     request_upload,
     stream_answer,
@@ -149,11 +150,7 @@ class Pipe:
         return [{"id": "main", "name": "Manastu Propulsion Engine"}]
 
     async def _groups_of(self, user_id: str) -> tuple[str, ...]:
-        try:
-            from open_webui.models.groups import Groups
-        except ImportError:
-            return ()
-        return tuple(sorted(group.name for group in await Groups.get_groups_by_member_id(user_id)))
+        return await open_webui_groups(user_id)
 
     async def _read_attachment(self, item: dict, user_id: str) -> tuple[str, str, bytes] | None:
         """(name, mime type, bytes) of a file the user attached, read from Open WebUI's own storage."""

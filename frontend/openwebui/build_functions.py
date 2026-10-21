@@ -16,7 +16,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 DIST = HERE / "bundled"
 # installed function id (file name in bundled/) → source module
-FUNCTIONS = {"manastu_engine.py": "pipe_manastu_engine.py"}
+FUNCTIONS = {"manastu_engine.py": "pipe_manastu_engine.py", "manastu_actions.py": "actions_manastu.py"}
 INLINE = re.compile(r"^from frontend\.openwebui\.(\w+) import .+  # inline$")
 
 

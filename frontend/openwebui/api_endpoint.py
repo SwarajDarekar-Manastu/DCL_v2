@@ -31,6 +31,15 @@ class EngineError(Exception):
         self.detail = detail
 
 
+async def open_webui_groups(user_id: str) -> tuple[str, ...]:
+    """The user's Open WebUI group names (mirrored from Entra ID); empty outside Open WebUI."""
+    try:
+        from open_webui.models.groups import Groups
+    except ImportError:
+        return ()
+    return tuple(sorted(group.name for group in await Groups.get_groups_by_member_id(user_id)))
+
+
 def sign_identity(secret: str, timestamp: str, user_id: str, email: str, groups: str, body: bytes) -> str:
     message = f"{timestamp}\n{user_id}\n{email}\n{groups}\n{hashlib.sha256(body).hexdigest()}"
     return hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
@@ -129,6 +138,43 @@ async def confirm(
     async with _client(config, client) as http:
         url = f"{config.engine_url}/v1/answer/{trace_id}/confirm"
         response = await http.post(url, content=body, headers=headers)
+    if response.status_code >= 300:
+        raise EngineError(response.status_code, _detail(response.status_code, response.content))
+
+
+async def find_trace(
+    config: DclConfig,
+    identity: Identity,
+    chat_id: str,
+    message_id: str,
+    client: httpx.AsyncClient | None = None,
+) -> dict:
+    """GET /v1/traces?chat_id=&message_id= (the Show trace action knows the message, not the trace id)."""
+    headers = identity_headers(config, identity, b"")
+    params = {"chat_id": chat_id, "message_id": message_id}
+    async with _client(config, client) as http:
+        response = await http.get(f"{config.engine_url}/v1/traces", params=params, headers=headers)
+    if response.status_code != 200:
+        raise EngineError(response.status_code, _detail(response.status_code, response.content))
+    return response.json()
+
+
+async def send_feedback(
+    config: DclConfig,
+    identity: Identity,
+    trace_id: str,
+    kind: str,
+    comment: str | None,
+    citation_id: str | None = None,
+    client: httpx.AsyncClient | None = None,
+) -> None:
+    """POST /v1/traces/{trace_id}/feedback (the Report issue action)."""
+    body = json.dumps({"kind": kind, "comment": comment, "citation_id": citation_id}).encode()
+    headers = identity_headers(config, identity, body) | {"Content-Type": "application/json"}
+    async with _client(config, client) as http:
+        response = await http.post(
+            f"{config.engine_url}/v1/traces/{trace_id}/feedback", content=body, headers=headers
+        )
     if response.status_code >= 300:
         raise EngineError(response.status_code, _detail(response.status_code, response.content))
 
