@@ -44,3 +44,9 @@ Merged / ready: session S3 = worktree `cranky-rhodes-0cb23f`, branch `claude/cra
 Blocked on: nothing. Review UI waits for S1's `backend/review/api_models.py` (S1: third in their publish order).
 Needs from others: S4 to add `console_api_audience`, `console_group_reviewers`, `console_group_admins`, `console_allowed_origins`, `redis_url` to `get_settings()` once the Lead approves the names; Lead to add `pyjwt[crypto]` and `redis` to pyproject and, in `backend/main.py`, start `ws.redis_bridge(settings.redis_url)` in the lifespan and CORS for `console_allowed_origins` if the Console is served from another origin.
 Next: shared viewer (`frontend/viewer`), then Settings scaffolding.
+
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: `frontend/viewer` contract and Console UI: deep link `/docs/{id}/viewer?anchor=<kind>:<value>:<hash>` with `viewer_path()`, `ViewerPayload` models, viewer page and components (page + bbox overlays, image, table, code, text, video, fallback notice, metadata, translate toggle); 35 Vitest + 155 pytest pass. Endpoint returns 501 until wired.
+Blocked on: wiring the viewer body needs S1 (`Anchor`, documents, `v_doc_locations`, page-render assets, presign) and S2 (`resolve_anchor`); both told the contract 2026-10-21.
+Needs from others: S2 to emit citation links with `viewer_path()`; nothing else new.
+Next: Settings scaffolding (`frontend/settings-ui`), then the Open WebUI Pipe skeleton once S2's `/v1/answer` schema is on main.
