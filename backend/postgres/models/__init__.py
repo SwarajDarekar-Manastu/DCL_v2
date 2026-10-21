@@ -5,7 +5,7 @@ from backend.postgres.models.entities import Entity, EntityAlias, EntityMention,
 from backend.postgres.models.nodes import Asset, DocumentNode
 from backend.postgres.models.ops import PipelineConfig
 from backend.postgres.models.registry import Blob, BlobDerivation, DriveFolder, DriveItem, Job, SyncRoot
-from backend.postgres.models.review import AuditEvent
+from backend.postgres.models.review import AuditEvent, ReviewFlag, Rule
 
 __all__ = [
     "Asset",
@@ -24,5 +24,7 @@ __all__ = [
     "Job",
     "NumericFact",
     "PipelineConfig",
+    "ReviewFlag",
+    "Rule",
     "SyncRoot",
 ]

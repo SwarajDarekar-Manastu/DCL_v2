@@ -33,6 +33,8 @@ M2_M4_TABLES = {
     "entity_mentions",
     "numeric_facts",
     "audit_events",
+    "rules",
+    "review_flags",
 }
 EXPECTED_TABLES = M1_TABLES | M2_M4_TABLES
 
@@ -67,12 +69,18 @@ CHECKED_COLUMNS: dict[tuple[str, str], type[StrEnum]] = {
     ("numeric_facts", "gauge_or_abs"): enums.GaugeOrAbs,
     ("numeric_facts", "source"): enums.NumericFactSource,
     ("audit_events", "entity_type"): enums.AuditEntityType,
+    ("rules", "rule_type"): enums.RuleType,
+    ("rules", "origin"): enums.RuleOrigin,
+    ("review_flags", "flag_type"): enums.FlagType,
+    ("review_flags", "severity"): enums.FlagSeverity,
+    ("review_flags", "status"): enums.FlagStatus,
 }
 # Hand-written CHECKs that are not enum lists.
 OTHER_CHECKS = {
     "ck_documents_trust_tier",
     "ck_documents_staged_when_halted",
     "ck_document_relations_symmetric_order",
+    "ck_review_flags_doc_or_location",
 }
 
 FK_WITHOUT_INDEX_SQL = (Path(__file__).parent / "fk_without_index.sql").read_text()
@@ -139,6 +147,7 @@ DOC_B = "00000000-0000-4000-8000-00000000000b"
 ASSET = "00000000-0000-4000-8000-0000000000a5"
 NODE = "00000000-0000-4000-8000-0000000000a6"
 ENTITY = "00000000-0000-4000-8000-0000000000e1"
+RULE = "00000000-0000-4000-8000-0000000000c1"
 
 
 def _insert(conn, table: str, **values):
@@ -208,6 +217,18 @@ def _seed(conn) -> None:
     )
     _insert(conn, "numeric_facts", node_id=NODE, doc_id=DOC_A, quantity="pressure", source="table")
     _insert(conn, "audit_events", actor="r@x", entity_type="rule", entity_id="1", action="create")
+    _insert(
+        conn, "rules", rule_id=RULE, rule_type="unit_mapping", origin="operator", body="{}", created_by="r@x"
+    )
+    _insert(
+        conn,
+        "review_flags",
+        case_key=f"{DOC_A}:1",
+        doc_id=DOC_A,
+        fingerprint="f1",
+        flag_type="CONFLICT",
+        severity="SOFT",
+    )
 
 
 def _paired(table: str, column: str) -> str:
@@ -388,3 +409,28 @@ def test_bm25_indexes_exist_and_answer_a_query(migrated):
         hits = conn.execute(text("SELECT count(*) FROM document_nodes WHERE content @@@ 'x'")).scalar_one()
     assert names == {"bm25_document_nodes", "bm25_documents"}
     assert hits == 1
+
+
+def test_a_flag_needs_a_document_or_a_location_and_location_flags_are_unique_per_fingerprint(migrated):
+    with migrated.connect() as conn:
+        with conn.begin():
+            _seed(conn)
+        with pytest.raises(IntegrityError, match="ck_review_flags_doc_or_location"):
+            with conn.begin():
+                _insert(
+                    conn, "review_flags", case_key="x", fingerprint="f", flag_type="CONFLICT", severity="SOFT"
+                )
+        with conn.begin():
+            location = conn.execute(text("SELECT location_id FROM drive_items LIMIT 1")).scalar_one()
+        row = dict(
+            case_key=f"{location}:",
+            location_id=location,
+            fingerprint="f2",
+            flag_type="HELD_LARGE_FILE",
+            severity="SOFT",
+        )
+        with conn.begin():
+            _insert(conn, "review_flags", **row)
+        with pytest.raises(IntegrityError, match="uq_review_flags_location_fingerprint"):
+            with conn.begin():
+                _insert(conn, "review_flags", **row)
