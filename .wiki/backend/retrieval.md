@@ -28,7 +28,8 @@ Provides:
 - `search(session, query, embed_query=, rerank=, filters=, scope=, k=8, user_language=, alias_surfaces=) -> SearchResult(hits, warnings, dense_path, rerank_margin_1_5, leg_counts)`; `embed_query`/`rerank` are `ModelsClient.embed_queries(...)[0]` and `ModelsClient.rerank`
 - `Hit`: doc fields, `anchor` (serialized stable anchor of the best passage), `parent_text`, `passage`, `web_url`, `asset_id`, `needs_review`, scores, `also_in` (near-duplicates collapsed into it); no node ids
 - BM25 field names the SQL relies on: `content` (icu), `content_stem_{en,de,fr,es,it,ru}`, `content_{ja,ko,zh}`, `content_codes` (whitespace), `content_en`, `breadcrumb`, literal filter fields
-- planned: Retrieval-lab API data for S3, doc-level `search_text` leg, alias expansion from `entity_aliases`
+- `POST /v1/retrieval/search` (`backend/api/engine.py`, Console user): `RetrievalLabRequest {query, filters, scope, k ≤ 50, user_language, rerank}` → `SearchResult` with hits, legs, dense path and margin
+- planned: doc-level `search_text` leg, alias expansion from `entity_aliases`
 
 Consumes:
 - `backend/embedding-service`, `backend/reranker-service` (through the callables)
@@ -39,6 +40,7 @@ Consumes:
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
 - `backend/indexing/retrieval.py`
+- `backend/api/engine.py` (retrieval-lab route)
 - `backend/tests/integration/retrieval/`
 - `backend/tests/benchmark/retrieval_set.yaml`
 
@@ -54,6 +56,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | Retrieval-lab endpoint for S3 |
 | 2026-10-22 | S2 | Hybrid search: exact/HNSW dense leg, per-language BM25 (pg_search 0.26.2), RRF, parent collapse, rerank with margin and fallback, near-duplicate collapse; 11 DB tests; BM25 DDL sent to S1 |
 
 ## Related
