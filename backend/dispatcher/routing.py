@@ -42,10 +42,12 @@ from backend.postgres.models import (
     DocumentSource,
     DriveFolder,
     DriveItem,
+    ReviewFlag,
     SyncRoot,
 )
 from backend.review.flags import upsert_document_flag
 from backend.storage.minio import CIR, BucketStore, parse_uri, uri
+from backend.sync.inspect import zip_member_names
 from backend.sync.scope import in_scope
 
 IMPLEMENTED_ROUTES: frozenset[Route] = frozenset()  # grows as route adapters land (Route C next)
@@ -81,6 +83,69 @@ def _read(minio: Minio, blob: Blob, length: int | None = None) -> bytes:
     finally:
         response.close()
         response.release_conn()
+
+
+def _resolve(minio: Minio, blob: Blob, name: str, head: bytes) -> ResolvedType:
+    """Type from the first bytes; ZIP-based files also by their member names (DOCX/PPTX/XLSX/.wbpz)."""
+    zip_names = None
+    if head.startswith(b"PK\x03\x04"):
+        _, key = parse_uri(blob.minio_uri)
+        zip_names = zip_member_names(minio, key, blob.size_bytes)
+    return resolve_type(head, name, zip_names)
+
+
+def retype_waiting(session: Session, minio: Minio) -> dict[str, int]:
+    """Re-resolve the route of documents still WAITING_FOR_ROUTE (nothing derived exists yet), e.g. after a
+    type-resolution fix. Returns ``{"old->new": count}``."""
+    changes: dict[str, int] = {}
+    rows = session.execute(
+        select(Document, Blob, DriveItem.name)
+        .join(DocumentSource, DocumentSource.doc_id == Document.doc_id)
+        .join(Blob, Blob.sha256 == DocumentSource.blob_sha256)
+        .join(DriveItem, DriveItem.blob_sha256 == Blob.sha256)
+        .where(
+            DocumentSource.role == DocumentSourceRole.PRIMARY,
+            Document.status == DocumentStatus.WAITING_FOR_ROUTE,
+        )
+    ).all()
+    seen: set = set()
+    for document, blob, name in rows:
+        if document.doc_id in seen:
+            continue  # one row per document (several locations may hold its blob)
+        seen.add(document.doc_id)
+        resolved = _resolve(minio, blob, name, _read(minio, blob, HEAD_BYTES))
+        new_route = resolved.route.value if resolved.route else None
+        if new_route != document.route:
+            key = f"{document.route}->{new_route}"
+            changes[key] = changes.get(key, 0) + 1
+            document.route = new_route
+            if new_route is None:
+                document.status = DocumentStatus.WAITING_FOR_ROUTE  # unsupported now: left for an operator
+    session.flush()
+    return changes
+
+
+def reset_waiting(session: Session, route: Route) -> int:
+    """Remove documents of ``route`` that are still WAITING_FOR_ROUTE and carry only untouched (OPEN) flags,
+    so the next dispatch assembles them again (after an assembler fix). Nothing derived exists for them."""
+    removed = 0
+    documents = session.scalars(
+        select(Document).where(
+            Document.route == route.value, Document.status == DocumentStatus.WAITING_FOR_ROUTE
+        )
+    ).all()
+    for document in documents:
+        flags = session.scalars(select(ReviewFlag).where(ReviewFlag.doc_id == document.doc_id)).all()
+        if any(flag.status != "OPEN" for flag in flags):
+            continue  # a human has acted on it: keep
+        for flag in flags:
+            session.delete(flag)
+        for source in session.scalars(select(DocumentSource).where(DocumentSource.doc_id == document.doc_id)):
+            session.delete(source)
+        session.delete(document)
+        removed += 1
+    session.flush()
+    return removed
 
 
 def _folder_tree(session: Session) -> tuple[dict[str, DriveFolder], dict[str, list[str]]]:
@@ -249,7 +314,7 @@ def dispatch(
         heads[item.blob_sha256] = _read(minio, blob, HEAD_BYTES)
         folder_names = item.path_cached.split("/")[:-1]
         group[item.blob_sha256] = Candidate(
-            item, folder_names, resolve_type(heads[item.blob_sha256], item.name)
+            item, folder_names, _resolve(minio, blob, item.name, heads[item.blob_sha256])
         )
 
     for key, by_blob in groups.items():
@@ -397,7 +462,10 @@ def main(argv: list[str]) -> int:
     from backend.storage.minio import client_from_settings
 
     parser = argparse.ArgumentParser(prog="python -m backend.dispatcher.routing")
-    parser.add_argument("command", choices=["dispatch", "sweep"])
+    parser.add_argument("command", choices=["dispatch", "sweep", "retype", "reassemble"])
+    parser.add_argument(
+        "--route", default="A2", help="reassemble: the route whose waiting documents are rebuilt"
+    )
     parser.add_argument("--env-file", default=None)
     args = parser.parse_args(argv)
     settings = load_settings(Path(args.env_file)) if args.env_file else get_settings()
@@ -407,6 +475,15 @@ def main(argv: list[str]) -> int:
     with Session(engine, expire_on_commit=False) as session:
         if args.command == "sweep":
             print(sweep_documents(session))
+            session.commit()
+            return 0
+        if args.command == "reassemble":
+            removed = reset_waiting(session, Route(args.route))
+            session.commit()
+            print(f"removed {removed} waiting {args.route} documents; dispatching again")
+            args.command = "dispatch"
+        if args.command == "retype":
+            print(retype_waiting(session, client_from_settings(settings)))
             session.commit()
             return 0
         result = dispatch(session, client_from_settings(settings))
