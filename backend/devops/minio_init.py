@@ -1,10 +1,11 @@
 """First-start MinIO setup for the dcl-v2 stack (docs/architecture/05 §1, §6; 10 §3). Idempotent.
 
-Creates the five buckets, enables versioning on dcl-raw and dcl-cir, sets the lifecycle rules (download temp
-objects under dcl-raw/_incoming/ lose noncurrent versions after 1 day and their delete markers; vision cache
-expires 180 days after last write; exports 180 days), and creates the application user with a policy limited
-to the five buckets. Runs in the one-shot `minio-init` compose service with the root pair; the application
-itself only ever holds DCL_MINIO_ACCESS_KEY / DCL_MINIO_SECRET_KEY. Prints names, never credentials.
+Creates the five buckets, enables versioning on dcl-raw and dcl-cir, and sets the lifecycle rules:
+download temp objects under dcl-raw/_incoming/ lose noncurrent versions after 1 day and their delete markers;
+the vision cache expires 180 days after last write; chat uploads under dcl-exports/uploads/ expire after
+1 day; other exports after 180 days. Creates the application user with a policy limited to the five buckets.
+Runs in the one-shot `minio-init` compose service with the root pair; the application itself only ever
+holds DCL_MINIO_ACCESS_KEY / DCL_MINIO_SECRET_KEY. Prints names, never credentials.
 """
 
 import os
@@ -42,7 +43,13 @@ LIFECYCLE = {
         )
     ],
     EXPORTS: [
-        Rule(ENABLED, rule_filter=Filter(prefix=""), rule_id="exports-180d", expiration=Expiration(days=180))
+        Rule(
+            ENABLED,
+            rule_filter=Filter(prefix="uploads/"),
+            rule_id="chat-uploads-24h",
+            expiration=Expiration(days=1),
+        ),
+        Rule(ENABLED, rule_filter=Filter(prefix=""), rule_id="exports-180d", expiration=Expiration(days=180)),
     ],
 }
 
