@@ -42,6 +42,7 @@ def in_range(ranges, ureg):
         r = ranges["quantities"][quantity]
         v = ureg.Quantity(value, unit).to(r["unit"]).magnitude
         return r["min"] <= v <= r["max"]
+
     return check
 
 
@@ -61,20 +62,24 @@ def test_values_from_the_manual(ranges):
     q = ranges["quantities"]
     names = ("chamber_pressure", "thrust", "temperature", "mass_flow")
     got = {k: (q[k]["min"], q[k]["max"], q[k]["unit"]) for k in names}
-    assert got == {"chamber_pressure": (0, 150, "bar"), "thrust": (0, 200, "N"),
-                   "temperature": (200, 2000, "K"), "mass_flow": (0, 50, "g/s")}
+    assert got == {
+        "chamber_pressure": (0, 150, "bar"),
+        "thrust": (0, 200, "N"),
+        "temperature": (200, 2000, "K"),
+        "mass_flow": (0, 50, "g/s"),
+    }
 
 
 def test_bounds_accept_plausible_values(in_range):
     assert in_range("chamber_pressure", 12.4, "bar")
-    assert in_range("chamber_pressure", 180, "psi")      # 12.4 bar
+    assert in_range("chamber_pressure", 180, "psi")  # 12.4 bar
     assert in_range("temperature", 845, "K")
-    assert in_range("temperature", 572, "degC")          # 845 K
+    assert in_range("temperature", 572, "degC")  # 845 K
     assert in_range("mass_flow", 0.012, "kg/s")
 
 
 def test_bounds_reject_classic_unit_mistakes(in_range):
-    assert not in_range("temperature", 25, "K")           # 25 °C logged as K
+    assert not in_range("temperature", 25, "K")  # 25 °C logged as K
     assert not in_range("chamber_pressure", 2000, "bar")  # psi logged as bar
-    assert not in_range("thrust", 450, "lbf")             # 2002 N
-    assert not in_range("mass_flow", 12, "kg/s")          # g/s logged as kg/s
+    assert not in_range("thrust", 450, "lbf")  # 2002 N
+    assert not in_range("mass_flow", 12, "kg/s")  # g/s logged as kg/s

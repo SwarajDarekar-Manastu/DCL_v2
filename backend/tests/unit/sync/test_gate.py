@@ -98,8 +98,18 @@ def test_tier2_names_and_extensions(name, reason):
 
 
 def test_conditional_extension_is_junk_only_under_its_folder():
-    assert verdict("macro.xlsm", ["APS - Library", "Python library"]) == (S.SKIPPED_JUNK, "T2:.xlsm")
+    assert verdict("macro.xlsm", ["APS - Library", "tools", "Lib"]) == (S.SKIPPED_JUNK, "T2:.xlsm")
+    assert verdict("Sizing_Calculator.xlsm", ["APS - Library", "Vendor tools"]) is None
     assert verdict("macro.xlsm") is None
+
+
+def test_numeric_looking_endings_are_matched_as_text():
+    assert verdict("numpy.1") == (S.SKIPPED_JUNK, "T2:.1")
+
+
+def test_a_pattern_that_is_not_a_string_is_refused():
+    with pytest.raises(ValueError, match="quote it in the YAML"):
+        GateConfig.from_mapping({"junk_extensions": [0.1], "max_download_bytes": 1})
 
 
 def test_tier3_size_and_type_sanity():
