@@ -130,14 +130,22 @@ def extension_of(name: str) -> str:
     return PurePosixPath(name).suffix.casefold()
 
 
-def _is_text(head: bytes) -> bool:
-    if not head:
-        return False
-    if b"\x00" in head:
-        return False
-    text = head.decode("utf-8", errors="ignore")
+UTF16_BOMS = {b"\xff\xfe": "utf-16-le", b"\xfe\xff": "utf-16-be"}
+
+
+def _decode_text(head: bytes) -> str | None:
+    """The head as text, or None for binary. UTF-16 with a BOM (PowerShell's `pip freeze >`) is text."""
+    encoding = UTF16_BOMS.get(head[:2])
+    if encoding is not None:
+        text = head[2:].decode(encoding, errors="ignore")
+    elif b"\x00" in head:
+        return None
+    else:
+        text = head.decode("utf-8", errors="ignore")
+    if not text:
+        return None
     printable = sum(ch.isprintable() or ch in "\r\n\t" for ch in text)
-    return len(text) > 0 and printable / len(text) >= TEXT_MIN_PRINTABLE
+    return text if printable / len(text) >= TEXT_MIN_PRINTABLE else None
 
 
 def _zip_kind(names: Sequence[str] | None) -> str:
@@ -181,13 +189,14 @@ def _sniff(head: bytes, extension: str, zip_names: Sequence[str] | None) -> str 
         return "jpeg"
     if head.startswith(b"\x89PNG"):
         return "png"
-    if _is_text(head):
-        return _sniff_text(head)
+    text = _decode_text(head)
+    if text is not None:
+        return _sniff_text(text)
     return None
 
 
-def _sniff_text(head: bytes) -> str:
-    text = head.decode("utf-8", errors="ignore").lstrip("﻿ \t\r\n")
+def _sniff_text(text: str) -> str:
+    text = text.lstrip("\ufeff \t\r\n")
     lowered = text[:1024].casefold()
     if "<mxfile" in lowered or "<mxgraphmodel" in lowered:
         return "drawio"

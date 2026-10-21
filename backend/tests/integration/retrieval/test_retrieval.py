@@ -66,7 +66,13 @@ def engine():
         command.upgrade(config, "head")
         eng = create_engine(url)
         with eng.begin() as conn:
-            conn.execute(text(BM25_DDL))
+            # Migration 0004 creates the BM25 indexes; apply the local DDL only on a bare schema.
+            bm25_names = "('bm25_document_nodes', 'bm25_documents')"
+            present = conn.execute(
+                text(f"select count(*) from pg_indexes where indexname in {bm25_names}")
+            ).scalar()
+            if not present:
+                conn.execute(text(BM25_DDL))
         yield eng
         with eng.begin() as conn:
             conn.execute(

@@ -16,6 +16,7 @@ import hashlib
 import io
 import uuid
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import httpx
 import quickxorhash
@@ -85,6 +86,11 @@ class HashingReader(io.RawIOBase):
         return base64.b64encode(self.quick_xor.digest()).decode()
 
 
+def ascii_metadata(value: str) -> str:
+    """S3 object metadata must be US-ASCII: non-ASCII characters are percent-encoded (RFC 3986)."""
+    return quote(value, safe=" !#$&'()*+,-./:;=?@[]^_`{|}~")
+
+
 def find_known_blob(session: Session, quick_xor_hash: str | None, size_bytes: int | None) -> str | None:
     if not quick_xor_hash or size_bytes is None:
         return None
@@ -96,6 +102,10 @@ def find_known_blob(session: Session, quick_xor_hash: str | None, size_bytes: in
 
 
 def _land(session: Session, item: DriveItem, sha256: str) -> None:
+    if item.blob_sha256 is not None and item.blob_sha256 != sha256 and item.previous_blob_sha256 is None:
+        item.previous_blob_sha256 = (
+            item.blob_sha256
+        )  # modified in place; a pending value is never overwritten
     item.blob_sha256 = sha256
     item.status = DriveItemStatus.LANDED
     item.error_last = None
@@ -120,7 +130,7 @@ def land_item(
         return Landed(location_id, known, downloaded=False, new_blob=False)
 
     temp_key = f"{INCOMING_PREFIX}{uuid.uuid4()}"
-    reader = _stream_to(graph, minio, item, temp_key, content_http)
+    reader, temp_version = _stream_to(graph, minio, item, temp_key, content_http)
     try:
         if item.size_bytes is not None and reader.size != item.size_bytes:
             raise DownloadMismatch(f"size {reader.size} != Graph size {item.size_bytes}")
@@ -134,7 +144,7 @@ def land_item(
                 raw_key(sha256),
                 CopySource(RAW, temp_key),
                 metadata={
-                    "original_name": item.name,
+                    "original_name": ascii_metadata(item.name),
                     "first_location_id": str(item.location_id),
                     "source": "onedrive",
                 },
@@ -152,7 +162,8 @@ def land_item(
             )
             exists = inserted.rowcount == 0
     finally:
-        minio.remove_object(RAW, temp_key)
+        # dcl-raw is versioned: removing the exact version deletes the temp bytes instead of hiding them
+        minio.remove_object(RAW, temp_key, version_id=temp_version)
     _land(session, item, sha256)
     return Landed(location_id, sha256, downloaded=True, new_blob=not exists)
 
@@ -165,14 +176,16 @@ def _stream_to(graph: GraphClient, minio: Minio, item: DriveItem, key: str, cont
     with content_http.stream("GET", response.headers["Location"]) as content:
         content.raise_for_status()
         reader = HashingReader(content.iter_bytes(CHUNK_BYTES))
-        minio.put_object(RAW, key, reader, length=-1, part_size=PART_BYTES)
-    return reader
+        written = minio.put_object(RAW, key, reader, length=-1, part_size=PART_BYTES)
+    return reader, written.version_id
 
 
 def main(argv: list[str]) -> int:
     """Host-side landing of PENDING_DOWNLOAD items, optionally only inside given folder subtrees."""
     import argparse
     import os
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
 
     from sqlalchemy import create_engine
 
@@ -188,6 +201,7 @@ def main(argv: list[str]) -> int:
         "--folder-id", action="append", default=[], help="only items inside this folder subtree"
     )
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--workers", type=int, default=4, help="parallel downloads (file 02 §3.4 allows 8)")
     parser.add_argument("--env-file", default=None)
     args = parser.parse_args(argv)
     from pathlib import Path
@@ -199,11 +213,7 @@ def main(argv: list[str]) -> int:
     tokens = TokenProvider.create(GraphAuthConfig.from_settings(settings))
     minio = client_from_settings(settings)
     counts: dict[str, int] = {}
-    with (
-        Session(engine, expire_on_commit=False) as session,
-        GraphClient(tokens.access_token) as graph,
-        httpx.Client(timeout=120.0) as content_http,
-    ):
+    with Session(engine, expire_on_commit=False) as session:
         if args.folder_id:
             ids = [
                 item.location_id
@@ -216,13 +226,29 @@ def main(argv: list[str]) -> int:
                     select(DriveItem.location_id).where(DriveItem.status == DriveItemStatus.PENDING_DOWNLOAD)
                 )
             )
-        for location_id in ids[: args.limit]:
+    selected = ids[: args.limit]
+    lock = threading.Lock()
+
+    def land(location_id) -> None:
+        with Session(engine, expire_on_commit=False) as own, httpx.Client(timeout=120.0) as own_http:
             outcome = Outcome.RETRY
-            for attempt in range(3):
-                outcome = download_one(session, graph, minio, content_http, location_id, attempt)
-                if outcome != Outcome.RETRY:
-                    break
+            try:
+                for attempt in range(3):
+                    outcome = download_one(own, graph, minio, own_http, location_id, attempt)
+                    if outcome != Outcome.RETRY:
+                        break
+            except Exception as exc:  # one bad item must not stop the run; it stays PENDING_DOWNLOAD
+                own.rollback()
+                outcome = "error"
+                print(f"  error on {location_id}: {type(exc).__name__}: {exc}", flush=True)
+        with lock:
             counts[outcome] = counts.get(outcome, 0) + 1
+            done = sum(counts.values())
+            if done % 100 == 0:
+                print(f"  {done}/{len(selected)} {counts}", flush=True)
+
+    with GraphClient(tokens.access_token) as graph, ThreadPoolExecutor(max_workers=args.workers) as pool:
+        list(pool.map(land, selected))
     print(f"{len(ids[: args.limit])} items: {counts}")
     return 0
 

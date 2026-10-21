@@ -4,35 +4,16 @@ Needs DCL_TEST_DATABASE_URL and DCL_TEST_MINIO_ENDPOINT (+ access/secret keys).
 """
 
 import io
-import os
-from urllib.parse import urlsplit
 
 import pytest
-from minio import Minio
 from sqlalchemy import func, select
 
 from backend.postgres.enums import DriveItemStatus as S
 from backend.postgres.models import Blob, DriveFolder, DriveItem
-from backend.storage.minio import RAW, ensure_buckets, raw_key
+from backend.storage.minio import RAW, raw_key
 from backend.sync.export_blobs import export
 
 SHA_DAT, SHA_CFG, SHA_OUT = "1" * 64, "2" * 64, "3" * 64
-
-
-@pytest.fixture(scope="module")
-def minio() -> Minio:
-    endpoint = os.environ.get("DCL_TEST_MINIO_ENDPOINT")
-    if not endpoint:
-        pytest.skip("DCL_TEST_MINIO_ENDPOINT is not set")
-    parts = urlsplit(endpoint)
-    client = Minio(
-        parts.netloc,
-        access_key=os.environ.get("DCL_TEST_MINIO_ACCESS_KEY", "minioadmin"),
-        secret_key=os.environ.get("DCL_TEST_MINIO_SECRET_KEY", "minioadmin"),
-        secure=parts.scheme == "https",
-    )
-    ensure_buckets(client)
-    return client
 
 
 def _landed(session, minio, item_id, path, sha, data, status=S.LANDED):

@@ -64,7 +64,7 @@ class Document(Base):
     doc_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    route: Mapped[str] = mapped_column(Text)
+    route: Mapped[str | None] = mapped_column(Text)  # NULL: no adapter (UNSUPPORTED_FORMAT)
     title: Mapped[str | None] = mapped_column(Text)
     doc_kind: Mapped[str] = mapped_column(Text, server_default=DocKind.UNKNOWN.value)
     status: Mapped[str] = mapped_column(Text)

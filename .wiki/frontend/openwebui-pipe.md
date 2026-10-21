@@ -27,13 +27,14 @@ Tests and fixtures:
 
 Provides:
 - Model "Manastu Propulsion Engine", id `manastu_engine.main` (install `bundled/manastu_engine.py` as function id `manastu_engine`)
-- Valves: `ENGINE_URL`, `ENGINE_SHARED_SECRET`, `CONSOLE_URL`, `DEFAULT_THINKING_LEVEL`, `SHOW_STATUS_EVENTS`, `MAX_EMBEDS_PER_MESSAGE`; UserValves `strict_numbers`, `show_debug_trace`
+- Valves: `ENGINE_URL`, `ENGINE_SHARED_SECRET`, `CONSOLE_URL`, `DEFAULT_THINKING_LEVEL`, `SHOW_STATUS_EVENTS`, `MAX_EMBEDS_PER_MESSAGE`, `MAX_ATTACHMENT_MB`; UserValves `strict_numbers`, `show_debug_trace`
 
 Consumes:
 - `POST /v1/answer` (SSE), `POST /v1/answer/{trace_id}/confirm` (backend/api/engine.py, S2); identity = HMAC over `DCL_PIPE_SHARED_SECRET`
+- `POST /assets/upload` (backend/api/assets.py, S3): Pipe identity only; 25 MB cap (413); slot = presigned PUT + GET for `s3://dcl-exports/uploads/{user}/{uuid}`, 15 minutes; objects expire after 24 hours (S4 lifecycle rule); never indexed
 - Open WebUI v0.12.3 APIs, checked against its source: `__user__`, `__event_emitter__`, `__event_call__`, `__metadata__`, `__task__`, `open_webui.models.groups.Groups.get_groups_by_member_id` (groups are not in `__user__`)
 
-Event mapping: step → `status` (and `<details type="tool_calls">` when `show_debug_trace`); token → text; citation → one `source` per document (`document[]` = cited passages, url = Console viewer link, marks for provenance, translation and "⚠ unverified extraction"); embed → `embeds` with the iframe height script; needs_confirmation → `confirmation` dialog, only `True` counts as consent, reply sent to `/confirm` (declined if the event has no `trace_id`); done → final markdown if nothing streamed, caveats not already in the text, `chat:message:follow_ups`, final status; error / HTTP error / unreachable → yields `{"error": {"detail": …}}`, which Open WebUI shows as the message error. Open WebUI's background tasks (`__task__`: title, tags, follow-ups) never reach the engine; follow-ups are answered from the engine's last answer in that chat. Chat attachments are not forwarded yet (no upload endpoint).
+Event mapping: step → `status` (and `<details type="tool_calls">` when `show_debug_trace`); token → text; citation → one `source` per document (`document[]` = cited passages, url = Console viewer link, marks for provenance, translation and "⚠ unverified extraction"); embed → `embeds` with the iframe height script; needs_confirmation → `confirmation` dialog, only `True` counts as consent, reply sent to `/confirm` (declined if the event has no `trace_id`); done → final markdown if nothing streamed, caveats not already in the text, `chat:message:follow_ups`, final status; error / HTTP error / unreachable → yields `{"error": {"detail": …}}`, which Open WebUI shows as the message error. Open WebUI's background tasks (`__task__`: title, tags, follow-ups) never reach the engine; follow-ups are answered from the engine's last answer in that chat. Chat attachments: for each file in `__files__` owned by the requesting user (read via `open_webui.models.files.Files` and `open_webui.storage.provider.Storage`) and within `MAX_ATTACHMENT_MB`, the Pipe asks `POST /assets/upload` for a slot, PUTs the bytes and sends `{name, mime_type, url: get_url}`; a failed or oversized file is skipped with a notification and never blocks the answer.
 
 ## Workspace (files to touch when modifying this feature)
 
@@ -43,6 +44,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `frontend/openwebui/api_endpoint.py`
 - `frontend/openwebui/config.py`
 - `frontend/openwebui/build_functions.py`, `frontend/openwebui/bundled/` (regenerate only)
+- `backend/api/assets.py` (upload route), `backend/tests/unit/api/test_assets.py`
 - `backend/tests/unit/openwebui/test_pipe.py`
 
 ## Rubric (what "done" means for this feature)
@@ -53,7 +55,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] The engine's own verifier accepts the Pipe's signed headers; a tampered body is refused
 - [x] The installable bundle is current and passes the same tests
 - [ ] Pilot run in a real Open WebUI against the live engine (M8/M9)
-- [ ] Attachments forwarded once an upload endpoint exists
+- [x] Attachments forwarded through `POST /assets/upload` (only the user's own files, size-capped, failures skipped with a notification)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 Verify:
@@ -69,6 +71,7 @@ uv run python -m pytest backend/tests/unit/openwebui
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | Pipe, api_endpoint.py, config.py, single-file build, replay tests |
+| 2026-10-22 | S3 | Chat attachments via `POST /assets/upload` (Lead decision); bundler accepts parenthesized inline imports |
 
 ## Related
 

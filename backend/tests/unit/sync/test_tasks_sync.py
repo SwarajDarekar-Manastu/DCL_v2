@@ -103,6 +103,7 @@ def test_download_lands_a_pending_item(session, monkeypatch):
     location_id = _pending_id(session)
     landed = []
     monkeypatch.setattr(tasks_sync, "land_item", lambda s, g, m, loc, http: landed.append(loc))
+    monkeypatch.setattr(tasks_sync, "inspect_item", lambda s, m, loc: None)
     assert download_one(session, None, None, None, location_id, attempt=0) == Outcome.LANDED
     assert landed == [location_id]
 

@@ -117,3 +117,14 @@ def test_extension_of():
     assert extension_of("TP07.DAT_FAIL") == ".dat_fail"
     assert extension_of("t02_00") == ""
     assert extension_of("a.tar.gz") == ".gz"
+
+
+def test_utf16_text_with_a_bom_is_text_refined_by_its_extension():
+    head = "numpy==1.26.4\r\nscipy==1.13.0\r\n".encode("utf-16")
+    resolved = resolve_type(head, "requirements.txt")
+    assert (resolved.kind, resolved.route, resolved.ext_mismatch) == ("plain_text", Route.B, False)
+
+
+def test_a_png_that_holds_jpeg_bytes_is_jpeg_with_a_mismatch():
+    resolved = resolve_type(b"\xff\xd8\xff\xe0" + b"\x00" * 20, "1.png")
+    assert (resolved.kind, resolved.route, resolved.ext_mismatch) == ("jpeg", Route.D, True)
