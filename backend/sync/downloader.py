@@ -102,6 +102,10 @@ def find_known_blob(session: Session, quick_xor_hash: str | None, size_bytes: in
 
 
 def _land(session: Session, item: DriveItem, sha256: str) -> None:
+    if item.blob_sha256 is not None and item.blob_sha256 != sha256 and item.previous_blob_sha256 is None:
+        item.previous_blob_sha256 = (
+            item.blob_sha256
+        )  # modified in place; a pending value is never overwritten
     item.blob_sha256 = sha256
     item.status = DriveItemStatus.LANDED
     item.error_last = None

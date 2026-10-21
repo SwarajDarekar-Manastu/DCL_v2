@@ -44,6 +44,7 @@ def session(engine):
         s.rollback()
         tables = (
             "review_flags",
+            "document_relations",
             "document_sources",
             "documents",
             "drive_items",

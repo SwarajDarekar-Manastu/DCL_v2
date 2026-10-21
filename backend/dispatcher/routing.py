@@ -35,9 +35,17 @@ from backend.postgres.enums import (
     Route,
     SourceOrigin,
 )
-from backend.postgres.models import Blob, Document, DocumentSource, DriveFolder, DriveItem, SyncRoot
+from backend.postgres.models import (
+    Blob,
+    Document,
+    DocumentRelation,
+    DocumentSource,
+    DriveFolder,
+    DriveItem,
+    SyncRoot,
+)
 from backend.review.flags import upsert_document_flag
-from backend.storage.minio import CIR, BucketStore, parse_uri
+from backend.storage.minio import CIR, BucketStore, parse_uri, uri
 from backend.sync.scope import in_scope
 
 IMPLEMENTED_ROUTES: frozenset[Route] = frozenset()  # grows as route adapters land (Route C next)
@@ -46,6 +54,7 @@ IMPLEMENTED_ROUTES: frozenset[Route] = frozenset()  # grows as route adapters la
 @dataclass
 class DispatchResult:
     created: int = 0
+    superseded: int = 0
     waiting: int = 0
     halted: int = 0
     skipped_existing: int = 0
@@ -269,7 +278,111 @@ def dispatch(
                 session, plan, by_blob, context, routes_on, cir, heads[plan.primary.blob_sha256], result
             )
         session.commit()
+    result.superseded = apply_supersessions(session)
+    session.commit()
     return result
+
+
+# ---------------------------------------------------------------- supersession (file 02 §5.1)
+
+DEAD_LOCATION = (DriveItemStatus.DELETED,)
+SETTLED = (DocumentStatus.SUPERSEDED, DocumentStatus.DELETED)
+
+
+def _set_status(document: Document, status: DocumentStatus, primary_blob: str) -> None:
+    """``staged_payload_uri`` is set exactly while HALTED (CHECK). The staged JSON stays at its key
+    ``dcl-cir/{sha256}/staged.json``, so a document returning to HALTED points at it again."""
+    document.status = status
+    document.staged_payload_uri = (
+        uri(CIR, f"{primary_blob}/staged.json") if status == DocumentStatus.HALTED else None
+    )
+
+
+def _primary_document(session: Session, blob_sha256: str) -> Document | None:
+    return session.scalar(
+        select(Document)
+        .join(DocumentSource, DocumentSource.doc_id == Document.doc_id)
+        .where(DocumentSource.blob_sha256 == blob_sha256, DocumentSource.role == DocumentSourceRole.PRIMARY)
+    )
+
+
+def _held_by_a_live_location(session: Session, blob_sha256: str) -> bool:
+    found = session.scalar(
+        select(DriveItem.location_id)
+        .where(DriveItem.blob_sha256 == blob_sha256, DriveItem.status.not_in(DEAD_LOCATION))
+        .limit(1)
+    )
+    return found is not None
+
+
+def apply_supersessions(session: Session) -> int:
+    """For each location whose content was replaced in place: SUPERSEDES new→old once the new content has
+    a document; the old document becomes SUPERSEDED only when no live location still holds the old blob."""
+    superseded = 0
+    pending = session.scalars(select(DriveItem).where(DriveItem.previous_blob_sha256.is_not(None))).all()
+    for item in pending:
+        new_doc = _primary_document(session, item.blob_sha256) if item.blob_sha256 else None
+        if new_doc is None:
+            continue  # the new content is not dispatched yet (scope, inspection): keep the value pending
+        old_doc = _primary_document(session, item.previous_blob_sha256)
+        if old_doc is not None and old_doc.doc_id != new_doc.doc_id:
+            if session.get(DocumentRelation, (new_doc.doc_id, old_doc.doc_id, "SUPERSEDES")) is None:
+                session.add(
+                    DocumentRelation(doc_id_a=new_doc.doc_id, doc_id_b=old_doc.doc_id, relation="SUPERSEDES")
+                )
+            if old_doc.status not in SETTLED and not _held_by_a_live_location(
+                session, item.previous_blob_sha256
+            ):
+                _set_status(old_doc, DocumentStatus.SUPERSEDED, item.previous_blob_sha256)
+                superseded += 1
+        item.previous_blob_sha256 = None
+    session.flush()
+    return superseded
+
+
+def sweep_documents(session: Session) -> dict[str, int]:
+    """Safety net: documents whose primary blob no live location holds are settled (SUPERSEDED when a
+    newer document supersedes them, else DELETED); documents held only by quarantined locations are
+    QUARANTINED, and come back when a location leaves quarantine (file 02 §7 document state machine)."""
+    counts = {"superseded": 0, "deleted": 0, "quarantined": 0, "reactivated": 0}
+    rows = session.execute(
+        select(Document, DocumentSource.blob_sha256)
+        .join(DocumentSource, DocumentSource.doc_id == Document.doc_id)
+        .where(DocumentSource.role == DocumentSourceRole.PRIMARY, Document.status != DocumentStatus.DELETED)
+    ).all()
+    for document, blob_sha256 in rows:
+        holders = set(
+            session.scalars(
+                select(DriveItem.status).where(
+                    DriveItem.blob_sha256 == blob_sha256, DriveItem.status.not_in(DEAD_LOCATION)
+                )
+            )
+        )
+        if not holders:
+            targeted = session.scalar(
+                select(DocumentRelation.doc_id_a)
+                .where(
+                    DocumentRelation.doc_id_b == document.doc_id, DocumentRelation.relation == "SUPERSEDES"
+                )
+                .limit(1)
+            )
+            target = DocumentStatus.SUPERSEDED if targeted is not None else DocumentStatus.DELETED
+            if document.status != target:
+                _set_status(document, target, blob_sha256)
+                counts["superseded" if target == DocumentStatus.SUPERSEDED else "deleted"] += 1
+        elif holders == {DriveItemStatus.QUARANTINED}:
+            if document.status != DocumentStatus.QUARANTINED:
+                _set_status(document, DocumentStatus.QUARANTINED, blob_sha256)
+                counts["quarantined"] += 1
+        elif document.status == DocumentStatus.QUARANTINED:
+            _set_status(
+                document,
+                DocumentStatus.WAITING_FOR_ROUTE if document.route else DocumentStatus.HALTED,
+                blob_sha256,
+            )
+            counts["reactivated"] += 1
+    session.flush()
+    return counts
 
 
 def main(argv: list[str]) -> int:
@@ -284,7 +397,7 @@ def main(argv: list[str]) -> int:
     from backend.storage.minio import client_from_settings
 
     parser = argparse.ArgumentParser(prog="python -m backend.dispatcher.routing")
-    parser.add_argument("command", choices=["dispatch"])
+    parser.add_argument("command", choices=["dispatch", "sweep"])
     parser.add_argument("--env-file", default=None)
     args = parser.parse_args(argv)
     settings = load_settings(Path(args.env_file)) if args.env_file else get_settings()
@@ -292,12 +405,16 @@ def main(argv: list[str]) -> int:
         normalize_url(os.environ.get("DCL_DATABASE_URL") or settings.stack_database_url().get_secret_value())
     )
     with Session(engine, expire_on_commit=False) as session:
+        if args.command == "sweep":
+            print(sweep_documents(session))
+            session.commit()
+            return 0
         result = dispatch(session, client_from_settings(settings))
     print(
         f"created {result.created} documents ({result.waiting} WAITING_FOR_ROUTE, {result.halted} HALTED), "
         f"{result.conflicts} CONFLICT flags, {result.skipped_existing} items already in documents"
     )
-    print(f"  by route: {dict(sorted(result.by_route.items()))}")
+    print(f"  by route: {dict(sorted(result.by_route.items()))}; superseded: {result.superseded}")
     return 0
 
 
