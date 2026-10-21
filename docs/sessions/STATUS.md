@@ -113,3 +113,9 @@ Merged / ready: publish-first item 2: backend/dispatcher/contract.py (ProcessedD
 Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
 Needs from others: S3 — import parse_anchor/format_anchor from backend.dispatcher.contract in backend/api/viewer.py and drop the local copies (one owner of the format, as S2 asked)
 Next: backend/review/api_models.py (publish-first item 3, for S3), MinIO get/put for S2's vision cache, then the documents/nodes/assets models
+
+## 2026-10-21 20:40 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: VisionService (`backend/llm_engine/vision/{service,schemas}.py`), prompt loader + nine v1 prompt files (`backend/llm_engine/prompts`), 23 tests on a mock gateway; full suite green.
+Blocked on: nothing for code; real vision calls wait for S4's probe to enable image input
+Needs from others: S1: `backend/storage/minio.py` get/put on dcl-cir (cache adapter), `document_nodes` model (resolve_anchor)
+Next: chunker against S1's contract (ProcessedNode), anchors (make_anchor, resolve_anchor), identifiers
