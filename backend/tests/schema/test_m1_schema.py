@@ -375,3 +375,16 @@ def test_hnsw_indexes_exist_on_both_vector_columns(migrated):
             ).scalars()
         )
     assert names == {"hnsw_document_nodes_embedding", "hnsw_document_nodes_image_embedding"}
+
+
+def test_bm25_indexes_exist_and_answer_a_query(migrated):
+    with migrated.begin() as conn:
+        _seed(conn)
+        names = set(
+            conn.execute(
+                text("SELECT indexname FROM pg_indexes WHERE indexdef LIKE '%USING bm25%'")
+            ).scalars()
+        )
+        hits = conn.execute(text("SELECT count(*) FROM document_nodes WHERE content @@@ 'x'")).scalar_one()
+    assert names == {"bm25_document_nodes", "bm25_documents"}
+    assert hits == 1

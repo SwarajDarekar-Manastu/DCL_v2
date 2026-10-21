@@ -5,6 +5,7 @@ has the property that makes it an edge case. Hostile fixtures are inspected safe
 only through pickletools, archives only through their central directory.
 """
 
+import ast
 import csv
 import hashlib
 import io
@@ -347,3 +348,18 @@ def test_pdf_is_html_has_html_magic():
     assert (folder / data["files"][0]).suffix == ".pdf"
     assert not raw.startswith(b"%PDF-")
     assert raw.lstrip().lower().startswith(b"<!doctype html")
+
+
+def test_unlabeled_npy_is_a_plain_float_array_without_names():
+    folder, data = fixture("unlabeled_npy")
+    raw = (folder / data["files"][0]).read_bytes()
+    assert raw[:6] == b"\x93NUMPY"  # 03 §1.1 sniffer
+    header_len = int.from_bytes(raw[8:10], "little")
+    header = ast.literal_eval(raw[10 : 10 + header_len].decode("latin1"))
+    meta = data["expected"]["metadata"]
+    assert header == {"descr": "<f8", "fortran_order": False, "shape": tuple(meta["shape"])}
+    numpy = pytest.importorskip("numpy")
+    array = numpy.load(folder / data["files"][0], mmap_mode="r", allow_pickle=False)  # 03 §C.5
+    assert array.dtype.names is None  # no column names: the reason for SCHEMA_UNKNOWN HARD
+    assert array[0].tolist() == meta["first_row"]
+    assert array.max(axis=0).tolist() == pytest.approx(meta["column_max"])

@@ -17,13 +17,13 @@ Enumerate the four shared OneDrive folders through Microsoft Graph delta, react 
 Code:
 - `backend/sync/graph_client.py` (GET-only Graph client; relative paths or absolute Graph links only)
 - `backend/sync/auth.py` (encrypted MSAL cache, `TokenProvider` silent-first + device-code sign-in, `check_access`, CLI)
-- `backend/sync/delta.py` (`seed_roots`, `run_root` crawl/delta with page checkpoints, `upsert_page`, `finalize_root` paths + gate + scope; CLI `crawl`)
+- `backend/sync/delta.py` (`seed_roots`, `run_root` crawl/delta with page checkpoints, `upsert_page`, `finalize_root` paths + gate + scope; 410 and forced resync with generation stamps and per-item 404 confirmation; CLI `crawl | resync`)
 - `backend/sync/folder_listing.py` (S5's allowlist listing: folders.csv + library_pdfs.csv; CLI)
+- `backend/celery_redis/tasks_sync.py` (io_light: `dcl.sync.delta_root` time-budgeted + self re-enqueue + per-root Redis lock, `dcl.sync.delta_all`, `dcl.sync.download` (3 attempts → DOWNLOAD_FAILED), `dcl.sync.enqueue_downloads`, `dcl.sync.token_health` (first-root probe))
 - `backend/sync/webhooks.py` (planned)
-- `backend/sync/resync.py` (planned)
 
 Tests and fixtures:
-- `backend/tests/unit/sync/test_auth.py`, `backend/tests/unit/sync/test_graph_client.py`, `backend/tests/unit/sync/test_delta.py`
+- `backend/tests/unit/sync/test_auth.py`, `backend/tests/unit/sync/test_graph_client.py`, `backend/tests/unit/sync/test_delta.py`, `backend/tests/unit/sync/test_tasks_sync.py`, `backend/tests/unit/sync/conftest.py`
 - `backend/tests/integration/sync/` (planned)
 
 ## Interfaces
@@ -50,9 +50,11 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/sync/auth.py`
 - `backend/sync/delta.py`
 - `backend/sync/folder_listing.py`
+- `backend/celery_redis/tasks_sync.py`
 - `backend/tests/unit/sync/test_delta.py`
+- `backend/tests/unit/sync/test_tasks_sync.py`
+- `backend/tests/unit/sync/conftest.py`
 - `backend/sync/webhooks.py`
-- `backend/sync/resync.py`
 - `backend/tests/unit/sync/`
 - `backend/tests/integration/sync/`
 
@@ -61,7 +63,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [ ] Full metadata crawl of the four roots completes and records ~110k items
 - [x] Items tracked by (drive_id,item_id); folder rename updates paths with zero downloads (unit-tested)
 - [x] Crash mid-crawl resumes from the page checkpoint; 429/503 honor Retry-After (unit-tested; Redis-wide pause with the Celery task)
-- [ ] 410 resync produces no deletion without a per-item 404 check
+- [x] 410 resync produces no deletion without a per-item 404 check (unit-tested; drill: `python -m backend.sync.delta resync --root NAME`)
 - [x] Outside-share item returns 403/404 in the negative test (live 2026-10-22: four roots 200, outside item 404)
 - [x] Token cache Fernet-encrypted, mode 600 in a 700 dir, atomic replace; an undecryptable file (v1 cache) is refused and left untouched
 - [x] Silent acquisition first; device-code sign-in as any account other than DCL_DELEGATED_USERNAME is rejected and not saved
@@ -75,6 +77,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | MSAL auth with encrypted cache, GET-only Graph client, access check and CLI (28 unit tests); device flow verified live against the tenant with scope A |
 | 2026-10-22 | S1 | Metadata crawl/delta (`delta.py`) and S5's folder listing; 10 tests; live crawl of the four roots run against a disposable DB |
+| 2026-10-22 | S1 | Celery tasks (tasks_sync.py): budgeted delta with resume and lock, downloads, token health; 8 tests |
+| 2026-10-22 | S1 | 410/forced resync in `delta.py` (no separate resync.py); generation = max(resync_gen)+1 per root committed with the first page |
 
 ## Related
 

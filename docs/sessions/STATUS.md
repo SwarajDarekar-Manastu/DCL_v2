@@ -258,17 +258,99 @@ Blocked on: nothing. Live crawl of the four real roots is running against a disp
 Needs from others: Lead — merge so the stack migrates to 0003
 Next: tasks_sync.py (crawl/delta/download tasks on io_light), BM25 migration with S2, review_flags/rules tables
 
+## 2026-10-22 01:05 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: allowlist chosen from S1's crawl listing: 11 folder-id entries, about 247 files (table in `.wiki/plans/quality__fixtures__allowlist.md`, sent to DCL Lead for DECISIONS.md); synthetic `c_telemetry/unlabeled_npy` fixture with a numpy cross-check (not yet requested; merges with the allowlist close-out)
+Blocked on: Lead — (1) drop the `.npy` slot (all 6 corpus .npy are under `_to_delete`) or have the user move one; (2) accept the APU Heater substitute (no telemetry under that root); (3) non-English library documents: S1 first-page language/DOI check after download, or a ruling on M5's "two non-English brochures"
+Needs from others: Lead — the three rulings and the DECISIONS.md entry; S1 — the library language/DOI check if the Lead agrees
+Next: on the rulings, close the allowlist sheet, then copy small real fixtures from the allowlisted folders (user approval) and verify the first 15 telemetry cases with own Python over the raw .dat
+
+## 2026-10-22 01:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: allowlist close-out (recorded by the Lead in DECISIONS.md; plan sheet deleted) and the synthetic `c_telemetry/unlabeled_npy` fixture that replaces the dropped .npy slot. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: nothing for the next task
+Needs from others: S1 — first-page language/DOI check over the downloaded library PDFs (Lead ruling 3), and word when the allowlisted blobs have landed in MinIO
+Next: real fixtures from E1–E11 (user approves the copies; nothing proprietary in git) and the first 15 telemetry cases verified with own Python over the raw .dat of E1–E3
+
+## 2026-10-22 02:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `quality/acceptance` M1: checklist (M1.md) mapping all ten criteria; five automated read-only checks (crawl bands, decided-with-reason, downloads complete, scope = DECISIONS allowlist, dispatch only in scope) opt-in via `DCL_ACCEPTANCE=1`; snapshot/compare CLI for the rename/modify/410/re-run procedures; seven proofs on a disposable DB; M2 draft. Test: `DCL_TEST_DATABASE_URL=<disposable> uv run pytest backend/tests/acceptance` (7 passed; live checks skipped without opt-in)
+Blocked on: S1 — E1–E11 downloads, the read-only `export_blobs` command, the file-level listing (real fixtures, telemetry cases); a 410-resync command and the M1 load-test harness (procedures 8, 10)
+Needs from others: Lead — run the M1 live checks once downloads finish (`DCL_ACCEPTANCE=1 DCL_DATABASE_URL=<stack db> uv run pytest backend/tests/acceptance`), or give S5 a read-only DB URL
+Next: idle until S1's export and listing arrive. Local test container `dcl-s5-test` (ParadeDB 0.26.2-pg17, 127.0.0.1:55435, throwaway credentials) runs for the seeded-DB proofs
+
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: Review UI MVP merge requested (head 0d428b2) plus e0255ef (removed the parse_anchor_param alias). Open WebUI Pipe not started in code; research done against Open WebUI v0.12.3 source:
+- `__user__` = user.model_dump() with `valves` = UserValves; no groups, which come from `await open_webui.models.groups.Groups.get_groups_by_member_id(user_id)` (`.name`). Manifold `pipes()` → model id `manastu_engine.main`. `__task__` is set for title/tags/follow-up calls, which must not reach the engine.
+- Errors raised while the stream is consumed are not caught by Open WebUI. Yield `{"error": {"detail": ...}}` to get the error state (middleware: no choices + error). Events are status, source/citation (`{source:{id,name,url}, document:[...], metadata:[{source,name,url}]}`), embeds (`{embeds:[...], replace?}`), `chat:message:follow_ups`. A confirmation `__event_call__` returns the browser reply or `{"error": ...}`, so accept only `True`.
+- Single-file install: functions cannot import siblings, so config.py and api_endpoint.py get inlined by a build script into dist/.
+Blocked on: S2 to add trace_id to ConfirmationEvent (asked); owner of a chat-attachment upload endpoint (to raise with the Lead); Lead answers on GET /audit and on the GET /assets/url uri form.
+Next: Pipe plan sheet, then frontend/openwebui/{config.py, api_endpoint.py, pipe_manastu_engine.py, build script}, with tests replaying S2's example_answer_stream.sse.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: `frontend/openwebui-pipe`. The Pipe against S2's /v1/answer contract has config.py, api_endpoint.py (signed identity mirroring engine.sign_identity, SSE parser, confirm, trace), the event mapping checked against Open WebUI v0.12.3 source, and a single-file bundle in frontend/openwebui/bundled (build_functions.py --check). 27 tests replay S2's recorded stream through the source and the bundle; the engine's own pipe_identity accepts the Pipe's headers.
+Blocked on: nothing for the Pipe; a live run waits for the engine (M8). Confirmations use trace_id once S2's c1641d5 lands (declined until then).
+Needs from others: the Lead to decide the owner of a chat-attachment upload endpoint (the Pipe sends attachments=[]).
+Next: GET /audit (approved, owner S3, 501 until S1's audit_events model) and the Audit page; then Actions (Show trace, Add to benchmark, Report issue) and the Filter.
 ## 2026-10-22 01:00 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: enrichment (`backend/llm_engine/enrichment/{extract,entities,numeric_facts}.py`, prompt `enrichment/parent.v1.md`), 37 tests; `resolve_anchor` over document_nodes; trace_id on ConfirmationEvent; torch-free local-model tests; vision cache on BucketStore; `indexing/tables.py`.
 Blocked on: nothing
 Needs from others: S1: who seeds `config/aerospace_synonyms.yaml` into entities/entity_aliases, and whether `sanity_ranges` is seeded into pipeline_config; your commit consumes `EntityDecisions` and `FactDecision`s
 Next: index_document (chunk → enrich → normalize → facts → embed → hand to commit), then retrieval and the BM25 DDL for S1
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: sync Celery tasks (tasks_sync.py), host download CLI + read-only export, sanity_ranges seeding (seed-config), get_session dependency for routers. Live in the stack: crawl into 5435/dcl_v2 matches the first run (110,867 items, 5,073 accepted, 0 orphans); processing.scope = the 11 E1–E11 folder ids, sync.download_scope = []; gate.* and sanity_ranges seeded; the 247 accepted files of E1–E11 landed in MinIO. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend`
+Blocked on: nothing
+Needs from others: S4 — beat entries for the sync tasks (sent); S2 — BM25 DDL, entities.load_seed() on main for the seed-entities command
+Next: download the rest of the accepted items (H11), Tier 4 on landed blobs, dispatcher (folder context, assembler, route gating, CIR writer), then Route C
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: gateway client rework to the verified contract (ManastuGatewayAdapter default with X-API-Key, /generate, /stream; native and OpenAI adapters kept); production checklist on `.wiki/platform/gemini-gateway-client.md` implemented (retry classification incl. upstream codes in 502, jittered backoff, Retry-After, circuit breaker, per-model concurrency, idempotency key, timeouts, 20 MB inline guard, thought-signature echo, temperature dropped for 3.6+, estimated usage, quota stop); tests on recordings from the real gateway; real probe run wrote `gemini_capabilities.json`; beat schedule for S1's sync tasks. Test: `uv run pytest` green except S2's vision tests until S2 lands a one-line conftest fix (sent)
+Blocked on: S2 conftest change (`GEMINI_API_STYLE="openai"` in their vision test settings) before this can merge green
+Needs from others: operator — `.env` has `GEMINI_API_STYLE=gemini`; it must be `manastu` (or removed, the default) for the real gateway
+Next: CI pipeline (incl. disposable MinIO for S1's tests), observability, MinIO replacement comparison by end of M4
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: 410 + forced resync (delta.py, CLI `resync`), downloader lock re-check, migration 0004 BM25 (S2's DDL). E1–E11 downloads landed (247). M1 procedure commands sent to S5. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend`
+Blocked on: nothing; asked the Lead whether to land the remaining ~4,826 items host-side or wait for the workers
+Needs from others: S2 — seed_rows() on main (then seed-entities)
+Next: dispatcher (folder context, assembler, route gating, document rows, CIR writer), Route C, queue load test
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: CI pipeline v1 (`.github/workflows/ci.yml`: lint; disposable ParadeDB 0.26.2-pg17 + MinIO with `DCL_TEST_*`; schema gate = upgrade head + `alembic check` + FK-without-index; pytest; image build + layer secret scan), every step a script in `backend/devops/ci/` verified on the dev host; all four images clean against the real `.env` values. Correction to the previous entry: S2 needs no conftest change (S2's 455f896 replaces their mock), so merge S2's branch with or before this one
+Blocked on: nothing
+Needs from others: Lead — merge order S2 455f896, then this branch; first GitHub run happens after the merge
+Next: observability (OTel, Prometheus metrics of file 02 §10, Grafana, alert routing), then backups/retention/runbooks, MinIO replacement comparison by end of M4
+
+
+## 2026-10-22 03:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: nothing new; real-sample list (Tier A 12 files to git, ~570 KB incl. two trimmed .dat; Tier B local-only working copies) sent to DCL Lead for the user
+Blocked on: the user's approval of the sample list and whether the repository is private; DCL Lead or S1 running `backend.sync.export_blobs` into S5's scratchpad (S5 does not use stack credentials, Lead ruling)
+Needs from others: Lead — the approval and the export run
+Next: on approval, trim and commit Tier A with expected.yaml; verify the first 15 telemetry cases from Tier B with own Python
+
+## 2026-10-22 03:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` per the Lead ruling (feed/valve/tank 0–400 bar, general pressure 0–700 bar, `checks_external_kept` so external facts see only the general range; Route C values unchanged); M1.md procedures 6–9 with S1's commands. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: the user's answer on the sample list (repository is public: Lead recommends Tier B only)
+Needs from others: S2 — read `checks_external_kept` for external facts and the role id for internal facts (message sent)
+Next: on the answer, export and verify the telemetry cases; meanwhile idle
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: viewer endpoint wired to real tables (`build_viewer_payload` over documents, document_sources, drive_items, assets and S2's `resolve_anchor`; 404/400; page render with cited boxes, code, photo, video, text views); `GET /audit` over audit_events (reviewer, filters, cursor) and the Console Audit page with a case History link; Pipe replay test updated for the confirmation now in S2's example stream. 80 Vitest, 918 backend unit, 12 integration tests on a disposable ParadeDB (container dcl-s3-test, 127.0.0.1:55436).
+Blocked on: nothing. Open: `open_flags`/`review_case_key` in the viewer and the end-to-end re-index check wait for S1's review_flags and commit path; chat-attachment upload owner (Lead).
+Needs from others: nothing new.
+Next: Open WebUI Actions (Show trace, Add to benchmark, Report issue) and the Filter.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: nothing new since the viewer/audit merge request.
+Blocked on: Open WebUI Actions. Show trace needs GET /v1/traces?chat_id&message_id and Report issue needs POST /v1/traces/{id}/feedback (both asked of S2 2026-10-22). Add to benchmark and the Benchmark UI need the benchmark enums (category, case/run status, failure class) in backend/postgres/enums.py and the benchmark_cases/runs/results models (S1's area; owner and timing asked of the Lead).
+Needs from others: Lead decision on the Filter of 08 §1, which the signed groups in the Pipe make redundant today (proposal: defer it until attachments exist).
+Next: idle until S2's trace routes or the benchmark models land.
 
 ## 2026-10-22 02:30 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: hybrid retrieval `backend/indexing/retrieval.py` (exact/HNSW dense, per-language BM25 on pg_search 0.26.2, RRF, parent collapse, rerank + fallback, near-dup collapse), 11 DB tests on a disposable ParadeDB; `seed_rows()` for S1; triage thinking settled with S4.
 Blocked on: nothing
 Needs from others: S1: the BM25 migration with the DDL sent today (field names verbatim); S5: `retrieval_set.yaml` (40 queries with gold anchors) for recall@30
 Next: index_document (end-to-end tail into S1's commit), then the Retrieval-lab data for S3, then Route A1
+## 2026-10-22 04:10 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` general fallback per quantity (Lead ruling): force_general 0–5,000 N, temperature_general 0–3,500 K, mass_flow_general 0–5 kg/s, power_general 0–50 kW, `pressure` renamed `pressure_general`; role ranges keep the Route C values and no longer check external facts. Test: `uv run pytest backend/tests/unit/config_data && uv run ruff check backend`
+Blocked on: the user's answer on the sample list
+Needs from others: nothing new (S2 told of the id rename)
+Next: on the answer, export and verify the telemetry cases; the retrieval set once allowlisted documents are indexed (S2's anchor format received)
 
 ## 2026-10-22 03:30 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: `backend/indexing/index_document.py` (ProcessedDocument → IndexPlan: chunk, enrich per parent, entities, facts, route mentions, question proxies, headers, vector reuse, image vectors, aggregation), 11 tests; trace lookup and feedback routes for S3; sanity range by origin and role.

@@ -1,0 +1,25 @@
+fixture: unlabeled_npy
+edge_case: .npy array without column names (Route C mystery format); stands in for the corpus .npy files, which are all under _to_delete
+origin: synthetic
+generator: make_synthetic.py::unlabeled_npy
+byte_stable: true
+files: [T01.npy]
+simulated_location: {root: APU Heater, folder: Test Plan 30}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §1.1 (\\x93NUMPY magic → Route C)"
+  - "docs/architecture/03_phase2_processing_routes.md §C.5 (mmap_mode='r', allow_pickle=False; unnamed columns → SCHEMA_UNKNOWN HARD)"
+  - "docs/architecture/06_review_flags_and_halt_policy.md §6 (column mapper; rule resumes siblings)"
+expected:
+  route: C
+  detected_mime: application/x-npy
+  document_status: HALTED
+  flags:
+    - {type: SCHEMA_UNKNOWN, severity: HARD, reason: unnamed columns in a 300 x 4 float64 array}
+  flags_exact: true
+  metadata:
+    shape: [300, 4]
+    dtype: float64
+    first_row: [0.0, 1.0, 300.0, 0.0]
+    column_max: [2.99, 12.96, 748.5, 1.0]
+    telemetry_runs_rows: 0
+  never: [numpy.load with allow_pickle=True, write normalized Parquet before the mapping is resolved]

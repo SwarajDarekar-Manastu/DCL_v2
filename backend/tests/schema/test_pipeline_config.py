@@ -63,3 +63,11 @@ def test_empty_or_missing_scopes_mean_everything(session):
     assert pc.processing_scope(session) == []
     pc.set_value(session, pc.PROCESSING_SCOPE, ["APU Injector/Test Plan 30/*"], "s5")
     assert pc.processing_scope(session) == ["APU Injector/Test Plan 30/*"]
+
+
+def test_sanity_ranges_seed_once_and_reseed_only_on_change(session):
+    assert pc.seed_sanity_ranges(session) is True
+    seeded = pc.sanity_ranges(session)
+    assert seeded["version"] == 2 and seeded["ranges"]
+    assert pc.seed_sanity_ranges(session) is False
+    assert pc.seed_sanity_ranges(session, reseed=True) is False

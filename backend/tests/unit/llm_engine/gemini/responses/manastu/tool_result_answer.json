@@ -1,0 +1,44 @@
+{
+ "status": 200,
+ "body": {
+  "candidates": [
+   {
+    "content": {
+     "parts": [
+      {
+       "text": "The peak chamber pressure for run HT-042 was **31.2 bar**.",
+       "thought_signature": "sig-redacted"
+      }
+     ],
+     "role": "model"
+    },
+    "finish_reason": "STOP"
+   }
+  ],
+  "model_version": "gemini-3.8-flash",
+  "quota": {
+   "limit": 1000000,
+   "remaining": 990000,
+   "used_today": 10000
+  },
+  "response_id": "resp-fixture",
+  "usage_metadata": {
+   "candidates_token_count": 19,
+   "candidates_tokens_details": [
+    {
+     "modality": "TEXT",
+     "token_count": 19
+    }
+   ],
+   "prompt_token_count": 79,
+   "prompt_tokens_details": [
+    {
+     "modality": "TEXT",
+     "token_count": 79
+    }
+   ],
+   "total_token_count": 98,
+   "traffic_type": "ON_DEMAND"
+  }
+ }
+}

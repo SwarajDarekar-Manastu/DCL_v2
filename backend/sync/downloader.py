@@ -108,9 +108,11 @@ def land_item(
     location_id: uuid.UUID,
     content_http: httpx.Client,
 ) -> Landed:
-    item = session.get(DriveItem, location_id, with_for_update=True)
+    item = session.get(DriveItem, location_id, with_for_update=True, populate_existing=True)
     if item is None:
         raise LookupError(f"no drive item {location_id}")
+    if item.status != DriveItemStatus.PENDING_DOWNLOAD:  # another worker landed it during the lock wait
+        return Landed(location_id, item.blob_sha256, downloaded=False, new_blob=False)
 
     known = find_known_blob(session, item.quick_xor_hash, item.size_bytes)
     if known is not None:
@@ -165,3 +167,67 @@ def _stream_to(graph: GraphClient, minio: Minio, item: DriveItem, key: str, cont
         reader = HashingReader(content.iter_bytes(CHUNK_BYTES))
         minio.put_object(RAW, key, reader, length=-1, part_size=PART_BYTES)
     return reader
+
+
+def main(argv: list[str]) -> int:
+    """Host-side landing of PENDING_DOWNLOAD items, optionally only inside given folder subtrees."""
+    import argparse
+    import os
+
+    from sqlalchemy import create_engine
+
+    from backend.celery_redis.tasks_sync import Outcome, download_one
+    from backend.config import get_settings, load_settings
+    from backend.postgres.session import normalize_url
+    from backend.storage.minio import client_from_settings
+    from backend.sync.auth import GraphAuthConfig, TokenProvider
+    from backend.sync.export_blobs import folder_paths, items_under
+
+    parser = argparse.ArgumentParser(prog="python -m backend.sync.downloader")
+    parser.add_argument(
+        "--folder-id", action="append", default=[], help="only items inside this folder subtree"
+    )
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--env-file", default=None)
+    args = parser.parse_args(argv)
+    from pathlib import Path
+
+    settings = load_settings(Path(args.env_file)) if args.env_file else get_settings()
+    engine = create_engine(
+        normalize_url(os.environ.get("DCL_DATABASE_URL") or settings.stack_database_url().get_secret_value())
+    )
+    tokens = TokenProvider.create(GraphAuthConfig.from_settings(settings))
+    minio = client_from_settings(settings)
+    counts: dict[str, int] = {}
+    with (
+        Session(engine, expire_on_commit=False) as session,
+        GraphClient(tokens.access_token) as graph,
+        httpx.Client(timeout=120.0) as content_http,
+    ):
+        if args.folder_id:
+            ids = [
+                item.location_id
+                for path in folder_paths(session, args.folder_id).values()
+                for item in items_under(session, path, DriveItemStatus.PENDING_DOWNLOAD)
+            ]
+        else:
+            ids = list(
+                session.scalars(
+                    select(DriveItem.location_id).where(DriveItem.status == DriveItemStatus.PENDING_DOWNLOAD)
+                )
+            )
+        for location_id in ids[: args.limit]:
+            outcome = Outcome.RETRY
+            for attempt in range(3):
+                outcome = download_one(session, graph, minio, content_http, location_id, attempt)
+                if outcome != Outcome.RETRY:
+                    break
+            counts[outcome] = counts.get(outcome, 0) + 1
+    print(f"{len(ids[: args.limit])} items: {counts}")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(main(sys.argv[1:]))

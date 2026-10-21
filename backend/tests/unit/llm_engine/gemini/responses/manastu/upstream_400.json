@@ -1,0 +1,7 @@
+{
+ "status": 502,
+ "body": {
+  "detail": "ClientError: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Thinking level is unsupported: THINKING_LEVEL_MINIMAL', 'status': 'INVALID_ARGUMENT'}}",
+  "error": "upstream Gemini error"
+ }
+}
