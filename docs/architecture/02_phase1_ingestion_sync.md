@@ -93,7 +93,7 @@ On 429 or 503: read `Retry-After`, **pause every Graph call process-wide** (a Re
 
 Graph returns 410 with `error.code` `resyncRequired`/`resyncChangesApplyDifferences` and a `Location` header pointing to a fresh enumeration. Procedure:
 1. Mark the root `RESYNCING` (delta runs for that root pause).
-2. Increment the root's resync generation and run the full enumeration from the `Location` link; every item seen is upserted normally **and stamped** with the new generation in `drive_items.resync_gen` (no staging table):
+2. Compute the root's new resync generation as `max(drive_items.resync_gen) + 1` over that root's items (no column on `sync_roots`) and run the full enumeration from the `Location` link; every item seen is upserted normally **and stamped** with the new generation in `drive_items.resync_gen` (no staging table):
    - known item, same `quickXorHash` → stamp only;
    - known item, different hash → treat as modified;
    - unknown item → treat as new.
