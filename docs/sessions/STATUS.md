@@ -167,16 +167,28 @@ Needs from others: S4 — CI service for a disposable MinIO with DCL_TEST_MINIO_
 Next: provisional evidence/suggestion models per flag type (S3 asked), then the M2 documents/nodes/assets models
 <<<<<<< HEAD
 
+## 2026-10-21 21:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/indexing/{chunker,anchors,identifiers}.py` (chunk_document, build_embed_texts, IndexNode, extract_identifiers, make_anchor, resolve_among), 47 tests; vision media resolution aligned with 03 §3.
+Blocked on: S1 `document_nodes` model for `resolve_anchor` (S3's viewer waits on it)
+Needs from others: S1: route node conventions in `.wiki/backend/chunker-and-anchors.md` (text as parent/child, every node needs a locator, run summaries t_start_ms 0); `IndexNode` is the commit input
+Next: enrichment (extract, entities, numeric facts), then index_document and retrieval
+
 ## 2026-10-21 22:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: `config/gate.yaml` with `kept_endings_by_parent_kind: {wbpz: [".out"]}` per the Lead's ruling; 5 archive-member decision cases through the documented rule and S1's gate (58 gate tests). Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
 Blocked on: S1 crawl folder listing (allowlist)
 Needs from others: nothing else
 Next: idle until the listing arrives
-=======
 
 ## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready: publish-first item 4: backend/review/rules.py (precedence resolver, typed bodies per rule_type incl. channel_map, config/rules YAML format); RuleDraft.body validated; also typed flag evidence (3db8ffa), MinIO store (e75440c), gate parent_kind (c861d3a). Test: `uv run pytest && uv run ruff check backend` (600 passed, 24 skipped)
 Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl and the downloader's dispatch step
 Needs from others: nothing new
 Next: downloader core (streamed SHA-256 + local quickXorHash, conflict-safe blob insert), job_key builder; then the M2 documents/nodes/assets models
->>>>>>> claude/competent-brahmagupta-3a5541
+=======
+
+## 2026-10-21 22:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: 31ed593 (gate.yaml header wording), not yet requested
+Blocked on: Lead — the `.wbpz` `.out` exception: Lead ruled "fixed rule in code, no gate.yaml key"; S1 implemented a gate.yaml key `kept_endings_by_parent_kind` (S1 c861d3a, merge requested). S5 adds the entry and three decision cases once the Lead confirms which one stands
+Needs from others: Lead — that confirmation; S1 — the crawl folder listing
+Next: idle
+>>>>>>> claude/infallible-swartz-58c96b

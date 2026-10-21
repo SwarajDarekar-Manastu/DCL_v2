@@ -1,0 +1,15 @@
+{
+  "_doc": "One fixture for both sides of file 04 §6. 'text' is document content; 'queries' are user wordings that must hit it lexically; 'must_have' tokens the indexer emits; 'must_not_have' tokens it must never emit.",
+  "cases": [
+    {"text": "Pressure transducer PT-104 read 12.4 bar.", "must_have": ["PT-104", "PT104"], "queries": ["PT104 calibration", "what did pt-104 show", "PT 104 range"]},
+    {"text": "Thermal margins follow ECSS-E-ST-35C Rev.1 clause 4.2.3a.", "must_have": ["ECSS-E-ST-35C", "ECSSEST35C"], "must_not_have": ["ST-35C", "ST35C", "E-ST-35C"], "queries": ["ECSS-E-ST-35C margin", "ecssest35c"]},
+    {"text": "The duct is made of niobium alloy C-103.", "must_have": ["C-103", "C103"], "queries": ["C103 properties", "c-103 creep"]},
+    {"text": "Hot fire results of TP37, run T02.", "must_have": ["TP37", "T02"], "queries": ["TP37 chamber pressure", "tp37"]},
+    {"text": "Injector INJ-14 failed during the flow test; SV-1 was closed.", "must_have": ["INJ-14", "INJ14", "SV-1", "SV1"], "queries": ["INJ14 damage", "inj-14", "SV 1 timing"]},
+    {"text": "ADN blend LMP-103S and HAN blend AF-M315E were compared.", "must_have": ["LMP-103S", "LMP103S", "AF-M315E", "AFM315E"], "queries": ["LMP103S Isp", "AF-M315E"]},
+    {"text": "Tested to MIL-STD-1522A pressure vessel rules.", "must_have": ["MIL-STD-1522A", "MILSTD1522A"], "must_not_have": ["STD-1522A"], "queries": ["MIL-STD-1522A"]},
+    {"text": "Filter F_101 sits upstream of the valve.", "must_have": ["F-101", "F101"], "queries": ["F-101 filter"]},
+    {"text": "Der Drucksensor PT‑101 (0–250 bar) wurde kalibriert.", "must_have": ["PT-101", "PT101"], "queries": ["PT-101 calibration"]},
+    {"text": "See page 5 and Fig. 4 on 2024-05-02 at 12.4 bar.", "must_not_have": ["PAGE-5", "FIG-4", "2024-05-02"], "queries": []}
+  ]
+}
