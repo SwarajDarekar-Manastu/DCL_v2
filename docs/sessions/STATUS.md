@@ -113,3 +113,9 @@ Merged / ready: publish-first item 2: backend/dispatcher/contract.py (ProcessedD
 Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
 Needs from others: S3 — import parse_anchor/format_anchor from backend.dispatcher.contract in backend/api/viewer.py and drop the local copies (one owner of the format, as S2 asked)
 Next: backend/review/api_models.py (publish-first item 3, for S3), MinIO get/put for S2's vision cache, then the documents/nodes/assets models
+
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: viewer anchor codec delegated to `backend/dispatcher/contract.py` (S1 owns the format); `viewer_path()` unchanged, `parse_anchor_param` kept as an alias for S1's equivalence test; 437 backend tests pass.
+Blocked on: Review UI waits for S1's `backend/review/api_models.py` (in progress); viewer body waits for S2's `resolve_anchor`; Pipe waits for S2's `/v1/answer` schema.
+Needs from others: S1 may drop the equivalence test in `test_contract.py`, after which S3 deletes the alias.
+Next: idle until one of the inputs above lands on main.

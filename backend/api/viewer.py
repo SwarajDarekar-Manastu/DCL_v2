@@ -11,8 +11,8 @@ Deep link (chat citations, Review UI, Benchmark drilldowns):
     cells  <sheet>!<A1 range>            cells:Run 1!A1:D20:0c1d2e3f4a5b6c7d
 
 The hash part is lowercase hex (16 to 64 characters) or empty; the trailing colon is always written.
-The anchor never carries a node id. Build links with `viewer_path()`; fields use the names of the
-stable `Anchor` model (page_no, line_start, t_start_ms, sheet_name, cell_range, content_sha256).
+The anchor never carries a node id. The format is owned by `backend.dispatcher.contract`; build links
+with `viewer_path(doc_id, anchor.locator_fields())`.
 
 The Console page calls GET /docs/{doc_id}/viewer?anchor=…[&translate=true] and renders the returned
 `ViewerPayload`. Resolution: same locator and same hash → `exact`; hash differs or is missing →
@@ -20,10 +20,9 @@ The Console page calls GET /docs/{doc_id}/viewer?anchor=…[&translate=true] and
 `document_only`.
 """
 
-import re
 from datetime import date
 from enum import StrEnum
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Any, Literal
 from urllib.parse import quote
 from uuid import UUID
 
@@ -31,79 +30,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from backend.api.auth import ConsoleRole, ConsoleUser, require_role
+from backend.dispatcher.contract import AnchorError, format_anchor, parse_anchor
 
 # ---------------------------------------------------------------- anchor parameter
+# The format is owned by backend.dispatcher.contract (parse_anchor / format_anchor / Anchor).
+
+parse_anchor_param = parse_anchor  # kept for S1's equivalence test in test_contract.py
 
 
-class AnchorFields(TypedDict, total=False):
-    page_no: int
-    line_start: int
-    t_start_ms: int
-    sheet_name: str
-    cell_range: str
-    content_sha256: str
-
-
-class AnchorParamError(ValueError):
-    pass
-
-
-_HASH = re.compile(r"[0-9a-f]{16,64}")
-_RANGE = re.compile(r"[A-Z]{1,3}[1-9][0-9]*(:[A-Z]{1,3}[1-9][0-9]*)?")
-
-
-def _positive_int(value: str, name: str, minimum: int) -> int:
-    if not value.isdigit() or int(value) < minimum:
-        raise AnchorParamError(f"{name} must be an integer >= {minimum}, got {value!r}")
-    return int(value)
-
-
-def parse_anchor_param(param: str) -> AnchorFields:
-    kind, sep, rest = param.partition(":")
-    if not sep:
-        raise AnchorParamError("anchor must look like <kind>:<value>:<hash>")
-    value, sep, content_hash = rest.rpartition(":")
-    if not sep:  # no hash part written: "page:12"
-        value, content_hash = rest, ""
-    if content_hash and not _HASH.fullmatch(content_hash):
-        raise AnchorParamError("hash must be 16 to 64 lowercase hex characters")
-    fields: AnchorFields = {"content_sha256": content_hash} if content_hash else {}
-    if kind == "page":
-        fields["page_no"] = _positive_int(value, "page", 1)
-    elif kind == "line":
-        fields["line_start"] = _positive_int(value, "line", 1)
-    elif kind == "t":
-        fields["t_start_ms"] = _positive_int(value, "t", 0)
-    elif kind == "cells":
-        sheet, bang, cell_range = value.rpartition("!")
-        if not bang or not sheet or not _RANGE.fullmatch(cell_range):
-            raise AnchorParamError("cells must look like <sheet>!<A1 range>")
-        fields["sheet_name"], fields["cell_range"] = sheet, cell_range
-    else:
-        raise AnchorParamError(f"unknown anchor kind {kind!r} (page, line, t, cells)")
-    return fields
-
-
-def format_anchor_param(fields: AnchorFields) -> str:
-    content_hash = fields.get("content_sha256", "")
-    if "page_no" in fields:
-        kind, value = "page", str(fields["page_no"])
-    elif "line_start" in fields:
-        kind, value = "line", str(fields["line_start"])
-    elif "t_start_ms" in fields:
-        kind, value = "t", str(fields["t_start_ms"])
-    elif "sheet_name" in fields and "cell_range" in fields:
-        kind, value = "cells", f"{fields['sheet_name']}!{fields['cell_range']}"
-    else:
-        raise AnchorParamError("anchor needs page_no, line_start, t_start_ms or sheet_name + cell_range")
-    param = f"{kind}:{value}:{content_hash}"
-    parse_anchor_param(param)  # refuse to emit a link the viewer cannot read
-    return param
-
-
-def viewer_path(doc_id: UUID | str, fields: AnchorFields) -> str:
-    """Path of the Console viewer for an anchor; prefix it with the Console base URL."""
-    return f"/docs/{doc_id}/viewer?anchor={quote(format_anchor_param(fields), safe=':!')}"
+def viewer_path(doc_id: UUID | str, fields: dict[str, Any]) -> str:
+    """Path of the Console viewer for an anchor's locator fields; prefix it with the Console base URL."""
+    return f"/docs/{doc_id}/viewer?anchor={quote(format_anchor(fields), safe=':!')}"
 
 
 # ---------------------------------------------------------------- response models
@@ -238,8 +175,8 @@ def get_viewer(
     translate: bool = False,
 ) -> ViewerPayload:
     try:
-        parse_anchor_param(anchor) if anchor else {}
-    except AnchorParamError as exc:
+        parse_anchor(anchor) if anchor else {}
+    except AnchorError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     raise HTTPException(
         status.HTTP_501_NOT_IMPLEMENTED,
