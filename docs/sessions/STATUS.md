@@ -135,6 +135,12 @@ Merged / ready: viewer anchor codec delegated to `backend/dispatcher/contract.py
 Blocked on: Review UI waits for S1's `backend/review/api_models.py` (in progress); viewer body waits for S2's `resolve_anchor`; Pipe waits for S2's `/v1/answer` schema.
 Needs from others: S1 may drop the equivalence test in `test_contract.py`, after which S3 deletes the alias.
 Next: idle until one of the inputs above lands on main.
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: publish-first item 3: backend/review/api_models.py (queue, case detail, the file 06 §6 resolution actions as a union on `action` with ALLOWED_ACTIONS, resolve/assign/reject/undo, dry-run, rules) + backend/api/review.py with every file 08 §4.4 review route typed and role-gated (501 until the M2 tables); review enums. Gate: S5's findings fixed (patterns must be strings; .xlsm only under lib/lib64/library/*-packages). Contract test no longer depends on viewer.py. Test: `uv run pytest && uv run ruff check backend` (498 passed, 18 skipped)
+Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
+Needs from others: nothing new
+Next: backend/storage/minio.py get/put for S2's vision cache; then documents/document_sources/document_nodes/assets models (M2)
+
 
 
 ## 2026-10-21 21:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439

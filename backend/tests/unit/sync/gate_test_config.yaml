@@ -7,11 +7,11 @@ junk_extensions: [.pyc, .pyi, .pyd, .typed, .dll, .exe, .lib, .a, .so, .o, .qml,
   .metainfo, .mesh, .frag, .bin, .h, .c, .cpp, .pxd, .pyx, .f90, .f, .f95, .pyf, .inc, .f2py_f2cmap, .afm,
   .ttf, .mplstyle, .ico, .icns, .ani, .cls, .bas, .xlam, .applescript, .asp, .pys, .vbs, .sct, .idl, .rc,
   .chm, .pyw, .tab, .zi, .tpl, .tmpl, .template, .build, .cmake, .toml, .ini, .pc, .pth, .spec, .whl, .rst,
-  .1, .apache, .bsd, .python, .external, .ps1, .fish, .pem, .lua, .xrc, .al, .g4, .lark, .gitignore, .iml,
+  ".1", .apache, .bsd, .python, .external, .ps1, .fish, .pem, .lua, .xrc, .al, .g4, .lark, .gitignore, .iml,
   .aux, .log, .toc, .lof, .lot, .out, .fls, .fdb_latexmk, .synctex, .synctex(busy), .synctex.gz, .bbl,
   .blg, .nav, .snm, .vrb, .bkp, .tdms_index, .tmp, .crdownload, .part]
 junk_names: [.DS_Store, Thumbs.db, desktop.ini]
 junk_name_prefixes: ["~$"]
-junk_extensions_under: {.xlsm: ["*library*"]}
+junk_extensions_under: {.xlsm: [lib, lib64, library, "*-packages"]}
 shortcut_extensions: [.url, .lnk]
 max_download_bytes: 4294967296

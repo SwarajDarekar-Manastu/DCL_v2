@@ -11,22 +11,42 @@ SCHEMA = {
     "additionalProperties": False,
     "properties": {
         "version": {"const": 1},
-        "vendors": {"type": "array", "minItems": 1, "items": {
-            "type": "object",
-            "required": ["id", "name", "aliases", "domains", "category", "internal_equipment",
-                         "sme_confirmed"],
-            "additionalProperties": False,
-            "properties": {
-                "id": {"type": "string", "pattern": "^[a-z0-9_]+$"},
-                "name": {"type": "string", "minLength": 2},
-                "aliases": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 2}},
-                "case_sensitive_aliases": {"type": "array", "items": {"type": "string"}},
-                "domains": {"type": "array", "items": {"type": "string"}},
-                "category": {"enum": ["propulsion", "sensors", "fluidics", "daq_software", "materials",
-                                      "chemicals"]},
-                "internal_equipment": {"type": "boolean"},
-                "sme_confirmed": {"type": "boolean"},
-            }}},
+        "vendors": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "name",
+                    "aliases",
+                    "domains",
+                    "category",
+                    "internal_equipment",
+                    "sme_confirmed",
+                ],
+                "additionalProperties": False,
+                "properties": {
+                    "id": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+                    "name": {"type": "string", "minLength": 2},
+                    "aliases": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 2}},
+                    "case_sensitive_aliases": {"type": "array", "items": {"type": "string"}},
+                    "domains": {"type": "array", "items": {"type": "string"}},
+                    "category": {
+                        "enum": [
+                            "propulsion",
+                            "sensors",
+                            "fluidics",
+                            "daq_software",
+                            "materials",
+                            "chemicals",
+                        ]
+                    },
+                    "internal_equipment": {"type": "boolean"},
+                    "sme_confirmed": {"type": "boolean"},
+                },
+            },
+        },
     },
 }
 

@@ -19,8 +19,15 @@ SCHEMA = {
             "minItems": 1,
             "items": {
                 "type": "object",
-                "required": ["id", "kind", "description", "aliases", "card", "reference_checks",
-                             "sme_confirmed"],
+                "required": [
+                    "id",
+                    "kind",
+                    "description",
+                    "aliases",
+                    "card",
+                    "reference_checks",
+                    "sme_confirmed",
+                ],
                 "additionalProperties": False,
                 "properties": {
                     "id": {"type": "string", "pattern": "^[A-Za-z0-9_]+$"},
@@ -33,8 +40,14 @@ SCHEMA = {
                         "type": "array",
                         "items": {
                             "type": "object",
-                            "required": ["quantity", "value", "unit", "conditions", "tolerance_pct",
-                                         "source"],
+                            "required": [
+                                "quantity",
+                                "value",
+                                "unit",
+                                "conditions",
+                                "tolerance_pct",
+                                "source",
+                            ],
                             "additionalProperties": False,
                             "properties": {
                                 "quantity": {"enum": ["adiabatic_decomposition_temperature"]},
@@ -58,9 +71,11 @@ KEYWORD = {"monopropellant": "name", "oxidizer": "oxid", "fuel": "fuel"}
 
 
 def register(p):
-    add = {"monopropellant": rocketcea.add_new_propellant,
-           "oxidizer": rocketcea.add_new_oxidizer,
-           "fuel": rocketcea.add_new_fuel}[p["kind"]]
+    add = {
+        "monopropellant": rocketcea.add_new_propellant,
+        "oxidizer": rocketcea.add_new_oxidizer,
+        "fuel": rocketcea.add_new_fuel,
+    }[p["kind"]]
     add(p["id"], p["card"])
 
 
@@ -85,7 +100,7 @@ def test_card_mass_fractions_sum_to_100(propellant):
     fractions = [float(x) for x in re.findall(r"wt%=\s*([0-9.]+)", propellant["card"])]
     assert fractions and sum(fractions) == pytest.approx(100.0)
     for line in propellant["card"].strip().splitlines():
-        assert line.split()[0] in (KEYWORD[propellant["kind"]], ) or line.startswith("h,cal="), line
+        assert line.split()[0] in (KEYWORD[propellant["kind"]],) or line.startswith("h,cal="), line
 
 
 def test_card_matches_rocketcea_builtin_thermo_data(propellant):
@@ -106,5 +121,6 @@ def test_rocketcea_reproduces_reference_values(propellant):
     for check in propellant["reference_checks"]:
         assert check["quantity"] == "adiabatic_decomposition_temperature" and check["unit"] == "K"
         tc_k = cea.get_Tcomb(Pc=ONE_ATM_PSIA) / 1.8  # RocketCEA returns degrees Rankine
-        assert tc_k == pytest.approx(check["value"], rel=check["tolerance_pct"] / 100), \
+        assert tc_k == pytest.approx(check["value"], rel=check["tolerance_pct"] / 100), (
             f"{propellant['id']}: RocketCEA {tc_k:.1f} K vs published {check['value']} K"
+        )
