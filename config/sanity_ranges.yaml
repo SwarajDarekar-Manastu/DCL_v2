@@ -19,7 +19,9 @@
 # physical_quantity (the general one). A fact from an external_kept document
 # (vendor or literature value) is checked only against ranges with checks_external_kept: true,
 # which for pressure is the general range: a vendor's 300 bar valve rating is not suspect
-# (Lead ruling 2026-10-22, S2 finding).
+# (Lead ruling 2026-10-22, S2 finding). Every quantity ends with one `<quantity>_general`
+# range (checks_external_kept: true). For Route C (first match wins) a general range after a "*"
+# role range is never reached, so the Route C bounds of 03 §C.1 step 4 are unchanged.
 #
 # Fields per range:
 #   id                   role name, unique
@@ -74,7 +76,7 @@ ranges:
     checks_external_kept: false
     source: "DCL Lead ruling 2026-10-22 (S2 finding: library ratings above 150 bar)"
     sme_confirmed: false
-  - id: pressure
+  - id: pressure_general
     physical_quantity: pressure
     canonical_name_glob: "*"
     dimension: "[pressure]"
@@ -91,8 +93,18 @@ ranges:
     unit: N
     min: 0
     max: 200
-    checks_external_kept: true
+    checks_external_kept: false
     source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
+    sme_confirmed: false
+  - id: force_general
+    physical_quantity: force
+    canonical_name_glob: "*"
+    dimension: "[force]"
+    unit: N
+    min: 0
+    max: 5000
+    checks_external_kept: true
+    source: "DCL Lead ruling 2026-10-22 (general fallback per quantity)"
     sme_confirmed: false
   - id: temperature
     physical_quantity: temperature
@@ -101,8 +113,18 @@ ranges:
     unit: K
     min: 200
     max: 2000
-    checks_external_kept: true
+    checks_external_kept: false
     source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
+    sme_confirmed: false
+  - id: temperature_general
+    physical_quantity: temperature
+    canonical_name_glob: "*"
+    dimension: "[temperature]"
+    unit: K
+    min: 0
+    max: 3500
+    checks_external_kept: true
+    source: "DCL Lead ruling 2026-10-22 (general fallback per quantity)"
     sme_confirmed: false
   - id: mass_flow
     physical_quantity: mass_flow_rate
@@ -111,6 +133,26 @@ ranges:
     unit: g/s
     min: 0
     max: 50
-    checks_external_kept: true
+    checks_external_kept: false
     source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
+    sme_confirmed: false
+  - id: mass_flow_general
+    physical_quantity: mass_flow_rate
+    canonical_name_glob: "*"
+    dimension: "[mass] / [time]"
+    unit: kg/s
+    min: 0
+    max: 5
+    checks_external_kept: true
+    source: "DCL Lead ruling 2026-10-22 (general fallback per quantity)"
+    sme_confirmed: false
+  - id: power_general
+    physical_quantity: power
+    canonical_name_glob: "*"
+    dimension: "[power]"
+    unit: kW
+    min: 0
+    max: 50
+    checks_external_kept: true
+    source: "DCL Lead ruling 2026-10-22 (general fallback per quantity)"
     sme_confirmed: false

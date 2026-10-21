@@ -346,3 +346,8 @@ Merged / ready: hybrid retrieval `backend/indexing/retrieval.py` (exact/HNSW den
 Blocked on: nothing
 Needs from others: S1: the BM25 migration with the DDL sent today (field names verbatim); S5: `retrieval_set.yaml` (40 queries with gold anchors) for recall@30
 Next: index_document (end-to-end tail into S1's commit), then the Retrieval-lab data for S3, then Route A1
+## 2026-10-22 04:10 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` general fallback per quantity (Lead ruling): force_general 0–5,000 N, temperature_general 0–3,500 K, mass_flow_general 0–5 kg/s, power_general 0–50 kW, `pressure` renamed `pressure_general`; role ranges keep the Route C values and no longer check external facts. Test: `uv run pytest backend/tests/unit/config_data && uv run ruff check backend`
+Blocked on: the user's answer on the sample list
+Needs from others: nothing new (S2 told of the id rename)
+Next: on the answer, export and verify the telemetry cases; the retrieval set once allowlisted documents are indexed (S2's anchor format received)
