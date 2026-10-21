@@ -31,6 +31,7 @@ from backend.llm_engine.prompts import load_prompt
 from backend.llm_engine.vision.schemas import (
     HandwritingReading,
     HardwarePhotoReading,
+    ImageClassification,
     PageTranscription,
     PageTriage,
     PlotReading,
@@ -57,6 +58,7 @@ class VisionCapability(StrEnum):
     INSPECT_HARDWARE_PHOTO = "inspect_hardware_photo"
     DESCRIBE_SLIDE = "describe_slide"
     VIDEO_TIMELINE = "video_timeline"
+    CLASSIFY_IMAGE = "classify_image"
 
 
 @dataclass(frozen=True)
@@ -93,6 +95,9 @@ TASKS: dict[VisionCapability, Task] = {
     ),
     VisionCapability.VIDEO_TIMELINE: Task(
         "video_timeline.v1", VideoTimeline, FLASH, "low", ThinkingLevel.LOW
+    ),
+    VisionCapability.CLASSIFY_IMAGE: Task(
+        "classify_image.v1", ImageClassification, FLASH_LITE, "low", ThinkingLevel.MINIMAL
     ),
 }
 
@@ -233,6 +238,14 @@ class VisionService:
     ) -> VisionOutput[SlideReading]:
         variables = {"slide_text": _or_none(slide_text), "context": context}
         return self._run(VisionCapability.DESCRIBE_SLIDE, [slide], variables, doc_id, anchor)
+
+    def classify_image(
+        self, image: Image, *, folder_context: str, doc_id: str | None = None, anchor: str | None = None
+    ) -> VisionOutput[ImageClassification]:
+        """Route D step 3: is this a hardware photo, a plot or screenshot, a document, a diagram, or other."""
+        return self._run(
+            VisionCapability.CLASSIFY_IMAGE, [image], {"folder_context": folder_context}, doc_id, anchor
+        )
 
     def video_timeline(
         self,

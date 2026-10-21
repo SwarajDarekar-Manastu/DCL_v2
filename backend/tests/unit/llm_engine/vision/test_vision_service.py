@@ -66,6 +66,11 @@ READINGS = {
         "key_numbers": [],
     },
     VisionCapability.VIDEO_TIMELINE: {"events": [{"t_s": 0.4, "type": "ignition", "description": "flash"}]},
+    VisionCapability.CLASSIFY_IMAGE: {
+        "image_class": "hardware_photo",
+        "confidence": 0.9,
+        "shows_people": False,
+    },
 }
 CALLS = {
     VisionCapability.TRIAGE_PAGE: lambda s: s.triage_page(PNG, context="TP37 run sheet p.1"),
@@ -82,6 +87,7 @@ CALLS = {
     VisionCapability.DESCRIBE_SLIDE: lambda s: s.describe_slide(
         PNG, slide_text="Heater plan", context="workshop"
     ),
+    VisionCapability.CLASSIFY_IMAGE: lambda s: s.classify_image(PNG, folder_context="APU / TP19 / photos"),
     VisionCapability.VIDEO_TIMELINE: lambda s: s.video_timeline(
         [(0.0, PNG), (0.5, OTHER_PNG)], folder_context="TP19/cam1.mp4"
     ),
@@ -215,6 +221,7 @@ def test_media_resolution_per_capability_follows_file_03_section_3():
         "inspect_hardware_photo": "medium",
         "describe_slide": "medium",
         "video_timeline": "low",
+        "classify_image": "low",
     }
     assert {str(c): t.media_resolution for c, t in TASKS.items()} == expected
 
@@ -232,5 +239,5 @@ def test_production_cache_is_the_cir_bucket():
 def test_only_flash_lite_tasks_ask_for_minimal_thinking():
     """gemini-3.8-flash rejects "minimal" thinking with a non-retryable 400; 3.5 Flash-Lite accepts it."""
     minimal = {str(c) for c, t in TASKS.items() if t.thinking is ThinkingLevel.MINIMAL}
-    assert minimal == {"triage_page"}
+    assert minimal == {"triage_page", "classify_image"}
     assert all(TASKS[c].model == "gemini-3.5-flash-lite" for c in minimal)
