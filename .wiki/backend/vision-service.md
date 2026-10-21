@@ -3,57 +3,71 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `backend/vision-service` |
-| Status | planned |
+| Status | in-progress |
 | Owner session | S2 |
-| Spec | docs/architecture/03_phase2_processing_routes.md §3; 01 §7 |
+| Spec | docs/architecture/03_phase2_processing_routes.md §3, §A1.2, §A1.7, §8, §10; 01 §5.4, §7 |
 | Last updated | 2026-10-21 |
 
 ## Purpose
 
-One component for every vision call through the gateway client: versioned prompts, structured-output schemas, MinIO cache, llm_calls logging, no-guessing rules.
+One component for every vision call through S4's gateway client: versioned prompts, structured-output schemas, content-hash cache, `llm_calls` context, no-guessing rules.
 
 ## Location
 
 Code:
-- `backend/llm_engine/vision/service.py`
-- `backend/llm_engine/vision/schemas.py`
-- `backend/llm_engine/prompts/vision/`
+- `backend/llm_engine/vision/service.py` (`VisionService`, `TASKS`, cache key and input hash)
+- `backend/llm_engine/vision/schemas.py` (the nine reading schemas)
+- `backend/llm_engine/prompts/__init__.py` (`load_prompt(area, version)`, shared by every prompt user)
+- `backend/llm_engine/prompts/vision/<capability>.v1.md` (nine prompt files)
 
 Tests and fixtures:
-- `backend/tests/unit/llm_engine/vision/`
-- `backend/tests/fixtures/vision/`
+- `backend/tests/unit/llm_engine/vision/` (mock gateway in `conftest.py`; response fixtures live there, not in S5's `backend/tests/fixtures/`)
 
 ## Interfaces
 
 Provides:
-- triage_page, transcribe_handwriting, transcribe_page, read_table_image, digitize_plot, read_schematic, inspect_hardware_photo, describe_slide, video_timeline
+- `VisionService(client: GeminiClient, cache)` with `triage_page`, `transcribe_page`, `transcribe_handwriting`, `read_table_image`, `digitize_plot`, `read_schematic`, `inspect_hardware_photo`, `describe_slide`, `video_timeline`; each takes `Image` parts, keyword context, `doc_id`, `anchor` and returns `VisionOutput(reading, model, prompt_version, input_sha256, cached)`
+- Schemas in `vision/schemas.py`: `PageTriage`, `PageTranscription`, `HandwritingReading`, `TableReading`, `PlotReading`, `SchematicReading`, `HardwarePhotoReading`, `SlideReading`, `VideoTimeline`; boxes are `box_2d` [ymin, xmin, ymax, xmax] 0–1000, top-left
+- Cache key `_vision_cache/{model}/{prompt_version}/{input_sha256}.json` in `dcl-cir`; a hit makes no gateway call and no ledger row
+- Prompt files: system text, `--- user ---`, `$variable` template; version = file stem; changing a prompt = new file + new pin in `TASKS`
 
 Consumes:
-- gateway client (platform/gemini-gateway-client)
+- `platform/gemini-gateway-client` (`GeminiClient.generate_sync`, its ledger hook writes `llm_calls`)
+- `backend/registry-and-blobs` (S1): `backend/storage/minio.py` get/put on `dcl-cir` for the cache adapter (pending)
+
+## Behavior that callers rely on
+
+- `CapabilityUnavailable` while the gateway's image flag is off (until S4's probe runs); `BudgetExhausted` means retry later; `StructuredOutputError` is never cached.
+- Handwriting: an illegible reading carries no value and confidence ≤ 0.5; a `value_number` that `value_raw` does not state is dropped.
+- `video_timeline` takes timestamped keyframes; the gateway has no video part.
 
 ## Workspace (files to touch when modifying this feature)
 
-Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
-
 - `backend/llm_engine/vision/service.py`
 - `backend/llm_engine/vision/schemas.py`
+- `backend/llm_engine/prompts/__init__.py`
 - `backend/llm_engine/prompts/vision/`
 - `backend/tests/unit/llm_engine/vision/`
-- `backend/tests/fixtures/vision/`
 
 ## Rubric (what "done" means for this feature)
 
-- [ ] Identical crops hit the cache and cost once
-- [ ] Every call appears in llm_calls with doc reference and tokens
-- [ ] Handwriting output carries confidence and alternatives, never a guessed digit
-- [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
+- [x] Identical crops hit the cache and cost once (`test_identical_crops_cost_once`)
+- [x] Every call appears in llm_calls with doc reference and tokens (ledger hook test; the table itself is S1's)
+- [x] Handwriting output carries confidence and alternatives, never a guessed digit (schema tests)
+- [ ] MinIO-backed cache adapter on `dcl-cir` (waits for S1's `backend/storage/minio.py`)
+- [ ] One real call per capability through the gateway once S4's probe enables image input
+- [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log
 
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-21 | S2 | Schemas, nine v1 prompt files, prompt loader, VisionService with cache and ledger context; 23 tests on a mock gateway |
 
 ## Related
 
+- `platform/gemini-gateway-client`
+- `backend/route-a1-office`, `backend/route-d-photos`, `backend/route-f-video` (callers)
+- `backend/enrichment` (shares `load_prompt`)
 - `.wiki/index.md`

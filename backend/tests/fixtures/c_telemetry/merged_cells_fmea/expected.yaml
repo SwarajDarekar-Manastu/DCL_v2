@@ -10,9 +10,8 @@ spec:
 expected:
   route: C
   detected_mime: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-  document_status: ACTIVE_WITH_SOFT_FLAGS
-  flags:
-    - {type: UNIT_AMBIGUITY, severity: SOFT, reason: "numeric matrix columns S, O, D, RPN without units (03 §C.4 step 8)"}
+  document_status: ACTIVE
+  flags: []  # S, O, D, RPN match the dimensionless list of 03 §C.4 step 8: stored without a flag
   flags_exact: true
   metadata:
     recalculated_with_libreoffice: true  # RPN formulas have no cached values
@@ -23,5 +22,4 @@ expected:
     html_keeps_spans: true
     rpn: {F-01: 96, F-02: 70, F-03: 108, F-04: 84, F-05: 72, F-06: 90}
     test_matrix_units: {Preheat: K, Duration: s}
-open_questions:
-  - "FMEA score columns (S, O, D, RPN) are dimensionless. A literal reading of 03 §C.4 step 8 raises UNIT_AMBIGUITY SOFT on every FMEA; should dimensionless score columns be exempt? Raised with DCL Lead 2026-10-21."
+    dimensionless_columns: [S, O, D, RPN]

@@ -58,6 +58,7 @@ Verification: `uv run pytest backend/tests/fixtures && uv run ruff check backend
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-21 | S5 | merged_cells_fmea expects no flag: S/O/D/RPN are on the dimensionless list (03 §C.4 step 8, Lead decision) |
 | 2026-10-21 | S5 | Synthetic edge-case fixtures, generator, expected.yaml format, 30 integrity tests |
 
 ## Related

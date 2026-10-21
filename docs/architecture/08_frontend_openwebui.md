@@ -52,7 +52,7 @@ flowchart LR
     C1 & C2 & C3 & C4 --> API[(Console API → PostgreSQL · MinIO · Celery)]
 ```
 
-Why not fork Open WebUI: 175 releases to date and a fast cadence; a fork would drift within weeks. Everything we need in chat is reachable through Pipe/Action/embeds/Skills. Everything that is a *workflow* (review, benchmark, configuration) is a proper application with its own routes, tables and permissions, and lives in the Console. Chat deep-links into it.
+Fork policy (revised 2026-10-21): the default remains the extension points (Pipe/Action/embeds/Skills), because Open WebUI ships frequently and a fork drifts within weeks. **When a needed feature is missing**, the team may clone Open WebUI and carry its own changes, kept as a thin patch set on top of upstream release tags, rebased at every upgrade, each patch documented on a wiki page with its reason; S3 proposes, the Lead approves per feature. Everything that is a *workflow* (review, benchmark, configuration) is a proper application with its own routes, tables and permissions, and lives in the Console. Chat deep-links into it.
 
 ### 2.1 The Pipe (model) — behavior
 

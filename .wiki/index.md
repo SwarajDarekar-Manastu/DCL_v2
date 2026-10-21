@@ -27,14 +27,14 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/route-g-archives` | planned | S1 | [Route G: archives and ANSYS packages](backend/route-g-archives.md) |
 | `backend/review-backend` | in-progress | S1 | [Review backend: flags, fingerprints, staged payloads, rules, resume](backend/review-backend.md) |
 | `backend/index-commit` | planned | S1 | [Index commit path (transaction, overlays, vector reuse)](backend/index-commit.md) |
-| `backend/vision-service` | planned | S2 | [VisionService on Gemini (triage, handwriting, tables, plots, photos, video)](backend/vision-service.md) |
+| `backend/vision-service` | in-progress | S2 | [VisionService on Gemini (triage, handwriting, tables, plots, photos, video)](backend/vision-service.md) |
 | `backend/route-a1-office` | planned | S2 | [Route A1: PDF, DOCX, PPTX, PPT](backend/route-a1-office.md) |
 | `backend/route-d-photos` | planned | S2 | [Route D: hardware inspection photos](backend/route-d-photos.md) |
 | `backend/route-f-video` | planned | S2 | [Route F: test-cell and workshop videos](backend/route-f-video.md) |
 | `backend/enrichment` | planned | S2 | [L2 enrichment, entity normalization, numeric facts](backend/enrichment.md) |
 | `backend/chunker-and-anchors` | planned | S2 | [Chunker, contextual headers, stable anchors, identifier extraction](backend/chunker-and-anchors.md) |
-| `backend/embedding-service` | planned | S2 | [Embedding service (EmbeddingGemma 2, text + image, GPU)](backend/embedding-service.md) |
-| `backend/reranker-service` | planned | S2 | [Reranker service (bge-reranker-v2-m3, GPU)](backend/reranker-service.md) |
+| `backend/embedding-service` | done | S2 | [Embedding service (EmbeddingGemma 2, text + image, GPU)](backend/embedding-service.md) |
+| `backend/reranker-service` | done | S2 | [Reranker service (bge-reranker-v2-m3, GPU)](backend/reranker-service.md) |
 | `backend/retrieval` | planned | S2 | [Hybrid retrieval (dense exact/HNSW, BM25 per language, RRF, rerank, parent expansion)](backend/retrieval.md) |
 | `backend/answer-engine` | planned | S2 | [Answer Engine (workflow, tools, playbooks, sanitizer, verifier, DBOS)](backend/answer-engine.md) |
 | `frontend/console-shell-auth` | in-progress | S3 | [Console shell, Entra ID login, roles, websocket](frontend/console-shell-auth.md) |

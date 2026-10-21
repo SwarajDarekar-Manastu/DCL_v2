@@ -72,10 +72,10 @@ def get_auth_config() -> AuthConfig:
 
     s = get_settings()
     return auth_config_from(
-        tenant_id=getattr(s, "tenant_id", None),
-        audience=getattr(s, "console_api_audience", None),
-        group_reviewers=getattr(s, "console_group_reviewers", None),
-        group_admins=getattr(s, "console_group_admins", None),
+        tenant_id=s.tenant_id,
+        audience=s.console_api_audience,
+        group_reviewers=s.console_group_reviewers,
+        group_admins=s.console_group_admins,
     )
 
 

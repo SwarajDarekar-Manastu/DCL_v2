@@ -31,7 +31,7 @@ flowchart LR
 **Decision (carried over, confirmed H4):** delegated permissions, app `dcl-reader-delegated` (`DCL_AUTH_MODE=delegated`, `DCL_DELEGATED_USERNAME`), signed in once with the device-code flow. The permission scope follows `DCL_PERMISSION_OPTION` from the env: **A** = `Files.SelectedOperations.Selected` granted on the shared folders only (preferred, no tenant-wide read), **B** = `Files.Read.All` (needs a written security sign-off). The code must work with either; with option A, every Graph call addresses the folders by the ids in `DCL_FOLDER_IDS` and the service must never try to resolve a sharing link itself (that needs write scope). Microsoft's scan guidance prefers application permissions for crawlers; the env already carries certificate variables for that future variant. The consequences of delegated auth are handled explicitly:
 
 1. **Token cache.** MSAL's serializable token cache is persisted at `DCL_TOKEN_CACHE_PATH` (v2's own file under `DCL_TOKEN_DIR`, mode 600 in a 700 directory, written atomically, **Fernet-encrypted with `DCL_TOKEN_CACHE_KEY`**; the v1 pipeline's plain cache is never read or modified, so v2 performs its own one-time device-code sign-in), mounted read-write into the sync worker only. Every job calls `acquire_token_silent` first. The refresh token is rotated by MSAL; it expires after 90 days of inactivity or when a Conditional Access policy revokes it.
-2. **Token health check** runs every 15 minutes (Celery beat): a `GET /me/drive` with the silent token. Failure raises an alert and sets `sync_roots.auth_status = 'REAUTH_REQUIRED'`. The DCL Console shows a banner with a "Start device-code sign-in" button; the code and verification URL are displayed to the operator, who completes sign-in as the service account. No human interaction is needed otherwise.
+2. **Token health check** runs every 15 minutes (Celery beat): a metadata `GET` on the first configured root folder with the silent token (`GET /me/drive` may be refused under permission option A, which grants only the shared folders). Failure raises an alert and sets `sync_roots.auth_status = 'REAUTH_REQUIRED'`. The DCL Console shows a banner with a "Start device-code sign-in" button; the code and verification URL are displayed to the operator, who completes sign-in as the service account. No human interaction is needed otherwise.
 3. **Least privilege.** Read-only scope. The app never calls write endpoints. There is no path in the code that could modify OneDrive.
 4. **Secrets.** Client id, tenant id, encryption key, Gemini credentials, MinIO keys live in the host secret store (Docker secrets or Vault), never in `pipeline_config`.
 
@@ -114,7 +114,7 @@ Graph returns 410 with `error.code` `resyncRequired`/`resyncChangesApplyDifferen
 
 ## 4. What is rejected (the junk gate) and why
 
-The gate runs on metadata only. Decisions are stored (`drive_items.status`, `gate_reason`) so the Console can show "why is my file not indexed?" without guessing. Rejected items are **not downloaded** and have no `blobs` row.
+The gate runs on metadata only. Its patterns live in `pipeline_config` (`gate.*` keys), **seeded from `config/gate.yaml`** on first start or by an explicit re-seed command, and edited afterwards in the Settings UI; the gate never reads the YAML directly at run time. S5 owns the YAML content, S1 the loader and the gate. Decisions are stored (`drive_items.status`, `gate_reason`) so the Console can show "why is my file not indexed?" without guessing. Rejected items are **not downloaded** and have no `blobs` row.
 
 ### Tier 1 — Path segments (stop traversal)
 
@@ -124,12 +124,14 @@ If any segment of the computed path matches: `.venv`, `venv`, `env`, `site-packa
 
 ### Tier 2 — Extensions (never download)
 
-- Compiled/environment: `.pyc .pyi .pyd .typed .dll .exe .lib .a .so .o .qml .qmltypes .qm .pak .metainfo .mesh .frag .bin .h .c .cpp .pxd .pyx .f90 .f .f95 .pyf .inc .f2py_f2cmap .afm .ttf .mplstyle .ico .icns .ani .cls .bas .xlam .xlsm(when under library) .applescript .asp .pys .vbs .sct .idl .rc .chm .pyw .tab .zi .tpl .tmpl .template .build .cmake .toml .ini .pc .pth .spec .whl .rst .1 .apache .bsd .python .external .ps1 .fish .pem .lua .xrc .al .g4 .lark .gitignore .iml`
-- LaTeX intermediates: `.aux .log .toc .lof .lot .out .fls .fdb_latexmk .synctex .synctex(busy) .synctex.gz .bbl .blg .nav .snm .vrb`
+- Compiled/environment: `.pyc .pyi .pyd .typed .dll .exe .lib .a .so .o .qml .qmltypes .qm .pak .metainfo .mesh .frag .bin .h .c .cpp .pxd .pyx .f90 .f .f95 .pyf .inc .f2py_f2cmap .afm .ttf .mplstyle .ico .icns .ani .cls .bas .xlam .xlsm(when under library) .applescript .asp .pys .vbs .sct .idl .rc .chm .pyw .tab .zi .tpl .tmpl .template .build .cmake .toml .pc .pth .spec .whl .rst .apache .bsd .python .external .ps1 .fish .pem .lua .xrc .al .g4 .lark .gitignore .iml`
+- LaTeX intermediates: `.aux .log .toc .lof .lot .out .fls .fdb_latexmk .synctex .synctex(busy) .synctex.gz .bbl .blg .nav .snm .vrb` (exception: members of an ANSYS `.wbpz` archive are gated with `parent_kind = wbpz`, under which `.out` solver logs are kept, file 03 §11)
 - Redundant companions: `.bkp` (draw.io backups), `.tdms_index`
 - OS/editor noise: `.DS_Store`, `Thumbs.db`, `desktop.ini`, names starting with `~$` (Office lock files), `.tmp`, `.crdownload`, `.part`
 
 → `SKIPPED_JUNK:EXT`.
+
+`.1` (man pages) is not listed either: it occurs only under Tier-1 paths, and an end-of-name match would junk team files named like `report_v1.1`. `.ini` is **not** Tier-2 junk: in team folders it is instrument or tool configuration (routed like `.cfg`) and it is secret-scanned at Tier 4; under Tier-1 paths it is dropped with everything else.
 
 **Important nuance:** the extension list is applied **after** Tier 1. Data-like extensions (`.mat .sav .arff .nc .wav .npz .fits .pkl .html .xml .csv .png`) are junk only when under a Tier-1 path (they are library sample data). The same extensions in a team folder are real and go to a route.
 
