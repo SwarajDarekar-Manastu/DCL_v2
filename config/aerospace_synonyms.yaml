@@ -14,9 +14,9 @@
 # Quote every surface that YAML would read as a number or boolean ("1.4404", not 1.4404);
 # the load test rejects non-string surfaces.
 #
-# quantity_terms[]: synonyms for physical quantities (Isp, Pc). 04 §3.2 has no entity type for
-# a quantity, so these are kept apart until DCL Lead decides where they load (open question
-# in docs/sessions/STATUS.md). Same alias format.
+# quantity_terms[]: synonyms for physical quantities (Isp, Pc). They are not entities: the
+# retriever uses them only for lexical query expansion (04 §3.3 step 4, 07 §4 T1). Same alias
+# format.
 
 version: 1
 entities:
