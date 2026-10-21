@@ -438,3 +438,9 @@ Merged / ready: office conversion for S1 and S2: `backend/common/office.py` `con
 Blocked on: backups questions with DCL Lead
 Needs from others: Lead — approve `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`; merge 31eb0be + this
 Next: backups once answered; MinIO replacement comparison by end of M4
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: Google Search grounding capability (e911384; probe re-run with the real `.env`, 9 capabilities enabled); office client (96cec91); dead letters + M1 load test (31eb0be); observability + parse image (a19ad4f) — all on this branch, merge requested
+Blocked on: backups questions with DCL Lead
+Needs from others: Lead approval of `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`
+Next: MinIO replacement evaluation, hands-on (bucket versioning, prefix lifecycle, presigned GET, DuckDB httpfs, via the same minio-py client) against pinned candidates rustfs/rustfs:1.0.3, chrislusf/seaweedfs:4.48, dxflrs/garage:v2.4.1, MinIO as baseline; written comparison to the Lead by end of M4
