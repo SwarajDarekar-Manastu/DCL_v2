@@ -13,7 +13,13 @@
 # quantities are dimension-level (pressure, force, temperature, mass_flow_rate, ...), the role
 # lives in the canonical name (pt_101_chamber_bar_abs, thrust_n, tc_bed_k, mdot_g_s).
 # Pressure bounds apply to the normalized absolute value.
-# Numeric facts (S2) use `id` as the quantity label.
+#
+# Numeric facts (S2, 04 §8): `id` is the role label. A fact from an internal document is
+# checked against the range whose id matches its role, else the last range of its
+# physical_quantity (the general one). A fact from an external_kept document
+# (vendor or literature value) is checked only against ranges with checks_external_kept: true,
+# which for pressure is the general range: a vendor's 300 bar valve rating is not suspect
+# (Lead ruling 2026-10-22, S2 finding).
 #
 # Fields per range:
 #   id                   role name, unique
@@ -22,6 +28,7 @@
 #   dimension            pint dimension the unit must have (checked by the load test)
 #   unit                 unit of min and max, parsed with config/units.txt
 #   min, max             inclusive bounds in that unit
+#   checks_external_kept true when the range also applies to facts from external_kept documents
 #   source               where the value comes from
 #   sme_confirmed        false until the SME has reviewed the entry
 
@@ -34,7 +41,48 @@ ranges:
     unit: bar
     min: 0
     max: 150
+    checks_external_kept: false
     source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
+    sme_confirmed: false
+  - id: feed_pressure
+    physical_quantity: pressure
+    canonical_name_glob: "*feed*"
+    dimension: "[pressure]"
+    unit: bar
+    min: 0
+    max: 400
+    checks_external_kept: false
+    source: "DCL Lead ruling 2026-10-22 (S2 finding: library ratings above 150 bar)"
+    sme_confirmed: false
+  - id: valve_pressure
+    physical_quantity: pressure
+    canonical_name_glob: "*valve*"
+    dimension: "[pressure]"
+    unit: bar
+    min: 0
+    max: 400
+    checks_external_kept: false
+    source: "DCL Lead ruling 2026-10-22 (S2 finding: library ratings above 150 bar)"
+    sme_confirmed: false
+  - id: tank_pressure
+    physical_quantity: pressure
+    canonical_name_glob: "*tank*"
+    dimension: "[pressure]"
+    unit: bar
+    min: 0
+    max: 400
+    checks_external_kept: false
+    source: "DCL Lead ruling 2026-10-22 (S2 finding: library ratings above 150 bar)"
+    sme_confirmed: false
+  - id: pressure
+    physical_quantity: pressure
+    canonical_name_glob: "*"
+    dimension: "[pressure]"
+    unit: bar
+    min: 0
+    max: 700
+    checks_external_kept: true
+    source: "DCL Lead ruling 2026-10-22 (S2 finding: library ratings above 150 bar)"
     sme_confirmed: false
   - id: thrust
     physical_quantity: force
@@ -43,6 +91,7 @@ ranges:
     unit: N
     min: 0
     max: 200
+    checks_external_kept: true
     source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
     sme_confirmed: false
   - id: temperature
@@ -52,6 +101,7 @@ ranges:
     unit: K
     min: 200
     max: 2000
+    checks_external_kept: true
     source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
     sme_confirmed: false
   - id: mass_flow
@@ -61,5 +111,6 @@ ranges:
     unit: g/s
     min: 0
     max: 50
+    checks_external_kept: true
     source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
     sme_confirmed: false

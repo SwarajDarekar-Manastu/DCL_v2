@@ -311,3 +311,9 @@ Merged / ready: nothing new; real-sample list (Tier A 12 files to git, ~570 KB i
 Blocked on: the user's approval of the sample list and whether the repository is private; DCL Lead or S1 running `backend.sync.export_blobs` into S5's scratchpad (S5 does not use stack credentials, Lead ruling)
 Needs from others: Lead — the approval and the export run
 Next: on approval, trim and commit Tier A with expected.yaml; verify the first 15 telemetry cases from Tier B with own Python
+
+## 2026-10-22 03:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` per the Lead ruling (feed/valve/tank 0–400 bar, general pressure 0–700 bar, `checks_external_kept` so external facts see only the general range; Route C values unchanged); M1.md procedures 6–9 with S1's commands. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: the user's answer on the sample list (repository is public: Lead recommends Tier B only)
+Needs from others: S2 — read `checks_external_kept` for external facts and the role id for internal facts (message sent)
+Next: on the answer, export and verify the telemetry cases; meanwhile idle
