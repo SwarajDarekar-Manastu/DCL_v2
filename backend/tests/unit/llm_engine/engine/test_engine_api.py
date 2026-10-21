@@ -100,3 +100,11 @@ def test_citations_carry_anchors_not_node_ids():
     citation = next(e for e in parse_stream(EXAMPLE.read_text()) if e.type == EventType.CITATION)
     assert citation.anchor.startswith("page:8:")
     assert "node_id" not in citation.model_dump()
+
+
+def test_confirmation_carries_the_trace_id_the_reply_goes_to():
+    events = list(parse_stream(EXAMPLE.read_text()))
+    confirmation = next(e for e in events if e.type == EventType.NEEDS_CONFIRMATION)
+    done = events[-1]
+    assert confirmation.trace_id == done.trace_id
+    assert events.index(confirmation) < events.index(done)
