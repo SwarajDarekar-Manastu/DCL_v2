@@ -61,6 +61,7 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
+| [plans/backend__embedding-service__local-models-and-router.md](plans/backend__embedding-service__local-models-and-router.md) | `backend/embedding-service`, `backend/reranker-service` | S2 | 2026-10-21 |
 
 ## Maintenance
 
