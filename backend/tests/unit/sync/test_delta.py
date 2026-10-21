@@ -273,3 +273,22 @@ def test_expired_delta_token_raises_resync_required_with_the_location(session):
     with pytest.raises(ResyncRequired) as info:
         run(session, FakeGraph({DELTA: [(410, {"error": {"code": "resyncRequired"}}, {"Location": DELTA2})]}))
     assert info.value.location == DELTA2
+
+
+def test_folder_listing_reports_accepted_files_per_folder_with_slot_flags(session, tmp_path):
+    from backend.sync.folder_listing import build, write
+
+    run(session, FakeGraph(crawl_pages()))
+    folders, library = build(session)
+    by_path = {row.folder_path: row.as_csv() for row in folders}
+    assert set(by_path) == {"Test Plan 30", "Test Plan 30/Pressure_Data_Files"}
+    pressure = by_path["Test Plan 30/Pressure_Data_Files"]
+    assert (pressure["n_accepted"], pressure["extensions"], pressure["has_dat_fail"]) == (
+        2,
+        ".dat:1;.dat_fail:1",
+        True,
+    )
+    assert by_path["Test Plan 30"]["videos"] == "firing.mp4:5368.7MB"
+    assert library == []
+    folder_csv, _ = write(tmp_path, folders, library)
+    assert folder_csv.read_text().splitlines()[0].startswith("root,folder_path,folder_id,n_accepted")
