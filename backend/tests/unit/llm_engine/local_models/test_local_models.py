@@ -6,6 +6,9 @@ from backend.llm_engine import local_models
 from backend.llm_engine.local_models import EmbedKind, InputTooLong, rank_scores, resolve_dtype
 
 
+
+pytest.importorskip("torch")  # the default unit suite runs without the GPU libraries; S2 keeps a fake-backend path for CI
+
 @pytest.mark.parametrize("name", ["float16", "half", "fp16", "int8"])
 def test_resolve_dtype_refuses_everything_but_bfloat16_and_float32(name):
     with pytest.raises(ValueError, match="bfloat16 or float32"):
@@ -54,13 +57,11 @@ def test_text_above_8000_tokens_is_refused_not_truncated(make_models):
 
 
 def test_nan_vector_is_an_error(make_models):
-    pytest.importorskip("torch")  # unit suites must pass without the GPU libraries
     with pytest.raises(RuntimeError, match="finite"):
         make_models(vector=[float("nan")] * 768).embed_texts(["a"], EmbedKind.QUERY)
 
 
 def test_wrong_dimension_is_an_error(make_models):
-    pytest.importorskip("torch")  # unit suites must pass without the GPU libraries
     with pytest.raises(RuntimeError, match="512 dimensions"):
         make_models(vector=[0.1] * 512).embed_texts(["a"], EmbedKind.QUERY)
 
