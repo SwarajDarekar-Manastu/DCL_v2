@@ -5,8 +5,6 @@ import pytest
 from backend.llm_engine import local_models
 from backend.llm_engine.local_models import EmbedKind, InputTooLong, rank_scores, resolve_dtype
 
-pytest.importorskip("torch")  # default unit suite runs without GPU libraries (S2: fake-backend path for CI)
-
 
 @pytest.mark.parametrize("name", ["float16", "half", "fp16", "int8"])
 def test_resolve_dtype_refuses_everything_but_bfloat16_and_float32(name):
@@ -15,7 +13,7 @@ def test_resolve_dtype_refuses_everything_but_bfloat16_and_float32(name):
 
 
 def test_resolve_dtype_accepts_float32():
-    import torch
+    torch = pytest.importorskip("torch")
 
     assert resolve_dtype("float32", "cpu") is torch.float32
 
@@ -75,9 +73,11 @@ def test_rank_scores_has_no_margin_below_five_passages():
     assert rank_scores([0.2, 0.4]).margin_1_5 is None
 
 
-def test_cuda_out_of_memory_halves_the_batch_and_retries(make_models):
-    import torch
+class OutOfMemoryError(RuntimeError):
+    """Stands in for torch.cuda.OutOfMemoryError (same name, same base class)."""
 
+
+def test_cuda_out_of_memory_halves_the_batch_and_retries(make_models):
     models = make_models()
     real_encode = models.embedder.encode
     sizes = []
@@ -85,9 +85,20 @@ def test_cuda_out_of_memory_halves_the_batch_and_retries(make_models):
     def encode(inputs, batch_size, **kwargs):
         sizes.append(batch_size)
         if batch_size > 4:
-            raise torch.cuda.OutOfMemoryError("CUDA out of memory")
+            raise OutOfMemoryError("CUDA out of memory")
         return real_encode(inputs, **kwargs)
 
     models.embedder.encode = encode
     assert len(models.embed_texts(["a"] * 3, EmbedKind.QUERY)) == 3
     assert sizes == [16, 8, 4]
+
+
+def test_other_runtime_errors_are_not_retried(make_models):
+    models = make_models()
+
+    def encode(inputs, batch_size, **kwargs):
+        raise RuntimeError("device-side assert")
+
+    models.embedder.encode = encode
+    with pytest.raises(RuntimeError, match="device-side assert"):
+        models.embed_texts(["a"], EmbedKind.QUERY)

@@ -172,7 +172,10 @@ class EmbedEvent(BaseModel):
 
 
 class ConfirmationEvent(BaseModel):
+    """The stream pauses; the Pipe replies to `POST /v1/answer/{trace_id}/confirm` before `done` exists."""
+
     type: Literal[EventType.NEEDS_CONFIRMATION] = EventType.NEEDS_CONFIRMATION
+    trace_id: uuid.UUID
     confirmation_id: str
     title: str
     message: str
