@@ -24,6 +24,8 @@ from backend.api import (
     viewer,
     ws,
 )
+from backend.celery_redis.queues import Queue
+from backend.common.telemetry import instrument_fastapi, register_queue_depth, setup_telemetry
 from backend.config import ConfigError, Role, get_settings
 
 API_ROUTERS: list[ModuleType] = [
@@ -56,6 +58,8 @@ async def lifespan(app: FastAPI):
     redis_url = getattr(settings, "redis_url", None)
     if settings.role in (Role.API, Role.ALL) and redis_url:
         tasks.append(asyncio.create_task(ws.redis_bridge(str(redis_url)), name="console-redis-bridge"))
+        if setup_telemetry(f"dcl-{settings.role}"):
+            register_queue_depth(str(redis_url), [str(q) for q in Queue])
     try:
         yield
     finally:
@@ -75,7 +79,9 @@ def _role() -> Role:
 
 def create_app() -> FastAPI:
     role = _role()
+    setup_telemetry(f"dcl-{role}", str(get_settings().env))
     app = FastAPI(title=f"DCL backend ({role})", lifespan=lifespan)
+    instrument_fastapi(app)
     origins = getattr(get_settings(), "console_allowed_origins", None)
     if origins:
         app.add_middleware(

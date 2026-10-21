@@ -57,3 +57,18 @@ docker inspect --format '{{.State.OOMKilled}}' dcl-v2-worker-telemetry-stream-1
 ```
 
 Tasks are acknowledged late and rejected on worker loss, so the task returns to the queue. A route that needs more memory asks S4 to change `backend/celery_redis/queues.py` and compose together; the unit tests fail if the two disagree.
+
+## Observability
+
+- Grafana: `http://<DCL_BIND_HOST>:${DCL_GRAFANA_PORT:-3300}`, user `admin`, password `DCL_GRAFANA_ADMIN_PASSWORD` (dev default in `compose.dev.yaml` only). Dashboard: DCL → DCL operations. Traces: Explore → Tempo.
+- Every backend container exports OTLP to `otel-collector:4318`. Prometheus scrapes the collector and evaluates `backend/devops/prometheus/alerts.yml`. Alertmanager sends to the Teams webhook in `DCL_ALERT_WEBHOOK_URL`, which is read at container start and never written to a committed file.
+- Change an alert: edit `alerts.yml`, add a case to `alerts_test.yml`, run `uv run pytest backend/tests/unit/devops/test_alert_rules.py`, then `docker compose -p dcl-v2 restart prometheus`.
+- No alerts arriving: check `docker compose -p dcl-v2 logs alertmanager` for `Notify attempt failed`. Alertmanager redacts the URL in its logs.
+
+## Re-auth (alert DclGraphAuthFailure)
+
+The delegated token expired or was revoked. Run S1's device-code sign-in CLI from the main checkout; it writes the encrypted cache into `DCL_TOKEN_DIR`. The next `dcl.sync.token_health` run (every 15 minutes) clears the alert.
+
+## Parse workers (cpu_parse)
+
+`worker-cpu-parse` runs the `parse` image: Docling, RapidOCR (models baked in) and Tesseract with OSD and the Latin, Cyrillic, Devanagari and Arabic script models, on CPU torch. Docling's layout and TableFormer models download into the `hf-cache` volume on first use with `HF_HUB_DISABLE_XET=1`, because Xet downloads stall on this network. The first conversion after a fresh volume takes about a minute longer.
