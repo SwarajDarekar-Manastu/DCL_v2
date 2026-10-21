@@ -32,11 +32,16 @@ def _body_without_docstring(source: str) -> list[str]:
 
 def _expand(lines: list[str], seen: set[str]) -> list[str]:
     out: list[str] = []
+    skipping_names = False  # inside a parenthesized `from … import (  # inline` block
     for line in lines:
+        if skipping_names:
+            skipping_names = line.strip() != ")"
+            continue
         match = INLINE.match(line)
         if not match:
             out.append(line)
             continue
+        skipping_names = line.rstrip().endswith("(  # inline")
         module = match.group(1)
         if module in seen:
             continue

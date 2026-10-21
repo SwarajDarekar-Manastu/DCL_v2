@@ -143,3 +143,35 @@ async def get_trace(
     if response.status_code != 200:
         raise EngineError(response.status_code, _detail(response.status_code, response.content))
     return response.json()
+
+
+async def request_upload(
+    config: DclConfig,
+    identity: Identity,
+    file_name: str,
+    mime_type: str,
+    size_bytes: int,
+    client: httpx.AsyncClient | None = None,
+) -> dict:
+    """POST /assets/upload → {object_uri, upload_url, get_url, expires_in_s} (backend/api/assets.py)."""
+    body = json.dumps({"file_name": file_name, "mime_type": mime_type, "size_bytes": size_bytes}).encode()
+    headers = identity_headers(config, identity, body) | {"Content-Type": "application/json"}
+    async with _client(config, client) as http:
+        response = await http.post(f"{config.engine_url}/assets/upload", content=body, headers=headers)
+    if response.status_code != 201:
+        raise EngineError(response.status_code, _detail(response.status_code, response.content))
+    return response.json()
+
+
+async def put_upload(
+    config: DclConfig,
+    upload_url: str,
+    content: bytes,
+    mime_type: str,
+    client: httpx.AsyncClient | None = None,
+) -> None:
+    """PUT the file bytes to the presigned URL the backend handed out."""
+    async with _client(config, client) as http:
+        response = await http.put(upload_url, content=content, headers={"Content-Type": mime_type})
+    if response.status_code >= 300:
+        raise EngineError(response.status_code, f"upload refused by storage (HTTP {response.status_code})")
