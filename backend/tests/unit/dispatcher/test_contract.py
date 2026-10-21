@@ -9,6 +9,7 @@ from backend.dispatcher.contract import (
     Anchor,
     AnchorError,
     BBox,
+    ChannelStats,
     DocumentFields,
     Flag,
     FlagAnchor,
@@ -20,6 +21,7 @@ from backend.dispatcher.contract import (
     TelemetryChannelRecord,
     TelemetryRunRecord,
     UnitHash,
+    UnitTelemetryEvidence,
     format_anchor,
     parse_anchor,
 )
@@ -42,9 +44,8 @@ CIR = f"s3://dcl-cir/{SHA}/C/v1/"
 
 def unit_flag(page=None, sheet="Run 1", channel="AIN0", bbox=None, flag_type=FlagType.UNIT_AMBIGUITY):
     anchor = FlagAnchor(page=page, sheet=sheet, channel=channel, bbox=bbox)
-    return Flag(
-        flag_type=flag_type, severity=FlagSeverity.HARD, anchor=anchor, evidence={"stats": {"max": 12.4}}
-    )
+    evidence = UnitTelemetryEvidence(channel=channel or "AIN0", stats=ChannelStats(max=12.4))
+    return Flag(flag_type=flag_type, severity=FlagSeverity.HARD, anchor=anchor, evidence=evidence)
 
 
 def sample(**overrides) -> ProcessedDocument:
@@ -143,7 +144,12 @@ def test_fingerprint_is_stable_across_runs_key_order_and_float_noise():
                 "page": 4,
             },
             "flag_type": "UNIT_AMBIGUITY",
-            "evidence": {"other": "evidence does not matter"},
+            "evidence": {
+                "kind": "conflict",
+                "subject": "evidence does not matter",
+                "a": {"label": "a", "value": "1", "provenance": "x"},
+                "b": {"label": "b", "value": "2", "provenance": "y"},
+            },
         }
     )
     assert first.fingerprint == again.fingerprint
@@ -248,3 +254,36 @@ def test_anchor_needs_exactly_one_locator():
     with pytest.raises(ValidationError, match="A1 cell_range"):
         Anchor(doc_id=DOC_ID, sheet_name="Run 1")
     assert Anchor(doc_id=DOC_ID, page_no=2, breadcrumb="Report › Results").serialize() == "page:2:"
+
+
+# ---------- evidence and suggestions ----------
+
+
+def test_evidence_and_suggestion_parse_by_their_discriminators_from_a_staged_payload():
+    flag = Flag.model_validate(
+        {
+            "flag_type": "SCHEMA_UNKNOWN",
+            "severity": "HARD",
+            "evidence": {
+                "kind": "array_schema",
+                "shape": [10000, 4],
+                "dtype": "float64",
+                "columns": [{"index": 0, "min": 0.0, "max": 9.999}],
+            },
+            "suggested_resolution": {
+                "resolution": {
+                    "action": "map_columns",
+                    "columns": [{"index": 0, "canonical_name": "t_rel_ms"}],
+                },
+                "confidence": 0.71,
+            },
+        }
+    )
+    assert flag.evidence.columns[0].max == 9.999
+    assert flag.suggested_resolution.resolution.action == "map_columns"
+    assert Flag.model_validate_json(flag.model_dump_json()) == flag
+
+
+def test_unknown_evidence_kind_is_refused():
+    with pytest.raises(ValidationError):
+        Flag.model_validate({"flag_type": "CONFLICT", "severity": "SOFT", "evidence": {"kind": "free_text"}})

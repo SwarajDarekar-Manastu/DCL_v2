@@ -32,6 +32,8 @@ Provides:
 - Flag with `fingerprint` = sha256(flag_type | canonical anchor JSON, bbox rounded to 4 digits) and `page_or_sheet` for the case key
 - Anchor model with S3's field names; the one owner of the `<kind>:<value>:<content_sha256>` format (`parse_anchor`, `format_anchor`, `Anchor.serialize/parse`)
 - Box convention: `PageBox {page_no, x0, y0, x1, y1}` in 0..1, origin top-left, a list per node
+- Flag evidence (`Evidence`, union on `kind`: unit_telemetry, unit_fact, array_schema, json_schema, conflict, parse_failure, low_confidence, sensitive, file_facts; provisional) and `Suggestion {resolution, confidence, rationale, proposed_by}`
+- Resolution actions (`Resolution`, union on `action`), `ALLOWED_ACTIONS`, `ADMIN_ONLY_ACTIONS`: the file 06 §6 vocabulary shared by routes, review API and overlays
 - route selection
 
 Consumes:
@@ -65,6 +67,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | Published `contract.py` (route output contract, flags with fingerprints, stable anchors and their link format); 27 tests |
+| 2026-10-21 | S1 | Typed flag evidence and suggestions; resolution actions moved here from review/api_models |
 
 ## Related
 

@@ -8,16 +8,9 @@ from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
 from backend.api import auth, review
+from backend.dispatcher.contract import ALLOWED_ACTIONS, MapColumns, Resolution, SetUnit
 from backend.postgres.enums import FlagType
-from backend.review.api_models import (
-    ALLOWED_ACTIONS,
-    FlagResolution,
-    MapColumns,
-    Resolution,
-    ResolveRequest,
-    SetUnit,
-    check_actions,
-)
+from backend.review.api_models import FlagResolution, ResolveRequest, allowed_actions_for, check_actions
 
 FLAG = uuid.UUID("00000000-0000-4000-8000-0000000000f1")
 RESOLUTION = TypeAdapter(Resolution)
@@ -136,3 +129,13 @@ def test_viewer_cannot_use_review_routes_and_reviewer_cannot_deactivate_rules():
     reviewer = _app(auth.ConsoleRole.REVIEWER)
     assert reviewer.post(f"/review/rules/{FLAG}/deactivate").status_code == 403
     assert _app(auth.ConsoleRole.ADMIN).post(f"/review/rules/{FLAG}/deactivate").status_code == 501
+
+
+def test_allowed_actions_hide_admin_only_actions_from_reviewers():
+    assert allowed_actions_for(FlagType.SENSITIVE_CONTENT, is_admin=True) == [
+        "approve_internal",
+        "exclude",
+        "redact",
+    ]
+    assert allowed_actions_for(FlagType.SENSITIVE_CONTENT, is_admin=False) == ["exclude", "redact"]
+    assert allowed_actions_for(FlagType.UNIT_AMBIGUITY, is_admin=False) == ["set_fact_unit", "set_unit"]
