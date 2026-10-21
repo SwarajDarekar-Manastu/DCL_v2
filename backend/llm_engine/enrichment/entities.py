@@ -85,6 +85,44 @@ def load_seed(path: Path = SYNONYMS_FILE) -> list[SeedEntity]:
     ]
 
 
+@dataclass(frozen=True)
+class SeedRows:
+    """Plain rows for S1's `seed-entities` command (created_by = seed; idempotent on the unique keys)."""
+
+    entities: list[dict]
+    aliases: list[dict]
+
+
+def seed_rows(seed: Iterable[SeedEntity] | None = None) -> SeedRows:
+    """`entities` rows keyed by (type, canonical_key) and `entity_aliases` rows that name their entity by
+    (entity_type, entity_canonical_key); duplicate alias keys within a type keep the first entity."""
+    entities: list[dict] = []
+    aliases: dict[tuple[str, str], dict] = {}
+    for entity in load_seed() if seed is None else seed:
+        key = canonical_key(entity.canonical)
+        entities.append(
+            {
+                "type": str(entity.type),
+                "canonical_name": entity.canonical,
+                "canonical_key": key,
+                "created_by": "seed",
+            }
+        )
+        for surface in (entity.canonical, *entity.aliases):
+            aliases.setdefault(
+                (str(entity.type), canonical_key(surface)),
+                {
+                    "type": str(entity.type),
+                    "alias_key": canonical_key(surface),
+                    "alias": surface,
+                    "entity_type": str(entity.type),
+                    "entity_canonical_key": key,
+                    "created_by": "seed",
+                },
+            )
+    return SeedRows(entities, list(aliases.values()))
+
+
 def index_from_seed(seed: Iterable[SeedEntity]) -> AliasIndex:
     """An index over the seed alone (tests, and the install-time seeding plan)."""
     index = AliasIndex()
