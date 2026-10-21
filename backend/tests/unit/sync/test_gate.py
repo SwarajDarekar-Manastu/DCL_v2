@@ -103,6 +103,14 @@ def test_conditional_extension_is_junk_only_under_its_folder():
     assert verdict("macro.xlsm") is None
 
 
+def test_ansys_solver_logs_are_kept_only_inside_a_wbpz():
+    assert verdict("run.out", parent_kind="wbpz") is None
+    assert verdict("report.out") == (S.SKIPPED_JUNK, "T2:.out")
+    assert verdict("run.out", parent_kind="zip") == (S.SKIPPED_JUNK, "T2:.out")
+    assert verdict("solver.log", parent_kind="wbpz") == (S.SKIPPED_JUNK, "T2:.log")
+    assert verdict("run.out", folders=["APU", ".venv"], parent_kind="wbpz") == (S.SKIPPED_JUNK, "T1:.venv")
+
+
 def test_numeric_looking_endings_are_matched_as_text():
     assert verdict("numpy.1") == (S.SKIPPED_JUNK, "T2:.1")
 

@@ -13,5 +13,6 @@ junk_extensions: [.pyc, .pyi, .pyd, .typed, .dll, .exe, .lib, .a, .so, .o, .qml,
 junk_names: [.DS_Store, Thumbs.db, desktop.ini]
 junk_name_prefixes: ["~$"]
 junk_extensions_under: {.xlsm: [lib, lib64, library, "*-packages"]}
+kept_endings_by_parent_kind: {wbpz: [".out"]}
 shortcut_extensions: [.url, .lnk]
 max_download_bytes: 4294967296
