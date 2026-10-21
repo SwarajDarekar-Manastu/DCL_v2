@@ -43,7 +43,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `frontend/settings-ui` | in-progress | S3 | [Settings UI (sources, scopes, gate, routes, models, translation, flags, prompts)](frontend/settings-ui.md) |
 | `frontend/benchmark-ui` | planned | S3 | [Benchmark UI (suites, cases, runs, results, drilldown, compare, retrieval lab)](frontend/benchmark-ui.md) |
 | `frontend/openwebui-pipe` | in-progress | S3 | [Open WebUI Pipe (engine model, event mapping)](frontend/openwebui-pipe.md) |
-| `frontend/openwebui-actions-skills` | planned | S3 | [Open WebUI Actions, Filter and Skills publication](frontend/openwebui-actions-skills.md) |
+| `frontend/openwebui-actions-skills` | in-progress | S3 | [Open WebUI Actions, Filter and Skills publication](frontend/openwebui-actions-skills.md) |
 | `platform/compose-stack` | in-progress | S4 | [Docker Compose stack with GPU model services](platform/compose-stack.md) |
 | `platform/env-contract` | in-progress | S4 | [Environment contract loader and .env.example](platform/env-contract.md) |
 | `platform/gemini-gateway-client` | in-progress | S4 | [Gemini gateway client and capability probe](platform/gemini-gateway-client.md) |
@@ -61,7 +61,6 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
-| [frontend__openwebui-actions-skills__actions.md](plans/frontend__openwebui-actions-skills__actions.md) | `frontend/openwebui-actions-skills` | S3 | 2026-10-22 |
 | [frontend__openwebui-pipe__attachments.md](plans/frontend__openwebui-pipe__attachments.md) | `frontend/openwebui-pipe` | S3 | 2026-10-22 |
 
 ## Maintenance
