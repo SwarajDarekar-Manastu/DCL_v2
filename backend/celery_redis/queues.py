@@ -16,7 +16,6 @@ class Queue(StrEnum):
     MEDIA = "media"
     VISION_BATCH = "vision_batch"
     EMBED = "embed"
-    DEAD_LETTER = "dead_letter"
 
 
 @dataclass(frozen=True)
@@ -61,3 +60,8 @@ POOLS: dict[Queue, Pool] = {
     )
 }
 VISIBILITY_TIMEOUT_S = 2 * max(pool.time_limit_s for pool in POOLS.values())
+
+DEAD_LETTER_KEY = "dcl:dead_letter"
+DEAD_LETTER_MAX = 10_000
+MAX_DELIVERIES = 3
+"""A task whose worker died this many times (OOM kill, crash) is dead-lettered instead of redelivered."""
