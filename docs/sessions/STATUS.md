@@ -38,3 +38,9 @@ Merged / ready: Gemini gateway client `backend/llm_engine/gemini_client.py` + pr
 Blocked on: real probe needs `GEMINI_BACKEND` and `GEMINI_GATEWAY_URL` in `.env` (operator) and the gateway contract answers sent to DCL Lead
 Needs from others: S2 builds VisionService/engine on `GeminiClient` (interface on the map page); S1 tells S4 when `llm_calls` exists so the ledger hook and budget `usage_today` are wired to it
 Next: Compose stack (`backend/devops/compose.yaml`, `compose.dev.yaml`, Dockerfiles) with the GPU runtime for the ROLE=models container
+
+## 2026-10-21 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: nothing new since the gateway client entry (three merge requests open: skeleton 136603d, loader b960763, client 7591007)
+Blocked on: DCL Lead decision on MinIO before the Compose stack. The official MinIO images are no longer pullable (Docker Hub repo removed, quay.io gone, GitHub minio/minio archived; last tag RELEASE.2025-10-15T17-29-55Z), so file 01 §5.5 / §6 cannot be deployed reproducibly as written. Options: (A) build MinIO from the archived pinned source tag in `backend/devops/docker/minio.Dockerfile` (unmaintained, AGPL, internal only); (B) replace it with a maintained S3-compatible store (needs a manual change: versioning, lifecycle expiry, presign, DuckDB httpfs); (C) Chainguard `minio:latest` (maintained, but not pinnable on the free tier). S4 recommends A now and B evaluated before M11. Also still open: MinIO/Redis env names, `DCL_GEMINI_API_KEY`, Console auth names, DB URL composition, `.env` location, gateway contract questions
+Needs from others: DCL Lead answers; operator adds `GEMINI_BACKEND` and `GEMINI_GATEWAY_URL` and fills `DCL_DB_USER`/`DCL_DB_PASSWORD` in `.env`
+Next: Compose stack (project name `dcl-v2`, because a paused DCL v1 stack on this host uses project `dcl` and host port 5432), GPU runtime for the ROLE=models container, Celery queues of file 10 §4
