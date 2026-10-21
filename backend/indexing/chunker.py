@@ -23,7 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.dispatcher.contract import DocumentFields, PageBox, ProcessedDocument, ProcessedNode
 from backend.indexing.anchors import content_hash
@@ -82,6 +82,9 @@ class IndexNode(BaseModel):
     embed_title: str | None = None
     embed_text: str | None = None
     embed_text_hash: str | None = None
+    origin_refs: list[str] = []
+    embedding: list[float] | None = Field(default=None, repr=False)
+    image_embedding: list[float] | None = Field(default=None, repr=False)
 
 
 # ---------------------------------------------------------------- text units
@@ -220,6 +223,7 @@ def _span(origins: list[ProcessedNode]) -> dict[str, Any]:
         "sheet_name": first.sheet_name,
         "cell_range": first.cell_range if len(origins) == 1 else None,
         "bboxes": boxes,
+        "origin_refs": [o.ref for o in origins],
     }
 
 

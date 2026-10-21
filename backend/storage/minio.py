@@ -123,3 +123,20 @@ def presign_get(client: Minio, minio_uri: str, ttl: timedelta = PRESIGN_TTL) -> 
         raise StorageError("presigned URLs live at most 15 minutes")
     bucket, key = parse_uri(minio_uri)
     return client.presigned_get_object(bucket, key, expires=ttl)
+
+
+UPLOAD_PREFIX = "uploads/"
+
+
+def presign_put(client: Minio, minio_uri: str, ttl: timedelta = PRESIGN_TTL) -> str:
+    """A PUT URL for a user upload, valid for ``ttl`` (15 minutes at most); callers check identity first.
+
+    Only ``s3://dcl-exports/uploads/…`` is allowed: a writable URL into dcl-raw or dcl-cir could
+    overwrite content-addressed data.
+    """
+    if ttl > PRESIGN_TTL:
+        raise StorageError("presigned URLs live at most 15 minutes")
+    bucket, key = parse_uri(minio_uri)
+    if bucket != EXPORTS or not key.startswith(UPLOAD_PREFIX):
+        raise StorageError("presigned PUTs are only issued for s3://dcl-exports/uploads/…")
+    return client.presigned_put_object(bucket, key, expires=ttl)

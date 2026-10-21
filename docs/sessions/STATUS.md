@@ -315,3 +315,85 @@ Merged / ready: CI pipeline v1 (`.github/workflows/ci.yml`: lint; disposable Par
 Blocked on: nothing
 Needs from others: Lead — merge order S2 455f896, then this branch; first GitHub run happens after the merge
 Next: observability (OTel, Prometheus metrics of file 02 §10, Grafana, alert routing), then backups/retention/runbooks, MinIO replacement comparison by end of M4
+
+
+## 2026-10-22 03:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: nothing new; real-sample list (Tier A 12 files to git, ~570 KB incl. two trimmed .dat; Tier B local-only working copies) sent to DCL Lead for the user
+Blocked on: the user's approval of the sample list and whether the repository is private; DCL Lead or S1 running `backend.sync.export_blobs` into S5's scratchpad (S5 does not use stack credentials, Lead ruling)
+Needs from others: Lead — the approval and the export run
+Next: on approval, trim and commit Tier A with expected.yaml; verify the first 15 telemetry cases from Tier B with own Python
+
+## 2026-10-22 03:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` per the Lead ruling (feed/valve/tank 0–400 bar, general pressure 0–700 bar, `checks_external_kept` so external facts see only the general range; Route C values unchanged); M1.md procedures 6–9 with S1's commands. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: the user's answer on the sample list (repository is public: Lead recommends Tier B only)
+Needs from others: S2 — read `checks_external_kept` for external facts and the role id for internal facts (message sent)
+Next: on the answer, export and verify the telemetry cases; meanwhile idle
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: viewer endpoint wired to real tables (`build_viewer_payload` over documents, document_sources, drive_items, assets and S2's `resolve_anchor`; 404/400; page render with cited boxes, code, photo, video, text views); `GET /audit` over audit_events (reviewer, filters, cursor) and the Console Audit page with a case History link; Pipe replay test updated for the confirmation now in S2's example stream. 80 Vitest, 918 backend unit, 12 integration tests on a disposable ParadeDB (container dcl-s3-test, 127.0.0.1:55436).
+Blocked on: nothing. Open: `open_flags`/`review_case_key` in the viewer and the end-to-end re-index check wait for S1's review_flags and commit path; chat-attachment upload owner (Lead).
+Needs from others: nothing new.
+Next: Open WebUI Actions (Show trace, Add to benchmark, Report issue) and the Filter.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: nothing new since the viewer/audit merge request.
+Blocked on: Open WebUI Actions. Show trace needs GET /v1/traces?chat_id&message_id and Report issue needs POST /v1/traces/{id}/feedback (both asked of S2 2026-10-22). Add to benchmark and the Benchmark UI need the benchmark enums (category, case/run status, failure class) in backend/postgres/enums.py and the benchmark_cases/runs/results models (S1's area; owner and timing asked of the Lead).
+Needs from others: Lead decision on the Filter of 08 §1, which the signed groups in the Pipe make redundant today (proposal: defer it until attachments exist).
+Next: idle until S2's trace routes or the benchmark models land.
+
+## 2026-10-22 02:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: hybrid retrieval `backend/indexing/retrieval.py` (exact/HNSW dense, per-language BM25 on pg_search 0.26.2, RRF, parent collapse, rerank + fallback, near-dup collapse), 11 DB tests on a disposable ParadeDB; `seed_rows()` for S1; triage thinking settled with S4.
+Blocked on: nothing
+Needs from others: S1: the BM25 migration with the DDL sent today (field names verbatim); S5: `retrieval_set.yaml` (40 queries with gold anchors) for recall@30
+Next: index_document (end-to-end tail into S1's commit), then the Retrieval-lab data for S3, then Route A1
+## 2026-10-22 04:10 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` general fallback per quantity (Lead ruling): force_general 0–5,000 N, temperature_general 0–3,500 K, mass_flow_general 0–5 kg/s, power_general 0–50 kW, `pressure` renamed `pressure_general`; role ranges keep the Route C values and no longer check external facts. Test: `uv run pytest backend/tests/unit/config_data && uv run ruff check backend`
+Blocked on: the user's answer on the sample list
+Needs from others: nothing new (S2 told of the id rename)
+Next: on the answer, export and verify the telemetry cases; the retrieval set once allowlisted documents are indexed (S2's anchor format received)
+
+## 2026-10-22 03:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/indexing/index_document.py` (ProcessedDocument → IndexPlan: chunk, enrich per parent, entities, facts, route mentions, question proxies, headers, vector reuse, image vectors, aggregation), 11 tests; trace lookup and feedback routes for S3; sanity range by origin and role.
+Blocked on: nothing
+Needs from others: S1: `commit.py` consuming `IndexPlan` (shape in `.wiki/backend/chunker-and-anchors.md`); the pipeline task that calls `index_document`
+Next: Retrieval-lab data for S3, `tasks_embed.py`, then Route A1 (pre-flight, triage, Docling by script)
+
+## 2026-10-22 04:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: fixture generator pins openpyxl's standard-library writer, so the byte-stable check passes with lxml installed (S2 finding; verified with `uv run --with lxml`). Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend`
+Blocked on: the user's answer on the sample list
+Needs from others: nothing new
+Next: idle until the answer
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: download fixes (temp version removal, ASCII metadata, resilient host run), presign_put, migration 0005 (rules, review_flags), 0006 (benchmark tables, S3 unblocked), Tier 4 on landed blobs (inspect.py), UTF-16 text detection. Live: 726 landed items inspected, 0 secrets, 3 real mismatches (JPEG bytes in .png). Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend && uv run ruff format --check <S1 paths>`
+Blocked on: nothing. Accepted corpus = 5,072 items, 24.0 GB (19.45 GB downloadable + one 4.57 GB held video; videos 13.4 GB in total); host download in progress
+Needs from others: S2/S5 — `ruff format --check backend` fails on 4 of their files (llm_engine/vision/service.py, tests/acceptance/m1_state.py, tests/acceptance/test_m1_checks_on_seeded_db.py, tests/fixtures/test_fixture_integrity.py)
+Next: dispatcher (folder context, assembler, route gating, documents/document_sources rows, CIR writer), then Route C
+## 2026-10-22 04:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Route A1 pre-flight and page triage (`backend/routes/a1_office/{preflight,triage}.py`), 19 tests on S5's fixtures; Retrieval-lab endpoint `POST /v1/retrieval/search`.
+Blocked on: nothing
+Needs from others: Lead: a `parse` dependency group (pypdfium2==5.14.0, pikepdf==10.17.0; docling next) — tests skip without them; S4: Tesseract (osd + Latin/Cyrillic/Devanagari/Arabic traineddata) and RapidOCR in the parse image; S5: openpyxl lxml writer makes byte-stable xlsx fixtures drift once pikepdf (lxml) is installed (told S5)
+Next: A1.3 Docling conversion by script group, then tables QA, figures, handwriting, page map
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready (after S1's presign_put lands): Open WebUI actions Show trace and Report issue (manastu_actions bundle, against S2's trace routes); chat attachments in the Pipe (only the user's own files, size cap, failures skipped) and `POST /assets/upload` (Pipe identity, 25 MB, slot in dcl-exports/uploads/{user}/{uuid}). 57 Open WebUI tests pass on source and bundle.
+Blocked on: S1's presign_put (2827fa9, merge requested). backend/api/assets.py imports it, so this branch is not mergeable until it is on main.
+Needs from others: Lead answers on the benchmark enums/tables owner and the Filter deferral.
+Next: on S1's message, sync, run the asset tests and full suite, delete the attachments plan sheet, request the merge.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: Open WebUI actions (Show trace, Report issue), chat attachments via `POST /assets/upload` (now on S1's presign_put), format-stable bundles, regenerated Console API types. Backend unit 998 passed, integration 11, frontend 80; ruff check and format clean on S3 paths.
+Blocked on: Benchmark API waits for S1's migration 0006 (benchmark tables, merge requested); Retrieval lab screen waits for S2's /v1/retrieval/search (merge requested).
+Needs from others: nothing new.
+Next: Benchmark API the day 0006 lands, then the Benchmark UI with the Retrieval lab.
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: dispatcher v1 (folder context, assembler, routing with gating and flags, dcl.process.dispatch), migrations 0006 (benchmark) and 0007 (documents.route nullable). Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend` (1,144 passed with servers)
+Blocked on: Lead — `drive_items.previous_blob_sha256` column for supersession (asked)
+Needs from others: nothing
+Next: after the merge: live dispatch over E1–E11 on the stack DB; supersession once answered; then Route C. Host download stopped (stack workers continue the remaining ~4,100 at ≤8 parallel)
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: supersession per the Lead's decision: migration 0008 drive_items.previous_blob_sha256, land_item rule, apply_supersessions after each dispatch, sweep_documents safety net (task dcl.process.sweep_documents). Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend` (295 S1 DB tests)
+Blocked on: S4 — stack redeploy from main before the live dispatch over E1–E11
+Needs from others: S4 — beat entries dcl.process.dispatch (every 30 min) and dcl.process.sweep_documents (daily)
+Next: live dispatch + counts; Route C

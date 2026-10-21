@@ -29,7 +29,8 @@ Provides:
 - `enrich_parent(client, text, context=, language=, doc_id=, anchor=) -> EnrichedParent(enrichment, drops, prompt_version, model, warnings)`; one gateway call per parent, grounded
 - `normalize(pairs, node_texts, index, doc_id=, languages=) -> EntityDecisions(new_entities, new_aliases, mentions)` for S1's commit; entity refs are an `entity_id` or `(type, canonical_key)` of a new entity
 - `validate_fact(extract, node_ref=, node_text=, locale=, source=, ranges=) -> FactDecision | DroppedFact` for `numeric_facts`
-- planned (with `index_document`): document aggregation (`documents.enrichment`, `entity_ids`, `search_text`), question proxies
+- document aggregation (`documents.enrichment`, entity refs, `search_text`) and question proxies are built in `backend/indexing/index_document.py`
+- `seed_rows()` for S1's `seed-entities`; `normalize(..., source=, decisions=)` also resolves route regex mentions
 
 Consumes:
 - `platform/gemini-gateway-client` (adapter-neutral `generate_sync`)
@@ -59,6 +60,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | Sanity range by origin and role (S5 rule); `seed_rows()`; alias index keeps display names |
 | 2026-10-22 | S2 | Per-parent extraction with grounding, entity normalization (seed + DB index, fuzzy ≥ 92, English canonical for non-English), numeric facts (locale, units, sanity, provenance); 37 tests |
 
 ## Related

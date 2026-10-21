@@ -7,16 +7,26 @@ requirements: httpx
 description: The DCL Answer Engine as a chat model (file 08 §2.1); install as function id manastu_engine.
 """
 
+import asyncio
 import html
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
+from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
 import httpx
 from pydantic import BaseModel, Field
 
-from frontend.openwebui.api_endpoint import EngineError, Identity, confirm, stream_answer  # inline
+from frontend.openwebui.api_endpoint import (  # inline
+    EngineError,
+    Identity,
+    confirm,
+    open_webui_groups,
+    put_upload,
+    request_upload,
+    stream_answer,
+)
 from frontend.openwebui.config import DclConfigError, build_config  # inline
 
 Emitter = Callable[[dict], Awaitable[Any]] | None
@@ -125,6 +135,7 @@ class Pipe:
         DEFAULT_THINKING_LEVEL: Literal["", "minimal", "low", "medium", "high"] = ""
         SHOW_STATUS_EVENTS: bool = True
         MAX_EMBEDS_PER_MESSAGE: int = Field(default=6, ge=0, le=20)
+        MAX_ATTACHMENT_MB: int = Field(default=25, ge=0, le=25, description="larger chat files are not sent")
 
     class UserValves(BaseModel):
         strict_numbers: bool = Field(default=False, description="Never accept unverified values")
@@ -139,11 +150,55 @@ class Pipe:
         return [{"id": "main", "name": "Manastu Propulsion Engine"}]
 
     async def _groups_of(self, user_id: str) -> tuple[str, ...]:
+        return await open_webui_groups(user_id)
+
+    async def _read_attachment(self, item: dict, user_id: str) -> tuple[str, str, bytes] | None:
+        """(name, mime type, bytes) of a file the user attached, read from Open WebUI's own storage."""
+        file_id = item.get("id") or (item.get("file") or {}).get("id")
+        if not file_id:
+            return None
         try:
-            from open_webui.models.groups import Groups
+            from open_webui.models.files import Files
+            from open_webui.storage.provider import Storage
         except ImportError:
-            return ()
-        return tuple(sorted(group.name for group in await Groups.get_groups_by_member_id(user_id)))
+            return None
+        record = await Files.get_file_by_id(file_id)
+        if record is None or record.user_id != user_id or not record.path:
+            return None  # only the requesting user's own files
+        local_path = await asyncio.to_thread(Storage.get_file, record.path)
+        content = await asyncio.to_thread(Path(local_path).read_bytes)
+        meta = record.meta or {}
+        return record.filename, meta.get("content_type") or "application/octet-stream", content
+
+    async def _upload_attachments(self, files: list[dict], config, identity: Identity, emit) -> list[dict]:
+        """Chat files → presigned uploads the engine can fetch once (answer-time only, never indexed)."""
+        attachments = []
+        cap = self.valves.MAX_ATTACHMENT_MB * 1024 * 1024
+        for item in files:
+            try:
+                found = await self._read_attachment(item, identity.user_id)
+                if found is None:
+                    continue
+                name, mime, content = found
+                if len(content) > cap:
+                    await emit(
+                        "notification",
+                        {
+                            "type": "warning",
+                            "content": f"{name} is over {self.valves.MAX_ATTACHMENT_MB} MB and was not sent.",
+                        },
+                    )
+                    continue
+                slot = await request_upload(config, identity, name, mime, len(content), self.http_client)
+                await put_upload(config, slot["upload_url"], content, mime, self.http_client)
+                attachments.append({"name": name, "mime_type": mime, "url": slot["get_url"]})
+            except (EngineError, OSError, KeyError) as exc:
+                detail = exc.detail if isinstance(exc, EngineError) else type(exc).__name__
+                await emit(
+                    "notification",
+                    {"type": "warning", "content": f"An attachment could not be sent ({detail})."},
+                )
+        return attachments
 
     def _task_reply(self, task: str, messages: list[dict], chat_id: str) -> str:
         """Open WebUI's own background tasks never reach the engine."""
@@ -166,6 +221,7 @@ class Pipe:
         __event_call__: Emitter = None,
         __metadata__: dict | None = None,
         __task__: str | None = None,
+        __files__: list[dict] | None = None,
     ) -> AsyncIterator[str | dict]:
         metadata = __metadata__ or {}
         chat_id = str(metadata.get("chat_id") or "")
@@ -197,7 +253,7 @@ class Pipe:
             "messages": engine_messages(body.get("messages", [])),
             "chat_id": chat_id,
             "message_id": message_id,
-            "attachments": [],  # chat attachments need an upload endpoint (open question to the Lead)
+            "attachments": await self._upload_attachments(__files__ or [], config, identity, emit),
             "options": {
                 "thinking_level": self.valves.DEFAULT_THINKING_LEVEL or None,
                 "strict_numbers": bool(getattr(user_valves, "strict_numbers", False)),

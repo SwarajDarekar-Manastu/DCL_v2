@@ -24,12 +24,15 @@ import json
 import time
 import uuid
 from enum import StrEnum
-from typing import Annotated, Literal
+from functools import lru_cache
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from backend.api.auth import CurrentUser
 from backend.config import Group, get_settings
+from backend.indexing.retrieval import Scope, SearchFilters, SearchResult, search
 
 MAX_CLOCK_SKEW_S = 300
 SSE_MEDIA_TYPE = "text/event-stream"
@@ -248,6 +251,24 @@ class TraceView(BaseModel):
     created_at: str
 
 
+class FeedbackKind(StrEnum):
+    """Reasons of the Report-issue Action (file 08 §2.2)."""
+
+    WRONG_NUMBER = "wrong_number"
+    WRONG_CITATION = "wrong_citation"
+    MISSING_DOCUMENT = "missing_document"
+    WRONG_UNIT = "wrong_unit"
+    WRONG_TRANSLATION = "wrong_translation"
+
+
+class FeedbackRequest(BaseModel):
+    """Appended to `answer_traces.feedback`; `wrong_unit` also opens a SOFT CONFLICT flag on the page."""
+
+    kind: FeedbackKind
+    comment: str | None = Field(default=None, max_length=4000)
+    citation_id: str | None = Field(default=None, description="the citation the report is about, if any")
+
+
 # ---------------------------------------------------------------- identity
 
 
@@ -306,3 +327,72 @@ async def confirm(trace_id: uuid.UUID, reply: ConfirmationReply, identity: Ident
 @router.get("/traces/{trace_id}")
 async def trace(trace_id: uuid.UUID, identity: Identity) -> TraceView:
     raise HTTPException(status_code=501, detail="answer_traces arrives with the workflow (M8)")
+
+
+@router.get("/traces")
+async def trace_for_message(
+    chat_id: Annotated[str, Query(min_length=1)],
+    message_id: Annotated[str, Query(min_length=1)],
+    identity: Identity,
+) -> TraceView:
+    """The trace of one Open WebUI message; the Show-trace Action knows chat and message ids, not the
+    trace id. 404 when the message has no trace."""
+    raise HTTPException(status_code=501, detail="answer_traces arrives with the workflow (M8)")
+
+
+@router.post("/traces/{trace_id}/feedback", status_code=202)
+async def feedback(trace_id: uuid.UUID, report: FeedbackRequest, identity: Identity) -> None:
+    raise HTTPException(status_code=501, detail="answer_traces arrives with the workflow (M8)")
+
+
+# ---------------------------------------------------------------- retrieval lab (Console, file 08 §5.5)
+
+
+class RetrievalLabRequest(BaseModel):
+    query: Annotated[str, Field(min_length=1, max_length=2000)]
+    filters: SearchFilters = SearchFilters()
+    scope: Scope = Scope.CHILD
+    k: int = Field(default=30, ge=1, le=50)
+    user_language: str = "en"
+    rerank: bool = True
+
+
+@lru_cache(maxsize=1)
+def _session_factory():
+    from backend.postgres.session import engine_from_settings, session_factory
+
+    return session_factory(engine_from_settings(get_settings()))
+
+
+def db_session():
+    with _session_factory()() as session:
+        yield session
+
+
+def models_client():
+    from backend.llm_engine.local_models import ModelsClient
+
+    url = get_settings().models_url
+    if url is None:
+        raise HTTPException(status_code=503, detail="DCL_MODELS_URL is not set")
+    return ModelsClient(base_url=str(url))
+
+
+@router.post("/retrieval/search")
+def retrieval_lab(
+    request: RetrievalLabRequest,
+    user: CurrentUser,
+    session: Annotated[Any, Depends(db_session)],
+    models: Annotated[Any, Depends(models_client)],
+) -> SearchResult:
+    """The Retrieval lab: one search with its legs, path, scores and margin (Console users only)."""
+    return search(
+        session,
+        request.query,
+        embed_query=lambda q: models.embed_queries([q])[0],
+        rerank=models.rerank if request.rerank else None,
+        filters=request.filters,
+        scope=request.scope,
+        k=request.k,
+        user_language=request.user_language,
+    )

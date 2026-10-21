@@ -216,3 +216,48 @@ def test_an_item_landed_by_another_worker_is_not_downloaded_again(session, minio
     result = _land(session, minio, onedrive, loc)  # a duplicate task for the same item
     assert (result.downloaded, result.new_blob) == (False, False)
     assert onedrive.content_requests == []
+
+
+def test_no_temp_bytes_survive_on_a_versioned_bucket(session, minio, onedrive):
+    from minio.commonconfig import ENABLED
+    from minio.versioningconfig import VersioningConfig
+
+    minio.set_bucket_versioning(RAW, VersioningConfig(ENABLED))
+    _land(session, minio, onedrive, _item(session, "i1", CONTENT))
+    leftovers = list(minio.list_objects(RAW, prefix=INCOMING_PREFIX, recursive=True, include_version=True))
+    assert leftovers == []
+
+
+def test_non_ascii_names_land_with_percent_encoded_metadata(session, minio, onedrive):
+    from urllib.parse import unquote
+
+    name = "Hydrogen Peroxide – Water – Ethanol Blend für CubeSat.pdf"
+    loc = _item(session, "i1", CONTENT, name=name)
+    result = _land(session, minio, onedrive, loc)
+    stored = minio.stat_object(RAW, raw_key(result.blob_sha256))
+    meta = {k.lower(): v for k, v in stored.metadata.items()}
+    assert unquote(meta["x-amz-meta-original_name"]) == name
+
+
+def test_modified_in_place_records_the_previous_blob_and_a_double_edit_keeps_the_oldest(
+    session, minio, onedrive
+):
+    v1, v2, v3 = CONTENT, CONTENT + b"v2", CONTENT + b"v3"
+    onedrive.files.update({"i1": v1})
+    loc = _item(session, "i1", v1, quick_xor_hash=None)
+    first = _land(session, minio, onedrive, loc)
+    item = session.get(DriveItem, loc)
+    assert item.previous_blob_sha256 is None
+
+    for version in (v2, v3):
+        onedrive.files["i1"] = version
+        item.status, item.quick_xor_hash, item.size_bytes = (
+            DriveItemStatus.PENDING_DOWNLOAD,
+            None,
+            len(version),
+        )
+        session.commit()
+        _land(session, minio, onedrive, loc)
+    item = session.get(DriveItem, loc)
+    assert item.blob_sha256 == hashlib.sha256(v3).hexdigest()
+    assert item.previous_blob_sha256 == first.blob_sha256

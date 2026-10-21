@@ -28,14 +28,14 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/review-backend` | in-progress | S1 | [Review backend: flags, fingerprints, staged payloads, rules, resume](backend/review-backend.md) |
 | `backend/index-commit` | planned | S1 | [Index commit path (transaction, overlays, vector reuse)](backend/index-commit.md) |
 | `backend/vision-service` | in-progress | S2 | [VisionService on Gemini (triage, handwriting, tables, plots, photos, video)](backend/vision-service.md) |
-| `backend/route-a1-office` | planned | S2 | [Route A1: PDF, DOCX, PPTX, PPT](backend/route-a1-office.md) |
+| `backend/route-a1-office` | in-progress | S2 | [Route A1: PDF, DOCX, PPTX, PPT](backend/route-a1-office.md) |
 | `backend/route-d-photos` | planned | S2 | [Route D: hardware inspection photos](backend/route-d-photos.md) |
 | `backend/route-f-video` | planned | S2 | [Route F: test-cell and workshop videos](backend/route-f-video.md) |
 | `backend/enrichment` | in-progress | S2 | [L2 enrichment, entity normalization, numeric facts](backend/enrichment.md) |
 | `backend/chunker-and-anchors` | in-progress | S2 | [Chunker, contextual headers, stable anchors, identifier extraction](backend/chunker-and-anchors.md) |
 | `backend/embedding-service` | done | S2 | [Embedding service (EmbeddingGemma 2, text + image, GPU)](backend/embedding-service.md) |
 | `backend/reranker-service` | done | S2 | [Reranker service (bge-reranker-v2-m3, GPU)](backend/reranker-service.md) |
-| `backend/retrieval` | planned | S2 | [Hybrid retrieval (dense exact/HNSW, BM25 per language, RRF, rerank, parent expansion)](backend/retrieval.md) |
+| `backend/retrieval` | in-progress | S2 | [Hybrid retrieval (dense exact/HNSW, BM25 per language, RRF, rerank, parent expansion)](backend/retrieval.md) |
 | `backend/answer-engine` | in-progress | S2 | [Answer Engine (workflow, tools, playbooks, sanitizer, verifier, DBOS)](backend/answer-engine.md) |
 | `frontend/console-shell-auth` | in-progress | S3 | [Console shell, Entra ID login, roles, websocket](frontend/console-shell-auth.md) |
 | `frontend/review-ui` | in-progress | S3 | [Review UI (queue, case view, resolution consoles, rules, audit)](frontend/review-ui.md) |
@@ -43,7 +43,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `frontend/settings-ui` | in-progress | S3 | [Settings UI (sources, scopes, gate, routes, models, translation, flags, prompts)](frontend/settings-ui.md) |
 | `frontend/benchmark-ui` | planned | S3 | [Benchmark UI (suites, cases, runs, results, drilldown, compare, retrieval lab)](frontend/benchmark-ui.md) |
 | `frontend/openwebui-pipe` | in-progress | S3 | [Open WebUI Pipe (engine model, event mapping)](frontend/openwebui-pipe.md) |
-| `frontend/openwebui-actions-skills` | planned | S3 | [Open WebUI Actions, Filter and Skills publication](frontend/openwebui-actions-skills.md) |
+| `frontend/openwebui-actions-skills` | in-progress | S3 | [Open WebUI Actions, Filter and Skills publication](frontend/openwebui-actions-skills.md) |
 | `platform/compose-stack` | in-progress | S4 | [Docker Compose stack with GPU model services](platform/compose-stack.md) |
 | `platform/env-contract` | in-progress | S4 | [Environment contract loader and .env.example](platform/env-contract.md) |
 | `platform/gemini-gateway-client` | in-progress | S4 | [Gemini gateway client and capability probe](platform/gemini-gateway-client.md) |

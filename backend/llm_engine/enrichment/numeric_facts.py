@@ -4,9 +4,9 @@ For each grounded `NumericExtract`: parse the value locale-aware (`12,4` in a de
 12.4; `1.234` there is one thousand two hundred thirty-four only when the thousands pattern is confirmed,
 otherwise the fact is `suspect`); parse the unit with S1's registry (`backend/common/units.py`); a unit pint
 cannot read keeps the number with `needs_unit`; a unit whose dimension does not fit the quantity is dropped;
-the value is converted to the canonical unit (`value_si`, `unit_si`); a value outside the sanity range of its
-quantity is `suspect`. Facts from external documents get `source = vendor_claim` or `literature` so the
-engine never treats them as measured (file 04 §2.3).
+the value is converted to the canonical unit (`value_si`, `unit_si`); a value outside the sanity range
+chosen for it by origin and role (`sanity_bounds`) is `suspect`. Facts from external documents get
+`source = vendor_claim` or `literature` so the engine never treats them as measured (file 04 §2.3).
 
 Nothing here writes to the database; S1's commit stores the returned `FactDecision`s.
 """
@@ -112,18 +112,29 @@ def fact_source(node_source: NodeSource, origin: SourceOrigin | None, doc_kind: 
     return NODE_SOURCE_TO_FACT.get(node_source, NumericFactSource.PRINTED)
 
 
-def sanity_bounds(ranges: Iterable[Mapping[str, Any]], quantity: Quantity) -> tuple[float, float, str] | None:
-    """The widest [min, max] in canonical units over the configured ranges of a quantity (S5 YAML shape)."""
-    bounds = []
-    for entry in ranges:
-        if entry.get("physical_quantity") != quantity:
-            continue
-        low, unit = to_canonical(float(entry["min"]), entry["unit"])
-        high, _ = to_canonical(float(entry["max"]), entry["unit"])
-        bounds.append((low, high, unit))
-    if not bounds:
+def role_of(quantity_label: str) -> str:
+    """`chamber pressure` → `chamber_pressure`: the label in the snake_case form of the range ids."""
+    return "_".join(re.findall(r"[a-z0-9]+", quantity_label.lower()))
+
+
+def sanity_bounds(
+    ranges: Iterable[Mapping[str, Any]], quantity: Quantity, *, external: bool, role: str | None = None
+) -> tuple[float, float, str] | None:
+    """[min, max] in canonical units for one fact (S5's rule in config/sanity_ranges.yaml):
+    external_kept → the range marked `checks_external_kept`; internal → the range whose id names the fact's
+    role (contained in the role, e.g. `chamber_pressure` in `peak_chamber_pressure`), else the last range of
+    the quantity."""
+    own = [r for r in ranges if r.get("physical_quantity") == quantity]
+    if not own:
         return None
-    return min(b[0] for b in bounds), max(b[1] for b in bounds), bounds[0][2]
+    if external:
+        chosen = next((r for r in own if r.get("checks_external_kept")), own[-1])
+    else:
+        named = [r for r in own if role and str(r.get("id", "")) in role]
+        chosen = max(named, key=lambda r: len(str(r["id"]))) if named else own[-1]
+    low, unit = to_canonical(float(chosen["min"]), chosen["unit"])
+    high, _ = to_canonical(float(chosen["max"]), chosen["unit"])
+    return low, high, unit
 
 
 def validate_fact(
@@ -134,6 +145,7 @@ def validate_fact(
     locale: NumberLocale,
     source: NumericFactSource,
     ranges: Iterable[Mapping[str, Any]] = (),
+    external: bool = False,
     confidence: float | None = None,
 ) -> FactDecision | DroppedFact:
     try:
@@ -176,7 +188,7 @@ def validate_fact(
     if not fits_quantity(parsed, fact.quantity):
         return DroppedFact(node_ref, fact.value, fact.unit, DropReason.DIMENSION_MISMATCH)
     value_si, unit_si = to_canonical(number, parsed)
-    bounds = sanity_bounds(ranges, fact.quantity)
+    bounds = sanity_bounds(ranges, fact.quantity, external=external, role=role_of(fact.quantity_label))
     out_of_range = bounds is not None and not bounds[0] <= value_si <= bounds[1]
     return FactDecision(
         value_si=value_si,

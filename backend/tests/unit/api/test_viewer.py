@@ -6,8 +6,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import auth, viewer
+from backend.api.assets import get_minio
 from backend.api.viewer import ViewerPayload, viewer_path
 from backend.dispatcher.contract import AnchorError, format_anchor, parse_anchor
+from backend.postgres.session import get_session
 
 HASH = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
 DOC = uuid.UUID("0b6f1d3e-2a4c-4e8f-9c1a-5d7e3f2b1a90")
@@ -106,12 +108,21 @@ def test_payload_serializes_each_view_kind():
         assert "node_id" not in payload.model_dump_json()
 
 
+class NoDocuments:
+    """Stands in for a Session over an empty database (the real path is in tests/integration/api)."""
+
+    def get(self, model, key):
+        return None
+
+
 @pytest.fixture
 def client(auth_config, key_resolver):
     app = FastAPI()
     app.include_router(viewer.router)
     app.dependency_overrides[auth.get_auth_config] = lambda: auth_config
     app.dependency_overrides[auth.get_key_resolver] = lambda: key_resolver
+    app.dependency_overrides[get_session] = lambda: NoDocuments()
+    app.dependency_overrides[get_minio] = lambda: None
     return TestClient(app)
 
 
@@ -127,8 +138,9 @@ def test_route_refuses_a_bad_anchor(client, token):
     assert response.json()["detail"].startswith("unknown anchor kind")
 
 
-def test_route_is_501_until_wired(client, token):
+def test_route_answers_404_for_an_unknown_document(client, token):
     response = client.get(
         f"/docs/{DOC}/viewer", params={"anchor": "page:1:"}, headers={"Authorization": f"Bearer {token()}"}
     )
-    assert response.status_code == 501
+    assert response.status_code == 404
+    assert response.json()["detail"] == f"no document {DOC}"

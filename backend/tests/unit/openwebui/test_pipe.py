@@ -68,7 +68,7 @@ def make_pipe(module, responses, **valves):
     return pipe, recorder
 
 
-def run(pipe, body=None, task=None, user_valves=None, confirm_reply=True):
+def run(pipe, body=None, task=None, user_valves=None, confirm_reply=True, files=None):
     yielded, events, calls = [], [], []
 
     async def emitter(event):
@@ -89,6 +89,7 @@ def run(pipe, body=None, task=None, user_valves=None, confirm_reply=True):
             __event_call__=caller,
             __metadata__={"chat_id": "chat-1", "message_id": "msg-1"},
             __task__=task,
+            __files__=files,
         ):
             yielded.append(item)
 
@@ -136,6 +137,8 @@ def test_example_stream_maps_to_open_webui_events(pipe_module):
     assert "iframe:height" in embeds[0]
     assert {"type": "chat:message:follow_ups", "data": {"follow_ups": ["Compare with T05?"]}} in events
 
+    assert [r.url.path for r in recorder.requests] == ["/v1/answer", f"/v1/answer/{TRACE}/confirm"]
+    assert json.loads(recorder.requests[1].content)["accepted"] is True
     sent = recorder.requests[0]
     body = json.loads(sent.content)
     assert body["messages"] == [{"role": "user", "content": "Steady-state pressure of TP07 T04?"}]
@@ -324,3 +327,62 @@ def test_multimodal_and_tool_messages_become_text_only():
 
 def test_dist_bundle_is_current():
     assert DIST.read_text() == bundle("pipe_manastu_engine.py")
+
+
+UPLOAD_SLOT = {
+    "object_uri": "s3://dcl-exports/uploads/u-1/aaaa",
+    "upload_url": "http://minio.test/dcl-exports/uploads/u-1/aaaa?X-Amz-Signature=put",
+    "get_url": "http://minio.test/dcl-exports/uploads/u-1/aaaa?X-Amz-Signature=get",
+    "expires_in_s": 900,
+}
+
+
+def attaching(pipe, files: dict):
+    async def read(item, user_id):
+        return files.get(item["id"])
+
+    pipe._read_attachment = read
+    return pipe
+
+
+def test_attachments_are_uploaded_and_sent_as_urls(pipe_module):
+    responses = ANSWER | {
+        "/assets/upload": (201, json.dumps(UPLOAD_SLOT), "application/json"),
+        "/dcl-exports/uploads/u-1/aaaa": (200, "", "text/plain"),
+    }
+    pipe, recorder = make_pipe(pipe_module, responses)
+    attaching(pipe, {"f1": ("bed_temp.png", "image/png", b"\x89PNG data")})
+    run(pipe, files=[{"type": "file", "id": "f1"}, {"type": "file", "id": "not-mine"}])
+
+    upload, put, answer = recorder.requests[0], recorder.requests[1], recorder.requests[2]
+    assert json.loads(upload.content) == {
+        "file_name": "bed_temp.png",
+        "mime_type": "image/png",
+        "size_bytes": 9,
+    }
+    assert "x-dcl-signature" in upload.headers
+    assert (put.method, str(put.url), put.content) == ("PUT", UPLOAD_SLOT["upload_url"], b"\x89PNG data")
+    assert put.headers["content-type"] == "image/png"
+    attachments = json.loads(answer.content)["attachments"]
+    assert attachments == [{"name": "bed_temp.png", "mime_type": "image/png", "url": UPLOAD_SLOT["get_url"]}]
+
+
+def test_oversized_or_refused_attachments_are_skipped_not_fatal(pipe_module):
+    responses = ANSWER | {"/assets/upload": (413, '{"detail": "file is over 25 MB"}', "application/json")}
+    pipe, recorder = make_pipe(pipe_module, responses, MAX_ATTACHMENT_MB=1)
+    attaching(
+        pipe,
+        {
+            "big": ("scan.pdf", "application/pdf", b"x" * (1024 * 1024 + 1)),
+            "ok": ("a.txt", "text/plain", b"hi"),
+        },
+    )
+    yielded, events, _ = run(pipe, files=[{"id": "big"}, {"id": "ok"}])
+
+    warnings = [e["data"]["content"] for e in events if e["type"] == "notification"]
+    assert warnings == [
+        "scan.pdf is over 1 MB and was not sent.",
+        "An attachment could not be sent (file is over 25 MB).",
+    ]
+    assert json.loads(recorder.requests[-2].content)["attachments"] == []  # last two: answer, then confirm
+    assert "".join(i for i in yielded if isinstance(i, str)).startswith("TP07 run T04")
