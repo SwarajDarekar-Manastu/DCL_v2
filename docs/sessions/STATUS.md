@@ -289,3 +289,9 @@ Merged / ready: `frontend/openwebui-pipe`. The Pipe against S2's /v1/answer cont
 Blocked on: nothing for the Pipe; a live run waits for the engine (M8). Confirmations use trace_id once S2's c1641d5 lands (declined until then).
 Needs from others: the Lead to decide the owner of a chat-attachment upload endpoint (the Pipe sends attachments=[]).
 Next: GET /audit (approved, owner S3, 501 until S1's audit_events model) and the Audit page; then Actions (Show trace, Add to benchmark, Report issue) and the Filter.
+
+## 2026-10-22 03:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: nothing new; real-sample list (Tier A 12 files to git, ~570 KB incl. two trimmed .dat; Tier B local-only working copies) sent to DCL Lead for the user
+Blocked on: the user's approval of the sample list and whether the repository is private; DCL Lead or S1 running `backend.sync.export_blobs` into S5's scratchpad (S5 does not use stack credentials, Lead ruling)
+Needs from others: Lead — the approval and the export run
+Next: on approval, trim and commit Tier A with expected.yaml; verify the first 15 telemetry cases from Tier B with own Python
