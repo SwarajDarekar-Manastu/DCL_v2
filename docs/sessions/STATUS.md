@@ -426,3 +426,9 @@ Merged / ready: nothing new since a19ad4f (merge requested)
 Blocked on: DCL Lead / user decision before backups (brief task 6, file 05 §6, 10 §3 prod): (1) backup destination off this host's NVMe (disk at 91%; same-disk copies do not survive a disk loss): NAS path, second disk, or an S3-compatible bucket elsewhere; (2) RPO/RTO targets; (3) tool: S4 recommends WAL-G (base backups + continuous WAL to an S3-compatible target, point-in-time restore) over pgBackRest for its smaller footprint; (4) `backend/sync/retention.py` sits under S1's `backend/sync` although the backups map lists it for S4 — who owns it?
 Needs from others: answers above; approval of `DCL_GRAFANA_ADMIN_PASSWORD` / `DCL_GRAFANA_PORT`
 Next: backups and restore drill once answered; MinIO replacement comparison by end of M4
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: dead-letter list + poison-task stop for every task (`DclTask` in `backend/celery_redis/app.py`; `Queue.DEAD_LETTER` removed, the list is `dcl:dead_letter`, read with `dead_letters()`); M1 queue load test harness `backend/devops/ci/queue_load_test.sh` + `backend.celery_redis.load_test` — passed on a throwaway project (5,002 tasks, no loss, no misrouting, 54 dead letters as planned, kills confined to telemetry_stream); 24 h lifecycle on `dcl-exports/uploads/` (applied live). Test: `uv run pytest` green
+Blocked on: backups questions (destination, RPO/RTO, tool, retention ownership) with DCL Lead
+Needs from others: S5 — add the load-test command and expected output to `backend/tests/acceptance/M1.md` row 10 (sent); S3/S1 — Console "Failed tasks" page reads `dead_letters()`
+Next: office conversion client for S1/S2 (`backend/common/office.py`, env name pending Lead), then backups once answered
