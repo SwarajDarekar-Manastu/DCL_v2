@@ -310,6 +310,54 @@ Merged / ready: 410 + forced resync (delta.py, CLI `resync`), downloader lock re
 Blocked on: nothing; asked the Lead whether to land the remaining ~4,826 items host-side or wait for the workers
 Needs from others: S2 — seed_rows() on main (then seed-entities)
 Next: dispatcher (folder context, assembler, route gating, document rows, CIR writer), Route C, queue load test
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: CI pipeline v1 (`.github/workflows/ci.yml`: lint; disposable ParadeDB 0.26.2-pg17 + MinIO with `DCL_TEST_*`; schema gate = upgrade head + `alembic check` + FK-without-index; pytest; image build + layer secret scan), every step a script in `backend/devops/ci/` verified on the dev host; all four images clean against the real `.env` values. Correction to the previous entry: S2 needs no conftest change (S2's 455f896 replaces their mock), so merge S2's branch with or before this one
+Blocked on: nothing
+Needs from others: Lead — merge order S2 455f896, then this branch; first GitHub run happens after the merge
+Next: observability (OTel, Prometheus metrics of file 02 §10, Grafana, alert routing), then backups/retention/runbooks, MinIO replacement comparison by end of M4
+
+
+## 2026-10-22 03:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: nothing new; real-sample list (Tier A 12 files to git, ~570 KB incl. two trimmed .dat; Tier B local-only working copies) sent to DCL Lead for the user
+Blocked on: the user's approval of the sample list and whether the repository is private; DCL Lead or S1 running `backend.sync.export_blobs` into S5's scratchpad (S5 does not use stack credentials, Lead ruling)
+Needs from others: Lead — the approval and the export run
+Next: on approval, trim and commit Tier A with expected.yaml; verify the first 15 telemetry cases from Tier B with own Python
+
+## 2026-10-22 03:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` per the Lead ruling (feed/valve/tank 0–400 bar, general pressure 0–700 bar, `checks_external_kept` so external facts see only the general range; Route C values unchanged); M1.md procedures 6–9 with S1's commands. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: the user's answer on the sample list (repository is public: Lead recommends Tier B only)
+Needs from others: S2 — read `checks_external_kept` for external facts and the role id for internal facts (message sent)
+Next: on the answer, export and verify the telemetry cases; meanwhile idle
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: viewer endpoint wired to real tables (`build_viewer_payload` over documents, document_sources, drive_items, assets and S2's `resolve_anchor`; 404/400; page render with cited boxes, code, photo, video, text views); `GET /audit` over audit_events (reviewer, filters, cursor) and the Console Audit page with a case History link; Pipe replay test updated for the confirmation now in S2's example stream. 80 Vitest, 918 backend unit, 12 integration tests on a disposable ParadeDB (container dcl-s3-test, 127.0.0.1:55436).
+Blocked on: nothing. Open: `open_flags`/`review_case_key` in the viewer and the end-to-end re-index check wait for S1's review_flags and commit path; chat-attachment upload owner (Lead).
+Needs from others: nothing new.
+Next: Open WebUI Actions (Show trace, Add to benchmark, Report issue) and the Filter.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: nothing new since the viewer/audit merge request.
+Blocked on: Open WebUI Actions. Show trace needs GET /v1/traces?chat_id&message_id and Report issue needs POST /v1/traces/{id}/feedback (both asked of S2 2026-10-22). Add to benchmark and the Benchmark UI need the benchmark enums (category, case/run status, failure class) in backend/postgres/enums.py and the benchmark_cases/runs/results models (S1's area; owner and timing asked of the Lead).
+Needs from others: Lead decision on the Filter of 08 §1, which the signed groups in the Pipe make redundant today (proposal: defer it until attachments exist).
+Next: idle until S2's trace routes or the benchmark models land.
+
+## 2026-10-22 02:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: hybrid retrieval `backend/indexing/retrieval.py` (exact/HNSW dense, per-language BM25 on pg_search 0.26.2, RRF, parent collapse, rerank + fallback, near-dup collapse), 11 DB tests on a disposable ParadeDB; `seed_rows()` for S1; triage thinking settled with S4.
+Blocked on: nothing
+Needs from others: S1: the BM25 migration with the DDL sent today (field names verbatim); S5: `retrieval_set.yaml` (40 queries with gold anchors) for recall@30
+Next: index_document (end-to-end tail into S1's commit), then the Retrieval-lab data for S3, then Route A1
+## 2026-10-22 04:10 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` general fallback per quantity (Lead ruling): force_general 0–5,000 N, temperature_general 0–3,500 K, mass_flow_general 0–5 kg/s, power_general 0–50 kW, `pressure` renamed `pressure_general`; role ranges keep the Route C values and no longer check external facts. Test: `uv run pytest backend/tests/unit/config_data && uv run ruff check backend`
+Blocked on: the user's answer on the sample list
+Needs from others: nothing new (S2 told of the id rename)
+Next: on the answer, export and verify the telemetry cases; the retrieval set once allowlisted documents are indexed (S2's anchor format received)
+
+## 2026-10-22 03:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/indexing/index_document.py` (ProcessedDocument → IndexPlan: chunk, enrich per parent, entities, facts, route mentions, question proxies, headers, vector reuse, image vectors, aggregation), 11 tests; trace lookup and feedback routes for S3; sanity range by origin and role.
+Blocked on: nothing
+Needs from others: S1: `commit.py` consuming `IndexPlan` (shape in `.wiki/backend/chunker-and-anchors.md`); the pipeline task that calls `index_document`
+Next: Retrieval-lab data for S3, `tasks_embed.py`, then Route A1 (pre-flight, triage, Docling by script)
+
 
 ## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready: download fixes (temp version removal, ASCII metadata, resilient host run), presign_put, migration 0005 (rules, review_flags), 0006 (benchmark tables, S3 unblocked), Tier 4 on landed blobs (inspect.py), UTF-16 text detection. Live: 726 landed items inspected, 0 secrets, 3 real mismatches (JPEG bytes in .png). Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend && uv run ruff format --check <S1 paths>`

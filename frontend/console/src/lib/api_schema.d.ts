@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Audit */
+        get: operations["list_audit_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -461,6 +478,43 @@ export interface components {
              * @description presigned GET URL the engine can fetch once
              */
             url: string;
+        };
+        /**
+         * AuditEntityType
+         * @enum {string}
+         */
+        AuditEntityType: "flag" | "case" | "rule" | "entity" | "config" | "benchmark_case" | "document";
+        /** AuditItem */
+        AuditItem: {
+            /** Action */
+            action: string;
+            /** Actor */
+            actor: string;
+            /** After */
+            after: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            } | null;
+            /** Entity Id */
+            entity_id: string;
+            entity_type: components["schemas"]["AuditEntityType"];
+            /** Event Id */
+            event_id: number;
+        };
+        /** AuditPage */
+        AuditPage: {
+            /** Items */
+            items: components["schemas"]["AuditItem"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /**
          * BBox
@@ -1241,11 +1295,6 @@ export interface components {
             /** Comment */
             comment?: string | null;
         };
-        /**
-         * ResolutionStatus
-         * @enum {string}
-         */
-        ResolutionStatus: "exact" | "page_fallback" | "document_only";
         /** ResolveRequest */
         ResolveRequest: {
             /** Comment */
@@ -1789,8 +1838,13 @@ export interface components {
              * @default
              */
             message: string;
-            status: components["schemas"]["ResolutionStatus"];
+            status: components["schemas"]["ViewerStatus"];
         };
+        /**
+         * ViewerStatus
+         * @enum {string}
+         */
+        ViewerStatus: "exact" | "page_fallback" | "document_only";
         /** ViewerTranslation */
         ViewerTranslation: {
             /**
@@ -1847,6 +1901,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetUrl"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_audit_audit_get: {
+        parameters: {
+            query?: {
+                entity_type?: components["schemas"]["AuditEntityType"] | null;
+                entity_id?: string[];
+                actor?: string | null;
+                action?: string | null;
+                since?: string | null;
+                until?: string | null;
+                /** @description next_cursor of the previous page */
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
                 };
             };
             /** @description Validation Error */

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { CaseDetail } from '$lib/api_endpoint';
+	import { auditUrl } from './audit';
 	import { ageText, isAging } from './format';
 
 	interface Props {
@@ -15,6 +16,7 @@
 	let hardOpen = $derived(detail.flags.filter((f) => f.severity === 'HARD' && ['OPEN', 'IN_PROGRESS', 'REOPENED'].includes(f.status)).length);
 	let undoable = $derived(detail.flags.some((f) => f.status === 'RESOLVED' || f.status === 'REJECTED_FILE'));
 	let pageNo = $derived(/^\d+$/.test(summary.page_or_sheet) ? Number(summary.page_or_sheet) : null);
+	let historyHref = $derived(auditUrl({ entity_id: [summary.case_key, ...detail.flags.map((f) => f.flag_id)] }));
 	let viewerHref = $derived(
 		summary.doc_id ? `/docs/${summary.doc_id}/viewer${pageNo ? `?anchor=${encodeURIComponent(`page:${pageNo}:`)}` : ''}` : null
 	);
@@ -38,6 +40,7 @@
 			{#if location.web_url}<a href={location.web_url} target="_blank" rel="noopener noreferrer">Open folder in OneDrive</a>{/if}
 		{/each}
 		{#if viewerHref}<a href={viewerHref}>Open in viewer</a>{/if}
+		<a href={historyHref}>History</a>
 		{#if summary.assignee === me}
 			<button type="button" disabled={busy} onclick={() => onAssign(null)}>Unassign</button>
 		{:else}

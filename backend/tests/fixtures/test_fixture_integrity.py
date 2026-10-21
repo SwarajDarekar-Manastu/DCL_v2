@@ -355,7 +355,7 @@ def test_unlabeled_npy_is_a_plain_float_array_without_names():
     raw = (folder / data["files"][0]).read_bytes()
     assert raw[:6] == b"\x93NUMPY"  # 03 §1.1 sniffer
     header_len = int.from_bytes(raw[8:10], "little")
-    header = ast.literal_eval(raw[10:10 + header_len].decode("latin1"))
+    header = ast.literal_eval(raw[10 : 10 + header_len].decode("latin1"))
     meta = data["expected"]["metadata"]
     assert header == {"descr": "<f8", "fortran_order": False, "shape": tuple(meta["shape"])}
     numpy = pytest.importorskip("numpy")

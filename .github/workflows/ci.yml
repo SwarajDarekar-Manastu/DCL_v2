@@ -1,0 +1,108 @@
+# CI gates (docs/architecture/10 §7; .wiki/platform/ci.md). Every step calls a script in backend/devops/ci/
+# that runs the same way on the dev host. The benchmark gate joins in M10.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.13"
+  MINIO_IMAGE: dcl-v2-minio:RELEASE.2025-10-15T17-29-55Z
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --frozen
+      - run: uv run ruff check backend
+      - run: uv run ruff format --check backend
+
+  test:
+    needs: lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build MinIO from the pinned source tag
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/devops/docker/minio.Dockerfile
+          tags: ${{ env.MINIO_IMAGE }}
+          load: true
+          cache-from: type=gha,scope=minio
+          cache-to: type=gha,scope=minio,mode=max
+      - run: uv sync --frozen
+      - name: Start disposable ParadeDB and MinIO
+        run: |
+          backend/devops/ci/test_services.sh up > "$RUNNER_TEMP/test_services.env"
+          sed -e 's/^export //' -e "s/'//g" "$RUNNER_TEMP/test_services.env" | while IFS='=' read -r name value; do
+            echo "::add-mask::$value"
+            echo "$name=$value" >> "$GITHUB_ENV"
+          done
+      - name: Schema gate (alembic upgrade head, alembic check, FK-without-index)
+        run: backend/devops/ci/schema_gate.sh
+      - name: Unit and schema tests
+        run: uv run pytest -q
+      - name: Stop test services
+        if: always()
+        run: backend/devops/ci/test_services.sh down
+
+  images:
+    needs: lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/devops/docker/backend.Dockerfile
+          target: backend
+          tags: dcl-v2-backend:ci
+          load: true
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+      - name: Build the LibreOffice image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/devops/docker/libreoffice.Dockerfile
+          tags: dcl-v2-libreoffice:ci
+          load: true
+          cache-from: type=gha,scope=libreoffice
+          cache-to: type=gha,scope=libreoffice,mode=max
+      - name: Build MinIO from the pinned source tag
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/devops/docker/minio.Dockerfile
+          tags: ${{ env.MINIO_IMAGE }}
+          load: true
+          cache-from: type=gha,scope=minio
+      - run: uv sync --frozen
+      - name: Secret scan of every image layer
+        run: |
+          for image in dcl-v2-backend:ci dcl-v2-libreoffice:ci "$MINIO_IMAGE"; do
+            uv run python backend/devops/ci/scan_image_secrets.py "$image"
+          done

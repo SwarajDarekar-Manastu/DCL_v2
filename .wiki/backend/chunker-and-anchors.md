@@ -19,7 +19,7 @@ Code:
 - `backend/indexing/tables.py` (`table_rows`, `row_groups`, `split_table`, `table_to_text`)
 - `backend/indexing/anchors.py` (`content_hash`, `make_anchor`, `resolve_among`, `resolve_anchor`, `NodeView`, `AnchorResolution`)
 - `backend/indexing/identifiers.py` (`extract_identifiers`, `content_codes`)
-- `backend/indexing/index_document.py` (planned: chunk → enrich → overlays → embed → commit)
+- `backend/indexing/index_document.py` (`index_document`, `IndexPlan`, `existing_vectors`, `HaltedDocument`)
 
 Tests and fixtures:
 - `backend/tests/unit/indexing/` (`identifier_cases.json` is the one fixture for indexer and query side)
@@ -33,7 +33,9 @@ Provides:
 - `extract_identifiers(text) -> list[str]` (uppercased full forms plus separator-less variants); `content_codes(text) -> str`
 - `content_hash(text)`, `make_anchor(doc_id, node) -> Anchor` (S1's model), `resolve_among(anchor, nodes) -> AnchorResolution(status exact|page_fallback|document_only, page_no, matches, boxes)`
 - `resolve_anchor(session, anchor) -> AnchorResolution`: one query over `document_nodes` (hash prefix or locator cover), matches are request-scoped `NodeView`s
-- planned: `index_document()`
+- `index_document(doc, doc_id=, gemini=, embed_documents=, embed_images=, asset_bytes=, alias_index=, reuse_vectors=, sanity_ranges=, cloud_allowed=) -> IndexPlan(nodes with vectors, entities: EntityDecisions, facts: list[FactDecision], document: {enrichment, entity_refs, search_text}, warnings, metrics)`; refuses HARD-flagged documents; writes nothing (S1's commit writes the plan and applies overlays)
+- `existing_vectors(session, doc_id, hashes)` for vector reuse by `embed_text_hash`
+- `IndexNode.origin_refs` (route refs a node's text came from), `embedding`, `image_embedding`
 
 Consumes:
 - `backend/dispatcher/contract.py` (S1): `ProcessedDocument`, `ProcessedNode`, `Anchor`, `PageBox`
@@ -53,7 +55,7 @@ Consumes:
 - `backend/indexing/anchors.py`
 - `backend/indexing/identifiers.py`
 - `backend/indexing/index_document.py`
-- `backend/tests/unit/indexing/`
+- `backend/tests/unit/indexing/` (incl. `test_index_document.py`)
 - `backend/tests/integration/indexing/test_resolve_anchor.py`
 
 ## Rubric (what "done" means for this feature)
@@ -63,7 +65,7 @@ Consumes:
 - [x] An anchor resolves after a chunk-size change, falling back to the page (`test_anchors_survive_a_chunk_size_change_by_falling_back_to_the_page`)
 - [x] Indexer and query side share one identifier fixture test
 - [x] `resolve_anchor` over `document_nodes` (database test: exact, then page fallback after a chunk-size change, then document)
-- [ ] `index_document()` end to end (waits for enrichment and S1's commit path)
+- [x] `index_document()` builds the full plan (11 tests: HARD refusal, vector reuse, child placement, route mentions, proxies, aggregation, no-cloud path); the write is S1's commit
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log
@@ -71,6 +73,7 @@ Consumes:
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | `index_document` → `IndexPlan` for S1's commit; `IndexNode.origin_refs` and vectors |
 | 2026-10-22 | S2 | `resolve_anchor` over `document_nodes` with a database test |
 | 2026-10-22 | S2 | Table helpers moved to `tables.py` (Lead approval); chunker under 600 lines |
 | 2026-10-21 | S2 | Chunker, contextual header, embed_text cap, identifiers with shared fixture, anchor hash/make/resolve; 47 tests |

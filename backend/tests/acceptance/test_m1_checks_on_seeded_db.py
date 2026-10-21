@@ -42,9 +42,18 @@ def db(monkeypatch):
 
 
 def item(name, status, folder, reason=None, blob=None, path=None):
-    return DriveItem(drive_id="D", item_id=f"I-{name}", root_name="APU", parent_item_id=folder, name=name,
-                     status=status, gate_reason=reason, blob_sha256=blob, path_cached=path or f"APU/x/{name}",
-                     size_bytes=10)
+    return DriveItem(
+        drive_id="D",
+        item_id=f"I-{name}",
+        root_name="APU",
+        parent_item_id=folder,
+        name=name,
+        status=status,
+        gate_reason=reason,
+        blob_sha256=blob,
+        path_cached=path or f"APU/x/{name}",
+        size_bytes=10,
+    )
 
 
 def blob(sha):
@@ -60,20 +69,27 @@ def seed(session):
     """A good M1 state: one allowlisted subtree (TP7 > Pressure), one folder outside it."""
     session.add(SyncRoot(root_name="APU", remote_drive_id="D", remote_item_id=ROOT))
     session.flush()
-    for item_id, parent, name in ((ROOT, None, "APU"), (TP7, ROOT, "Test Plan 7"),
-                                  (PRESSURE, TP7, "Pressure"), (TP30, ROOT, "Test Plan 30")):
-        session.add(DriveFolder(drive_id="D", item_id=item_id, parent_item_id=parent, root_name="APU",
-                                name=name))
+    for item_id, parent, name in (
+        (ROOT, None, "APU"),
+        (TP7, ROOT, "Test Plan 7"),
+        (PRESSURE, TP7, "Pressure"),
+        (TP30, ROOT, "Test Plan 30"),
+    ):
+        session.add(
+            DriveFolder(drive_id="D", item_id=item_id, parent_item_id=parent, root_name="APU", name=name)
+        )
     a, b = "a" * 64, "b" * 64
     session.add_all([blob(a), blob(b)])
     session.flush()
-    session.add_all([
-        item("run1.dat", S.LANDED, PRESSURE, blob=a, path="APU/Test Plan 7/Pressure/run1.dat"),
-        item("run2.dat", S.LANDED, TP30, blob=b, path="APU/Test Plan 30/run2.dat"),
-        item("lib.pyc", S.SKIPPED_JUNK, TP30, reason="T2:.pyc"),
-        item("old.dat", S.QUARANTINED, TP30, reason="T1:quarantine:_to_delete"),
-        item("huge.mp4", S.HELD_LARGE_FILE, TP30, reason="T3:size"),
-    ])
+    session.add_all(
+        [
+            item("run1.dat", S.LANDED, PRESSURE, blob=a, path="APU/Test Plan 7/Pressure/run1.dat"),
+            item("run2.dat", S.LANDED, TP30, blob=b, path="APU/Test Plan 30/run2.dat"),
+            item("lib.pyc", S.SKIPPED_JUNK, TP30, reason="T2:.pyc"),
+            item("old.dat", S.QUARANTINED, TP30, reason="T1:quarantine:_to_delete"),
+            item("huge.mp4", S.HELD_LARGE_FILE, TP30, reason="T3:size"),
+        ]
+    )
     doc, src = document(a)
     session.add(doc)
     session.flush()
@@ -91,8 +107,13 @@ def test_good_state_passes(m1, db):
 
 
 def test_undecided_and_reasonless_items_fail(m1, db):
-    db.add_all([item("new.dat", S.SEEN, TP30), item("bad.pyc", S.SKIPPED_JUNK, TP30),
-                item("odd.pyc", S.SKIPPED_JUNK, TP30, reason="junk")])
+    db.add_all(
+        [
+            item("new.dat", S.SEEN, TP30),
+            item("bad.pyc", S.SKIPPED_JUNK, TP30),
+            item("odd.pyc", S.SKIPPED_JUNK, TP30, reason="junk"),
+        ]
+    )
     db.flush()
     violations = m1.decision_violations(m1.item_counts(db))
     assert len(violations) == 3, violations
@@ -115,8 +136,11 @@ def test_dispatch_outside_the_allowlist_fails(m1, db):
 
 def test_snapshot_compare_shows_a_rename_without_downloads(m1, db):
     before = m1.snapshot(db)
-    db.execute(update(DriveItem).where(DriveItem.parent_item_id == PRESSURE)
-               .values(path_cached="APU/TP7 renamed/Pressure/run1.dat"))
+    db.execute(
+        update(DriveItem)
+        .where(DriveItem.parent_item_id == PRESSURE)
+        .values(path_cached="APU/TP7 renamed/Pressure/run1.dat")
+    )
     db.flush()
     diff = m1.compare(before, m1.snapshot(db))
     assert diff == {"counts": {}, "jobs": {}, "changed_paths": 1}
