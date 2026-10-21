@@ -24,10 +24,10 @@ dist/
 build/
 
 # Local data and model caches (never commit corpus files or vectors)
-data/
-minio-data/
-pgdata/
-models/
+/data/
+/minio-data/
+/pgdata/
+/models/
 *.parquet
 *.db
 *.sqlite
