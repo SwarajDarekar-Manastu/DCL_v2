@@ -316,3 +316,9 @@ Merged / ready: viewer endpoint wired to real tables (`build_viewer_payload` ove
 Blocked on: nothing. Open: `open_flags`/`review_case_key` in the viewer and the end-to-end re-index check wait for S1's review_flags and commit path; chat-attachment upload owner (Lead).
 Needs from others: nothing new.
 Next: Open WebUI Actions (Show trace, Add to benchmark, Report issue) and the Filter.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: nothing new since the viewer/audit merge request.
+Blocked on: Open WebUI Actions. Show trace needs GET /v1/traces?chat_id&message_id and Report issue needs POST /v1/traces/{id}/feedback (both asked of S2 2026-10-22). Add to benchmark and the Benchmark UI need the benchmark enums (category, case/run status, failure class) in backend/postgres/enums.py and the benchmark_cases/runs/results models (S1's area; owner and timing asked of the Lead).
+Needs from others: Lead decision on the Filter of 08 §1, which the signed groups in the Pipe make redundant today (proposal: defer it until attachments exist).
+Next: idle until S2's trace routes or the benchmark models land.
