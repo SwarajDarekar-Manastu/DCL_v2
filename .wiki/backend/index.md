@@ -2,7 +2,7 @@
 
 | Feature | Status | Owner | Purpose |
 |---------|--------|-------|---------|
-| [Graph sync engine (delta, webhooks, resync)](sync-engine.md) | planned | S1 | Enumerate the four shared OneDrive folders through Microsoft Graph delta, react to webhooks, run the daily safety delta, and recover from HTTP 410 with a generation-stamped resync. |
+| [Graph sync engine (delta, webhooks, resync)](sync-engine.md) | in-progress | S1 | Enumerate the four shared OneDrive folders through Microsoft Graph delta, react to webhooks, run the daily safety delta, and recover from HTTP 410 with a generation-stamped resync. |
 | [Junk gate, quarantine, download and processing scopes](gate-and-scope.md) | planned | S1 | Reject junk from Graph metadata (tiers 1–3), quarantine paths and secrets (tier 4), and hold items outside the download or processing scope without flags. |
 | [Registry, content-addressed blobs, downloader](registry-and-blobs.md) | planned | S1 | Download accepted items into MinIO keyed by SHA-256, verify quickXorHash, deduplicate by (quick_xor_hash,size), and maintain drive_items/drive_folders/blobs/blob_derivations. |
 | [PostgreSQL schema, enums as CHECK, Alembic](schema-and-migrations.md) | in-progress | S1 | Own the 26-table schema in three tiers, the StrEnum→CHECK generation, naming conventions, every FK index, and hand-written migrations for HNSW/BM25/CHECK. |

@@ -90,3 +90,9 @@ Merged / ready: `frontend/settings-ui` scaffolding (admin-gated layout, nine sec
 Blocked on: Review UI waits for S1's `backend/review/api_models.py`; Settings editing waits for S1's settings API; viewer body waits for S1 models/presign and S2 `resolve_anchor`; Open WebUI Pipe waits for S2's `/v1/answer` schema.
 Needs from others: S1 and S2 to message S3 when those land on main; Lead to merge this branch (shell, viewer, settings scaffolding).
 Next: idle until one of the inputs above arrives; then switch `get_auth_config` to S4's `require("console_auth")` once S4's settings merge is on main.
+
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: task 2: backend/sync/auth.py (Fernet-encrypted MSAL cache, mode 600/700, atomic writes, v1 cache refused untouched; silent-first TokenProvider; device-code sign-in that rejects any account but DCL_DELEGATED_USERNAME; check_access for the roots and the outside item) + GET-only backend/sync/graph_client.py; 28 unit tests; device flow verified live against the tenant with scope A. Test: `uv run pytest && uv run ruff check backend` (159 passed, 18 skipped)
+Blocked on: nothing for code. Live sign-in and `check` need S4's config fields on main (S4 merge request 14c8c4d) and the operator: in .env set DCL_TOKEN_CACHE_PATH to a NEW v2 file under a 700 DCL_TOKEN_DIR (it still points at v1's cache, which the code refuses), add DCL_TOKEN_CACHE_KEY (Fernet key), optionally DCL_TEST_OUTSIDE_DRIVE_ID; then run `uv run python -m backend.sync.auth sign-in` and complete the code as ai@manastuspace.com, then `uv run python -m backend.sync.auth check`
+Needs from others: Lead — merge S4's config fields; relay the operator step above to the user. Open for the health-check task: file 02 §1 probes `GET /me/drive`, which option A may refuse; I will confirm live once signed in
+Next: task 3, delta crawl of the four roots (metadata only), folder tree and paths, gate tiers 1–3, HELD_BY_SCOPE
