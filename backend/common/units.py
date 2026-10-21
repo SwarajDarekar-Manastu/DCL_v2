@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pint
 
-from backend.postgres.enums import AmbientCondition, GaugeOrAbs
+from backend.postgres.enums import AmbientCondition, GaugeOrAbs, Quantity
 
 UNITS_FILE = Path(__file__).resolve().parents[2] / "config" / "units.txt"
 ALIAS_LINE = re.compile(r"^#=\s*(?P<surface>.+?)\s*=>\s*(?P<expr>.+?)\s*\|\s*(?P<dimension>\S.*?)\s*$")
@@ -45,6 +45,34 @@ NAMED_DIMENSIONS = (
     "[electric_potential]",
     "[energy]",
 )
+
+
+QUANTITY_DIMENSIONS: dict[Quantity, str | None] = {
+    Quantity.PRESSURE: "[pressure]",
+    Quantity.FORCE: "[force]",
+    Quantity.TEMPERATURE: "[temperature]",
+    Quantity.MASS_FLOW_RATE: "[mass] / [time]",
+    Quantity.VOLUME_FLOW_RATE: "[volume] / [time]",
+    Quantity.POWER: "[power]",
+    Quantity.ENERGY: "[energy]",
+    Quantity.VOLTAGE: "[electric_potential]",
+    Quantity.CURRENT: "[current]",
+    Quantity.RESISTANCE: "[resistance]",
+    Quantity.LENGTH: "[length]",
+    Quantity.AREA: "[area]",
+    Quantity.VOLUME: "[volume]",
+    Quantity.MASS: "[mass]",
+    Quantity.DENSITY: "[density]",
+    Quantity.TIME: "[time]",
+    Quantity.FREQUENCY: "[frequency]",
+    Quantity.VELOCITY: "[velocity]",
+    Quantity.ACCELERATION: "[acceleration]",
+    Quantity.SPECIFIC_IMPULSE: "[time]",
+    Quantity.ANGLE: "[]",
+    Quantity.RATIO: "[]",
+    Quantity.VALVE_STATE: "[]",
+    Quantity.OTHER: None,
+}
 
 
 class UnitError(ValueError):
@@ -158,3 +186,9 @@ def has_dimension(unit: str | ParsedUnit, dimension: str) -> bool:
     parsed = unit if isinstance(unit, ParsedUnit) else parse_unit(unit)
     ureg = registry()
     return ureg.get_dimensionality(parsed.unit) == ureg.get_dimensionality(dimension)
+
+
+def fits_quantity(unit: str | ParsedUnit, quantity: Quantity) -> bool:
+    """True when the unit's dimension is the one ``quantity`` expects (``other`` accepts any unit)."""
+    expected = QUANTITY_DIMENSIONS[quantity]
+    return expected is None or has_dimension(unit, expected)

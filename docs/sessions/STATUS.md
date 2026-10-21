@@ -172,3 +172,9 @@ Merged / ready: task 4 core: backend/sync/downloader.py land_item() (zero-downlo
 Blocked on: Lead answers of 100eae2 for the crawl and for dispatch after landing (processing.scope)
 Needs from others: Lead — may the M4 entity tables (entities, entity_aliases, entity_mentions, numeric_facts) be created now? S2 is building enrichment in parallel and asked for the models
 Next: backend/common/units.py (pint + config/units.txt, S2 needs it), S2's entity enums
+
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: backend/common/units.py (pint + config/units.txt with S5's aliases, gauge/absolute from the spelling, canonical units bar/N/K/g/s/W, gauge→absolute, fits_quantity); enums EntityType, EntityCreatedBy, AliasCreatedBy, NumericFactSource, Quantity (one vocabulary for numeric facts, Route C and sanity ranges). Test: `uv run pytest && uv run ruff check backend` (640 passed, 28 skipped)
+Blocked on: Lead answers of 100eae2 (crawl) and on whether the M4 entity tables may be created now (S2 asked)
+Needs from others: nothing new
+Next: M2 models documents/document_sources/document_relations/document_nodes/assets once the Lead confirms the table timing; otherwise Tier 4 (magic bytes, secret scan)

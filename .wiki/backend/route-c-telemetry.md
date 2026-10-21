@@ -26,7 +26,7 @@ Tests and fixtures:
 ## Interfaces
 
 Provides:
-- `parse_unit(text) -> ParsedUnit{unit, dimension, gauge_or_abs, canonical}` (raises `UnitError`), `to_canonical(value, unit) -> (value, unit)` in bar / N / K / g/s / W or base SI, `ambient_bar_abs(condition, recorded)`, `gauge_to_absolute()`, `has_dimension()` (used by S2's numeric-fact check)
+- `parse_unit(text) -> ParsedUnit{unit, dimension, gauge_or_abs, canonical}` (raises `UnitError`), `to_canonical(value, unit) -> (value, unit)` in bar / N / K / g/s / W or base SI, `ambient_bar_abs(condition, recorded)`, `gauge_to_absolute()`, `has_dimension()`, `fits_quantity(unit, Quantity)` with `QUANTITY_DIMENSIONS` (used by S2's numeric-fact check); the `Quantity` vocabulary is in `backend/postgres/enums.py`
 - telemetry_runs/telemetry_channels rows
 - `normalized.parquet`
 - run summary node
@@ -60,6 +60,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | backend/common/units.py (registry, aliases, references, canonical units); 29 tests |
+| 2026-10-21 | S1 | Quantity vocabulary + fits_quantity(); entity/alias/fact enums for S2 |
 
 ## Related
 

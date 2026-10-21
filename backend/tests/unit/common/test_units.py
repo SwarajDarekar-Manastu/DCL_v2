@@ -3,16 +3,18 @@
 import pytest
 
 from backend.common.units import (
+    QUANTITY_DIMENSIONS,
     SEA_LEVEL_BAR_ABS,
     UnitError,
     aliases,
     ambient_bar_abs,
+    fits_quantity,
     gauge_to_absolute,
     has_dimension,
     parse_unit,
     to_canonical,
 )
-from backend.postgres.enums import AmbientCondition, GaugeOrAbs
+from backend.postgres.enums import AmbientCondition, GaugeOrAbs, Quantity
 
 
 @pytest.mark.parametrize(
@@ -86,3 +88,24 @@ def test_aliases_come_from_config_units_txt_longest_first():
     found = aliases()
     assert any(alias.surface == "bar(g)" and alias.expression == "barg" for alias in found)
     assert [len(a.surface) for a in found] == sorted((len(a.surface) for a in found), reverse=True)
+
+
+@pytest.mark.parametrize(
+    ("unit", "quantity", "fits"),
+    [
+        ("psig", Quantity.PRESSURE, True),
+        ("N", Quantity.PRESSURE, False),
+        ("g/s", Quantity.MASS_FLOW_RATE, True),
+        ("slpm", Quantity.VOLUME_FLOW_RATE, False),
+        ("s", Quantity.SPECIFIC_IMPULSE, True),
+        ("%", Quantity.RATIO, True),
+        ("mV", Quantity.VOLTAGE, True),
+        ("furlong", Quantity.OTHER, True),
+    ],
+)
+def test_units_are_checked_against_the_quantity_vocabulary(unit, quantity, fits):
+    assert fits_quantity(unit, quantity) is fits
+
+
+def test_every_quantity_has_a_dimension_entry():
+    assert set(QUANTITY_DIMENSIONS) == set(Quantity)
