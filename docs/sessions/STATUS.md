@@ -432,3 +432,9 @@ Merged / ready: dead-letter list + poison-task stop for every task (`DclTask` in
 Blocked on: backups questions (destination, RPO/RTO, tool, retention ownership) with DCL Lead
 Needs from others: S5 — add the load-test command and expected output to `backend/tests/acceptance/M1.md` row 10 (sent); S3/S1 — Console "Failed tasks" page reads `dead_letters()`
 Next: office conversion client for S1/S2 (`backend/common/office.py`, env name pending Lead), then backups once answered
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: office conversion for S1 and S2: `backend/common/office.py` `convert(data, from_ext, to, *, recalc=False)` against the libreoffice container, which now runs `office_server.py` (one soffice run per request, profile that recalculates formulas on load) instead of unoserver (unoserver cannot load .xlsx on LibreOffice 7.4, inline or by path). Verified live: rtf/doc → docx, docx → pdf, xls → xlsx, xlsx recalculation (stale 999 → 81), S5's FMEA fixture → pdf; PPT/PPTX untested (no sample). Env name `DCL_OFFICE_URL` used, pending Lead approval. Test: `uv run pytest` green
+Blocked on: backups questions with DCL Lead
+Needs from others: Lead — approve `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`; merge 31eb0be + this
+Next: backups once answered; MinIO replacement comparison by end of M4

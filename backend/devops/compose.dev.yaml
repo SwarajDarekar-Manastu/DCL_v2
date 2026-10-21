@@ -11,6 +11,7 @@ x-dev-env: &dev-env
   DCL_REDIS_URL: redis://redis:6379/0
   DCL_MINIO_ENDPOINT: http://minio:9000
   DCL_MODELS_URL: http://models:8500
+  DCL_OFFICE_URL: http://libreoffice:2003
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
   DCL_MINIO_ACCESS_KEY: ${DCL_MINIO_ACCESS_KEY:-${DCL_MINIO_ROOT_USER:-dcl-dev}}
   DCL_MINIO_SECRET_KEY: ${DCL_MINIO_SECRET_KEY:-${DCL_MINIO_ROOT_PASSWORD:-dcl-dev-only-minio}}
