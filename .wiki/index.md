@@ -61,7 +61,6 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
-| [platform__env-contract__wiring-names](plans/platform__env-contract__wiring-names.md) | `platform/env-contract` | S4 | 2026-10-21 |
 
 ## Maintenance
 

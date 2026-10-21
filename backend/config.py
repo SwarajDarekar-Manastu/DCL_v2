@@ -5,6 +5,8 @@ needs are checked by Settings.require() when that component starts, so a contain
 it does not use. Dev defaults apply only when DCL_ENV=dev. Messages name variables, never values.
 """
 
+import base64
+import binascii
 import logging
 import os
 import re
@@ -117,11 +119,13 @@ class Settings(BaseSettings):
     permission_option: PermissionOption | None = _env("DCL_PERMISSION_OPTION", default=None)
     token_cache_path: Path | None = _env("DCL_TOKEN_CACHE_PATH", default=None)
     token_dir: Path | None = _env("DCL_TOKEN_DIR", default=None)
+    token_cache_key: SecretStr | None = _env("DCL_TOKEN_CACHE_KEY", default=None)
 
     drive_id: str | None = _env("DCL_DRIVE_ID", default=None)
     folder_ids: CommaList = _env("DCL_FOLDER_IDS", default_factory=list)
     folder_paths: CommaList = _env("DCL_FOLDER_PATHS", default_factory=list)
     test_outside_item_id: str | None = _env("DCL_TEST_OUTSIDE_ITEM_ID", default=None)
+    test_outside_drive_id: str | None = _env("DCL_TEST_OUTSIDE_DRIVE_ID", default=None)
 
     secret_store: str | None = _env("DCL_SECRET_STORE", default=None)
     certificate_path: Path | None = _env("DCL_CERTIFICATE_PATH", default=None)
@@ -184,6 +188,18 @@ class Settings(BaseSettings):
             raise ValueError("must start with redis://, rediss:// or unix://")
         return value
 
+    @field_validator("token_cache_key")
+    @classmethod
+    def _fernet_key_shape(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            try:
+                raw = base64.urlsafe_b64decode(value.get_secret_value().encode())
+            except (ValueError, binascii.Error):
+                raw = b""
+            if len(raw) != 32:
+                raise ValueError("must be a Fernet key (32 bytes, url-safe base64)")
+        return value
+
     @model_validator(mode="after")
     def _roots_pair_up(self) -> "Settings":
         if self.folder_ids and self.folder_paths and len(self.folder_ids) != len(self.folder_paths):
@@ -237,6 +253,7 @@ REQUIRED_BY_GROUP: dict[Group, tuple[str, ...]] = {
         "DCL_PERMISSION_OPTION",
         "DCL_TOKEN_CACHE_PATH",
         "DCL_TOKEN_DIR",
+        "DCL_TOKEN_CACHE_KEY",
         "DCL_DRIVE_ID",
         "DCL_FOLDER_IDS",
         "DCL_FOLDER_PATHS",

@@ -23,6 +23,7 @@ COMPLETE = {
     "DCL_PERMISSION_OPTION": "A",
     "DCL_TOKEN_CACHE_PATH": "/var/lib/dcl/token_cache.bin",
     "DCL_TOKEN_DIR": "/var/lib/dcl",
+    "DCL_TOKEN_CACHE_KEY": "Wb2zbXq0mkC9w3dE0t2tHhpG6fZcUaFsr3o5rQyPqLM=",
     "DCL_DRIVE_ID": "drive-1",
     "DCL_FOLDER_IDS": "id1, id2,id3,id4",
     "DCL_FOLDER_PATHS": "APU Injector,APU,APS - Library,APU Heater",
@@ -390,3 +391,22 @@ def test_database_group_names_missing_parts(monkeypatch):
     monkeypatch.setenv("DCL_DB_USER", "dcl")
     with pytest.raises(ConfigError, match="DCL_DB_PASSWORD"):
         load_settings(env_file=None).stack_database_url()
+
+
+@pytest.mark.parametrize("value", ["not-a-key", "c2hvcnQ=", "Wb2zbXq0mkC9w3dE0t2tHhpG6fZcUaFsr3o5rQyPqLM"])
+def test_token_cache_key_must_be_a_fernet_key(monkeypatch, value):
+    with pytest.raises(ConfigError, match="DCL_TOKEN_CACHE_KEY") as exc:
+        load_with(monkeypatch, DCL_TOKEN_CACHE_KEY=value)
+    assert value not in str(exc.value)
+
+
+def test_graph_group_requires_the_token_cache_key(monkeypatch):
+    set_env(monkeypatch, {k: v for k, v in COMPLETE.items() if k != "DCL_TOKEN_CACHE_KEY"})
+    with pytest.raises(ConfigError, match="DCL_TOKEN_CACHE_KEY"):
+        load_settings(env_file=None).require(Group.GRAPH)
+
+
+def test_outside_drive_id_is_optional_without_default(monkeypatch):
+    settings = load_with(monkeypatch)
+    assert settings.test_outside_drive_id is None
+    assert load_with(monkeypatch, DCL_TEST_OUTSIDE_DRIVE_ID="drive-x").test_outside_drive_id == "drive-x"
