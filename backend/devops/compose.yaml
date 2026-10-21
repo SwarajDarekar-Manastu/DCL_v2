@@ -13,6 +13,7 @@ x-stack-env: &stack-env
   DCL_REDIS_URL: redis://redis:6379/0
   DCL_MINIO_ENDPOINT: http://minio:9000
   DCL_MODELS_URL: http://models:8500
+  DCL_OFFICE_URL: http://libreoffice:2003
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
 x-backend: &backend
@@ -129,7 +130,7 @@ services:
       context: ../..
       dockerfile: backend/devops/docker/libreoffice.Dockerfile
     healthcheck:
-      test: ["CMD", "python3", "-c", "import socket; socket.create_connection(('127.0.0.1', 2003), 3).close()"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:2003/health', timeout=5)"]
       interval: 15s
       timeout: 5s
       retries: 10

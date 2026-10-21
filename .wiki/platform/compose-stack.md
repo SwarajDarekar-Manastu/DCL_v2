@@ -18,7 +18,8 @@ Code:
 - `backend/devops/compose.yaml`, `backend/devops/compose.dev.yaml`
 - `backend/devops/docker/backend.Dockerfile` (targets `backend`, `models` (CUDA torch), `parse` (CPU torch, Docling, RapidOCR, Tesseract scripts); builder stage compiles deps)
 - `backend/devops/docker/minio.Dockerfile` (RELEASE.2025-10-15T17-29-55Z, commit-checked)
-- `backend/devops/docker/libreoffice.Dockerfile` (unoserver on 2003)
+- `backend/devops/docker/libreoffice.Dockerfile` + `office_server.py` (POST /convert on 2003, one soffice run per request, recalculating profile)
+- `backend/common/office.py` (the one client: `convert(data, from_ext, to, recalc=False)`)
 - `backend/devops/minio_init.py` (buckets, versioning, lifecycle, app user; idempotent)
 - `backend/celery_redis/app.py` (incl. `DclTask`: delivery count, poison stop, dead-letter list), `queues.py`, `beat.py`
 - `backend/celery_redis/tasks_loadtest.py`, `backend/celery_redis/load_test.py`, `backend/devops/ci/queue_load_test.sh` (M1 queue load test)
@@ -38,7 +39,7 @@ Provides:
 - Dead letters: every final task failure and every task whose worker died `MAX_DELIVERIES` (3) times lands in the Redis list `dcl:dead_letter` (newest first, capped 10,000); read with `backend.celery_redis.app.dead_letters(limit)` for the Console "Failed tasks" page
 - M1 load test: `backend/devops/ci/queue_load_test.sh [--project dcl-v2] --tasks 5000`
 - Celery: `backend.celery_redis.app.app`, queues `Queue.*`, pools `POOLS`; task modules `backend/celery_redis/tasks_*.py` are included when present; `dcl.ping`
-- LibreOffice: `unoconvert --host libreoffice --port 2003 --host-location remote <in> <out>`
+- LibreOffice: `backend.common.office.convert(data, from_ext, to, *, recalc=False)` → bytes; `to` ∈ pdf/docx/pptx/xlsx; inputs doc/docx/rtf/odt/ppt/pptx/odp/xls/xlsx/ods; endpoint `settings.office_url` (`DCL_OFFICE_URL`, in-stack `http://libreoffice:2003`; name pending Lead approval)
 
 Consumes:
 - `platform/env-contract`; S2's `/models/health` and `models` dependency group; S1's `backend.storage.minio.BUCKETS` and Alembic config
@@ -51,6 +52,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/devops/compose.dev.yaml`
 - `backend/devops/docker/`
 - `backend/devops/minio_init.py`
+- `backend/common/office.py`
 - `backend/celery_redis/app.py`, `backend/celery_redis/queues.py`, `backend/celery_redis/beat.py`
 - `.dockerignore`
 - `backend/devops/runbooks/stack.md`
@@ -74,6 +76,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | Office conversion service + client (unoserver dropped: inline and path-based xlsx loads fail on LibreOffice 7.4); verified rtf/doc→docx, docx→pdf, xls→xlsx, xlsx recalculation (stale 999 → 81), FMEA fixture → pdf |
 | 2026-10-22 | S4 | Dead-letter list and poison-task stop (`DclTask`), M1 queue load test harness (passed), 24 h lifecycle on `dcl-exports/uploads/` |
 | 2026-10-22 | S4 | `parse` image for cpu_parse (CPU torch via a group-scoped index; `models` and `parse` declared conflicting); `HF_HUB_DISABLE_XET=1`; observability services; `_incoming/` lifecycle rule; S1 process schedules |
 | 2026-10-22 | S4 | Beat schedule for S1's sync tasks (delta 02:00 Asia/Kolkata, token health 15 min, downloads 10 min) |

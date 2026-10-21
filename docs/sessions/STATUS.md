@@ -454,3 +454,9 @@ Merged / ready: Route D (`backend/routes/d_photos.py`, `classify_image` capabili
 Blocked on: nothing (A1 DOCX/PPTX waits for S4's `backend/common/office.py`, signature agreed)
 Needs from others: Lead: parse/media deps pillow-heif==1.8.1, imagehash==4.3.2, faster-whisper==1.2.1; S1: dispatcher calls for `process_photo` (with `cluster_photos` in the assembler) and `process_video`
 Next: the Answer Engine workflow (query analysis, planner, tools T1–T6/U1–U2, synthesis, verifier, DBOS)
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: office conversion for S1 and S2: `backend/common/office.py` `convert(data, from_ext, to, *, recalc=False)` against the libreoffice container, which now runs `office_server.py` (one soffice run per request, profile that recalculates formulas on load) instead of unoserver (unoserver cannot load .xlsx on LibreOffice 7.4, inline or by path). Verified live: rtf/doc → docx, docx → pdf, xls → xlsx, xlsx recalculation (stale 999 → 81), S5's FMEA fixture → pdf; PPT/PPTX untested (no sample). Env name `DCL_OFFICE_URL` used, pending Lead approval. Test: `uv run pytest` green
+Blocked on: backups questions with DCL Lead
+Needs from others: Lead — approve `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`; merge 31eb0be + this
+Next: backups once answered; MinIO replacement comparison by end of M4
