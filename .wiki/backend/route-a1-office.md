@@ -19,6 +19,7 @@ Code:
 - `backend/routes/a1_office/triage.py` (A1.2: `triage_pages`, `PageDecision`, `combine`, `ocr_groups`, `DEFAULT_OCR_ENGINE_BY_SCRIPT`)
 - `backend/routes/a1_office/convert.py` (A1.3: `plan_runs`, `Run`, `OcrPlan`, `pipeline_options`, `convert_run`, `low_ocr_pages`)
 - `backend/routes/a1_office/structure.py` (A1.3/A1.11/A1.12: `build_structure` → route nodes, breadcrumbs, references as mentions, furniture)
+- `backend/routes/a1_office/metadata.py` (L1 for PDFs: `extract_metadata` → `DocumentFields` + SENSITIVE_CONTENT flags; DOI/arXiv/ISBN, running head, copyright, vendors with the internal-equipment rule, markings, standard id, kind rules, tier, locale)
 - planned: second OCR pass and `transcribe_page`, tables QA (A1.4), figures (A1.6), handwriting (A1.7), page map (A1.0), metadata scan and assembly into `ProcessedDocument`
 
 Tests and fixtures:
@@ -60,6 +61,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | A1 metadata scan (origin overrides, markings, kind, tier, locale); 11 tests |
 | 2026-10-22 | S2 | Docling runs by OCR plan and the structure mapping (breadcrumbs, references as mentions, furniture, tables, figure placeholders); 15 tests, Docling ones skip without cached models |
 | 2026-10-22 | S2 | Pre-flight (encryption, repair, density, Unicode-aware garbage ratio, windows) and page triage (signals bound the model, OCR engine by script, no-cloud path); 19 tests on S5's fixtures |
 
