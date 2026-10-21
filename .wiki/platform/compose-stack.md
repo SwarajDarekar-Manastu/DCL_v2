@@ -20,7 +20,8 @@ Code:
 - `backend/devops/docker/minio.Dockerfile` (RELEASE.2025-10-15T17-29-55Z, commit-checked)
 - `backend/devops/docker/libreoffice.Dockerfile` (unoserver on 2003)
 - `backend/devops/minio_init.py` (buckets, versioning, lifecycle, app user; idempotent)
-- `backend/celery_redis/app.py`, `queues.py`, `beat.py`
+- `backend/celery_redis/app.py` (incl. `DclTask`: delivery count, poison stop, dead-letter list), `queues.py`, `beat.py`
+- `backend/celery_redis/tasks_loadtest.py`, `backend/celery_redis/load_test.py`, `backend/devops/ci/queue_load_test.sh` (M1 queue load test)
 - `.dockerignore`
 - `backend/devops/runbooks/stack.md`
 
@@ -34,6 +35,8 @@ Provides:
 - Healthy stack: `docker compose --env-file .env -f backend/devops/compose.yaml -f backend/devops/compose.dev.yaml up -d --build --wait`
 - Host ports on `DCL_BIND_HOST`: 5435 PostgreSQL (`DCL_DB_PORT`), 6381 Redis, 9100 MinIO, 9101 MinIO console, 8500 models, 8200 API
 - In-network URLs set per container: `postgres:5432/dcl_v2`, `redis:6379/0`, `minio:9000`, `models:8500`
+- Dead letters: every final task failure and every task whose worker died `MAX_DELIVERIES` (3) times lands in the Redis list `dcl:dead_letter` (newest first, capped 10,000); read with `backend.celery_redis.app.dead_letters(limit)` for the Console "Failed tasks" page
+- M1 load test: `backend/devops/ci/queue_load_test.sh [--project dcl-v2] --tasks 5000`
 - Celery: `backend.celery_redis.app.app`, queues `Queue.*`, pools `POOLS`; task modules `backend/celery_redis/tasks_*.py` are included when present; `dcl.ping`
 - LibreOffice: `unoconvert --host libreoffice --port 2003 --host-location remote <in> <out>`
 
@@ -59,6 +62,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] docker compose up reaches healthy (2026-10-22, real `.env`: 13 services healthy, both one-shot jobs exited 0, migrations at head)
 - [x] GPU visible only to the two model services (one `models` role; integration test)
 - [x] Queue memory limits match file 10 §4 (unit test; dev override only lowers them)
+- [x] M1 queue load test (2026-10-22, throwaway project): 5,002 tasks accounted for, routing correct on all six queues, 233 transient failures retried, 52 permanent + 2 OOM tasks dead-lettered, worker kills only in telemetry_stream, no container restart
 - [x] No `.env` or key file in the backend image (integration test)
 - [x] Observability services added (2026-10-22)
 - [x] Parse image: Docling + RapidOCR and Tesseract (Latin, Cyrillic, Devanagari, Arabic, OSD) OCR a scanned page correctly (2026-10-22)
@@ -70,6 +74,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | Dead-letter list and poison-task stop (`DclTask`), M1 queue load test harness (passed), 24 h lifecycle on `dcl-exports/uploads/` |
 | 2026-10-22 | S4 | `parse` image for cpu_parse (CPU torch via a group-scoped index; `models` and `parse` declared conflicting); `HF_HUB_DISABLE_XET=1`; observability services; `_incoming/` lifecycle rule; S1 process schedules |
 | 2026-10-22 | S4 | Beat schedule for S1's sync tasks (delta 02:00 Asia/Kolkata, token health 15 min, downloads 10 min) |
 | 2026-10-22 | S4 | M0 stack: images, MinIO from source, LibreOffice, models on the GPU, API, beat, six queue workers, `minio-init`, `migrate`; host ports and in-network URLs per the Lead's allocation; verified live on the dev host with the real `.env` |
