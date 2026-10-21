@@ -207,3 +207,11 @@ Merged / ready: `config/sanity_ranges.yaml` v2 for S1's channel_map body (a7cf42
 Blocked on: S1 crawl folder listing (allowlist); S1 CIR snapshot format (with the CIR writer)
 Needs from others: nothing else; `config/rules/` stays empty until operator rules exist (format now known from S1)
 Next: idle until the listing arrives
+
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: Review UI MVP merge requested (head 0d428b2) plus e0255ef (removed the parse_anchor_param alias). Open WebUI Pipe not started in code; research done against Open WebUI v0.12.3 source:
+- `__user__` = user.model_dump() with `valves` = UserValves; no groups, which come from `await open_webui.models.groups.Groups.get_groups_by_member_id(user_id)` (`.name`). Manifold `pipes()` → model id `manastu_engine.main`. `__task__` is set for title/tags/follow-up calls, which must not reach the engine.
+- Errors raised while the stream is consumed are not caught by Open WebUI. Yield `{"error": {"detail": ...}}` to get the error state (middleware: no choices + error). Events are status, source/citation (`{source:{id,name,url}, document:[...], metadata:[{source,name,url}]}`), embeds (`{embeds:[...], replace?}`), `chat:message:follow_ups`. A confirmation `__event_call__` returns the browser reply or `{"error": ...}`, so accept only `True`.
+- Single-file install: functions cannot import siblings, so config.py and api_endpoint.py get inlined by a build script into dist/.
+Blocked on: S2 to add trace_id to ConfirmationEvent (asked); owner of a chat-attachment upload endpoint (to raise with the Lead); Lead answers on GET /audit and on the GET /assets/url uri form.
+Next: Pipe plan sheet, then frontend/openwebui/{config.py, api_endpoint.py, pipe_manastu_engine.py, build script}, with tests replaying S2's example_answer_stream.sse.
