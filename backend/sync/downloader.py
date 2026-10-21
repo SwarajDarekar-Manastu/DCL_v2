@@ -108,9 +108,11 @@ def land_item(
     location_id: uuid.UUID,
     content_http: httpx.Client,
 ) -> Landed:
-    item = session.get(DriveItem, location_id, with_for_update=True)
+    item = session.get(DriveItem, location_id, with_for_update=True, populate_existing=True)
     if item is None:
         raise LookupError(f"no drive item {location_id}")
+    if item.status != DriveItemStatus.PENDING_DOWNLOAD:  # another worker landed it during the lock wait
+        return Landed(location_id, item.blob_sha256, downloaded=False, new_blob=False)
 
     known = find_known_blob(session, item.quick_xor_hash, item.size_bytes)
     if known is not None:
