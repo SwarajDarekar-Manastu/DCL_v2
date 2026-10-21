@@ -102,7 +102,8 @@ def sse(*events) -> str:
 
 ANSWER = {
     "/v1/answer": (200, EXAMPLE.read_text(), "text/event-stream"),
-    f"/v1/answer/{TRACE}/confirm": (202, "", "application/json"),  # the example asks one confirmation
+    # S2's example stream now carries a needs_confirmation event with trace_id; the Pipe answers it.
+    f"/v1/answer/{TRACE}/confirm": (202, "", "application/json"),
 }
 
 
