@@ -340,3 +340,9 @@ Merged / ready: nothing new since the viewer/audit merge request.
 Blocked on: Open WebUI Actions. Show trace needs GET /v1/traces?chat_id&message_id and Report issue needs POST /v1/traces/{id}/feedback (both asked of S2 2026-10-22). Add to benchmark and the Benchmark UI need the benchmark enums (category, case/run status, failure class) in backend/postgres/enums.py and the benchmark_cases/runs/results models (S1's area; owner and timing asked of the Lead).
 Needs from others: Lead decision on the Filter of 08 §1, which the signed groups in the Pipe make redundant today (proposal: defer it until attachments exist).
 Next: idle until S2's trace routes or the benchmark models land.
+
+## 2026-10-22 02:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: hybrid retrieval `backend/indexing/retrieval.py` (exact/HNSW dense, per-language BM25 on pg_search 0.26.2, RRF, parent collapse, rerank + fallback, near-dup collapse), 11 DB tests on a disposable ParadeDB; `seed_rows()` for S1; triage thinking settled with S4.
+Blocked on: nothing
+Needs from others: S1: the BM25 migration with the DDL sent today (field names verbatim); S5: `retrieval_set.yaml` (40 queries with gold anchors) for recall@30
+Next: index_document (end-to-end tail into S1's commit), then the Retrieval-lab data for S3, then Route A1

@@ -1,5 +1,4 @@
 import pytest
-import yaml
 
 from backend.llm_engine.enrichment.extract import NumericExtract
 from backend.llm_engine.enrichment.numeric_facts import (
@@ -13,19 +12,44 @@ from backend.llm_engine.enrichment.numeric_facts import (
 )
 from backend.postgres.enums import DocKind, GaugeOrAbs, NodeSource, NumericFactSource, SourceOrigin
 
-RANGES = yaml.safe_load(open("config/sanity_ranges.yaml", encoding="utf-8"))["ranges"]
+RANGES = [  # S5's shape (config/sanity_ranges.yaml v2): one checks_external_kept range per quantity, last
+    {"id": "chamber_pressure", "physical_quantity": "pressure", "unit": "bar", "min": 0, "max": 150},
+    {"id": "valve_pressure", "physical_quantity": "pressure", "unit": "bar", "min": 0, "max": 400},
+    {
+        "id": "pressure",
+        "physical_quantity": "pressure",
+        "unit": "bar",
+        "min": 0,
+        "max": 700,
+        "checks_external_kept": True,
+    },
+    {
+        "id": "temperature",
+        "physical_quantity": "temperature",
+        "unit": "K",
+        "min": 200,
+        "max": 2000,
+        "checks_external_kept": True,
+    },
+]
 TEXT = "Der Kammerdruck stieg auf 12,4 bar(g); das Bett erreichte 600 °C."
 
 
-def fact(value, unit, quantity="pressure", span=TEXT):
+def fact(value, unit, quantity="pressure", span=TEXT, label="chamber pressure"):
     return NumericExtract(
-        quantity=quantity, quantity_label="q", value=value, unit=unit, context="c", span=span
+        quantity=quantity, quantity_label=label, value=value, unit=unit, context="c", span=span
     )
 
 
-def check(f, locale=NumberLocale.COMMA):
+def check(f, locale=NumberLocale.COMMA, external=False):
     return validate_fact(
-        f, node_ref="n1", node_text=TEXT, locale=locale, source=NumericFactSource.PRINTED, ranges=RANGES
+        f,
+        node_ref="n1",
+        node_text=TEXT,
+        locale=locale,
+        source=NumericFactSource.PRINTED,
+        ranges=RANGES,
+        external=external,
     )
 
 
@@ -77,6 +101,20 @@ def test_missing_or_unreadable_unit_keeps_the_number_with_needs_unit(unit):
 def test_out_of_range_and_locale_ambiguous_values_are_suspect():
     assert check(fact("900", "bar")).suspect
     assert check(fact("1.234", "bar")).suspect
+
+
+@pytest.mark.parametrize(
+    ("value", "label", "external", "suspect"),
+    [
+        ("300", "peak chamber pressure", False, True),  # internal chamber fact: 0-150 bar
+        ("300", "valve pressure rating", False, False),  # internal valve fact: 0-400 bar
+        ("300", "inlet pressure", False, False),  # no role known: last range, 0-700 bar
+        ("300", "chamber pressure", True, False),  # library document: the checks_external_kept range
+        ("800", "rated pressure", True, True),
+    ],
+)
+def test_sanity_range_follows_origin_and_role(value, label, external, suspect):
+    assert check(fact(value, "bar", label=label), external=external).suspect is suspect
 
 
 @pytest.mark.parametrize(

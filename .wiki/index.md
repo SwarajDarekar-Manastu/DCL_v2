@@ -35,7 +35,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/chunker-and-anchors` | in-progress | S2 | [Chunker, contextual headers, stable anchors, identifier extraction](backend/chunker-and-anchors.md) |
 | `backend/embedding-service` | done | S2 | [Embedding service (EmbeddingGemma 2, text + image, GPU)](backend/embedding-service.md) |
 | `backend/reranker-service` | done | S2 | [Reranker service (bge-reranker-v2-m3, GPU)](backend/reranker-service.md) |
-| `backend/retrieval` | planned | S2 | [Hybrid retrieval (dense exact/HNSW, BM25 per language, RRF, rerank, parent expansion)](backend/retrieval.md) |
+| `backend/retrieval` | in-progress | S2 | [Hybrid retrieval (dense exact/HNSW, BM25 per language, RRF, rerank, parent expansion)](backend/retrieval.md) |
 | `backend/answer-engine` | in-progress | S2 | [Answer Engine (workflow, tools, playbooks, sanitizer, verifier, DBOS)](backend/answer-engine.md) |
 | `frontend/console-shell-auth` | in-progress | S3 | [Console shell, Entra ID login, roles, websocket](frontend/console-shell-auth.md) |
 | `frontend/review-ui` | in-progress | S3 | [Review UI (queue, case view, resolution consoles, rules, audit)](frontend/review-ui.md) |
