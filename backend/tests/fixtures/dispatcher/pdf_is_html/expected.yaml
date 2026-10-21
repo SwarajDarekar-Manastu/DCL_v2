@@ -1,0 +1,20 @@
+fixture: pdf_is_html
+edge_case: a .pdf that is HTML (file 10 §7)
+origin: synthetic
+generator: make_synthetic.py::pdf_is_html
+byte_stable: true
+files: [Test_Report_12.pdf]
+simulated_location: {root: APU, folder: Test Plan 12/report}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §1.1 (content wins; mismatch recorded)"
+  - "docs/architecture/03_phase2_processing_routes.md §12 (no adapter → UNSUPPORTED_FORMAT HARD)"
+expected:
+  route: null
+  detected_mime: text/html
+  document_status: HALTED
+  flags:
+    - {type: UNSUPPORTED_FORMAT, severity: HARD, reason: no adapter for text/html}
+  flags_exact: true
+  metadata:
+    extension_mime_mismatch: true
+  never: [open the file with a PDF parser as if it were a PDF]

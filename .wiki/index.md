@@ -50,8 +50,8 @@ This folder is the compiled, always-current map of what exists in the repository
 | `platform/ci` | planned | S4 | [CI pipeline and gates](platform/ci.md) |
 | `platform/observability` | planned | S4 | [OpenTelemetry, metrics, dashboards, alerts](platform/observability.md) |
 | `platform/backups-retention` | planned | S4 | [Backups, retention jobs, runbooks](platform/backups-retention.md) |
-| `quality/fixtures` | planned | S5 | [Fixture corpus and expected outcomes](quality/fixtures.md) |
-| `quality/config-data` | planned | S5 | [Domain configuration data (synonyms, vendors, sanity ranges, units, propellants, report schemas, rules)](quality/config-data.md) |
+| `quality/fixtures` | in-progress | S5 | [Fixture corpus and expected outcomes](quality/fixtures.md) |
+| `quality/config-data` | in-progress | S5 | [Domain configuration data (synonyms, vendors, sanity ranges, units, propellants, report schemas, rules)](quality/config-data.md) |
 | `quality/benchmark-suites` | planned | S5 | [Golden benchmark suites and verification notes](quality/benchmark-suites.md) |
 | `quality/acceptance` | planned | S5 | [Milestone acceptance checklists](quality/acceptance.md) |
 

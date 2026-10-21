@@ -3,9 +3,9 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `quality/config-data` |
-| Status | planned |
+| Status | in-progress |
 | Owner session | S5 |
-| Spec | docs/architecture/04 §3.3, §8; 03 §C; 10 §2 |
+| Spec | docs/architecture/04 §3.3, §8; 03 §1.3, §A2.1, §C.1; 06 §8; 10 §2 |
 | Last updated | 2026-10-21 |
 
 ## Purpose
@@ -21,18 +21,24 @@ Code:
 - `config/units.txt`
 - `config/propellants.yaml`
 - `config/report_json_schemas.yaml`
-- `config/rules/`
+- `config/rules/` (planned: waits for the S1 rules YAML schema)
 
 Tests and fixtures:
-- `backend/tests/unit/config_data/`
+- `backend/tests/unit/config_data/` (conftest.py with fixtures; one `test_config_<file>.py` per file)
 
 ## Interfaces
 
-Provides:
-- loaded configuration
+Provides (formats are documented in each file's header; the tests' JSON Schemas are the contract):
+- `units.txt`: pint definitions (`load_definitions`) plus `#= surface => expr | dimension` alias lines; consumer applies aliases longest-first before pint. Gauge/absolute is not carried by pint (`backend/common/units.py`, S1)
+- `sanity_ranges.yaml`: `quantities.<name>.{dimension, unit, min, max}` (Route C bounds, numeric-fact `suspect`)
+- `aerospace_synonyms.yaml`: `entities[]` typed by the closed list of 04 §3.2, `quantity_terms[]` (load target open), aliases `{surface, lang}` (S2 entity normalization)
+- `vendors.yaml`: `vendors[]` with aliases, case-sensitive short aliases, domains, `internal_equipment` (L1 origin detectors)
+- `propellants.yaml`: RocketCEA cards with published reference checks (physics_calculator, S2)
+- `report_json_schemas.yaml`: `schemas[]` (required keys, ordered sections) and `section_file_sets[]` (Route A2, assembler, S1)
+- every entry carries `sme_confirmed` (false until the SME review)
 
 Consumes:
-- (none yet)
+- (none)
 
 ## Workspace (files to touch when modifying this feature)
 
@@ -45,20 +51,38 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `config/propellants.yaml`
 - `config/report_json_schemas.yaml`
 - `config/rules/`
-- `backend/tests/unit/config_data/`
+- `backend/tests/unit/config_data/conftest.py`
+- `backend/tests/unit/config_data/test_config_units.py`
+- `backend/tests/unit/config_data/test_config_sanity_ranges.py`
+- `backend/tests/unit/config_data/test_config_synonyms.py`
+- `backend/tests/unit/config_data/test_config_vendors.py`
+- `backend/tests/unit/config_data/test_config_propellants.py`
+- `backend/tests/unit/config_data/test_config_report_schemas.py`
+- `pyproject.toml` (dev dependencies only: pint, pyyaml, jsonschema, rocketcea)
 
 ## Rubric (what "done" means for this feature)
 
-- [ ] Every file loads and is covered by a test
-- [ ] Synonym seeds include non-English surfaces
-- [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
+- [x] Every file loads and is covered by a test (six files; `config/rules/` pending its schema)
+- [x] Synonym seeds include non-English surfaces (de, fr, es, it, ru, ja, zh)
+- [x] Every unit alias and sanity-range unit resolves with its declared dimension
+- [x] RocketCEA reproduces the published HTP 90/98 decomposition temperatures within 1.5%
+- [ ] SME has reviewed every entry (`sme_confirmed: true`)
+- [ ] `config/rules/` exported operator rules load against the S1 rules schema
+- [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
+
+Verification: `uv run pytest backend/tests/unit/config_data && uv run ruff check backend`
 
 ## Change log
 
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-21 | S5 | Six data files drafted from the manual and public references (all `sme_confirmed: false`); 152 load tests; dev dependencies added |
 
 ## Related
 
 - `.wiki/index.md`
+- `backend/route-c-telemetry` (sanity ranges, units)
+- `backend/enrichment` (synonyms, units, sanity ranges)
+- `backend/route-a2-source` (report JSON schemas)
+- `backend/answer-engine` (propellants for the physics tool)

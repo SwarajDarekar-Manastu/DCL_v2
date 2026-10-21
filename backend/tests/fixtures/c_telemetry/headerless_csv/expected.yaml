@@ -1,0 +1,25 @@
+fixture: headerless_csv
+edge_case: headerless CSV (file 10 §7)
+origin: synthetic
+generator: make_synthetic.py::headerless_csv
+byte_stable: true
+files: [T05_export.csv]
+simulated_location: {root: APU Injector, folder: Pressure_Data_Files}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §C.3 (header detection, triage)"
+  - "docs/architecture/03_phase2_processing_routes.md C flags (CSV without header and > 3 numeric columns)"
+  - "docs/architecture/06_review_flags_and_halt_policy.md §2 (HARD: zero rows indexed, staged payload)"
+expected:
+  route: C
+  detected_mime: text/csv
+  document_status: HALTED
+  flags:
+    - {type: SCHEMA_UNKNOWN, severity: HARD, reason: CSV without header and 5 numeric columns}
+  flags_exact: false  # a UNIT_AMBIGUITY on the same case is acceptable
+  metadata:
+    rows: 200
+    columns: 5
+    header_row: null
+    staged_payload: true
+    telemetry_runs_rows: 0
+  never: [write normalized Parquet before the mapping is resolved]
