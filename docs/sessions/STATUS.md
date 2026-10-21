@@ -200,7 +200,6 @@ Merged / ready: `/v1/answer` SSE contract in `backend/api/engine.py` (request, s
 Blocked on: S1 for enrichment (EntityType/NumericFactSource/Quantity enums, M4 entity models, `backend/common/units.py`) and for `resolve_anchor` (`document_nodes` model)
 Needs from others: Lead: add `rapidfuzz` and `pint` to main dependencies and a `models` group (torch 2.14.1, torchvision 0.29.1, transformers 5.20.2, sentence-transformers 6.1.0)
 Next: enrichment extraction schema, prompt and grounding (no DB), then entity normalization once S1's enums land
-<<<<<<< HEAD
 ## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready: task 4 core: backend/sync/downloader.py land_item() (zero-download link, tokenless 302 fetch, one-pass SHA-256 + quickXorHash, verify, content-addressed copy, conflict-safe blob insert); backend/postgres/session.py; Job.key_for(); quickxorhash dep. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend` (627 passed, 3 skipped with both servers)
 Blocked on: Lead answers of 100eae2 for the crawl and for dispatch after landing (processing.scope)
@@ -224,11 +223,9 @@ Merged / ready: `config/sanity_ranges.yaml` v2 for S1's channel_map body (a7cf42
 Blocked on: S1 crawl folder listing (allowlist); S1 CIR snapshot format (with the CIR writer)
 Needs from others: nothing else; `config/rules/` stays empty until operator rules exist (format now known from S1)
 Next: idle until the listing arrives
-=======
 
 ## 2026-10-21 23:15 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: `backend/llm_engine/engine/{sanitizer,verifier}.py` (outbound IP sanitizer, numeric claim string check), 24 tests; GPU tests now skip when the shared card has < 3 GiB free (S4's dcl-v2-models container holds ~1 GiB while loading).
 Blocked on: nothing (S1's enums and units.py are on their branch, merge requested)
 Needs from others: S1: entity tables when the Lead rules on M4 timing
 Next: enrichment extraction (schema, prompt, grounding, unit validation with S1's units.py)
->>>>>>> claude/infallible-swartz-58c96b
