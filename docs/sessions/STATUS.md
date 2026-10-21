@@ -374,3 +374,14 @@ Merged / ready: Route A1 pre-flight and page triage (`backend/routes/a1_office/{
 Blocked on: nothing
 Needs from others: Lead: a `parse` dependency group (pypdfium2==5.14.0, pikepdf==10.17.0; docling next) — tests skip without them; S4: Tesseract (osd + Latin/Cyrillic/Devanagari/Arabic traineddata) and RapidOCR in the parse image; S5: openpyxl lxml writer makes byte-stable xlsx fixtures drift once pikepdf (lxml) is installed (told S5)
 Next: A1.3 Docling conversion by script group, then tables QA, figures, handwriting, page map
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready (after S1's presign_put lands): Open WebUI actions Show trace and Report issue (manastu_actions bundle, against S2's trace routes); chat attachments in the Pipe (only the user's own files, size cap, failures skipped) and `POST /assets/upload` (Pipe identity, 25 MB, slot in dcl-exports/uploads/{user}/{uuid}). 57 Open WebUI tests pass on source and bundle.
+Blocked on: S1's presign_put (2827fa9, merge requested). backend/api/assets.py imports it, so this branch is not mergeable until it is on main.
+Needs from others: Lead answers on the benchmark enums/tables owner and the Filter deferral.
+Next: on S1's message, sync, run the asset tests and full suite, delete the attachments plan sheet, request the merge.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: Open WebUI actions (Show trace, Report issue), chat attachments via `POST /assets/upload` (now on S1's presign_put), format-stable bundles, regenerated Console API types. Backend unit 998 passed, integration 11, frontend 80; ruff check and format clean on S3 paths.
+Blocked on: Benchmark API waits for S1's migration 0006 (benchmark tables, merge requested); Retrieval lab screen waits for S2's /v1/retrieval/search (merge requested).
+Needs from others: nothing new.
+Next: Benchmark API the day 0006 lands, then the Benchmark UI with the Retrieval lab.

@@ -16,7 +16,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 DIST = HERE / "bundled"
 # installed function id (file name in bundled/) → source module
-FUNCTIONS = {"manastu_engine.py": "pipe_manastu_engine.py"}
+FUNCTIONS = {"manastu_engine.py": "pipe_manastu_engine.py", "manastu_actions.py": "actions_manastu.py"}
 INLINE = re.compile(r"^from frontend\.openwebui\.(\w+) import .+  # inline$")
 
 
@@ -32,19 +32,26 @@ def _body_without_docstring(source: str) -> list[str]:
 
 def _expand(lines: list[str], seen: set[str]) -> list[str]:
     out: list[str] = []
+    skipping_names = False  # inside a parenthesized `from … import (  # inline` block
     for line in lines:
+        if skipping_names:
+            skipping_names = line.strip() != ")"
+            continue
         match = INLINE.match(line)
         if not match:
             out.append(line)
             continue
+        skipping_names = line.rstrip().endswith("(  # inline")
         module = match.group(1)
         if module in seen:
             continue
         seen.add(module)
         source = (HERE / f"{module}.py").read_text()
         out.append(f"# ---- inlined from frontend/openwebui/{module}.py")
-        out += _expand(_body_without_docstring(source), seen)
-        out.append(f"# ---- end of {module}.py")
+        body = _expand(_body_without_docstring(source), seen)
+        while body and not body[-1].strip():
+            body.pop()
+        out += [*body, "", "", f"# ---- end of {module}.py"]  # PEP 8 spacing keeps ruff format stable
     return out
 
 

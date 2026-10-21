@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/assets/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Upload */
+        post: operations["request_upload_assets_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assets/url": {
         parameters: {
             query?: never;
@@ -294,6 +311,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/retrieval/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retrieval Lab
+         * @description The Retrieval lab: one search with its legs, path, scores and margin (Console users only).
+         */
+        post: operations["retrieval_lab_v1_retrieval_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trace For Message
+         * @description The trace of one Open WebUI message; the Show-trace Action knows chat and message ids, not the
+         *     trace id. 404 when the message has no trace.
+         */
+        get: operations["trace_for_message_v1_traces_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/traces/{trace_id}": {
         parameters: {
             query?: never;
@@ -305,6 +363,23 @@ export interface paths {
         get: operations["trace_v1_traces__trace_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/traces/{trace_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Feedback */
+        post: operations["feedback_v1_traces__trace_id__feedback_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -920,6 +995,26 @@ export interface components {
             printed_label?: string | null;
         };
         /**
+         * FeedbackKind
+         * @description Reasons of the Report-issue Action (file 08 §2.2).
+         * @enum {string}
+         */
+        FeedbackKind: "wrong_number" | "wrong_citation" | "missing_document" | "wrong_unit" | "wrong_translation";
+        /**
+         * FeedbackRequest
+         * @description Appended to `answer_traces.feedback`; `wrong_unit` also opens a SOFT CONFLICT flag on the page.
+         */
+        FeedbackRequest: {
+            /**
+             * Citation Id
+             * @description the citation the report is about, if any
+             */
+            citation_id?: string | null;
+            /** Comment */
+            comment?: string | null;
+            kind: components["schemas"]["FeedbackKind"];
+        };
+        /**
          * FileFactsEvidence
          * @description HELD_LARGE_FILE and CLOUD_RESTRICTED: facts about the file only.
          */
@@ -1034,6 +1129,62 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** Hit */
+        Hit: {
+            /**
+             * Also In
+             * @default []
+             */
+            also_in: string[];
+            /**
+             * Anchor
+             * @description <kind>:<value>:<content_sha256> of the best passage
+             */
+            anchor: string;
+            /** Asset Id */
+            asset_id: string | null;
+            /** Breadcrumb */
+            breadcrumb: string;
+            /** Doc Date */
+            doc_date: string | null;
+            /**
+             * Doc Id
+             * Format: uuid
+             */
+            doc_id: string;
+            /** Doc Kind */
+            doc_kind: string | null;
+            /** Hardware Item */
+            hardware_item: string | null;
+            /** Language */
+            language: string | null;
+            /** Needs Review */
+            needs_review: boolean;
+            /** Node Type */
+            node_type: string;
+            /** Page No */
+            page_no: number | null;
+            /** Parent Text */
+            parent_text: string;
+            /** Passage */
+            passage: string;
+            /** Rerank Score */
+            rerank_score: number | null;
+            /** Rrf Score */
+            rrf_score: number;
+            /** Source Origin */
+            source_origin: string | null;
+            /** Test Plan Id */
+            test_plan_id: string | null;
+            /** Test Run Id */
+            test_run_id: string | null;
+            /** Title */
+            title: string | null;
+            /** Trust Tier */
+            trust_tier: number | null;
+            /** Web Url */
+            web_url: string | null;
         };
         /** Ignore */
         Ignore: {
@@ -1316,6 +1467,41 @@ export interface components {
             resumed_doc_ids: string[];
             rule: components["schemas"]["RuleView"] | null;
         };
+        /** RetrievalLabRequest */
+        RetrievalLabRequest: {
+            /**
+             * @default {
+             *       "doc_ids": [],
+             *       "doc_kinds": [],
+             *       "include_needs_review": true,
+             *       "include_superseded": false,
+             *       "languages": [],
+             *       "node_types": [],
+             *       "source_origins": [],
+             *       "test_plan_ids": []
+             *     }
+             */
+            filters: components["schemas"]["SearchFilters"];
+            /**
+             * K
+             * @default 30
+             */
+            k: number;
+            /** Query */
+            query: string;
+            /**
+             * Rerank
+             * @default true
+             */
+            rerank: boolean;
+            /** @default child */
+            scope: components["schemas"]["Scope"];
+            /**
+             * User Language
+             * @default en
+             */
+            user_language: string;
+        };
         /**
          * Route
          * @enum {string}
@@ -1436,6 +1622,62 @@ export interface components {
             quantity: string;
             /** Unit */
             unit: string;
+        };
+        /**
+         * Scope
+         * @enum {string}
+         */
+        Scope: "child" | "parent" | "tables_only" | "figures_only";
+        /**
+         * SearchFilters
+         * @description L1 filters of T1 (file 07 §4), applied on the columns denormalized onto `document_nodes`.
+         */
+        SearchFilters: {
+            /** Doc Ids */
+            doc_ids?: string[];
+            /** Doc Kinds */
+            doc_kinds?: string[];
+            /**
+             * Include Needs Review
+             * @default true
+             */
+            include_needs_review: boolean;
+            /**
+             * Include Superseded
+             * @default false
+             */
+            include_superseded: boolean;
+            /** Languages */
+            languages?: string[];
+            /** Node Types */
+            node_types?: string[];
+            /** Source Origins */
+            source_origins?: string[];
+            /** Test Plan Ids */
+            test_plan_ids?: string[];
+            /** Trust Tier Max */
+            trust_tier_max?: number | null;
+        };
+        /** SearchResult */
+        SearchResult: {
+            /** Dense Path */
+            dense_path?: string | null;
+            /** Hits */
+            hits: components["schemas"]["Hit"][];
+            /**
+             * Leg Counts
+             * @default {}
+             */
+            leg_counts: {
+                [key: string]: number;
+            };
+            /** Rerank Margin 1 5 */
+            rerank_margin_1_5?: number | null;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /**
          * SensitiveEvidence
@@ -1730,6 +1972,26 @@ export interface components {
             /** @default {} */
             stats: components["schemas"]["ChannelStats"];
         };
+        /** UploadRequest */
+        UploadRequest: {
+            /** File Name */
+            file_name: string;
+            /** Mime Type */
+            mime_type: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /** UploadSlot */
+        UploadSlot: {
+            /** Expires In S */
+            expires_in_s: number;
+            /** Get Url */
+            get_url: string;
+            /** Object Uri */
+            object_uri: string;
+            /** Upload Url */
+            upload_url: string;
+        };
         /**
          * UseReplacement
          * @description PARSE_FAILURE: a readable copy uploaded through the Console (stored as a derived blob).
@@ -1882,6 +2144,45 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    request_upload_assets_upload_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-dcl-user-id": string;
+                "x-dcl-user-email": string;
+                "x-dcl-user-groups": string;
+                "x-dcl-timestamp": string;
+                "x-dcl-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadSlot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     asset_url_assets_url_get: {
         parameters: {
             query: {
@@ -2478,6 +2779,77 @@ export interface operations {
             };
         };
     };
+    retrieval_lab_v1_retrieval_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetrievalLabRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trace_for_message_v1_traces_get: {
+        parameters: {
+            query: {
+                chat_id: string;
+                message_id: string;
+            };
+            header: {
+                "x-dcl-user-id": string;
+                "x-dcl-user-email": string;
+                "x-dcl-user-groups": string;
+                "x-dcl-timestamp": string;
+                "x-dcl-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     trace_v1_traces__trace_id__get: {
         parameters: {
             query?: never;
@@ -2502,6 +2874,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TraceView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    feedback_v1_traces__trace_id__feedback_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-dcl-user-id": string;
+                "x-dcl-user-email": string;
+                "x-dcl-user-groups": string;
+                "x-dcl-timestamp": string;
+                "x-dcl-signature": string;
+            };
+            path: {
+                trace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

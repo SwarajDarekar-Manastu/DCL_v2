@@ -31,6 +31,15 @@ class EngineError(Exception):
         self.detail = detail
 
 
+async def open_webui_groups(user_id: str) -> tuple[str, ...]:
+    """The user's Open WebUI group names (mirrored from Entra ID); empty outside Open WebUI."""
+    try:
+        from open_webui.models.groups import Groups
+    except ImportError:
+        return ()
+    return tuple(sorted(group.name for group in await Groups.get_groups_by_member_id(user_id)))
+
+
 def sign_identity(secret: str, timestamp: str, user_id: str, email: str, groups: str, body: bytes) -> str:
     message = f"{timestamp}\n{user_id}\n{email}\n{groups}\n{hashlib.sha256(body).hexdigest()}"
     return hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
@@ -133,6 +142,43 @@ async def confirm(
         raise EngineError(response.status_code, _detail(response.status_code, response.content))
 
 
+async def find_trace(
+    config: DclConfig,
+    identity: Identity,
+    chat_id: str,
+    message_id: str,
+    client: httpx.AsyncClient | None = None,
+) -> dict:
+    """GET /v1/traces?chat_id=&message_id= (the Show trace action knows the message, not the trace id)."""
+    headers = identity_headers(config, identity, b"")
+    params = {"chat_id": chat_id, "message_id": message_id}
+    async with _client(config, client) as http:
+        response = await http.get(f"{config.engine_url}/v1/traces", params=params, headers=headers)
+    if response.status_code != 200:
+        raise EngineError(response.status_code, _detail(response.status_code, response.content))
+    return response.json()
+
+
+async def send_feedback(
+    config: DclConfig,
+    identity: Identity,
+    trace_id: str,
+    kind: str,
+    comment: str | None,
+    citation_id: str | None = None,
+    client: httpx.AsyncClient | None = None,
+) -> None:
+    """POST /v1/traces/{trace_id}/feedback (the Report issue action)."""
+    body = json.dumps({"kind": kind, "comment": comment, "citation_id": citation_id}).encode()
+    headers = identity_headers(config, identity, body) | {"Content-Type": "application/json"}
+    async with _client(config, client) as http:
+        response = await http.post(
+            f"{config.engine_url}/v1/traces/{trace_id}/feedback", content=body, headers=headers
+        )
+    if response.status_code >= 300:
+        raise EngineError(response.status_code, _detail(response.status_code, response.content))
+
+
 async def get_trace(
     config: DclConfig, identity: Identity, trace_id: str, client: httpx.AsyncClient | None = None
 ) -> dict:
@@ -143,3 +189,35 @@ async def get_trace(
     if response.status_code != 200:
         raise EngineError(response.status_code, _detail(response.status_code, response.content))
     return response.json()
+
+
+async def request_upload(
+    config: DclConfig,
+    identity: Identity,
+    file_name: str,
+    mime_type: str,
+    size_bytes: int,
+    client: httpx.AsyncClient | None = None,
+) -> dict:
+    """POST /assets/upload → {object_uri, upload_url, get_url, expires_in_s} (backend/api/assets.py)."""
+    body = json.dumps({"file_name": file_name, "mime_type": mime_type, "size_bytes": size_bytes}).encode()
+    headers = identity_headers(config, identity, body) | {"Content-Type": "application/json"}
+    async with _client(config, client) as http:
+        response = await http.post(f"{config.engine_url}/assets/upload", content=body, headers=headers)
+    if response.status_code != 201:
+        raise EngineError(response.status_code, _detail(response.status_code, response.content))
+    return response.json()
+
+
+async def put_upload(
+    config: DclConfig,
+    upload_url: str,
+    content: bytes,
+    mime_type: str,
+    client: httpx.AsyncClient | None = None,
+) -> None:
+    """PUT the file bytes to the presigned URL the backend handed out."""
+    async with _client(config, client) as http:
+        response = await http.put(upload_url, content=content, headers={"Content-Type": mime_type})
+    if response.status_code >= 300:
+        raise EngineError(response.status_code, f"upload refused by storage (HTTP {response.status_code})")
