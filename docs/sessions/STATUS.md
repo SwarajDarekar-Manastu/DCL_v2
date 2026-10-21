@@ -408,3 +408,10 @@ Merged / ready: live dispatch over E1–E11 on the stack DB (0008): 182 document
 Blocked on: nothing
 Needs from others: nothing
 Next: Route C
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: Route C step 1 for LabJack .dat/.dat_fail. A run streams to `dcl-telemetry/{run_uuid}/raw.parquet` (ZSTD, 100k-row groups), with per-channel stats, actual rate, gaps and duplicates. `v*` channels are volts; every other channel resolves through `channel_map` rules or gets UNIT_AMBIGUITY HARD. The validation gate (`backend/review/staged.py`) then halts the document with a staged payload. New: the adapter registry, release of parked documents on dispatch, and `dcl.process.route_c` on telemetry_stream. pyarrow, duckdb, numpy, pint, pyyaml, openpyxl and nptdms are now main dependencies, so the backend image needs a rebuild. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest` (1,210 passed, 20 skipped).
+Read-only census of the stack: 20 of the 40 waiting C documents are LabJack (18 .dat, 2 .dat_fail, 819 MB). The other 20 (12 xlsx, 4 cfg, 2 csv, 2 tdms) wait for step 2 adapters. Dry run on real data: 628 MB, 3.79 M rows in 3.7 s; 16 channels per file, 8 of them y* with no unit.
+Blocked on: merge + stack image rebuild, then `routes.C.enabled = true` on the stack and a re-dispatch (live counts follow)
+Needs from others: Lead: approval for the `telemetry_runs`/`telemetry_channels` migration (step 2); S4: rebuild the worker image after the merge
+Next: live Route C run and counts; then step 2 (normalized Parquet, t0, metrics, catalog tables, commit path) and the A1/D/F adapter wiring S2 published
