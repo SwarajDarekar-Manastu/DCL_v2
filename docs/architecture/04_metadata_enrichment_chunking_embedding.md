@@ -151,7 +151,7 @@ Use a local tokenizer (the embedding model's own tokenizer is available locally,
 
 ### 4.4 Stable anchors
 
-Node ids are regenerated on every re-index, so nothing durable may reference a `node_id`. Citations in traces, benchmark gold, flag anchors and chat deep links store a **stable anchor** instead: `{doc_id, page_no | line_start | t_start_ms | sheet+cell_range, content_sha256 (first 64 chars of normalized content), breadcrumb}`. A resolver maps an anchor to the current node by document + page + content hash, falling back to document + page.
+Node ids are regenerated on every re-index, so nothing durable may reference a `node_id`. Citations in traces, benchmark gold, flag anchors and chat deep links store a **stable anchor** instead: `{doc_id, page_no | line_start | t_start_ms | sheet+cell_range, content_sha256 (first 64 chars of normalized content), breadcrumb}`. A resolver maps an anchor to the current node by document + page + content hash, falling back to document + page. Serialized form in links and traces: `<kind>:<value>:<content_sha256>` with `kind ∈ {page, line, t, cells}` (file 08 §6).
 
 ## 5. Embeddings
 

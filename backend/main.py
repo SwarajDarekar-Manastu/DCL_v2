@@ -1,10 +1,13 @@
 """The one FastAPI app. ROLE decides which routers of backend/api are mounted (file 10 §2.1)."""
 
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 from types import ModuleType
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api import (
     assets,
@@ -45,9 +48,20 @@ DEFAULT_PORT_BY_ROLE: dict[Role, int] = {Role.API: 8200, Role.MODELS: 8500, Role
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    get_settings()
-    yield
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+    tasks: list[asyncio.Task[None]] = []
+    redis_url = getattr(settings, "redis_url", None)
+    if settings.role in (Role.API, Role.ALL) and redis_url:
+        tasks.append(asyncio.create_task(ws.redis_bridge(str(redis_url)), name="console-redis-bridge"))
+    try:
+        yield
+    finally:
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with contextlib.suppress(asyncio.CancelledError, Exception):  # shutdown must not raise
+                await task
 
 
 def _role() -> Role:
@@ -60,6 +74,15 @@ def _role() -> Role:
 def create_app() -> FastAPI:
     role = _role()
     app = FastAPI(title=f"DCL backend ({role})", lifespan=lifespan)
+    origins = getattr(get_settings(), "console_allowed_origins", None)
+    if origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(origins),
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     for module in ROUTERS_BY_ROLE[role]:
         app.include_router(module.router)
     return app

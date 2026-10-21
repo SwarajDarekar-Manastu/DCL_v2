@@ -113,6 +113,7 @@ This file lists what was wrong, fragile, or missing in the design conversation a
 ### H.1 Still open (not blocking the start)
 
 - **Gateway API contract.** The manual assumes the gateway passes through structured output (JSON schema), function calling, thinking level, image/PDF input, streaming, context caching and the Batch API. Whichever of these the gateway does not expose must be confirmed in week 1 (file 10 §10); context caching and Batch are the ones most likely to need a gateway change.
+- **Object store.** MinIO's images are no longer pullable (Docker Hub and quay) and the upstream repository is archived at `RELEASE.2025-10-15T17-29-55Z` (verified 2026-10-21). Decision: build MinIO from that pinned source tag in `backend/devops/docker/minio.Dockerfile` so M0 proceeds reproducibly on the internal network; S4 evaluates a maintained S3-compatible replacement (candidates: RustFS, SeaweedFS, Garage; must offer bucket versioning, lifecycle expiry, presigned GETs and DuckDB `httpfs` access) and the Lead decides **before the full-corpus run (M6)**, because migrating object storage after the corpus is loaded is expensive. S1's storage client stays plain S3-API code either way.
 - **Graph permission option.** The env offers option A (`Files.SelectedOperations.Selected` on the shared folders, preferred) and option B (`Files.Read.All`). The code reads `DCL_PERMISSION_OPTION` and must work with either; A is the default assumption.
 
 ## I. Independent schema review (October 2026) and what changed
