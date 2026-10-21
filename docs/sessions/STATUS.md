@@ -310,3 +310,8 @@ Merged / ready: 410 + forced resync (delta.py, CLI `resync`), downloader lock re
 Blocked on: nothing; asked the Lead whether to land the remaining ~4,826 items host-side or wait for the workers
 Needs from others: S2 — seed_rows() on main (then seed-entities)
 Next: dispatcher (folder context, assembler, route gating, document rows, CIR writer), Route C, queue load test
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: CI pipeline v1 (`.github/workflows/ci.yml`: lint; disposable ParadeDB 0.26.2-pg17 + MinIO with `DCL_TEST_*`; schema gate = upgrade head + `alembic check` + FK-without-index; pytest; image build + layer secret scan), every step a script in `backend/devops/ci/` verified on the dev host; all four images clean against the real `.env` values. Correction to the previous entry: S2 needs no conftest change (S2's 455f896 replaces their mock), so merge S2's branch with or before this one
+Blocked on: nothing
+Needs from others: Lead — merge order S2 455f896, then this branch; first GitHub run happens after the merge
+Next: observability (OTel, Prometheus metrics of file 02 §10, Grafana, alert routing), then backups/retention/runbooks, MinIO replacement comparison by end of M4
