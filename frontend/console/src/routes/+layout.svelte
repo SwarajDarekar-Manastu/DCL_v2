@@ -2,15 +2,14 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { openLiveChannel, type LiveChannel, type LiveStatus } from '$lib/api_endpoint';
+	import { openLiveChannel, type LiveChannel } from '$lib/api_endpoint';
+	import { applyLiveEvent, live } from '$lib/live.svelte';
 	import { hasRole } from '$lib/auth/roles';
 	import { session, startSession } from '$lib/auth/session.svelte';
 	import { getConfig } from '$lib/config';
 	import NavBar from '$lib/components/shell/NavBar.svelte';
 
 	let { children } = $props();
-	let liveStatus = $state<LiveStatus>('closed');
-	let reviewCounts = $state<{ hard: number; soft: number } | null>(null);
 
 	onMount(() => {
 		startSession();
@@ -21,13 +20,8 @@
 		if (session.status !== 'signed_in' || !user || getConfig().auth.mode === 'dev') return;
 		const channel: LiveChannel = openLiveChannel({
 			topics: hasRole(user.roles, 'reviewer') ? ['ops', 'case'] : ['ops'],
-			onStatus: (status) => (liveStatus = status),
-			onEvent: (event) => {
-				// ops counter published by the review backend: key "review_counts", data {hard, soft}
-				if (event.topic === 'ops' && event.key === 'review_counts') {
-					reviewCounts = { hard: Number(event.data.hard ?? 0), soft: Number(event.data.soft ?? 0) };
-				}
-			}
+			onStatus: (status) => (live.status = status),
+			onEvent: applyLiveEvent
 		});
 		return () => channel.close();
 	});
@@ -51,8 +45,8 @@
 	<NavBar
 		user={session.user}
 		currentPath={page.url.pathname}
-		{reviewCounts}
-		{liveStatus}
+		reviewCounts={live.reviewCounts}
+		liveStatus={live.status}
 		onSignOut={() => session.signOut()}
 	/>
 	<main class="content">
