@@ -91,6 +91,7 @@ Presigned GET URLs (15-minute TTL) are minted by the Console API / Answer Engine
 | `gate_reason` | text | tier and matched pattern (`T1:.venv`, `T2:.aux`, `T4:secret`, `SCOPE:not_in_download_scope`) |
 | `detected_mime`, `ext_mime_mismatch` | text, boolean | post-download type check |
 | `blob_sha256` | char(64) FK → blobs, indexed | null until landed |
+| `previous_blob_sha256` | char(64), partial index (where not null), no FK (blobs may be purged) | set by `land_item` when new content replaces a different blob at this location; a pending (non-null) value is never overwritten, so a fast double edit still points at the oldest superseded blob. The dispatcher writes `document_relations(SUPERSEDES)` new → old, marks the old document `SUPERSEDED` only when no live location still holds the old blob, then clears the column. A periodic sweep catches documents that no live location holds (decided 2026-10-22) |
 | `resync_gen` | int | generation stamp written during a 410 resync; items not stamped with the current generation are candidates for the per-item deletion check (replaces a staging table) |
 | `last_seen_delta_at`, `deleted_at`, `error_last` | — | — |
 
@@ -329,7 +330,7 @@ Partial index `(rule_type, scope_folder_id) WHERE active`. "Files affected by th
 
 **`benchmark_cases`** — PK `(case_id, version)`; `suite` text; `status` ✓ (`draft`, `active`, `retired`); `category` ✓; `question`; `spec` jsonb (`paraphrases`, `expected_numeric`, `expected_citations`, `must_not_cite`, `expected_tools`, `expected_entities`, `expected_behavior`, `retrieval_gold_anchors` (stable anchors, not node ids), `clarification_answer`, `language`); `difficulty`; `notes`; `source_trace_id` (ON DELETE SET NULL); `created_by`, `created_at`.
 
-**`benchmark_runs`** — `run_id` PK; `suite`; `case_versions` jsonb snapshot; `git_commit`; `model_config` jsonb; `pipeline_version`; `active_doc_count`; `status` ✓; `started_at`, `finished_at`; `aggregate` jsonb.
+**`benchmark_runs`** — `run_id` PK; `suite`; `case_versions` jsonb snapshot; `git_commit`; `model_config` jsonb; `pipeline_version`; `active_doc_count`; `status` ✓ (`QUEUED`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`); `started_at`, `finished_at`; `aggregate` jsonb.
 
 **`benchmark_results`** — PK `(run_id, case_id)`; `case_version`; `trace_id`; `passed`; `failure_class` ✓; `latency_ms`; `cost_estimate`; `metrics` jsonb (numeric details, citation recall/precision, tool match, faithfulness, retrieval recall@8/@30, reranker margin, judge rationale).
 
