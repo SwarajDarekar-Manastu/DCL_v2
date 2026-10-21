@@ -391,3 +391,9 @@ Merged / ready: dispatcher v1 (folder context, assembler, routing with gating an
 Blocked on: Lead — `drive_items.previous_blob_sha256` column for supersession (asked)
 Needs from others: nothing
 Next: after the merge: live dispatch over E1–E11 on the stack DB; supersession once answered; then Route C. Host download stopped (stack workers continue the remaining ~4,100 at ≤8 parallel)
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: supersession per the Lead's decision: migration 0008 drive_items.previous_blob_sha256, land_item rule, apply_supersessions after each dispatch, sweep_documents safety net (task dcl.process.sweep_documents). Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend` (295 S1 DB tests)
+Blocked on: S4 — stack redeploy from main before the live dispatch over E1–E11
+Needs from others: S4 — beat entries dcl.process.dispatch (every 30 min) and dcl.process.sweep_documents (daily)
+Next: live dispatch + counts; Route C

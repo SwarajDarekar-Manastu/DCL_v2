@@ -18,8 +18,8 @@ Code:
 - `backend/dispatcher/type_resolution.py` (`resolve_type(head, name, zip_names) -> ResolvedType{kind, mime, route, by, ext_mismatch}`)
 - `backend/dispatcher/folder_context.py` (`build_folder_context`: breadcrumb, TP/T/INJ ids with source, conflicts, siblings, folder kind, origin, trust tier)
 - `backend/dispatcher/assembler.py` (`assemble`: LaTeX master + parts + PDF twin, orphan .tex, JSON section sets)
-- `backend/dispatcher/routing.py` (`dispatch`: processing scope, typing, assembly, documents + document_sources, gating, UNSUPPORTED_FORMAT, CONFLICT flags; CLI `dispatch`)
-- `backend/celery_redis/tasks_process.py` (`dcl.process.dispatch`, io_light)
+- `backend/dispatcher/routing.py` (`dispatch`: processing scope, typing, assembly, documents + document_sources, gating, UNSUPPORTED_FORMAT, CONFLICT flags, then `apply_supersessions`; `sweep_documents`; CLI `dispatch | sweep`)
+- `backend/celery_redis/tasks_process.py` (`dcl.process.dispatch`, `dcl.process.sweep_documents`, io_light)
 - `backend/dispatcher/contract.py` (published: `ProcessedDocument` and parts, `Flag` fingerprint, `Anchor` + `parse_anchor`/`format_anchor`)
 
 Tests and fixtures:
@@ -63,7 +63,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] LaTeX master + parts become one document with document_sources roles (S5 fixture two_latex_masters, DB test)
 - [x] Unknown type raises UNSUPPORTED_FORMAT HARD (S5 fixture pdf_is_html: route NULL, HALTED, staged payload)
 - [ ] Live dispatch over E1–E11 on the stack DB (needs migrations 0006/0007 on main)
-- [ ] Supersession on in-place modification (column question to the Lead)
+- [x] Supersession on in-place modification: `apply_supersessions` (SUPERSEDES new→old, old SUPERSEDED only if no live location holds the old blob, column cleared) + daily `sweep_documents` (DB tests)
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log

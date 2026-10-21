@@ -9,6 +9,7 @@ from backend.celery_redis.app import app
 from backend.celery_redis.queues import Queue
 from backend.config import get_settings
 from backend.dispatcher.routing import dispatch as dispatch_scope
+from backend.dispatcher.routing import sweep_documents
 from backend.postgres.session import engine_from_settings
 from backend.storage.minio import client_from_settings
 
@@ -25,3 +26,12 @@ def dispatch() -> dict[str, int]:
     with Session(_engine(), expire_on_commit=False) as session:
         result = dispatch_scope(session, client_from_settings(get_settings()))
     return {"created": result.created, "waiting": result.waiting, "halted": result.halted}
+
+
+@app.task(name="dcl.process.sweep_documents", queue=IO_LIGHT)
+def sweep() -> dict[str, int]:
+    """Daily safety net for document states (superseded, deleted, quarantined)."""
+    with Session(_engine(), expire_on_commit=False) as session:
+        counts = sweep_documents(session)
+        session.commit()
+    return counts
