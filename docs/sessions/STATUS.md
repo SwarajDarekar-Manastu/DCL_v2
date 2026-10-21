@@ -178,3 +178,9 @@ Merged / ready: 31ed593 (gate.yaml header wording), not yet requested
 Blocked on: Lead — the `.wbpz` `.out` exception: Lead ruled "fixed rule in code, no gate.yaml key"; S1 implemented a gate.yaml key `kept_endings_by_parent_kind` (S1 c861d3a, merge requested). S5 adds the entry and three decision cases once the Lead confirms which one stands
 Needs from others: Lead — that confirmation; S1 — the crawl folder listing
 Next: idle
+
+## 2026-10-21 22:45 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `/v1/answer` SSE contract in `backend/api/engine.py` (request, seven event models, `to_sse`, HMAC identity, TraceView, example stream), 9 tests; endpoints 501 until M8.
+Blocked on: S1 for enrichment (EntityType/NumericFactSource/Quantity enums, M4 entity models, `backend/common/units.py`) and for `resolve_anchor` (`document_nodes` model)
+Needs from others: Lead: add `rapidfuzz` and `pint` to main dependencies and a `models` group (torch 2.14.1, torchvision 0.29.1, transformers 5.20.2, sentence-transformers 6.1.0)
+Next: enrichment extraction schema, prompt and grounding (no DB), then entity normalization once S1's enums land
