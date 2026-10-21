@@ -12,6 +12,7 @@ no extension owns are compared; everything an extension owns is left alone.
 import os
 
 from alembic import context
+from pgvector.sqlalchemy import HALFVEC
 from sqlalchemy import create_engine, pool, text
 
 import backend.postgres.models  # noqa: F401  registers every table on Base.metadata
@@ -70,6 +71,7 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     engine = create_engine(database_url(), poolclass=pool.NullPool)
     with engine.connect() as connection:
+        connection.dialect.ischema_names["halfvec"] = HALFVEC  # reflect pgvector columns as their type
         own_tables = set(connection.execute(OWN_TABLES_SQL).scalars())
         connection.commit()
         context.configure(
