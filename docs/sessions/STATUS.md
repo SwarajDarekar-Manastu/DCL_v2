@@ -119,9 +119,62 @@ Merged / ready: VisionService (`backend/llm_engine/vision/{service,schemas}.py`)
 Blocked on: nothing for code; real vision calls wait for S4's probe to enable image input
 Needs from others: S1: `backend/storage/minio.py` get/put on dcl-cir (cache adapter), `document_nodes` model (resolve_anchor)
 Next: chunker against S1's contract (ProcessedNode), anchors (make_anchor, resolve_anchor), identifiers
+## 2026-10-21 20:05 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: config data + synthetic fixtures merged to main (3240cc6); branch synced; allowlist plan sheet reopened with the delegated method (S5 chooses from S1's crawl)
+Blocked on: S1 folder-level listing of the real metadata crawl (requested 2026-10-21)
+Needs from others: DCL S1 Backend — the listing (fields in `.wiki/plans/quality__fixtures__allowlist.md`); DCL Lead — answers to the three open questions of the previous entry
+Next: on the listing, fill the 13 slots and send the table to DCL Lead for DECISIONS.md; meanwhile idle
+
+## 2026-10-21 20:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` for S1's GateConfig (file 02 §4 lists; `.1` kept as a string; `.xlsm` junk only under environment library folders, not `APS - Library`; `* (old)` quarantine), 44 tests incl. S1's real gate; config headers and the FMEA fixture aligned with the Lead's three decisions. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: S1 folder-level listing of the real crawl (allowlist); S1 rules YAML schema and CIR snapshot format (M2)
+Needs from others: Lead — decide `.out` (LaTeX junk in 02 §4 vs ANSYS solver logs kept in 03 §11 step 5; archive members pass the same gate) and `.ini` (Tier-2 junk vs Tier-4 secret-scan list)
+Next: allowlist from the crawl listing, then real fixtures and the first 15 telemetry cases; meanwhile idle
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: viewer anchor codec delegated to `backend/dispatcher/contract.py` (S1 owns the format); `viewer_path()` unchanged, `parse_anchor_param` kept as an alias for S1's equivalence test; 437 backend tests pass.
+Blocked on: Review UI waits for S1's `backend/review/api_models.py` (in progress); viewer body waits for S2's `resolve_anchor`; Pipe waits for S2's `/v1/answer` schema.
+Needs from others: S1 may drop the equivalence test in `test_contract.py`, after which S3 deletes the alias.
+Next: idle until one of the inputs above lands on main.
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: publish-first item 3: backend/review/api_models.py (queue, case detail, the file 06 §6 resolution actions as a union on `action` with ALLOWED_ACTIONS, resolve/assign/reject/undo, dry-run, rules) + backend/api/review.py with every file 08 §4.4 review route typed and role-gated (501 until the M2 tables); review enums. Gate: S5's findings fixed (patterns must be strings; .xlsm only under lib/lib64/library/*-packages). Contract test no longer depends on viewer.py. Test: `uv run pytest && uv run ruff check backend` (498 passed, 18 skipped)
+Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
+Needs from others: nothing new
+Next: backend/storage/minio.py get/put for S2's vision cache; then documents/document_sources/document_nodes/assets models (M2)
+
+
+
+## 2026-10-21 21:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: unchanged since e109103 (gate.yaml merge requested)
+Blocked on: Lead decision on dropping ".1" from the 02 §4 Tier-2 list (raised by S1): end-of-name matching junks team files such as "report_v1.1"; man pages only occur under Tier-1 paths. S5 agrees with dropping it; config/gate.yaml keeps it until the manual changes
+Needs from others: Lead — the ".1" decision together with the open ".out"/".ini" question; S1 — the crawl folder listing
+Next: idle until one of these arrives
+
+## 2026-10-21 21:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` without `.ini` and `.1` (manual at be5ce14), new cases for `report_v1.1` and instrument `.ini` files; 48 gate tests through S1's gate. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend` (230 passed)
+Blocked on: S1 — `parent_kind` in GateConfig/GateInput (the `.wbpz` `.out` exception needs a key or a fixed rule) and the crawl folder listing
+Needs from others: S1 — tell S5 whether the `.wbpz` exception is configured in gate.yaml (proposed key below in the message) or fixed in code
+Next: idle until S1 answers or the listing arrives
+
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: backend/storage/minio.py (BucketStore get/put for S2's vision cache, presign_get 15 min for S3, ensure_buckets, raw_key); 11 tests, the server tests green against S4's dcl-v2-minio:RELEASE.2025-10-15T17-29-55Z. Test: `DCL_TEST_MINIO_ENDPOINT=<disposable> uv run pytest && uv run ruff check backend`
+Blocked on: Lead answers of 100eae2 for the delta crawl
+Needs from others: S4 — CI service for a disposable MinIO with DCL_TEST_MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY, like the DB tests
+Next: provisional evidence/suggestion models per flag type (S3 asked), then the M2 documents/nodes/assets models
 
 ## 2026-10-21 21:30 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: `backend/indexing/{chunker,anchors,identifiers}.py` (chunk_document, build_embed_texts, IndexNode, extract_identifiers, make_anchor, resolve_among), 47 tests; vision media resolution aligned with 03 §3.
 Blocked on: S1 `document_nodes` model for `resolve_anchor` (S3's viewer waits on it)
 Needs from others: S1: route node conventions in `.wiki/backend/chunker-and-anchors.md` (text as parent/child, every node needs a locator, run summaries t_start_ms 0); `IndexNode` is the commit input
 Next: enrichment (extract, entities, numeric facts), then index_document and retrieval
+
+## 2026-10-21 22:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` with `kept_endings_by_parent_kind: {wbpz: [".out"]}` per the Lead's ruling; 5 archive-member decision cases through the documented rule and S1's gate (58 gate tests). Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: S1 crawl folder listing (allowlist)
+Needs from others: nothing else
+Next: idle until the listing arrives
+
+## 2026-10-21 22:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: 31ed593 (gate.yaml header wording), not yet requested
+Blocked on: Lead — the `.wbpz` `.out` exception: Lead ruled "fixed rule in code, no gate.yaml key"; S1 implemented a gate.yaml key `kept_endings_by_parent_kind` (S1 c861d3a, merge requested). S5 adds the entry and three decision cases once the Lead confirms which one stands
+Needs from others: Lead — that confirmation; S1 — the crawl folder listing
+Next: idle

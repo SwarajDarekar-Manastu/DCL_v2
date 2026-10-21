@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api import (
     assets,
+    audit,
     auth,
     benchmark,
     engine,
@@ -35,6 +36,7 @@ API_ROUTERS: list[ModuleType] = [
     engine,
     viewer,
     assets,
+    audit,
     benchmark,
     ws,
 ]

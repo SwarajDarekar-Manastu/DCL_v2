@@ -21,6 +21,7 @@ Code:
 - `config/units.txt`
 - `config/propellants.yaml`
 - `config/report_json_schemas.yaml`
+- `config/gate.yaml`
 - `config/rules/` (planned: waits for the S1 rules YAML schema)
 
 Tests and fixtures:
@@ -35,7 +36,8 @@ Provides (formats are documented in each file's header; the tests' JSON Schemas 
 - `vendors.yaml`: `vendors[]` with aliases, case-sensitive short aliases, domains, `internal_equipment` (L1 origin detectors)
 - `propellants.yaml`: RocketCEA cards with published reference checks (physics_calculator, S2)
 - `report_json_schemas.yaml`: `schemas[]` (required keys, ordered sections) and `section_file_sets[]` (Route A2, assembler, S1)
-- every entry carries `sme_confirmed` (false until the SME review)
+- `gate.yaml`: S1's GateConfig schema (docstring of `backend/sync/gate.py`): tier-1 segments, quarantine globs, tier-2 endings/names/prefixes, `junk_extensions_under`, shortcuts, `max_download_bytes`, `kept_endings_by_parent_kind` (junk gate, S1)
+- every entry except `gate.yaml` carries `sme_confirmed` (false until the SME review)
 
 Consumes:
 - (none)
@@ -50,6 +52,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `config/units.txt`
 - `config/propellants.yaml`
 - `config/report_json_schemas.yaml`
+- `config/gate.yaml`
 - `config/rules/`
 - `backend/tests/unit/config_data/conftest.py`
 - `backend/tests/unit/config_data/test_config_units.py`
@@ -58,14 +61,18 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/tests/unit/config_data/test_config_vendors.py`
 - `backend/tests/unit/config_data/test_config_propellants.py`
 - `backend/tests/unit/config_data/test_config_report_schemas.py`
+- `backend/tests/unit/config_data/test_config_gate.py`
 - `pyproject.toml` (dev dependencies only: pint, pyyaml, jsonschema, rocketcea)
 
 ## Rubric (what "done" means for this feature)
 
-- [x] Every file loads and is covered by a test (six files; `config/rules/` pending its schema)
+- [x] Every file loads and is covered by a test (seven files; `config/rules/` pending its schema)
 - [x] Synonym seeds include non-English surfaces (de, fr, es, it, ru, ja, zh)
 - [x] Every unit alias and sanity-range unit resolves with its declared dimension
 - [x] RocketCEA reproduces the published HTP 90/98 decomposition temperatures within 1.5%
+- [x] `gate.yaml` equals the file 02 §4 lists plus two recorded judgment calls; decisions verified through S1's GateConfig (S1 branch 100eae2; the test runs it automatically once on main)
+- [ ] Gate rejection counts checked against the real crawl (segments build/env/backup, endings .log/.bin/.tab/.out)
+- [x] `.out` kept for `.wbpz` members via `kept_endings_by_parent_kind` (02 §4, 03 §11); 5 archive-member cases
 - [ ] SME has reviewed every entry (`sme_confirmed: true`)
 - [ ] `config/rules/` exported operator rules load against the S1 rules schema
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
@@ -77,6 +84,9 @@ Verification: `uv run pytest backend/tests/unit/config_data && uv run ruff check
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-21 | S5 | `gate.yaml`: `kept_endings_by_parent_kind: {wbpz: [.out]}` (Lead ruling); 5 archive-member cases; 58 gate tests |
+| 2026-10-21 | S5 | `gate.yaml`: `.ini` and `.1` removed per manual (Lead decisions); cases for `report_v1.1` and instrument `.ini` files; 48 gate tests |
+| 2026-10-21 | S5 | `config/gate.yaml` from file 02 §4 in S1's GateConfig schema (`.1` kept as a string; `.xlsm` junk only under environment library folders; `* (old)` quarantine); 44 gate tests |
 | 2026-10-21 | S5 | Six data files drafted from the manual and public references (all `sme_confirmed: false`); 152 load tests; dev dependencies added |
 
 ## Related

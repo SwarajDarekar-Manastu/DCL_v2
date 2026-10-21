@@ -223,3 +223,39 @@ class GaugeOrAbs(StrEnum):
     ABSOLUTE = "absolute"
     UNKNOWN = "unknown"
     NOT_APPLICABLE = "n/a"
+
+
+class FlagStatus(StrEnum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    REJECTED_FILE = "REJECTED_FILE"
+    AUTO_RESOLVED = "AUTO_RESOLVED"
+    REOPENED = "REOPENED"
+
+
+class CaseStatus(StrEnum):
+    """Derived in ``v_review_cases`` from the case's flags (file 08 §4.3); not a column."""
+
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    REJECTED_FILE = "REJECTED_FILE"
+    REOPENED = "REOPENED"
+
+
+class RuleType(StrEnum):
+    CHANNEL_MAP = "channel_map"
+    UNIT_MAPPING = "unit_mapping"
+    SCHEMA_MAPPING = "schema_mapping"
+    SUPERSESSION = "supersession"
+    IGNORE_PATTERN = "ignore_pattern"
+    ORIGIN_OVERRIDE = "origin_override"
+
+
+class RuleOrigin(StrEnum):
+    OPERATOR = "operator"
+    CFG = "cfg"
+    HEADER = "header"
+    CONFIG_JSON = "config_json"
+    TDMS_PROPS = "tdms_props"

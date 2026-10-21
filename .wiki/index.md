@@ -17,7 +17,7 @@ This folder is the compiled, always-current map of what exists in the repository
 |------------|--------|-------|-----|
 | `backend/sync-engine` | in-progress | S1 | [Graph sync engine (delta, webhooks, resync)](backend/sync-engine.md) |
 | `backend/gate-and-scope` | in-progress | S1 | [Junk gate, quarantine, download and processing scopes](backend/gate-and-scope.md) |
-| `backend/registry-and-blobs` | planned | S1 | [Registry, content-addressed blobs, downloader](backend/registry-and-blobs.md) |
+| `backend/registry-and-blobs` | in-progress | S1 | [Registry, content-addressed blobs, downloader](backend/registry-and-blobs.md) |
 | `backend/schema-and-migrations` | in-progress | S1 | [PostgreSQL schema, enums as CHECK, Alembic](backend/schema-and-migrations.md) |
 | `backend/dispatcher-and-route-gating` | in-progress | S1 | [Dispatcher, type resolution, folder context, assembler, route gating](backend/dispatcher-and-route-gating.md) |
 | `backend/route-c-telemetry` | planned | S1 | [Route C: telemetry, LabVIEW, spreadsheets, arrays](backend/route-c-telemetry.md) |
@@ -25,7 +25,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/route-b-code` | planned | S1 | [Route B: Python scripts and tooling docs](backend/route-b-code.md) |
 | `backend/route-e-diagrams` | planned | S1 | [Route E: draw.io diagrams and XSD](backend/route-e-diagrams.md) |
 | `backend/route-g-archives` | planned | S1 | [Route G: archives and ANSYS packages](backend/route-g-archives.md) |
-| `backend/review-backend` | planned | S1 | [Review backend: flags, fingerprints, staged payloads, rules, resume](backend/review-backend.md) |
+| `backend/review-backend` | in-progress | S1 | [Review backend: flags, fingerprints, staged payloads, rules, resume](backend/review-backend.md) |
 | `backend/index-commit` | planned | S1 | [Index commit path (transaction, overlays, vector reuse)](backend/index-commit.md) |
 | `backend/vision-service` | in-progress | S2 | [VisionService on Gemini (triage, handwriting, tables, plots, photos, video)](backend/vision-service.md) |
 | `backend/route-a1-office` | planned | S2 | [Route A1: PDF, DOCX, PPTX, PPT](backend/route-a1-office.md) |

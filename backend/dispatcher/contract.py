@@ -18,7 +18,7 @@ import json
 import re
 import uuid
 from datetime import date, datetime
-from typing import Any, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
@@ -176,6 +176,359 @@ def _positive_int(value: str, name: str, minimum: int) -> int:
     return int(value)
 
 
+# ---------------------------------------------------------------- resolutions (file 06 §6)
+
+
+class SetUnit(_Model):
+    """UNIT_AMBIGUITY on a telemetry channel: unit + gauge/abs + ambient, or a custom expression."""
+
+    action: Literal["set_unit"] = "set_unit"
+    channel: str
+    unit: str = Field(min_length=1, description="pint-parsable unit, e.g. psig, bar(a), kPa, mV")
+    quantity: str
+    gauge_or_abs: GaugeOrAbs
+    ambient_condition: AmbientCondition | None = None
+    ambient_pressure_bar_abs: float | None = None
+    expression: str | None = Field(
+        default=None, description="custom conversion, e.g. val * 0.0689476 + 1.01325"
+    )
+
+
+class SetFactUnit(_Model):
+    """UNIT_AMBIGUITY on a number in prose or a table: a unit, or keep it as text."""
+
+    action: Literal["set_fact_unit"] = "set_fact_unit"
+    unit: str | None = Field(default=None, description="null = leave as text")
+
+
+class ColumnMapping(_Model):
+    index: int = Field(ge=0)
+    canonical_name: str
+    unit: str | None = None
+    quantity: str | None = None
+    is_time: bool = False
+
+
+class MapColumns(_Model):
+    """SCHEMA_UNKNOWN on an array or headerless table."""
+
+    action: Literal["map_columns"] = "map_columns"
+    columns: list[ColumnMapping] = Field(min_length=1)
+
+
+class MapJsonKeys(_Model):
+    """SCHEMA_UNKNOWN on a JSON file: key → section title, optionally saved as a new report schema."""
+
+    action: Literal["map_json_keys"] = "map_json_keys"
+    key_to_section: dict[str, str] = Field(min_length=1)
+    save_as_schema: str | None = None
+
+
+class SetValue(_Model):
+    """LOW_CONFIDENCE_EXTRACTION on a handwritten or OCR value."""
+
+    action: Literal["set_value"] = "set_value"
+    value: str | None = Field(default=None, description="null together with illegible = true")
+    unit: str | None = None
+    illegible: bool = False
+
+
+class ChooseTable(_Model):
+    """LOW_CONFIDENCE_EXTRACTION on a table: version A (TableFormer) or B (VLM), or edited cells."""
+
+    action: Literal["choose_table"] = "choose_table"
+    choice: Literal["A", "B", "edited"]
+    cells: list[list[str]] | None = None
+
+
+class ChooseSource(_Model):
+    """CONFLICT: pick the authoritative value or document."""
+
+    action: Literal["choose_source"] = "choose_source"
+    choice: Literal["A", "B"]
+
+
+class MarkSuperseded(_Model):
+    action: Literal["mark_superseded"] = "mark_superseded"
+    superseded_doc_id: uuid.UUID
+
+
+class AcceptBoth(_Model):
+    action: Literal["accept_both"] = "accept_both"
+
+
+class Ignore(_Model):
+    action: Literal["ignore"] = "ignore"
+
+
+class UseReplacement(_Model):
+    """PARSE_FAILURE: a readable copy uploaded through the Console (stored as a derived blob)."""
+
+    action: Literal["use_replacement"] = "use_replacement"
+    replacement_blob_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class RedactionRegion(_Model):
+    page: int | None = Field(default=None, ge=1)
+    bbox: BBox | None = None
+    line_start: int | None = Field(default=None, ge=1)
+    line_end: int | None = Field(default=None, ge=1)
+
+
+class Redact(_Model):
+    """SENSITIVE_CONTENT: process a redacted derived copy; the original stays restricted."""
+
+    action: Literal["redact"] = "redact"
+    regions: list[RedactionRegion] = Field(min_length=1)
+
+
+class ApproveInternal(_Model):
+    """SENSITIVE_CONTENT: index as-is for internal use (admin only)."""
+
+    action: Literal["approve_internal"] = "approve_internal"
+
+
+class ApproveDownload(_Model):
+    """HELD_LARGE_FILE."""
+
+    action: Literal["approve_download"] = "approve_download"
+
+
+class Watch(_Model):
+    """UNSUPPORTED_FORMAT: re-dispatch automatically when an adapter exists."""
+
+    action: Literal["watch"] = "watch"
+
+
+class Skip(_Model):
+    action: Literal["skip"] = "skip"
+
+
+class MarkJunk(_Model):
+    action: Literal["mark_junk"] = "mark_junk"
+
+
+class Exclude(_Model):
+    action: Literal["exclude"] = "exclude"
+
+
+Resolution = Annotated[
+    SetUnit
+    | SetFactUnit
+    | MapColumns
+    | MapJsonKeys
+    | SetValue
+    | ChooseTable
+    | ChooseSource
+    | MarkSuperseded
+    | AcceptBoth
+    | Ignore
+    | UseReplacement
+    | Redact
+    | ApproveInternal
+    | ApproveDownload
+    | Watch
+    | Skip
+    | MarkJunk
+    | Exclude,
+    Field(discriminator="action"),
+]
+
+ALLOWED_ACTIONS: dict[FlagType, frozenset[str]] = {
+    FlagType.UNIT_AMBIGUITY: frozenset({"set_unit", "set_fact_unit"}),
+    FlagType.SCHEMA_UNKNOWN: frozenset({"map_columns", "map_json_keys", "mark_junk"}),
+    FlagType.LOW_CONFIDENCE_EXTRACTION: frozenset({"set_value", "choose_table"}),
+    FlagType.PARSE_FAILURE: frozenset({"use_replacement", "skip", "mark_junk"}),
+    FlagType.UNSUPPORTED_FORMAT: frozenset({"skip", "mark_junk", "watch"}),
+    FlagType.CONFLICT: frozenset({"choose_source", "mark_superseded", "accept_both", "ignore"}),
+    FlagType.SENSITIVE_CONTENT: frozenset({"redact", "approve_internal", "exclude"}),
+    FlagType.HELD_LARGE_FILE: frozenset({"approve_download", "skip"}),
+    FlagType.CLOUD_RESTRICTED: frozenset({"ignore"}),
+}
+ADMIN_ONLY_ACTIONS = frozenset({"approve_internal"})
+
+
+# ---------------------------------------------------------------- evidence (file 06 §3, §5)
+# What the route saw, so the reviewer confirms instead of investigating. Provisional shapes:
+# routes may add keys only by extending these models. Images are referenced by their
+# deterministic ``minio_uri`` in ``dcl-assets`` (the API presigns them).
+
+
+class ChannelStats(_Model):
+    n: int | None = Field(default=None, ge=0)
+    min: float | None = None
+    max: float | None = None
+    mean: float | None = None
+    p50: float | None = None
+    p99: float | None = None
+    std: float | None = None
+
+
+class CandidateUnit(_Model):
+    unit: str
+    gauge_or_abs: GaugeOrAbs = GaugeOrAbs.NOT_APPLICABLE
+    score: float = Field(ge=0, le=1)
+    reason: str = ""
+
+
+class SiblingUnit(_Model):
+    file_name: str
+    channel: str
+    unit: str
+    source: str = Field(description="cfg | header | rule | config_json | tdms_props")
+
+
+class SanityBounds(_Model):
+    quantity: str
+    unit: str
+    min: float
+    max: float
+
+
+class UnitTelemetryEvidence(_Model):
+    """UNIT_AMBIGUITY on a time-series channel (Route C)."""
+
+    kind: Literal["unit_telemetry"] = "unit_telemetry"
+    channel: str
+    raw_unit: str | None = None
+    quantity_guess: str | None = None
+    header_lines: list[str] = []
+    stats: ChannelStats = ChannelStats()
+    sparkline_uri: str | None = None
+    candidate_units: list[CandidateUnit] = []
+    sibling_units: list[SiblingUnit] = []
+    sanity: SanityBounds | None = None
+
+
+class UnitFactEvidence(_Model):
+    """UNIT_AMBIGUITY on a number in prose or a table."""
+
+    kind: Literal["unit_fact"] = "unit_fact"
+    value_raw: str
+    context: str = ""
+    candidate_units: list[CandidateUnit] = []
+
+
+class ColumnStats(ChannelStats):
+    index: int = Field(ge=0)
+    dtype: str | None = None
+    sparkline_uri: str | None = None
+
+
+class ArraySchemaEvidence(_Model):
+    """SCHEMA_UNKNOWN on an array, headerless table, HDF5 or pickle (never unpickled)."""
+
+    kind: Literal["array_schema"] = "array_schema"
+    shape: list[int]
+    dtype: str | None = None
+    columns: list[ColumnStats] = []
+    first_rows: list[list[float | str | None]] = []
+    pickle_classes: list[str] = Field(default=[], description="from pickletools.dis, without executing")
+    siblings: list[str] = []
+    recommendation: str = ""
+
+
+class JsonSchemaEvidence(_Model):
+    """SCHEMA_UNKNOWN on a JSON file."""
+
+    kind: Literal["json_schema"] = "json_schema"
+    top_level_keys: list[str]
+    flattened_sample: list[str] = []
+    closest_schema: str | None = None
+    missing_keys: list[str] = []
+
+
+class ConflictSide(_Model):
+    label: str
+    value: str
+    provenance: str = Field(description="file, header line, page or rule the value came from")
+    doc_id: uuid.UUID | None = None
+    date: str | None = None
+
+
+class ConflictEvidence(_Model):
+    """CONFLICT: two sources disagree."""
+
+    kind: Literal["conflict"] = "conflict"
+    subject: str
+    a: ConflictSide
+    b: ConflictSide
+
+
+class ParseFailureEvidence(_Model):
+    """PARSE_FAILURE (and the 'what is this?' preview of UNSUPPORTED_FORMAT)."""
+
+    kind: Literal["parse_failure"] = "parse_failure"
+    error: str
+    magic_bytes_hex: str = ""
+    size_bytes: int | None = Field(default=None, ge=0)
+    detected_mime: str | None = None
+    extension: str | None = None
+    first_kb_preview: str = ""
+    partial_output: str | None = None
+
+
+class ExtractionCrop(_Model):
+    crop_uri: str
+    model_value: str | None = None
+    alternatives: list[str] = []
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    printed_label: str | None = None
+
+
+class LowConfidenceEvidence(_Model):
+    """LOW_CONFIDENCE_EXTRACTION: crops with the model's reading, or two table versions."""
+
+    kind: Literal["low_confidence"] = "low_confidence"
+    crops: list[ExtractionCrop] = []
+    table_a_html: str | None = None
+    table_b_html: str | None = None
+
+
+class SensitiveEvidence(_Model):
+    """SENSITIVE_CONTENT: the matched pattern with a redacted preview (never the secret)."""
+
+    kind: Literal["sensitive"] = "sensitive"
+    pattern: str
+    redacted_preview: str
+    line: int | None = Field(default=None, ge=1)
+    page: int | None = Field(default=None, ge=1)
+
+
+class FileFactsEvidence(_Model):
+    """HELD_LARGE_FILE and CLOUD_RESTRICTED: facts about the file only."""
+
+    kind: Literal["file_facts"] = "file_facts"
+    size_bytes: int | None = Field(default=None, ge=0)
+    extension: str | None = None
+    folder: str | None = None
+    note: str = ""
+
+
+Evidence = Annotated[
+    UnitTelemetryEvidence
+    | UnitFactEvidence
+    | ArraySchemaEvidence
+    | JsonSchemaEvidence
+    | ConflictEvidence
+    | ParseFailureEvidence
+    | LowConfidenceEvidence
+    | SensitiveEvidence
+    | FileFactsEvidence,
+    Field(discriminator="kind"),
+]
+
+
+class Suggestion(_Model):
+    """A proposed resolution (file 06 §5): deterministic heuristics first, else one Gemini proposal.
+    Applied automatically only when ``confidence >= 0.9`` and a matching rule exists."""
+
+    resolution: Resolution
+    confidence: float = Field(ge=0, le=1)
+    rationale: str = ""
+    proposed_by: Literal["heuristic", "rule", "llm"] = "heuristic"
+
+
 # ---------------------------------------------------------------- flags
 
 
@@ -204,8 +557,8 @@ class Flag(_Model):
     flag_type: FlagType
     severity: FlagSeverity
     anchor: FlagAnchor = FlagAnchor()
-    evidence: dict[str, Any] = {}
-    suggested_resolution: dict[str, Any] | None = None
+    evidence: Evidence | None = None
+    suggested_resolution: Suggestion | None = None
 
     @model_validator(mode="before")
     @classmethod
