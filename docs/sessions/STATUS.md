@@ -32,3 +32,9 @@ Merged / ready: env contract loader `backend/config.py` (typed Settings with the
 Blocked on: DCL Lead answers for DCL_GEMINI_API_KEY, MinIO/Redis names, Console auth names (S3), DB URL composition; operator to add GEMINI_BACKEND and GEMINI_GATEWAY_URL to `.env`
 Needs from others: consumers call `get_settings().require(Group.GRAPH)` / `(Group.GEMINI)` in their startup instead of reading os.environ
 Next: Gemini gateway client + capability probe (OpenAI-compatible shape, every capability behind a flag)
+
+## 2026-10-21 20:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/llm_engine/local_models.py` + `backend/api/models.py` (EmbeddingGemma 2 text+image 768-d, bge-reranker-v2-m3, `ModelsClient`), 27 unit tests + 5 GPU tests green; throughput in `.wiki/backend/embedding-service.md`. Branch mapping: S2 = claude/infallible-swartz-58c96b.
+Blocked on: nothing
+Needs from others: S4: GPU image pins (torch 2.14.1 cu130, transformers 5.20.2, sentence-transformers 6.1.0, torchvision 0.29.1, pillow, numpy), HF cache volume, compose healthcheck on `/models/health` with ~60 s start period. Lead: pyproject `models` dependency group with the same pins.
+Next: chunker + anchors + identifiers (S3 waits on `resolve_anchor`), then VisionService on S4's gateway client
