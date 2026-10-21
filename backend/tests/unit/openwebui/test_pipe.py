@@ -100,7 +100,11 @@ def sse(*events) -> str:
     return "".join(engine.to_sse(e) for e in events)
 
 
-ANSWER = {"/v1/answer": (200, EXAMPLE.read_text(), "text/event-stream")}
+ANSWER = {
+    "/v1/answer": (200, EXAMPLE.read_text(), "text/event-stream"),
+    # S2's example stream now carries a needs_confirmation event with trace_id; the Pipe answers it.
+    f"/v1/answer/{TRACE}/confirm": (202, "", "application/json"),
+}
 
 
 def test_example_stream_maps_to_open_webui_events(pipe_module):
