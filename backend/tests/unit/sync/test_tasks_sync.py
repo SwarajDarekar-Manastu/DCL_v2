@@ -72,7 +72,7 @@ def test_the_lock_is_released_after_a_run(session):
     assert lock.data == {}
 
 
-def test_expired_delta_token_marks_the_root_resyncing(session):
+def test_a_410_that_persists_during_the_resync_marks_the_root_resyncing(session):
     run_delta(session, graph(FakeGraph(crawl_pages())), ROOT, FakeRedis())
     expired = FakeGraph({DELTA: [(410, {"error": {"code": "resyncRequired"}}, {"Location": DELTA})]})
     assert run_delta(session, graph(expired), ROOT, FakeRedis()) == Outcome.RESYNC_REQUIRED

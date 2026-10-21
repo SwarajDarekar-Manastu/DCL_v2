@@ -304,3 +304,9 @@ Merged / ready: gateway client rework to the verified contract (ManastuGatewayAd
 Blocked on: S2 conftest change (`GEMINI_API_STYLE="openai"` in their vision test settings) before this can merge green
 Needs from others: operator — `.env` has `GEMINI_API_STYLE=gemini`; it must be `manastu` (or removed, the default) for the real gateway
 Next: CI pipeline (incl. disposable MinIO for S1's tests), observability, MinIO replacement comparison by end of M4
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: 410 + forced resync (delta.py, CLI `resync`), downloader lock re-check, migration 0004 BM25 (S2's DDL). E1–E11 downloads landed (247). M1 procedure commands sent to S5. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend`
+Blocked on: nothing; asked the Lead whether to land the remaining ~4,826 items host-side or wait for the workers
+Needs from others: S2 — seed_rows() on main (then seed-entities)
+Next: dispatcher (folder context, assembler, route gating, document rows, CIR writer), Route C, queue load test

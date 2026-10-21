@@ -64,6 +64,9 @@ class GraphCallFailed(RuntimeError):
 class CrawlStats:
     root_name: str
     finished: bool = False
+    resynced: bool = False
+    deleted_after_check: int = 0
+    kept_after_check: int = 0
     pages: int = 0
     folders_seen: int = 0
     items_seen: int = 0
@@ -124,9 +127,14 @@ def _last_occurrence(items: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def upsert_page(
-    session: Session, root: SyncRoot, raw_items: Sequence[dict[str, Any]], now: datetime
+    session: Session,
+    root: SyncRoot,
+    raw_items: Sequence[dict[str, Any]],
+    now: datetime,
+    resync_gen: int | None = None,
 ) -> tuple[int, int]:
-    """Write one page of delta items; returns ``(folders, items)`` touched."""
+    """Write one page of delta items; returns ``(folders, items)`` touched. During a resync every item
+    seen is stamped with ``resync_gen``."""
     page = _last_occurrence(raw_items)
     drive = root.remote_drive_id
     ids = [item["id"] for item in page]
@@ -176,6 +184,8 @@ def upsert_page(
             )
             row.status = DriveItemStatus.SEEN
             session.add(row)
+        if resync_gen is not None:
+            row.resync_gen = resync_gen
         if deleted:
             row.status = DriveItemStatus.DELETED
             row.deleted_at = row.deleted_at or now
@@ -307,6 +317,49 @@ def finalize_root(
     session.flush()
 
 
+# ---------------------------------------------------------------- resync (file 02 §3.5)
+
+
+def _max_resync_gen(session: Session, root: SyncRoot) -> int:
+    return (
+        session.scalar(select(func.max(DriveItem.resync_gen)).where(DriveItem.root_name == root.root_name))
+        or 0
+    )
+
+
+def _begin_resync(root: SyncRoot, session: Session, location: str | None) -> int:
+    """Not committed here: the status change is committed together with the first stamped page."""
+    log.error("resync of %s started (%s)", root.root_name, "410 from Graph" if location else "forced")
+    root.status = SyncRootStatus.RESYNCING
+    root.next_link_checkpoint = None
+    return _max_resync_gen(session, root) + 1
+
+
+def _confirm_missing(
+    session: Session, graph: GraphClient, root: SyncRoot, generation: int, now: datetime, stats: CrawlStats
+) -> None:
+    """Items the enumeration did not return are deleted only if Graph confirms with a 404."""
+    missing = session.scalars(
+        select(DriveItem).where(
+            DriveItem.root_name == root.root_name,
+            DriveItem.status != DriveItemStatus.DELETED,
+            DriveItem.resync_gen < generation,
+        )
+    )
+    for item in missing:
+        status = graph.get(
+            f"/drives/{item.drive_id}/items/{item.item_id}", params={"$select": "id"}
+        ).status_code
+        if status == 404:
+            item.status, item.deleted_at = DriveItemStatus.DELETED, now
+            stats.deleted_after_check += 1
+        else:
+            item.resync_gen = generation
+            stats.kept_after_check += 1
+            log.warning("resync: %s missing from the enumeration but answers %s; kept", item.item_id, status)
+    session.flush()
+
+
 # ---------------------------------------------------------------- one run
 
 
@@ -319,30 +372,46 @@ def run_root(
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
     deadline: float | None = None,
     clock: Callable[[], float] = time.monotonic,
+    force_resync: bool = False,
 ) -> CrawlStats:
-    """Crawl (no delta link yet) or incremental delta for one root; commits after every page.
+    """Crawl (no delta link yet), incremental delta, or resync for one root; commits after every page.
 
     With a ``deadline`` (a ``clock()`` value) the run stops after the first committed page past it,
     leaving ``next_link_checkpoint`` for the next run; ``finished`` says whether the root completed.
+
+    Resync (HTTP 410, or ``force_resync``; file 02 §3.5): the root becomes RESYNCING and every item
+    seen is stamped with generation g = max(resync_gen) + 1. The status change is committed with the
+    first stamped page, so a resumed resync (status already RESYNCING) continues with g = max. After
+    the last page, unstamped items are deleted only if a direct GET answers 404.
     """
     stats = CrawlStats(root.root_name)
-    first_crawl = root.delta_link is None
+    first_crawl = root.delta_link is None and not force_resync
+    fresh = (f"/drives/{root.remote_drive_id}/items/{root.remote_item_id}/delta", {"$select": DELTA_SELECT})
+    resync_gen: int | None = None
+    if root.status == SyncRootStatus.RESYNCING:
+        resync_gen = _max_resync_gen(session, root)
+    elif force_resync:
+        resync_gen = _begin_resync(root, session, None)
     if root.next_link_checkpoint:
         url, params = root.next_link_checkpoint, None
-    elif root.delta_link:
+    elif root.delta_link and resync_gen is None:
         url, params = root.delta_link, None
     else:
-        url, params = (
-            f"/drives/{root.remote_drive_id}/items/{root.remote_item_id}/delta",
-            {"$select": DELTA_SELECT},
-        )
-    if first_crawl:
+        url, params = fresh
+    if first_crawl and root.status != SyncRootStatus.CRAWLING:
         root.status = SyncRootStatus.CRAWLING
         session.commit()
 
     while True:
-        body = _get_page(graph, url, params, sleep)
-        n_folders, n_items = upsert_page(session, root, body.get("value", []), now())
+        try:
+            body = _get_page(graph, url, params, sleep)
+        except ResyncRequired as expired:
+            if resync_gen is not None:
+                raise
+            resync_gen = _begin_resync(root, session, expired.location)
+            url, params = (expired.location, None) if expired.location else fresh
+            continue
+        n_folders, n_items = upsert_page(session, root, body.get("value", []), now(), resync_gen)
         stats.pages += 1
         stats.folders_seen += n_folders
         stats.items_seen += n_items
@@ -361,6 +430,9 @@ def run_root(
             pipeline_config.download_scope(session),
             stats,
         )
+        if resync_gen is not None:
+            _confirm_missing(session, graph, root, resync_gen, now(), stats)
+            stats.resynced = True
         root.delta_link = body.get("@odata.deltaLink")
         root.next_link_checkpoint = None
         root.status = SyncRootStatus.ACTIVE
@@ -391,7 +463,7 @@ def main(argv: list[str]) -> int:
     from backend.sync.auth import GraphAuthConfig, TokenProvider
 
     parser = argparse.ArgumentParser(prog="python -m backend.sync.delta")
-    parser.add_argument("command", choices=["crawl"])
+    parser.add_argument("command", choices=["crawl", "resync"], help="resync = forced 410 procedure (drill)")
     parser.add_argument("--root", help="one root name; default all")
     parser.add_argument(
         "--env-file", type=Path, default=None, help="settings file (default: the repository .env)"
@@ -413,13 +485,16 @@ def main(argv: list[str]) -> int:
             if args.root and root.root_name != args.root:
                 continue
             started = time.monotonic()
-            stats = run_root(session, graph, root)
+            stats = run_root(session, graph, root, force_resync=args.command == "resync")
             elapsed = time.monotonic() - started
             print(
                 f"{stats.root_name}: {stats.pages} pages, {stats.items_seen} items, "
                 f"{stats.folders_seen} folders, {stats.orphans} orphans, {elapsed:.0f} s"
             )
             print(f"  by status: {dict(sorted(stats.by_status.items()))}")
+            if stats.resynced:
+                deleted, kept = stats.deleted_after_check, stats.kept_after_check
+                print(f"  resync: {deleted} deleted after a 404, {kept} kept")
     return 0
 
 
