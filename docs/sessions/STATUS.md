@@ -409,3 +409,9 @@ Merged / ready: Route A1 for PDFs end to end (`backend/routes/a1_office/{convert
 Blocked on: nothing
 Needs from others: S1: the dispatcher's adapter call into `process_pdf` and `IMPLEMENTED_ROUTES` (signature in `.wiki/backend/route-a1-office.md`); `critical_field_patterns` from pipeline_config
 Next: A1.0 visual twin + page map, DOCX/PPTX, rotation; then Routes D and F; then the answer workflow
+
+## 2026-10-22 07:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Route D (`backend/routes/d_photos.py`, `classify_image` capability) and Route F (`backend/routes/f_video.py`), 17 tests; Route A1 for PDFs requested earlier.
+Blocked on: nothing (A1 DOCX/PPTX waits for S4's `backend/common/office.py`, signature agreed)
+Needs from others: Lead: parse/media deps pillow-heif==1.8.1, imagehash==4.3.2, faster-whisper==1.2.1; S1: dispatcher calls for `process_photo` (with `cluster_photos` in the assembler) and `process_video`
+Next: the Answer Engine workflow (query analysis, planner, tools T1–T6/U1–U2, synthesis, verifier, DBOS)
