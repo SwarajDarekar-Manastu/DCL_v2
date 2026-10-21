@@ -415,3 +415,9 @@ Merged / ready: Benchmark UI. Suites, cases with drafts to approve, the case edi
 Blocked on: nothing. A real benchmark run waits for S2's runner (M10).
 Needs from others: S2 to publish `run` events (progress, finished) through publish_event when the runner lands.
 Next: Open WebUI "Add to benchmark" action against POST /benchmark/drafts; Settings editing once S1 publishes the settings API.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: "Add to benchmark" Open WebUI action. It prefills a draft from the trace (verified numeric claims, cited pages, tools) and posts it to POST /benchmark/drafts; the prefill is tested against the API's DraftFromChat model. 68 Open WebUI tests pass on source and bundles.
+Blocked on: nothing. Settings editing waits for S1's settings API; live Pipe and actions wait for the engine (M8).
+Needs from others: nothing new.
+Next: idle until S1's settings API, or new tasks.
