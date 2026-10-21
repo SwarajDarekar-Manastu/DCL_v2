@@ -1,0 +1,26 @@
+fixture: rotated_scan
+edge_case: rotated scan (file 10 §7)
+origin: synthetic
+generator: make_synthetic.py::rotated_scan
+byte_stable: false  # rasterized with the system font DejaVu Sans
+files: [run_sheet_T01_rotated.pdf]
+simulated_location: {root: APU, folder: Test Plan 07/Run Sheets}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §A1.1 (rotation)"
+  - "docs/architecture/03_phase2_processing_routes.md §A1.2 (page triage)"
+expected:
+  route: A1
+  detected_mime: application/pdf
+  document_status: ACTIVE
+  flags: []
+  flags_exact: true
+  metadata:
+    page_count: 1
+    page_types: {1: scanned_printed}
+    rotation_deg: {1: 90}  # content rotated 90° counter-clockwise; processing rotates it back, original kept for rendering
+    test_plan_id: TP07
+    source_origin: internal
+  ocr_text_contains: ["TEST CELL RUN SHEET", "Run T01", "12.4 bar", "845 K"]
+  numeric_facts:
+    - {quantity: chamber_pressure, value: 12.4, unit: bar}
+    - {quantity: temperature, value: 845, unit: K}

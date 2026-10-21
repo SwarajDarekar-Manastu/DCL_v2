@@ -25,6 +25,76 @@ export interface LiveEvent {
 	at: string;
 }
 
+/** backend/api/viewer.py ViewerPayload and parts */
+export type ResolutionStatus = 'exact' | 'page_fallback' | 'document_only';
+
+export interface ViewerRegion {
+	bbox: [number, number, number, number]; // x0, y0, x1, y1 in 0..1 of the rendered image
+	kind: 'cited' | 'handwriting' | 'flag';
+	label: string;
+	confidence: number | null;
+}
+
+export type ViewerView =
+	| {
+			kind: 'page';
+			page_no: number;
+			page_count: number;
+			image_url: string;
+			width: number;
+			height: number;
+			regions: ViewerRegion[];
+			text: string;
+	  }
+	| {
+			kind: 'image';
+			image_kind: 'photo' | 'plot' | 'diagram' | 'figure';
+			image_url: string;
+			width: number;
+			height: number;
+			regions: ViewerRegion[];
+			caption: string;
+	  }
+	| {
+			kind: 'table';
+			sheet_name: string | null;
+			header_rows: number;
+			rows: string[][];
+			highlight: [number, number, number, number] | null;
+	  }
+	| { kind: 'code'; language: string; first_line: number; lines: string[]; highlight: [number, number] | null }
+	| { kind: 'text'; text: string; breadcrumb: string }
+	| { kind: 'video'; video_url: string; t_ms: number; poster_url: string | null };
+
+export interface ViewerPayload {
+	anchor: string;
+	document: {
+		doc_id: string;
+		title: string;
+		doc_kind: string;
+		source_origin: 'internal' | 'external_kept';
+		trust_tier: number;
+		language: string | null;
+		test_ids: string[];
+		doc_date: string | null;
+		status: string;
+		open_flags: number;
+	};
+	resolution: { status: ResolutionStatus; message: string };
+	view: ViewerView;
+	links: {
+		onedrive: { path: string; web_url: string }[];
+		download_url: string | null;
+		review_case_key: string | null;
+	};
+	translation: {
+		source_language: string | null;
+		available: boolean;
+		translated_text: string | null;
+		pending: boolean;
+	};
+}
+
 export class ApiError extends Error {
 	constructor(
 		readonly status: number,
@@ -86,6 +156,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 /** GET /auth/me (backend/api/auth.py) */
 export function getMe(): Promise<ConsoleUser> {
 	return request<ConsoleUser>('GET', '/auth/me');
+}
+
+/** GET /docs/{doc_id}/viewer?anchor=…&translate=… (backend/api/viewer.py) */
+export function getViewer(docId: string, anchor: string, translate = false): Promise<ViewerPayload> {
+	const query = new URLSearchParams({ anchor });
+	if (translate) query.set('translate', 'true');
+	return request<ViewerPayload>('GET', `/docs/${encodeURIComponent(docId)}/viewer?${query}`);
 }
 
 // ---------------------------------------------------------------- live channel (backend/api/ws.py)

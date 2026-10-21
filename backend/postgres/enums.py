@@ -76,3 +76,186 @@ class JobStatus(StrEnum):
     RUNNING = "running"
     DONE = "done"
     FAILED = "failed"
+
+
+# ---------- documents, nodes, assets (file 05 §4.2) ----------
+
+
+class Route(StrEnum):
+    A1 = "A1"
+    A2 = "A2"
+    B = "B"
+    C = "C"
+    D = "D"
+    E = "E"
+    F = "F"
+    G = "G"
+
+
+class DocKind(StrEnum):
+    STANDARD = "standard"
+    TEST_PLAN = "test_plan"
+    TEST_REPORT = "test_report"
+    FAILURE_REPORT = "failure_report"
+    CALIBRATION = "calibration"
+    RISK_ASSESSMENT = "risk_assessment"
+    MATERIAL_SPEC = "material_spec"
+    PROCEDURE = "procedure"
+    WORKSHOP_SLIDES = "workshop_slides"
+    CODE = "code"
+    TOOLING_DOC = "tooling_doc"
+    TELEMETRY_RUN = "telemetry_run"
+    ENGINEERING_TABLE = "engineering_table"
+    HARDWARE_PHOTO = "hardware_photo"
+    PLOT_FIGURE = "plot_figure"
+    DIAGRAM = "diagram"
+    SCHEMA = "schema"
+    VIDEO_TRANSCRIPT = "video_transcript"
+    VIDEO_TIMELINE = "video_timeline"
+    CAE_PACKAGE = "cae_package"
+    CAD_REFERENCE = "cad_reference"
+    CONFIG = "config"
+    VENDOR_BROCHURE = "vendor_brochure"
+    DATASHEET = "datasheet"
+    ACADEMIC_PAPER = "academic_paper"
+    ARTICLE = "article"
+    BOOK_EXCERPT = "book_excerpt"
+    CONFERENCE_PAPER = "conference_paper"
+    UNKNOWN = "unknown"
+
+
+class NodeType(StrEnum):
+    PARENT = "parent"
+    CHILD = "child"
+    TABLE = "table"
+    TABLE_ROW = "table_row"
+    FIGURE = "figure"
+    CODE_SYMBOL = "code_symbol"
+    MODULE_HEADER = "module_header"
+    SLIDE = "slide"
+    TRANSCRIPT_WINDOW = "transcript_window"
+    VIDEO_EVENT = "video_event"
+    RUN_SUMMARY = "run_summary"
+    PHOTO = "photo"
+    DIAGRAM_SUMMARY = "diagram_summary"
+    DIAGRAM_COMPONENT = "diagram_component"
+    QUESTION_PROXY = "question_proxy"
+    CONFIG = "config"
+
+
+class NodeSource(StrEnum):
+    PRINTED = "printed"
+    OCR = "ocr"
+    VLM = "vlm"
+    SOURCE_CODE = "source_code"
+    STRUCTURED = "structured"
+    HUMAN = "human"
+
+
+class AssetKind(StrEnum):
+    PAGE_RENDER = "page_render"
+    FIGURE_CROP = "figure_crop"
+    HANDWRITING_CROP = "handwriting_crop"
+    TABLE_CROP = "table_crop"
+    PHOTO_WEB = "photo_web"
+    PHOTO_THUMB = "photo_thumb"
+    PHOTO_IN_DOC = "photo_in_doc"
+    VIDEO_FRAME = "video_frame"
+    DIAGRAM_RENDER = "diagram_render"
+    SPARKLINE = "sparkline"
+
+
+class MentionSource(StrEnum):
+    REGEX = "regex"
+    LLM = "llm"
+    HUMAN = "human"
+
+
+# ---------- review (file 05 §4.5, file 06 §3) ----------
+
+
+class FlagType(StrEnum):
+    UNIT_AMBIGUITY = "UNIT_AMBIGUITY"
+    SCHEMA_UNKNOWN = "SCHEMA_UNKNOWN"
+    LOW_CONFIDENCE_EXTRACTION = "LOW_CONFIDENCE_EXTRACTION"
+    PARSE_FAILURE = "PARSE_FAILURE"
+    UNSUPPORTED_FORMAT = "UNSUPPORTED_FORMAT"
+    CONFLICT = "CONFLICT"
+    SENSITIVE_CONTENT = "SENSITIVE_CONTENT"
+    HELD_LARGE_FILE = "HELD_LARGE_FILE"
+    CLOUD_RESTRICTED = "CLOUD_RESTRICTED"
+
+
+class FlagSeverity(StrEnum):
+    HARD = "HARD"
+    SOFT = "SOFT"
+
+
+# ---------- telemetry (file 05 §4.4) ----------
+
+
+class TelemetrySourceFormat(StrEnum):
+    LABJACK_DAT = "labjack_dat"
+    TDMS = "tdms"
+    CSV = "csv"
+    XLSX_SHEET = "xlsx_sheet"
+    NPY_MAPPED = "npy_mapped"
+
+
+class RunStatus(StrEnum):
+    NOMINAL = "NOMINAL"
+    FAILED_RUN = "FAILED_RUN"
+    COLD_FLOW = "COLD_FLOW"
+    PRE_HEAT = "PRE_HEAT"
+    ABORTED = "ABORTED"
+    UNKNOWN = "UNKNOWN"
+
+
+class AmbientCondition(StrEnum):
+    VACUUM_CHAMBER = "VACUUM_CHAMBER"
+    SEA_LEVEL = "SEA_LEVEL"
+    AMBIENT_RECORDED = "AMBIENT_RECORDED"
+    UNKNOWN = "UNKNOWN"
+
+
+class GaugeOrAbs(StrEnum):
+    GAUGE = "gauge"
+    ABSOLUTE = "absolute"
+    UNKNOWN = "unknown"
+    NOT_APPLICABLE = "n/a"
+
+
+class FlagStatus(StrEnum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    REJECTED_FILE = "REJECTED_FILE"
+    AUTO_RESOLVED = "AUTO_RESOLVED"
+    REOPENED = "REOPENED"
+
+
+class CaseStatus(StrEnum):
+    """Derived in ``v_review_cases`` from the case's flags (file 08 §4.3); not a column."""
+
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    REJECTED_FILE = "REJECTED_FILE"
+    REOPENED = "REOPENED"
+
+
+class RuleType(StrEnum):
+    CHANNEL_MAP = "channel_map"
+    UNIT_MAPPING = "unit_mapping"
+    SCHEMA_MAPPING = "schema_mapping"
+    SUPERSESSION = "supersession"
+    IGNORE_PATTERN = "ignore_pattern"
+    ORIGIN_OVERRIDE = "origin_override"
+
+
+class RuleOrigin(StrEnum):
+    OPERATOR = "operator"
+    CFG = "cfg"
+    HEADER = "header"
+    CONFIG_JSON = "config_json"
+    TDMS_PROPS = "tdms_props"

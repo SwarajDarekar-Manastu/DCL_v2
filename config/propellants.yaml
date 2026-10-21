@@ -1,0 +1,54 @@
+# Propellant definitions for RocketCEA (physics_calculator, file 07).
+# Owner: S5 (DCL S5 Quality), agreed with the propulsion SME.
+#
+# Each entry is registered at start-up with rocketcea.cea_obj.add_new_propellant(id, card)
+# (kind: monopropellant), add_new_oxidizer or add_new_fuel, then used as CEA_Obj(propName=id)
+# or as oxName/fuelName. The card is in CEA input format. Enthalpies and densities are copied
+# from RocketCEA's own built-in peroxide cards (oxCards["90_H2O2"], ["98_H2O2"]); only the
+# card keyword ("name" for a monopropellant) and the mass fractions differ.
+#
+# reference_checks are published values, not RocketCEA output. The load test runs RocketCEA
+# and requires agreement within tolerance_pct; it is the independent check that a card is
+# entered correctly.
+#
+# aliases are surface forms used in documents and questions; aerospace_synonyms.yaml holds the
+# entity seeds, this list only maps a name in a question to a card.
+
+version: 1
+propellants:
+  - id: HTP90
+    kind: monopropellant
+    description: High-test peroxide, 90 wt% H2O2 in water, catalytic decomposition
+    aliases: [HTP90, HTP 90, HTP 90%, 90% HTP, 90% H2O2, H2O2 90%, 90_H2O2]
+    rocketcea_builtin_equivalent: 90_H2O2
+    card: |
+      name H2O2(L) H 2 O 2 wt%=90.00
+      h,cal=-44880.0 t(k)=298.15 rho.g/cc=1.407
+      name WATER H 2.0 O 1.0 wt%=10.00
+      h,cal=-68317.0 t(k)=298.15 rho.g/cc=1.0
+    reference_checks:
+      - quantity: adiabatic_decomposition_temperature
+        value: 1022
+        unit: K
+        conditions: 1 atm, feed at 298 K
+        tolerance_pct: 1.5
+        source: DTIC ADA002195 (1380 °F for 90% H2O2), https://apps.dtic.mil/sti/pdfs/ADA002195.pdf
+    sme_confirmed: false
+  - id: HTP98
+    kind: monopropellant
+    description: High-test peroxide, 98 wt% H2O2 in water, catalytic decomposition
+    aliases: [HTP98, HTP 98, HTP 98%, 98% HTP, 98% H2O2, H2O2 98%, 98_H2O2]
+    rocketcea_builtin_equivalent: 98_H2O2
+    card: |
+      name H2O2(L) H 2 O 2 wt%=98.00
+      h,cal=-44880.0 t(k)=298.15 rho.g/cc=1.407
+      name WATER H 2.0 O 1.0 wt%=2.00
+      h,cal=-68317.0 t(k)=298.15 rho.g/cc=1.0
+    reference_checks:
+      - quantity: adiabatic_decomposition_temperature
+        value: 1219
+        unit: K
+        conditions: 1 atm, feed at 298 K
+        tolerance_pct: 1.5
+        source: General Kinetics, AIAA 2001-3250 (1734-1735 °F for 98% H2O2), https://www.hydrogen-peroxide.us/history-US-General-Kinetics/AIAA-2001-3250_Advancements_in_High_Concentration_Hydrogen_Peroxide_Catalyst_Beds-pitch.pdf
+    sme_confirmed: false

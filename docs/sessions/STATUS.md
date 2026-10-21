@@ -62,6 +62,11 @@ Merged / ready: task 1 (M1 schema) at 7aac2a3, merge requested; task 2 (MSAL sig
 Blocked on: DCL Lead decision. File 02 §1 says the token cache at DCL_TOKEN_CACHE_PATH is "encrypted at rest" and the encryption key lives in the secret store, but file 01 §7.1 has no key variable, and the existing cache (shared with the v1 pipeline under DCL_SECRET_STORE) is plain MSAL JSON, mode 600, owned by `ai`, not root. Options: (a) plain JSON, mode 600 in a 700 dir, atomic writes, rely on host disk encryption, manual text amended; (b) Fernet-encrypt with a new `DCL_TOKEN_CACHE_KEY` (S4 adds it to the contract), migrate the plain cache once, v1 then needs its own cache file. S1 recommends (b). Second question: is DCL_TEST_OUTSIDE_ITEM_ID in the DCL_DRIVE_ID drive? If not, a 404 there proves nothing and the check needs the item's drive id too.
 Needs from others: Lead — the two answers above
 Next: task 2 once answered (auth.py with device-code + silent refresh, live read-only checks of the four roots and the outside item using the existing cache)
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: `frontend/viewer` contract and Console UI: deep link `/docs/{id}/viewer?anchor=<kind>:<value>:<hash>` with `viewer_path()`, `ViewerPayload` models, viewer page and components (page + bbox overlays, image, table, code, text, video, fallback notice, metadata, translate toggle); 35 Vitest + 155 pytest pass. Endpoint returns 501 until wired.
+Blocked on: wiring the viewer body needs S1 (`Anchor`, documents, `v_doc_locations`, page-render assets, presign) and S2 (`resolve_anchor`); both told the contract 2026-10-21.
+Needs from others: S2 to emit citation links with `viewer_path()`; nothing else new.
+Next: Settings scaffolding (`frontend/settings-ui`), then the Open WebUI Pipe skeleton once S2's `/v1/answer` schema is on main.
 ## 2026-10-21 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
 Merged / ready: nothing new since the gateway client entry (three merge requests open: skeleton 136603d, loader b960763, client 7591007)
 Blocked on: DCL Lead decision on MinIO before the Compose stack. The official MinIO images are no longer pullable (Docker Hub repo removed, quay.io gone, GitHub minio/minio archived; last tag RELEASE.2025-10-15T17-29-55Z), so file 01 §5.5 / §6 cannot be deployed reproducibly as written. Options: (A) build MinIO from the archived pinned source tag in `backend/devops/docker/minio.Dockerfile` (unmaintained, AGPL, internal only); (B) replace it with a maintained S3-compatible store (needs a manual change: versioning, lifecycle expiry, presign, DuckDB httpfs); (C) Chainguard `minio:latest` (maintained, but not pinnable on the free tier). S4 recommends A now and B evaluated before M11. Also still open: MinIO/Redis env names, `DCL_GEMINI_API_KEY`, Console auth names, DB URL composition, `.env` location, gateway contract questions
@@ -73,3 +78,99 @@ Merged / ready: env-contract follow-up (wiring + Console names of file 01 §7.1,
 Blocked on: nothing (MinIO decision received: build from the archived pinned tag)
 Needs from others: operator fills in `.env`: `DCL_TOKEN_CACHE_KEY`, `GEMINI_BACKEND`, `GEMINI_GATEWAY_URL`, `DCL_DB_USER`/`DCL_DB_PASSWORD`, `DCL_MINIO_*` keys, Console auth names, `DCL_PIPE_SHARED_SECRET`; S2 imports types from `backend.llm_engine.gemini_types`
 Next: Compose stack with the GPU runtime for the ROLE=models container, ParadeDB pinned to a pg17 tag, MinIO built from source
+
+## 2026-10-21 19:50 — DCL S5 Quality — claude/strange-bhaskara-1dd439 (S5 → this branch, kept per README)
+Merged / ready: `quality/config-data` (six `config/` data files from the manual and public references, all `sme_confirmed: false`; 152 load tests incl. RocketCEA HTP 90/98 vs published decomposition temperatures) and `quality/fixtures` synthetic half (12 fixtures for every file 10 §7 edge case, generator, expected.yaml, 30 integrity tests). Dev deps added. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend` (182 passed)
+Blocked on: SME answer to the 13-slot allowlist table (sent to DCL Lead 2026-10-21); real per-format fixtures, telemetry cases and retrieval set wait for it
+Needs from others: Lead decisions on three questions: (1) quantity synonyms Isp/Pc have no entity type in 04 §3.2, so where do `quantity_terms` load? (2) 04 §2 lets a vendor name alone turn a document `external_kept`, but internal reports name sensor/DAQ vendors (LabJack, Kistler); should vendors marked `internal_equipment: true` need a datasheet/brochure cue too? (3) FMEA score columns (S, O, D, RPN) are dimensionless; does 03 §C.4 step 8 really raise UNIT_AMBIGUITY SOFT on them? S1: apply `config/units.txt` alias lines before pint (pint reads `bar(g)` as bar·gram); S1 rules YAML schema for `config/rules/`
+Next: on the allowlist answer, collect real fixtures with expected outcomes and the first 15 telemetry cases; meanwhile idle
+
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: `frontend/settings-ui` scaffolding (admin-gated layout, nine sections of 08 §3.2 with their `pipeline_config` keys, redirect and 404); 39 Vitest pass, build clean.
+Blocked on: Review UI waits for S1's `backend/review/api_models.py`; Settings editing waits for S1's settings API; viewer body waits for S1 models/presign and S2 `resolve_anchor`; Open WebUI Pipe waits for S2's `/v1/answer` schema.
+Needs from others: S1 and S2 to message S3 when those land on main; Lead to merge this branch (shell, viewer, settings scaffolding).
+Next: idle until one of the inputs above arrives; then switch `get_auth_config` to S4's `require("console_auth")` once S4's settings merge is on main.
+
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: task 2: backend/sync/auth.py (Fernet-encrypted MSAL cache, mode 600/700, atomic writes, v1 cache refused untouched; silent-first TokenProvider; device-code sign-in that rejects any account but DCL_DELEGATED_USERNAME; check_access for the roots and the outside item) + GET-only backend/sync/graph_client.py; 28 unit tests; device flow verified live against the tenant with scope A. Test: `uv run pytest && uv run ruff check backend` (159 passed, 18 skipped)
+Blocked on: nothing for code. Live sign-in and `check` need S4's config fields on main (S4 merge request 14c8c4d) and the operator: in .env set DCL_TOKEN_CACHE_PATH to a NEW v2 file under a 700 DCL_TOKEN_DIR (it still points at v1's cache, which the code refuses), add DCL_TOKEN_CACHE_KEY (Fernet key), optionally DCL_TEST_OUTSIDE_DRIVE_ID; then run `uv run python -m backend.sync.auth sign-in` and complete the code as ai@manastuspace.com, then `uv run python -m backend.sync.auth check`
+Needs from others: Lead — merge S4's config fields; relay the operator step above to the user. Open for the health-check task: file 02 §1 probes `GET /me/drive`, which option A may refuse; I will confirm live once signed in
+Next: task 3, delta crawl of the four roots (metadata only), folder tree and paths, gate tiers 1–3, HELD_BY_SCOPE
+
+## 2026-10-21 20:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/llm_engine/local_models.py` + `backend/api/models.py` (EmbeddingGemma 2 text+image 768-d, bge-reranker-v2-m3, `ModelsClient`), 27 unit tests + 5 GPU tests green; throughput in `.wiki/backend/embedding-service.md`. Branch mapping: S2 = claude/infallible-swartz-58c96b.
+Blocked on: nothing
+Needs from others: S4: GPU image pins (torch 2.14.1 cu130, transformers 5.20.2, sentence-transformers 6.1.0, torchvision 0.29.1, pillow, numpy), HF cache volume, compose healthcheck on `/models/health` with ~60 s start period. Lead: pyproject `models` dependency group with the same pins.
+Next: chunker + anchors + identifiers (S3 waits on `resolve_anchor`), then VisionService on S4's gateway client
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: task 3 part 1: backend/sync/gate.py (tiers 1–3, reasons in the file 05 format) + scope.py (download-scope matcher), 49 unit tests. Test: `uv run pytest && uv run ruff check backend`
+Blocked on: DCL Lead, for the rest of task 3 and the live sign-in. (1) The app dcl-reader-delegated has admin consent only for delegated Files.Read.All (v1 docs/GRAPH_SETUP.md, 13 Oct). .env sets DCL_PERMISSION_OPTION=A, which requests Files.SelectedOperations.Selected, so sign-in will most likely stop at "Need admin approval". Either set B (the security sign-off of file 02 §1 applies) or have an admin consent to A and grant the four folders. (2) M1 code reads sync.download_scope and processing.scope from pipeline_config, but file 05 §7 creates that table in M2–M3. Proposal: migration 0002 creates pipeline_config + v_config_current in M1. Who owns typed reads (file 10 §2 puts them in backend/config.py, S4)? (3) Gate source: config/gate.yaml (brief; S5 owns config/*.yaml, while my map page lists it in S1's workspace) seeds pipeline_config gate.* (file 05 lists gate.* keys)? (4) bbox convention for the contract: proposal `{page_no, x0, y0, x1, y1}` normalized 0..1 with a top-left origin, a list per node
+Needs from others: S5 — config/gate.yaml in the GateConfig schema (docstring of backend/sync/gate.py; a test copy is in backend/tests/unit/sync/gate_test_config.yaml)
+Next: backend/dispatcher/contract.py (publish-first item 2: S2 and S3 wait on it), then the delta crawl once (1)–(3) are answered
+
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: publish-first item 2: backend/dispatcher/contract.py (ProcessedDocument, ProcessedNode, ProcessedAsset, telemetry run/channel records, Mention, Flag with fingerprint, UnitHash, Anchor + the one copy of the <kind>:<value>:<hash> format) and the contract enums in backend/postgres/enums.py; 27 tests. Test: `uv run pytest && uv run ruff check backend` (470 passed, 18 skipped)
+Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
+Needs from others: S3 — import parse_anchor/format_anchor from backend.dispatcher.contract in backend/api/viewer.py and drop the local copies (one owner of the format, as S2 asked)
+Next: backend/review/api_models.py (publish-first item 3, for S3), MinIO get/put for S2's vision cache, then the documents/nodes/assets models
+
+## 2026-10-21 20:40 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: VisionService (`backend/llm_engine/vision/{service,schemas}.py`), prompt loader + nine v1 prompt files (`backend/llm_engine/prompts`), 23 tests on a mock gateway; full suite green.
+Blocked on: nothing for code; real vision calls wait for S4's probe to enable image input
+Needs from others: S1: `backend/storage/minio.py` get/put on dcl-cir (cache adapter), `document_nodes` model (resolve_anchor)
+Next: chunker against S1's contract (ProcessedNode), anchors (make_anchor, resolve_anchor), identifiers
+## 2026-10-21 20:05 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: config data + synthetic fixtures merged to main (3240cc6); branch synced; allowlist plan sheet reopened with the delegated method (S5 chooses from S1's crawl)
+Blocked on: S1 folder-level listing of the real metadata crawl (requested 2026-10-21)
+Needs from others: DCL S1 Backend — the listing (fields in `.wiki/plans/quality__fixtures__allowlist.md`); DCL Lead — answers to the three open questions of the previous entry
+Next: on the listing, fill the 13 slots and send the table to DCL Lead for DECISIONS.md; meanwhile idle
+
+## 2026-10-21 20:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` for S1's GateConfig (file 02 §4 lists; `.1` kept as a string; `.xlsm` junk only under environment library folders, not `APS - Library`; `* (old)` quarantine), 44 tests incl. S1's real gate; config headers and the FMEA fixture aligned with the Lead's three decisions. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: S1 folder-level listing of the real crawl (allowlist); S1 rules YAML schema and CIR snapshot format (M2)
+Needs from others: Lead — decide `.out` (LaTeX junk in 02 §4 vs ANSYS solver logs kept in 03 §11 step 5; archive members pass the same gate) and `.ini` (Tier-2 junk vs Tier-4 secret-scan list)
+Next: allowlist from the crawl listing, then real fixtures and the first 15 telemetry cases; meanwhile idle
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: viewer anchor codec delegated to `backend/dispatcher/contract.py` (S1 owns the format); `viewer_path()` unchanged, `parse_anchor_param` kept as an alias for S1's equivalence test; 437 backend tests pass.
+Blocked on: Review UI waits for S1's `backend/review/api_models.py` (in progress); viewer body waits for S2's `resolve_anchor`; Pipe waits for S2's `/v1/answer` schema.
+Needs from others: S1 may drop the equivalence test in `test_contract.py`, after which S3 deletes the alias.
+Next: idle until one of the inputs above lands on main.
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: publish-first item 3: backend/review/api_models.py (queue, case detail, the file 06 §6 resolution actions as a union on `action` with ALLOWED_ACTIONS, resolve/assign/reject/undo, dry-run, rules) + backend/api/review.py with every file 08 §4.4 review route typed and role-gated (501 until the M2 tables); review enums. Gate: S5's findings fixed (patterns must be strings; .xlsm only under lib/lib64/library/*-packages). Contract test no longer depends on viewer.py. Test: `uv run pytest && uv run ruff check backend` (498 passed, 18 skipped)
+Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
+Needs from others: nothing new
+Next: backend/storage/minio.py get/put for S2's vision cache; then documents/document_sources/document_nodes/assets models (M2)
+
+
+
+## 2026-10-21 21:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: unchanged since e109103 (gate.yaml merge requested)
+Blocked on: Lead decision on dropping ".1" from the 02 §4 Tier-2 list (raised by S1): end-of-name matching junks team files such as "report_v1.1"; man pages only occur under Tier-1 paths. S5 agrees with dropping it; config/gate.yaml keeps it until the manual changes
+Needs from others: Lead — the ".1" decision together with the open ".out"/".ini" question; S1 — the crawl folder listing
+Next: idle until one of these arrives
+
+## 2026-10-21 21:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` without `.ini` and `.1` (manual at be5ce14), new cases for `report_v1.1` and instrument `.ini` files; 48 gate tests through S1's gate. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend` (230 passed)
+Blocked on: S1 — `parent_kind` in GateConfig/GateInput (the `.wbpz` `.out` exception needs a key or a fixed rule) and the crawl folder listing
+Needs from others: S1 — tell S5 whether the `.wbpz` exception is configured in gate.yaml (proposed key below in the message) or fixed in code
+Next: idle until S1 answers or the listing arrives
+
+<<<<<<< HEAD
+## 2026-10-21 22:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: 31ed593 (gate.yaml header wording), not yet requested
+Blocked on: Lead — the `.wbpz` `.out` exception: Lead ruled "fixed rule in code, no gate.yaml key"; S1 implemented a gate.yaml key `kept_endings_by_parent_kind` (S1 c861d3a, merge requested). S5 adds the entry and three decision cases once the Lead confirms which one stands
+Needs from others: Lead — that confirmation; S1 — the crawl folder listing
+Next: idle
+=======
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: backend/storage/minio.py (BucketStore get/put for S2's vision cache, presign_get 15 min for S3, ensure_buckets, raw_key); 11 tests, the server tests green against S4's dcl-v2-minio:RELEASE.2025-10-15T17-29-55Z. Test: `DCL_TEST_MINIO_ENDPOINT=<disposable> uv run pytest && uv run ruff check backend`
+Blocked on: Lead answers of 100eae2 for the delta crawl
+Needs from others: S4 — CI service for a disposable MinIO with DCL_TEST_MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY, like the DB tests
+Next: provisional evidence/suggestion models per flag type (S3 asked), then the M2 documents/nodes/assets models
+>>>>>>> main
+
+## 2026-10-21 22:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` with `kept_endings_by_parent_kind: {wbpz: [".out"]}` per the Lead's ruling; 5 archive-member decision cases through the documented rule and S1's gate (58 gate tests). Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: S1 crawl folder listing (allowlist)
+Needs from others: nothing else
+Next: idle until the listing arrives

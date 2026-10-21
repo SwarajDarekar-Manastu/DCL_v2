@@ -1,0 +1,18 @@
+# Test copy of the file 02 §4 lists in the GateConfig schema (backend/sync/gate.py).
+# The production file is config/gate.yaml (S5); this copy keeps the unit tests independent of it.
+junk_path_segments: [.venv, venv, env, site-packages, __pycache__, .git, .idea, .vscode, build, dist,
+  node_modules, .ipynb_checkpoints, .mypy_cache, .pytest_cache, .tox, .eggs, "*.egg-info"]
+quarantine_path_patterns: [_to_delete, old, archive_old, backup, "* (old)"]
+junk_extensions: [.pyc, .pyi, .pyd, .typed, .dll, .exe, .lib, .a, .so, .o, .qml, .qmltypes, .qm, .pak,
+  .metainfo, .mesh, .frag, .bin, .h, .c, .cpp, .pxd, .pyx, .f90, .f, .f95, .pyf, .inc, .f2py_f2cmap, .afm,
+  .ttf, .mplstyle, .ico, .icns, .ani, .cls, .bas, .xlam, .applescript, .asp, .pys, .vbs, .sct, .idl, .rc,
+  .chm, .pyw, .tab, .zi, .tpl, .tmpl, .template, .build, .cmake, .toml, .ini, .pc, .pth, .spec, .whl, .rst,
+  ".1", .apache, .bsd, .python, .external, .ps1, .fish, .pem, .lua, .xrc, .al, .g4, .lark, .gitignore, .iml,
+  .aux, .log, .toc, .lof, .lot, .out, .fls, .fdb_latexmk, .synctex, .synctex(busy), .synctex.gz, .bbl,
+  .blg, .nav, .snm, .vrb, .bkp, .tdms_index, .tmp, .crdownload, .part]
+junk_names: [.DS_Store, Thumbs.db, desktop.ini]
+junk_name_prefixes: ["~$"]
+junk_extensions_under: {.xlsm: [lib, lib64, library, "*-packages"]}
+kept_endings_by_parent_kind: {wbpz: [".out"]}
+shortcut_extensions: [.url, .lnk]
+max_download_bytes: 4294967296

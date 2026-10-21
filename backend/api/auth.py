@@ -71,12 +71,23 @@ def get_auth_config() -> AuthConfig:
     from backend.config import get_settings
 
     s = get_settings()
-    return AuthConfig(
+    return auth_config_from(
         tenant_id=s.tenant_id,
         audience=s.console_api_audience,
         group_reviewers=s.console_group_reviewers,
         group_admins=s.console_group_admins,
     )
+
+
+def auth_config_from(**values: str | None) -> AuthConfig:
+    """Refuse to verify anything with a partial configuration (503 names what is missing)."""
+    missing = [name for name, value in values.items() if not value]
+    if missing:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            f"Console sign-in is not configured: missing {', '.join(missing)}",
+        )
+    return AuthConfig(**values)  # type: ignore[arg-type]
 
 
 @lru_cache(maxsize=4)

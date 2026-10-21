@@ -81,7 +81,8 @@ ProcessedDocument
   document        : row for `documents` (title, doc_kind, route, dates, canonical flags)
   cir_uri         : s3://dcl-cir/{sha256}/{route}/v{parser_version}/…
   nodes[]         : hierarchical nodes (parent/child), each with content, node_type,
-                    page/line/slide/time anchors, bbox, breadcrumb, unit-normalized numbers
+                    page/line/slide/time anchors, bbox (list of {page_no,x0,y0,x1,y1}, normalized
+                    0..1, top-left origin), breadcrumb, unit-normalized numbers
   assets[]        : page renders, crops, photos, frames (→ dcl-assets, rows in `assets`)
   catalog[]       : telemetry_runs / telemetry_channels rows, or a JSON payload for
                     documents.catalog (diagram graph, CAE summary, CAD reference)
@@ -140,6 +141,8 @@ All routes that need a vision model call the same component, `VisionService`, so
 | `inspect_hardware_photo` | 3.8 Flash | photo + folder context | `{components_visible[], failure_modes:[{mode, location, severity, confidence}], visible_text[], test_stage_hint, description}` |
 | `describe_slide` | 3.8 Flash | slide image + extracted text | `{summary, diagram_description, key_numbers[]}` |
 | `video_timeline` | 3.8 Flash (video input) | clip ≤ 2 min or keyframes | `{events:[{t_s, type, description}], anomalies[]}` |
+
+**Media resolution per capability** (Gemini 3 per-part `mediaResolution`; tokens per image low 280 / medium 560 / high 1120): `triage_page` → `low`; `transcribe_handwriting`, `transcribe_page`, `read_table_image`, `digitize_plot`, `read_schematic` → `high`; `inspect_hardware_photo`, `describe_slide` → `medium` (a `relook` at answer time may use `high`); whole PDF pages (rare) → `medium`; `video_timeline` → `low`, `high` only when text in frames must be read. The M5 calibration study compares `medium` and `high` on the handwriting set and may lower the handwriting default.
 
 Rules:
 1. Every call is logged to `llm_calls` with `doc_id`, `purpose`, token counts.
@@ -431,7 +434,7 @@ Per workbook:
 5. **Merged cells** are expanded (value copied to all covered cells in the normalized representation; HTML keeps spans). Excel date serials converted. Percent formats preserved as numbers with `unit = %`.
 6. **Charts** in the workbook: series references are read from `chart.xml` to produce `figure` nodes from data, no image needed.
 7. Named ranges and defined names are recorded as mentions (`defined_name: Pc_max → Sheet1!B12`).
-8. **Units**: header parsing; a dedicated `units` row; cell number formats (`0.0 "bar"`); if a numeric column in a time-series island has none → `UNIT_AMBIGUITY` HARD; in a matrix table → SOFT.
+8. **Units**: header parsing; a dedicated `units` row; cell number formats (`0.0 "bar"`); if a numeric column in a time-series island has none → `UNIT_AMBIGUITY` HARD; in a matrix table → SOFT, **except** columns whose header matches the configurable dimensionless list (`S`, `O`, `D`, `RPN`, `Severity`, `Occurrence`, `Detection`, `Score`, `Rank`, `Index`, `Count`, `%`), which are stored as dimensionless numbers without a flag (FMEA and risk registers would otherwise flag on every row).
 
 ### C.5 Mystery formats (`.npy`, `.plotdata`, extensionless `t02_00…`)
 
@@ -553,7 +556,7 @@ Inventory: 3 `.zip`, 41 `.gz`, 1 `.wbpz` (ANSYS Workbench), 1 `.scdoc` (SpaceCla
 
 1. **Bomb guard** before extraction: compressed/uncompressed ratio ≤ 100, total uncompressed ≤ 5 GB, entries ≤ 50,000, nesting depth ≤ 3, path traversal (`../`, absolute paths) rejected. Violations → `PARSE_FAILURE` HARD with the manifest.
 2. **Extraction** to a scratch directory; every inner file becomes a blob in `dcl-raw` (content-addressed, so a member identical to a loose file is the same blob and is **not** processed twice) and a row in `blob_derivations` (`parent_blob_sha256`, `member_path`, `child_blob_sha256`, `kind = archive_member`).
-3. Members are dispatched to routes A–F with the archive's folder context plus `archive_path` breadcrumb. `.synctex.gz` and other gate-listed junk inside archives are skipped by the same gate.
+3. Members are dispatched to routes A–F with the archive's folder context plus `archive_path` breadcrumb. `.synctex.gz` and other gate-listed junk inside archives are skipped by the same gate, which receives `parent_kind` (`zip`, `gz`, `wbpz`) and applies the configurable `kept_endings_by_parent_kind` exceptions (default: `.out` kept under `wbpz`).
 4. `.dat.gz` (`11bar_10sec.dat.gz`) → gunzip → Route C with the folder's channel map.
 5. **`.wbpz`** (zip): extract solver `.out` logs (text → document nodes with the solver-summary table parsed), engineering data XML (material properties → table nodes + `material` mentions with units), report images (→ figure pipeline), project tree (`.wbpj`) → a summary in `documents.catalog` of the archive's document (analysis systems, materials, mesh stats if present).
 6. **`.scdoc`**: no open parser. Recorded as a `cad_reference` document whose `catalog` holds filename, size, folder context and the OneDrive link; `STL/STEP` exports found in the same folder (none in the current inventory) would be linked by `document_relations(REFERENCES)` and measured with trimesh when an adapter is added.

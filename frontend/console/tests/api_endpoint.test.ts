@@ -106,3 +106,18 @@ describe('openLiveChannel', () => {
 		expect(FakeSocket.instances).toHaveLength(2);
 	});
 });
+
+describe('getViewer', () => {
+	it('forwards the anchor untouched and asks for translation only when toggled', async () => {
+		const { getViewer } = await import('../src/lib/api_endpoint');
+		const fetchMock = vi.fn(async () => new Response('{}'));
+		wire(fetchMock as unknown as typeof fetch);
+		await getViewer('doc-1', 'cells:Run 1!A1:D20:ab12cd34ef56ab78');
+		await getViewer('doc-1', 'page:3:', true);
+		const urls = fetchMock.mock.calls.map((call) => (call as unknown[])[0]);
+		expect(urls).toEqual([
+			'http://api/docs/doc-1/viewer?anchor=cells%3ARun+1%21A1%3AD20%3Aab12cd34ef56ab78',
+			'http://api/docs/doc-1/viewer?anchor=page%3A3%3A&translate=true'
+		]);
+	});
+});

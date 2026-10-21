@@ -1,0 +1,40 @@
+fixture: german_datasheet
+edge_case: German datasheet (file 10 §7)
+origin: synthetic
+generator: make_synthetic.py::german_datasheet
+byte_stable: true
+files: [MT-1_Datenblatt_DE.pdf]
+simulated_location: {root: APS - Library, folder: Vendor brochures/DE}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §A1.12 steps 1, 3, 4 (origin, datasheet tables, locale)"
+  - "docs/architecture/04_metadata_enrichment_chunking_embedding.md §2 (source_origin, trust_tier, number_locale)"
+expected:
+  route: A1
+  detected_mime: application/pdf
+  document_status: ACTIVE
+  flags: []
+  flags_exact: true
+  metadata:
+    language: de
+    number_locale: comma
+    page_types: {1: digital_text}
+    source_origin: external_kept  # folder default of APS - Library
+    trust_tier: 4
+    doc_kind: datasheet  # vendor is fictitious (not in vendors.yaml), so L1 may say unknown and L2 decides
+  text_contains: ["Datenblatt", "Nennschub", "1,0 N", "0,25 - 1,1 N", "Spezifischer Impuls", "160 s",
+                  "5,5 - 22 bar", "0,29 kg", "8,5 W", "-40 °C bis +85 °C", "Wasserstoffperoxid"]
+  numeric_facts:  # operating ranges are two facts each (03 §A1.12 step 3)
+    - {quantity: thrust, value: 1.0, unit: N, source: vendor_claim}
+    - {quantity: thrust, value: 0.25, unit: N, source: vendor_claim}
+    - {quantity: thrust, value: 1.1, unit: N, source: vendor_claim}
+    - {quantity: specific_impulse, value: 160, unit: s, source: vendor_claim}
+    - {quantity: pressure, value: 5.5, unit: bar, source: vendor_claim}
+    - {quantity: pressure, value: 22, unit: bar, source: vendor_claim}
+    - {quantity: mass, value: 0.29, unit: kg, source: vendor_claim}
+    - {quantity: power, value: 8.5, unit: W, source: vendor_claim}
+    - {quantity: temperature, value: -40, unit: degC, source: vendor_claim}
+    - {quantity: temperature, value: 85, unit: degC, source: vendor_claim}
+  entities:
+    - {type: propellant, canonical: HTP, surface: Wasserstoffperoxid}
+    - {type: product, surface: MT-1}
+    - {type: vendor, surface: Beispiel Antriebstechnik GmbH}

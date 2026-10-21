@@ -1,0 +1,31 @@
+fixture: doi_paper
+edge_case: a paper with a DOI (file 10 §7), filed in an internal folder
+origin: synthetic
+generator: make_synthetic.py::doi_paper
+byte_stable: true
+files: [preheat_paper_synthetic.pdf]
+simulated_location: {root: APU, folder: Test Plan 37/literature}
+spec:
+  - "docs/architecture/04_metadata_enrichment_chunking_embedding.md §2 (DOI detector overrides internal to external_kept)"
+  - "docs/architecture/03_phase2_processing_routes.md §A1.12 step 2 (abstract node, references not body text)"
+expected:
+  route: A1
+  detected_mime: application/pdf
+  document_status: ACTIVE
+  flags: []
+  flags_exact: true
+  metadata:
+    source_origin: external_kept  # the DOI overrides the folder default "internal"
+    trust_tier: 5
+    doc_kind: academic_paper
+    external_ids: {doi: 10.5555/dcl.fixture.2026.001}
+    publisher: Journal of Synthetic Propulsion Fixtures
+    abstract_is_own_parent_node: true
+    reference_mentions: 3
+    references_indexed_as_body_nodes: false
+  text_contains: ["10.5555/dcl.fixture.2026.001", "Abstract", "References", "11.8 bar", "473 K"]
+  numeric_facts:
+    - {quantity: chamber_pressure, value: 11.8, unit: bar, source: literature}
+    - {quantity: temperature, value: 473, unit: K, source: literature}
+    - {quantity: time, value: 0.8, unit: s, source: literature}
+    - {quantity: time, value: 0.2, unit: s, source: literature}

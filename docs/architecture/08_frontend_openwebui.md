@@ -52,7 +52,7 @@ flowchart LR
     C1 & C2 & C3 & C4 --> API[(Console API → PostgreSQL · MinIO · Celery)]
 ```
 
-Why not fork Open WebUI: 175 releases to date and a fast cadence; a fork would drift within weeks. Everything we need in chat is reachable through Pipe/Action/embeds/Skills. Everything that is a *workflow* (review, benchmark, configuration) is a proper application with its own routes, tables and permissions, and lives in the Console. Chat deep-links into it.
+Fork policy (revised 2026-10-21): the default remains the extension points (Pipe/Action/embeds/Skills), because Open WebUI ships frequently and a fork drifts within weeks. **When a needed feature is missing**, the team may clone Open WebUI and carry its own changes, kept as a thin patch set on top of upstream release tags, rebased at every upgrade, each patch documented on a wiki page with its reason; S3 proposes, the Lead approves per feature. Everything that is a *workflow* (review, benchmark, configuration) is a proper application with its own routes, tables and permissions, and lives in the Console. Chat deep-links into it.
 
 ### 2.1 The Pipe (model) — behavior
 
@@ -154,6 +154,7 @@ Every change records actor/time/before/after; a "rollback to version" button exi
 - `GET /review/rules` · `POST /review/rules` · `POST /review/rules/{id}/simulate` · `POST /review/rules/{id}/deactivate`
 - `GET /assets/{id}/url` (presign) · `GET /docs/{id}/pages/{n}/render` · `GET /docs/{id}/viewer?anchor=…` (deep-link page used by chat citations; the anchor is `page` + `content_sha256`, resolved to the current node, falling back to the page)
 - `GET /entities?query…` · `POST /entities/merge` · `POST /entities/split`
+- `GET /audit?entity_type=&entity_id=&actor=&action=&since=&until=&cursor=&limit=` → `{items: [{event_id, at, actor, entity_type, entity_id, action, before, after}], next_cursor}`; reviewer role; read-only over `audit_events`; a case's history is `entity_type=case&entity_id=<case_key>` plus its flag ids (owner S3, `backend/api/audit.py`)
 - `GET /ops/*`
 
 ## 5. Benchmark UI — internal structure
@@ -222,7 +223,7 @@ Failure classification (automatic, from the metrics): `RETRIEVAL_MISS` (gold nod
 
 ## 6. Shared viewer
 
-`/docs/{id}/viewer?anchor=…` renders: left — page image (or table HTML, code with line highlight, photo, plot, diagram render, video player seeking to `t`); overlays — bbox of the cited passage (and handwriting regions with confidence); right — document metadata (kind, source origin and trust tier, language, test ids, date, status, flags), "Open in OneDrive", "Download original", "Open review case" if any, and a **Translate** toggle for non-English pages (shows `content_en` when it exists, otherwise requests an on-the-fly translation that is cached as derived data). The anchor is resolved to the current node by page and content hash; if the content changed, the viewer falls back to the page and says so. The same route is used by chat citations, by the Review UI and by Benchmark drilldowns.
+`/docs/{id}/viewer?anchor=<kind>:<value>:<content_sha256>` (kinds `page`, `line`, `t`, `cells`; never a node id; built by `viewer_path()` in the backend) renders: left — page image (or table HTML, code with line highlight, photo, plot, diagram render, video player seeking to `t`); overlays — bbox of the cited passage (and handwriting regions with confidence); right — document metadata (kind, source origin and trust tier, language, test ids, date, status, flags), "Open in OneDrive", "Download original", "Open review case" if any, and a **Translate** toggle for non-English pages (shows `content_en` when it exists, otherwise requests an on-the-fly translation that is cached as derived data). The anchor is resolved to the current node by page and content hash; if the content changed, the viewer falls back to the page and says so. The same route is used by chat citations, by the Review UI and by Benchmark drilldowns.
 
 ## 7. UI technology
 

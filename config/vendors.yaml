@@ -1,0 +1,94 @@
+# Vendors and publishers whose material may sit in the external library.
+# Owner: S5 (DCL S5 Quality), agreed with the propulsion SME.
+# Consumers: L1 source-origin and doc_kind detectors (04 §2, 03 §A1.12 step 1); vendor and
+# organization entities (S2).
+#
+# Fields per vendor:
+#   id                  stable slug
+#   name                legal or common name
+#   aliases[]           surface forms; an alias shorter than 4 characters must be matched
+#                       case-sensitively as a whole word (case_sensitive_aliases lists them)
+#   domains[]           web domains, for URL footers on datasheets
+#   category            propulsion | sensors | fluidics | daq_software | materials | chemicals
+#   internal_equipment  true when the team uses this vendor's equipment, so its name also
+#                       appears in internal reports, run sheets and telemetry headers. Such a
+#                       vendor turns a document external_kept only together with a datasheet or
+#                       brochure cue (title word, or the vendor's domain in the footer), 04 §2
+#   sme_confirmed       false until the SME has reviewed the entry
+
+version: 1
+vendors:
+  # ---- propulsion system and thruster makers -----------------------------------------
+  - {id: moog, name: Moog Inc., aliases: [Moog], domains: [moog.com], category: propulsion, internal_equipment: false, sme_confirmed: false}
+  - id: aerojet_rocketdyne
+    name: Aerojet Rocketdyne (L3Harris)
+    aliases: [Aerojet Rocketdyne, Aerojet, L3Harris]
+    domains: [rocket.com, l3harris.com]
+    category: propulsion
+    internal_equipment: false
+    sme_confirmed: false
+  - {id: arianegroup, name: ArianeGroup, aliases: [ArianeGroup, Ariane Group], domains: [ariane.group], category: propulsion, internal_equipment: false, sme_confirmed: false}
+  - id: bradford_space
+    name: Bradford Space (ECAPS)
+    aliases: [Bradford Space, Bradford ECAPS, ECAPS]
+    domains: [bradford-space.com]
+    category: propulsion
+    internal_equipment: false
+    sme_confirmed: false
+  - {id: nammo, name: Nammo, aliases: [Nammo], domains: [nammo.com], category: propulsion, internal_equipment: false, sme_confirmed: false}
+  - {id: airbus, name: Airbus Defence and Space, aliases: [Airbus, Airbus Defence and Space], domains: [airbus.com], category: propulsion, internal_equipment: false, sme_confirmed: false}
+  - {id: ohb, name: OHB SE, aliases: [OHB], case_sensitive_aliases: [OHB], domains: [ohb.de], category: propulsion, internal_equipment: false, sme_confirmed: false}
+  - {id: thales_alenia_space, name: Thales Alenia Space, aliases: [Thales Alenia Space, Thales Alenia], domains: [thalesaleniaspace.com], category: propulsion, internal_equipment: false, sme_confirmed: false}
+  - {id: busek, name: Busek Co., aliases: [Busek], domains: [busek.com], category: propulsion, internal_equipment: false, sme_confirmed: false}
+  - {id: dawn_aerospace, name: Dawn Aerospace, aliases: [Dawn Aerospace], domains: [dawnaerospace.com], category: propulsion, internal_equipment: false, sme_confirmed: false}
+  - {id: benchmark_space, name: Benchmark Space Systems, aliases: [Benchmark Space Systems, Benchmark Space], domains: [benchmarkspacesystems.com], category: propulsion, internal_equipment: false, sme_confirmed: false}
+  - {id: ihi_aerospace, name: IHI Aerospace, aliases: [IHI Aerospace, IHI], case_sensitive_aliases: [IHI], domains: [ihi.co.jp], category: propulsion, internal_equipment: false, sme_confirmed: false}
+  - {id: mhi, name: Mitsubishi Heavy Industries, aliases: [Mitsubishi Heavy Industries, MHI, 三菱重工], case_sensitive_aliases: [MHI], domains: [mhi.com], category: propulsion, internal_equipment: false, sme_confirmed: false}
+
+  # ---- sensors -----------------------------------------------------------------------
+  - {id: kistler, name: Kistler Instrumente AG, aliases: [Kistler], domains: [kistler.com], category: sensors, internal_equipment: true, sme_confirmed: false}
+  - {id: keller, name: KELLER Druckmesstechnik AG, aliases: [KELLER Druckmesstechnik, Keller AG], domains: [keller-druck.com], category: sensors, internal_equipment: true, sme_confirmed: false}
+  - {id: wika, name: WIKA Alexander Wiegand SE & Co. KG, aliases: [WIKA], domains: [wika.com, wika.de], category: sensors, internal_equipment: true, sme_confirmed: false}
+  - {id: omega, name: Omega Engineering, aliases: [Omega Engineering, OMEGA Engineering], domains: [omega.com], category: sensors, internal_equipment: true, sme_confirmed: false}
+  - {id: honeywell, name: Honeywell, aliases: [Honeywell], domains: [honeywell.com], category: sensors, internal_equipment: true, sme_confirmed: false}
+  - {id: te_connectivity, name: TE Connectivity, aliases: [TE Connectivity], domains: [te.com], category: sensors, internal_equipment: true, sme_confirmed: false}
+  - id: hbk
+    name: HBK (Hottinger Brüel & Kjær)
+    aliases: [HBK, HBM, Hottinger Baldwin Messtechnik, Hottinger Brüel & Kjær]
+    case_sensitive_aliases: [HBK, HBM]
+    domains: [hbkworld.com, hbm.com]
+    category: sensors
+    internal_equipment: true
+    sme_confirmed: false
+  - {id: endress_hauser, name: Endress+Hauser, aliases: [Endress+Hauser, Endress + Hauser], domains: [endress.com], category: sensors, internal_equipment: true, sme_confirmed: false}
+  - {id: nagano_keiki, name: "Nagano Keiki Co., Ltd.", aliases: [Nagano Keiki, 長野計器], domains: [naganokeiki.co.jp], category: sensors, internal_equipment: true, sme_confirmed: false}
+  - {id: yokogawa, name: Yokogawa Electric, aliases: [Yokogawa, 横河電機], domains: [yokogawa.com], category: sensors, internal_equipment: true, sme_confirmed: false}
+
+  # ---- valves and fluid components ---------------------------------------------------
+  - {id: swagelok, name: Swagelok Company, aliases: [Swagelok], domains: [swagelok.com], category: fluidics, internal_equipment: true, sme_confirmed: false}
+  - {id: parker, name: Parker Hannifin, aliases: [Parker Hannifin], domains: [parker.com], category: fluidics, internal_equipment: true, sme_confirmed: false}
+  - {id: lee_company, name: The Lee Company, aliases: [The Lee Company, Lee Company], domains: [theleeco.com], category: fluidics, internal_equipment: true, sme_confirmed: false}
+  - {id: marotta, name: Marotta Controls, aliases: [Marotta], domains: [marotta.com], category: fluidics, internal_equipment: false, sme_confirmed: false}
+  - {id: vacco, name: VACCO Industries, aliases: [VACCO], domains: [vacco.com], category: fluidics, internal_equipment: false, sme_confirmed: false}
+  - {id: buerkert, name: Bürkert Fluid Control Systems, aliases: [Bürkert, Buerkert, Burkert], domains: [burkert.com], category: fluidics, internal_equipment: true, sme_confirmed: false}
+  - {id: festo, name: Festo SE & Co. KG, aliases: [Festo], domains: [festo.com], category: fluidics, internal_equipment: true, sme_confirmed: false}
+  - {id: smc, name: SMC Corporation, aliases: [SMC Corporation, SMC], case_sensitive_aliases: [SMC], domains: [smcworld.com], category: fluidics, internal_equipment: true, sme_confirmed: false}
+
+  # ---- data acquisition and engineering software -------------------------------------
+  - {id: labjack, name: LabJack Corporation, aliases: [LabJack], domains: [labjack.com], category: daq_software, internal_equipment: true, sme_confirmed: false}
+  - id: national_instruments
+    name: NI (National Instruments)
+    aliases: [National Instruments, NI, LabVIEW]
+    case_sensitive_aliases: [NI]
+    domains: [ni.com]
+    category: daq_software
+    internal_equipment: true
+    sme_confirmed: false
+  - {id: ansys, name: Ansys, aliases: [Ansys, ANSYS], domains: [ansys.com], category: daq_software, internal_equipment: true, sme_confirmed: false}
+  - {id: keyence, name: Keyence Corporation, aliases: [Keyence, KEYENCE], domains: [keyence.com], category: daq_software, internal_equipment: true, sme_confirmed: false}
+
+  # ---- materials and propellant suppliers --------------------------------------------
+  - {id: ati, name: ATI Inc., aliases: [ATI Specialty Alloys, ATI Inc.], domains: [atimaterials.com], category: materials, internal_equipment: false, sme_confirmed: false}
+  - {id: special_metals, name: Special Metals Corporation, aliases: [Special Metals], domains: [specialmetals.com], category: materials, internal_equipment: false, sme_confirmed: false}
+  - {id: evonik, name: Evonik Industries, aliases: [Evonik], domains: [evonik.com], category: chemicals, internal_equipment: false, sme_confirmed: false}
+  - {id: solvay, name: Solvay, aliases: [Solvay], domains: [solvay.com], category: chemicals, internal_equipment: false, sme_confirmed: false}
