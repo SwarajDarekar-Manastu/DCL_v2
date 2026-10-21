@@ -119,3 +119,32 @@ def test_trace_lookup_by_chat_and_message_and_feedback_are_signed_routes(client)
     assert client.post(path, content=body, headers=signed_headers(body)).status_code == 501
     bad = json.dumps({"kind": "rude"}).encode()
     assert client.post(path, content=bad, headers=signed_headers(bad)).status_code == 422
+
+
+def test_retrieval_lab_needs_a_console_user_and_returns_the_search_result(monkeypatch):
+    from backend.api import auth
+    from backend.indexing.retrieval import SearchResult
+
+    app = FastAPI()
+    app.include_router(engine.router)
+    seen = {}
+
+    def fake_search(session, query, **kw):
+        seen.update(query=query, k=kw["k"], rerank=kw["rerank"])
+        return SearchResult(hits=[], dense_path="exact", leg_counts={"dense": 0, "lexical": 0, "parents": 0})
+
+    monkeypatch.setattr(engine, "search", fake_search)
+    app.dependency_overrides[engine.db_session] = lambda: None
+    app.dependency_overrides[engine.models_client] = lambda: None
+    client = TestClient(app)
+    refused = client.post("/v1/retrieval/search", json={"query": "TP37 Pc"})
+    assert refused.status_code in (401, 403, 503)  # 503: Console auth not configured in this environment
+    assert seen == {}
+
+    app.dependency_overrides[auth.current_user] = lambda: auth.ConsoleUser(
+        oid="o", name="n", email="e@manastuspace.com", roles=[auth.ConsoleRole.VIEWER]
+    )
+    response = client.post("/v1/retrieval/search", json={"query": "TP37 Pc", "k": 10, "rerank": False})
+    assert response.status_code == 200
+    assert response.json()["dense_path"] == "exact"
+    assert seen == {"query": "TP37 Pc", "k": 10, "rerank": None}

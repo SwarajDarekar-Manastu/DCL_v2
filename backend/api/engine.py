@@ -24,12 +24,15 @@ import json
 import time
 import uuid
 from enum import StrEnum
-from typing import Annotated, Literal
+from functools import lru_cache
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from backend.api.auth import CurrentUser
 from backend.config import Group, get_settings
+from backend.indexing.retrieval import Scope, SearchFilters, SearchResult, search
 
 MAX_CLOCK_SKEW_S = 300
 SSE_MEDIA_TYPE = "text/event-stream"
@@ -340,3 +343,56 @@ async def trace_for_message(
 @router.post("/traces/{trace_id}/feedback", status_code=202)
 async def feedback(trace_id: uuid.UUID, report: FeedbackRequest, identity: Identity) -> None:
     raise HTTPException(status_code=501, detail="answer_traces arrives with the workflow (M8)")
+
+
+# ---------------------------------------------------------------- retrieval lab (Console, file 08 §5.5)
+
+
+class RetrievalLabRequest(BaseModel):
+    query: Annotated[str, Field(min_length=1, max_length=2000)]
+    filters: SearchFilters = SearchFilters()
+    scope: Scope = Scope.CHILD
+    k: int = Field(default=30, ge=1, le=50)
+    user_language: str = "en"
+    rerank: bool = True
+
+
+@lru_cache(maxsize=1)
+def _session_factory():
+    from backend.postgres.session import engine_from_settings, session_factory
+
+    return session_factory(engine_from_settings(get_settings()))
+
+
+def db_session():
+    with _session_factory()() as session:
+        yield session
+
+
+def models_client():
+    from backend.llm_engine.local_models import ModelsClient
+
+    url = get_settings().models_url
+    if url is None:
+        raise HTTPException(status_code=503, detail="DCL_MODELS_URL is not set")
+    return ModelsClient(base_url=str(url))
+
+
+@router.post("/retrieval/search")
+def retrieval_lab(
+    request: RetrievalLabRequest,
+    user: CurrentUser,
+    session: Annotated[Any, Depends(db_session)],
+    models: Annotated[Any, Depends(models_client)],
+) -> SearchResult:
+    """The Retrieval lab: one search with its legs, path, scores and margin (Console users only)."""
+    return search(
+        session,
+        request.query,
+        embed_query=lambda q: models.embed_queries([q])[0],
+        rerank=models.rerank if request.rerank else None,
+        filters=request.filters,
+        scope=request.scope,
+        k=request.k,
+        user_language=request.user_language,
+    )

@@ -50,6 +50,14 @@ EntityRef = uuid.UUID | tuple[str, str]
 class AliasIndex:
     by_key: dict[tuple[str, str], EntityRef] = field(default_factory=dict)
     names: dict[str, list[tuple[str, EntityRef]]] = field(default_factory=dict)
+    display: dict[EntityRef, str] = field(default_factory=dict)
+
+    def set_name(self, ref: EntityRef, canonical_name: str) -> None:
+        """The English canonical name shown in contextual headers and `search_text`."""
+        self.display.setdefault(ref, canonical_name)
+
+    def name(self, ref: EntityRef) -> str:
+        return self.display.get(ref) or (ref[1] if isinstance(ref, tuple) else str(ref))
 
     def add(self, entity_type: str, surface: str, ref: EntityRef) -> None:
         key = canonical_key(surface)
@@ -129,6 +137,7 @@ def index_from_seed(seed: Iterable[SeedEntity]) -> AliasIndex:
     for entity in seed:
         ref = (str(entity.type), canonical_key(entity.canonical))
         index.add(entity.type, entity.canonical, ref)
+        index.set_name(ref, entity.canonical)
         for alias in entity.aliases:
             index.add(entity.type, alias, ref)
     return index
@@ -141,6 +150,7 @@ def index_from_db(session: Session) -> AliasIndex:
         select(Entity.entity_id, Entity.type, Entity.canonical_name)
     ):
         index.add(entity_type, name, entity_id)
+        index.set_name(entity_id, name)
     for entity_id, entity_type, alias in session.execute(
         select(EntityAlias.entity_id, EntityAlias.type, EntityAlias.alias)
     ):
@@ -211,10 +221,13 @@ def normalize(
     *,
     doc_id: uuid.UUID | None,
     languages: dict[str, str | None] | None = None,
+    source: MentionSource = MentionSource.LLM,
+    decisions: EntityDecisions | None = None,
 ) -> EntityDecisions:
-    """Resolve `(node_ref, extracted entity)` pairs; the index grows with every new entity and alias."""
+    """Resolve `(node_ref, extracted entity)` pairs; the index grows with every new entity and alias.
+    Pass `decisions` to append to an earlier call (route mentions after LLM entities)."""
     languages = languages or {}
-    decisions = EntityDecisions()
+    decisions = decisions if decisions is not None else EntityDecisions()
     for node_ref, extract in extracted:
         entity_type, surface = extract.type, extract.surface
         key = canonical_key(surface)
@@ -234,9 +247,10 @@ def normalize(
             decisions.new_entities.append(new)
             ref = new.ref
             index.add(entity_type, name, ref)
+            index.set_name(ref, name)
         if not known_surface:
             decisions.new_aliases.append(NewAlias(entity_type, key, surface.strip(), ref, created_by, score))
             index.add(entity_type, surface, ref)
         start, end = _span(node_texts.get(node_ref, ""), surface)
-        decisions.mentions.append(MentionDecision(node_ref, ref, entity_type, surface, start, end))
+        decisions.mentions.append(MentionDecision(node_ref, ref, entity_type, surface, start, end, source))
     return decisions
