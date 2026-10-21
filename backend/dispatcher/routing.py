@@ -13,14 +13,16 @@ CLI: ``python -m backend.dispatcher.routing dispatch`` (uses DCL_DATABASE_URL an
 
 import hashlib
 import json
+import uuid
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from minio import Minio
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.dispatcher.adapters import Adapter, adapter_for
 from backend.dispatcher.assembler import DocumentPlan, FileRef, assemble, load_section_file_sets
 from backend.dispatcher.contract import ConflictEvidence, ConflictSide, Flag, FlagAnchor, ParseFailureEvidence
 from backend.dispatcher.folder_context import FolderContext, Sibling, build_folder_context
@@ -50,7 +52,14 @@ from backend.storage.minio import CIR, BucketStore, parse_uri, uri
 from backend.sync.inspect import zip_member_names
 from backend.sync.scope import in_scope
 
-IMPLEMENTED_ROUTES: frozenset[Route] = frozenset()  # grows as route adapters land (Route C next)
+PROCESSED_MARK = "processed_awaiting_commit"  # set by a route whose commit path is not there yet
+
+
+@dataclass(frozen=True)
+class Release:
+    doc_id: uuid.UUID
+    task: str
+    queue: str
 
 
 @dataclass
@@ -61,7 +70,9 @@ class DispatchResult:
     halted: int = 0
     skipped_existing: int = 0
     conflicts: int = 0
+    released: int = 0
     by_route: dict[str, int] = field(default_factory=dict)
+    to_process: list[Release] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -218,9 +229,10 @@ def _write_plan(
 ) -> None:
     primary = by_blob[plan.primary.blob_sha256]
     route = primary.resolved.route
+    adapter = adapter_for(route, head, primary.item.name) if route in routes_on else None
     if route is None:
         status = DocumentStatus.HALTED
-    elif route in routes_on and route in IMPLEMENTED_ROUTES:
+    elif adapter is not None:
         status = DocumentStatus.PROCESSING
     else:
         status = DocumentStatus.WAITING_FOR_ROUTE
@@ -266,6 +278,8 @@ def _write_plan(
         result.halted += 1
     elif status == DocumentStatus.WAITING_FOR_ROUTE:
         result.waiting += 1
+    else:
+        result.to_process.append(_release(document.doc_id, adapter))
     for message in [*plan.conflicts, *context.conflicts]:
         upsert_document_flag(session, document.doc_id, _conflict_flag(message, plan.title), route)
         result.conflicts += 1
@@ -274,9 +288,52 @@ def _write_plan(
     result.by_route[key] = result.by_route.get(key, 0) + 1
 
 
+def _release(doc_id: uuid.UUID, adapter: Adapter) -> Release:
+    return Release(doc_id=doc_id, task=adapter.task, queue=str(adapter.queue))
+
+
+def release_waiting(session: Session, minio: Minio, routes_on: set[Route], result: DispatchResult) -> None:
+    """Parked documents (WAITING_FOR_ROUTE) whose route is now enabled and has an adapter for their
+    primary file become PROCESSING (file 06 §3: re-dispatched automatically when the registry gains one).
+    Documents a route already processed (waiting only for their commit path) stay parked."""
+    rows = session.execute(
+        select(Document, Blob, DriveItem.name)
+        .join(DocumentSource, DocumentSource.doc_id == Document.doc_id)
+        .join(Blob, Blob.sha256 == DocumentSource.blob_sha256)
+        .join(DriveItem, DriveItem.blob_sha256 == Blob.sha256)
+        .where(
+            DocumentSource.role == DocumentSourceRole.PRIMARY,
+            Document.status == DocumentStatus.WAITING_FOR_ROUTE,
+            Document.route.in_([r.value for r in routes_on]),
+            DriveItem.status.not_in(DEAD_LOCATION),
+        )
+        .order_by(DriveItem.path_cached)
+    ).all()
+    seen: set[uuid.UUID] = set()
+    for document, blob, name in rows:
+        if document.doc_id in seen or PROCESSED_MARK in (document.metadata_sources or {}):
+            continue
+        seen.add(document.doc_id)
+        adapter = adapter_for(Route(document.route), _read(minio, blob, HEAD_BYTES), name)
+        if adapter is None:
+            continue
+        document.status = DocumentStatus.PROCESSING
+        result.to_process.append(_release(document.doc_id, adapter))
+        result.released += 1
+    session.flush()
+
+
+Enqueue = Callable[[Release], None]
+
+
 def dispatch(
-    session: Session, minio: Minio, section_file_sets: Sequence[Sequence[str]] | None = None
+    session: Session,
+    minio: Minio,
+    section_file_sets: Sequence[Sequence[str]] | None = None,
+    enqueue: Enqueue | None = None,
 ) -> DispatchResult:
+    """Create documents for new content, release parked ones, and hand every PROCESSING document to
+    ``enqueue`` after its transaction committed (a worker never sees an uncommitted document)."""
     result = DispatchResult()
     scope = pipeline_config.processing_scope(session)
     routes_on = enabled_routes(session)
@@ -344,7 +401,11 @@ def dispatch(
             )
         session.commit()
     result.superseded = apply_supersessions(session)
+    release_waiting(session, minio, routes_on, result)
     session.commit()
+    if enqueue is not None:
+        for release in result.to_process:
+            enqueue(release)
     return result
 
 

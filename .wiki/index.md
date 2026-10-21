@@ -61,6 +61,7 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
+| [backend__route-c-telemetry__labjack-dat](plans/backend__route-c-telemetry__labjack-dat.md) | `backend/route-c-telemetry` | S1 | 2026-10-22 |
 
 ## Maintenance
 

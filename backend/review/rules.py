@@ -13,7 +13,7 @@ Bodies are typed per ``rule_type``. Operator rules export to YAML for ``config/r
 """
 
 import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from fnmatch import fnmatchcase
@@ -116,6 +116,14 @@ def resolve(rules: Iterable[RuleRecord], target: RuleTarget, rule_type: RuleType
             rule.created_at,
         ),
     )
+
+
+def resolve_where(
+    rules: Iterable[RuleRecord], target: RuleTarget, rule_type: RuleType, accept: Callable[[RuleRecord], bool]
+) -> RuleRecord | None:
+    """Like ``resolve`` but only among rules ``accept`` keeps (for example: the channel_map rules that
+    name one raw channel), so a specific rule that is silent about a channel does not hide a broader one."""
+    return resolve((rule for rule in rules if accept(rule)), target, rule_type)
 
 
 # ---------------------------------------------------------------- bodies

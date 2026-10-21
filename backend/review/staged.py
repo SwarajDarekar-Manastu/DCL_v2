@@ -1,0 +1,73 @@
+"""The validation gate and the staged payload (file 06 §2, §7; file 03 §1.5).
+
+After a route returns its ``ProcessedDocument``, the gate applies the severity policy
+(``flags.severity_overrides`` per route and flag type, ``flags.strict_mode``), upserts every flag by
+fingerprint, and decides: any HARD flag → the document is HALTED, the payload is staged at
+``dcl-cir/{sha256}/staged.json`` and nothing reaches the index; otherwise the commit path runs.
+``load_staged`` reads the payload back for ``resume_from_staged`` (resolution never re-parses).
+"""
+
+from dataclasses import dataclass
+
+from sqlalchemy.orm import Session
+
+from backend.dispatcher.contract import Flag, ProcessedDocument
+from backend.postgres import pipeline_config
+from backend.postgres.enums import DocumentStatus, FlagSeverity
+from backend.postgres.models import Document
+from backend.review.flags import upsert_document_flag
+from backend.storage.minio import BucketStore, parse_uri
+
+
+def staged_key(blob_sha256: str) -> str:
+    return f"{blob_sha256}/staged.json"
+
+
+@dataclass(frozen=True)
+class GateResult:
+    halted: bool
+    hard: int
+    soft: int
+    staged_uri: str | None = None
+
+
+def apply_severity_policy(session: Session, doc: ProcessedDocument) -> ProcessedDocument:
+    """``flags.strict_mode = true`` turns every SOFT into HARD; ``flags.severity_overrides`` is
+    ``{route: {flag_type: "HARD" | "SOFT"}}`` and wins over the route's default."""
+    strict = pipeline_config.get(session, "flags.strict_mode", default=False) is True
+    overrides = pipeline_config.get(session, "flags.severity_overrides", default={}) or {}
+    by_type = overrides.get(str(doc.route), {}) if isinstance(overrides, dict) else {}
+    flags: list[Flag] = []
+    for flag in doc.flags:
+        override = by_type.get(str(flag.flag_type))
+        severity = FlagSeverity(override) if override else flag.severity
+        if strict:
+            severity = FlagSeverity.HARD
+        flags.append(flag if severity == flag.severity else flag.model_copy(update={"severity": severity}))
+    return doc.model_copy(update={"flags": flags})
+
+
+def gate(session: Session, cir: BucketStore, document: Document, doc: ProcessedDocument) -> GateResult:
+    """Record the flags and halt on HARD. The caller commits; a clean document goes to the commit path."""
+    doc = apply_severity_policy(session, doc)
+    for flag in doc.flags:
+        upsert_document_flag(session, document.doc_id, flag, str(doc.route))
+    hard = sum(flag.severity == FlagSeverity.HARD for flag in doc.flags)
+    soft = len(doc.flags) - hard
+    if not hard:
+        return GateResult(halted=False, hard=0, soft=soft)
+    staged_uri = cir.put(staged_key(doc.blob_sha256), doc.model_dump_json().encode(), "application/json")
+    document.status = DocumentStatus.HALTED
+    document.staged_payload_uri = staged_uri
+    session.flush()
+    return GateResult(halted=True, hard=hard, soft=soft, staged_uri=staged_uri)
+
+
+def load_staged(cir: BucketStore, document: Document) -> ProcessedDocument:
+    if document.staged_payload_uri is None:
+        raise ValueError(f"document {document.doc_id} has no staged payload")
+    _, key = parse_uri(document.staged_payload_uri)
+    payload = cir.get(key)
+    if payload is None:
+        raise FileNotFoundError(f"staged payload {document.staged_payload_uri} is missing")
+    return ProcessedDocument.model_validate_json(payload)
