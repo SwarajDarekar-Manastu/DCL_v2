@@ -13,7 +13,15 @@ import backend.postgres.models  # noqa: F401
 from backend.postgres import enums
 from backend.postgres.base import Base, Tier
 
-M1_TABLES = {"sync_roots", "drive_folders", "drive_items", "blobs", "blob_derivations", "jobs"}
+M1_TABLES = {
+    "sync_roots",
+    "drive_folders",
+    "drive_items",
+    "blobs",
+    "blob_derivations",
+    "jobs",
+    "pipeline_config",
+}
 
 # Every ✓ column of file 05 §4.1 and the enum it must follow.
 CHECKED_COLUMNS: dict[tuple[str, str], type[StrEnum]] = {
