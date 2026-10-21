@@ -174,3 +174,9 @@ Merged / ready: `config/gate.yaml` with `kept_endings_by_parent_kind: {wbpz: [".
 Blocked on: S1 crawl folder listing (allowlist)
 Needs from others: nothing else
 Next: idle until the listing arrives
+
+## 2026-10-21 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: not yet requested. Compose stack is on the branch and verified live: 13 services healthy (ParadeDB 0.26.2-pg17, Redis 8.6.7, MinIO built from the pinned archived tag, LibreOffice/unoserver, models with GPU, api, beat, six queue workers per file 10 §4), GPU visible only to `models`, all workers answer ping, no `.env`/key files in the backend image. `uv run pytest` green; `DCL_STACK_PROJECT=dcl-v2 uv run pytest backend/tests/integration/stack` 9 passed
+Blocked on: nothing (session paused on usage limit)
+Needs from others: nothing new
+Next: add `libmagic1` to the backend image (S1 request), CI service MinIO + DCL_TEST_MINIO_* (S1 request), finish the compose-stack map page, delete plan sheet `platform__compose-stack__m0-stack`, request merge; tell S2 the models service uses `/models/health` with a 900 s start period and the `hf-cache` volume

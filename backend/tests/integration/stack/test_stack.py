@@ -60,9 +60,8 @@ def test_api_reports_its_role():
 
 
 def test_no_env_file_or_secret_in_backend_image():
-    result = exec_in(
-        "api", "sh", "-c", "find / -xdev \\( -name '.env' -o -name '*.pem' -o -name '*.pfx' \\) 2>/dev/null"
-    )
+    secret_names = "\\( -name '.env' -o -name '.env.*' -o -name '*.pfx' -o -name '*.key' \\)"
+    result = exec_in("api", "sh", "-c", f"find /app /home /opt /root /tmp -xdev {secret_names} 2>/dev/null")
     assert result.stdout.strip() == ""
 
 

@@ -26,16 +26,42 @@ EXPECTED_FILES = sorted(FIXTURES.glob("*/*/expected.yaml"))
 
 ROUTES = ["A1", "A2", "B", "C", "D", "E", "F", "G", None]
 STATUSES = ["ACTIVE", "ACTIVE_WITH_SOFT_FLAGS", "HALTED", "WAITING_FOR_ROUTE", "QUARANTINED"]
-FLAG_TYPES = ["UNIT_AMBIGUITY", "SCHEMA_UNKNOWN", "LOW_CONFIDENCE_EXTRACTION", "PARSE_FAILURE",
-              "UNSUPPORTED_FORMAT", "CONFLICT", "SENSITIVE_CONTENT", "HELD_LARGE_FILE", "CLOUD_RESTRICTED"]
+FLAG_TYPES = [
+    "UNIT_AMBIGUITY",
+    "SCHEMA_UNKNOWN",
+    "LOW_CONFIDENCE_EXTRACTION",
+    "PARSE_FAILURE",
+    "UNSUPPORTED_FORMAT",
+    "CONFLICT",
+    "SENSITIVE_CONTENT",
+    "HELD_LARGE_FILE",
+    "CLOUD_RESTRICTED",
+]
 ROOTS = ["APU Injector", "APU", "APS - Library", "APU Heater"]
-ROUTE_DIRS = ["dispatcher", "a1_office", "a2_source", "b_code", "c_telemetry", "d_photos",
-              "e_diagrams", "f_video", "g_archives"]
+ROUTE_DIRS = [
+    "dispatcher",
+    "a1_office",
+    "a2_source",
+    "b_code",
+    "c_telemetry",
+    "d_photos",
+    "e_diagrams",
+    "f_video",
+    "g_archives",
+]
 
 SCHEMA = {
     "type": "object",
-    "required": ["fixture", "edge_case", "origin", "byte_stable", "files", "simulated_location",
-                 "spec", "expected"],
+    "required": [
+        "fixture",
+        "edge_case",
+        "origin",
+        "byte_stable",
+        "files",
+        "simulated_location",
+        "spec",
+        "expected",
+    ],
     "additionalProperties": False,
     "properties": {
         "fixture": {"type": "string"},
@@ -44,11 +70,17 @@ SCHEMA = {
         "generator": {"type": "string", "pattern": r"^make_synthetic\.py::[a-z_]+$"},
         "byte_stable": {"type": "boolean"},
         "files": {"type": "array", "minItems": 1, "items": {"type": "string"}},
-        "simulated_location": {"type": "object", "required": ["root", "folder"],
-                               "additionalProperties": False,
-                               "properties": {"root": {"enum": ROOTS}, "folder": {"type": "string"}}},
-        "spec": {"type": "array", "minItems": 1,
-                 "items": {"type": "string", "pattern": "^docs/architecture/"}},
+        "simulated_location": {
+            "type": "object",
+            "required": ["root", "folder"],
+            "additionalProperties": False,
+            "properties": {"root": {"enum": ROOTS}, "folder": {"type": "string"}},
+        },
+        "spec": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "pattern": "^docs/architecture/"},
+        },
         "notes": {"type": "string"},
         "open_questions": {"type": "array", "items": {"type": "string"}},
         "expected": {
@@ -60,21 +92,37 @@ SCHEMA = {
                 "detected_mime": {"type": "string", "pattern": r"^[a-z]+/[a-z0-9.+-]+$"},
                 "documents": {"type": "integer", "minimum": 1},
                 "document_status": {"enum": STATUSES},
-                "flags": {"type": "array", "items": {
-                    "type": "object", "required": ["type", "severity", "reason"],
-                    "additionalProperties": False,
-                    "properties": {"type": {"enum": FLAG_TYPES}, "severity": {"enum": ["HARD", "SOFT"]},
-                                   "reason": {"type": "string"}}}},
+                "flags": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["type", "severity", "reason"],
+                        "additionalProperties": False,
+                        "properties": {
+                            "type": {"enum": FLAG_TYPES},
+                            "severity": {"enum": ["HARD", "SOFT"]},
+                            "reason": {"type": "string"},
+                        },
+                    },
+                },
                 "flags_exact": {"type": "boolean"},
                 "metadata": {"type": "object"},
                 "text_contains": {"type": "array", "items": {"type": "string"}},
                 "ocr_text_contains": {"type": "array", "items": {"type": "string"}},
-                "numeric_facts": {"type": "array", "items": {
-                    "type": "object", "required": ["quantity", "value", "unit"],
-                    "additionalProperties": False,
-                    "properties": {"quantity": {"type": "string"}, "value": {"type": "number"},
-                                   "unit": {"type": "string"},
-                                   "source": {"enum": ["vendor_claim", "literature"]}}}},
+                "numeric_facts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["quantity", "value", "unit"],
+                        "additionalProperties": False,
+                        "properties": {
+                            "quantity": {"type": "string"},
+                            "value": {"type": "number"},
+                            "unit": {"type": "string"},
+                            "source": {"enum": ["vendor_claim", "literature"]},
+                        },
+                    },
+                },
                 "entities": {"type": "array", "items": {"type": "object", "required": ["type", "surface"]}},
                 "never": {"type": "array", "items": {"type": "string"}},
             },
@@ -98,11 +146,21 @@ def pdf_text(path: Path) -> str:
 
 # ---- every fixture ----------------------------------------------------------------------
 
+
 def test_fixture_set_covers_file_10_section_7():
     names = {p.parent.name for p in EXPECTED_FILES}
-    assert {"rotated_scan", "merged_cells_fmea", "headerless_csv", "two_latex_masters", "zip_bomb_ratio",
-            "malicious_pickle", "pdf_is_html", "german_datasheet", "japanese_scanned_page",
-            "doi_paper"} <= names
+    assert {
+        "rotated_scan",
+        "merged_cells_fmea",
+        "headerless_csv",
+        "two_latex_masters",
+        "zip_bomb_ratio",
+        "malicious_pickle",
+        "pdf_is_html",
+        "german_datasheet",
+        "japanese_scanned_page",
+        "doi_paper",
+    } <= names
 
 
 @pytest.mark.parametrize("path", EXPECTED_FILES, ids=lambda p: p.parent.name)
@@ -111,16 +169,22 @@ def test_expected_yaml_is_valid_and_files_match(path):
     jsonschema.validate(data, SCHEMA)
     assert data["fixture"] == path.parent.name
     assert path.parent.parent.name in ROUTE_DIRS
-    present = sorted(str(p.relative_to(path.parent)) for p in path.parent.rglob("*")
-                     if p.is_file() and p.name != "expected.yaml")
+    present = sorted(
+        str(p.relative_to(path.parent))
+        for p in path.parent.rglob("*")
+        if p.is_file() and p.name != "expected.yaml"
+    )
     assert present == sorted(data["files"]), "fixture folder must hold exactly the listed files"
     for flag in data["expected"]["flags"]:
         if flag["severity"] == "HARD":
             assert data["expected"]["document_status"] == "HALTED"
 
 
-@pytest.mark.parametrize("path", [p for p in EXPECTED_FILES if load(p)["expected"].get("text_contains")],
-                         ids=lambda p: p.parent.name)
+@pytest.mark.parametrize(
+    "path",
+    [p for p in EXPECTED_FILES if load(p)["expected"].get("text_contains")],
+    ids=lambda p: p.parent.name,
+)
 def test_text_contains_is_in_the_file(path):
     data = load(path)
     texts = []
@@ -153,6 +217,7 @@ def test_fixture_corpus_is_small():
 
 
 # ---- per edge case ----------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("name", ["rotated_scan", "japanese_scanned_page"])
 def test_scanned_pages_have_no_text_layer(name):
