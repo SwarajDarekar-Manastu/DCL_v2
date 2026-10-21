@@ -12,6 +12,8 @@ Config keys (one mapping; the source file is ``config/gate.yaml``):
     junk_names               exact names → SKIPPED_JUNK                           (T2:<name>)
     junk_name_prefixes       name starts → SKIPPED_JUNK                           (T2:<prefix>)
     junk_extensions_under    {ending: [segment globs]}: junk only below such a folder (T2:<ending>)
+    kept_endings_by_parent_kind {kind: [endings]}: for archive members gated with that
+                             parent_kind (e.g. ``wbpz``), these endings skip the Tier-2 ending checks
     shortcut_extensions      name endings → SKIPPED_SHORTCUT                      (T3:shortcut)
     max_download_bytes       larger files → HELD_LARGE_FILE                        (T3:size)
 """
@@ -35,6 +37,7 @@ class GateConfig:
     junk_names: frozenset[str]
     junk_name_prefixes: tuple[str, ...]
     junk_extensions_under: Mapping[str, tuple[str, ...]]
+    kept_endings_by_parent_kind: Mapping[str, frozenset[str]]
     shortcut_extensions: tuple[str, ...]
     max_download_bytes: int
 
@@ -54,6 +57,12 @@ class GateConfig:
                     _text(g, "junk_extensions_under") for g in globs
                 )
                 for ending, globs in (data.get("junk_extensions_under") or {}).items()
+            },
+            kept_endings_by_parent_kind={
+                _text(kind, "kept_endings_by_parent_kind"): frozenset(
+                    _text(ending, "kept_endings_by_parent_kind") for ending in endings
+                )
+                for kind, endings in (data.get("kept_endings_by_parent_kind") or {}).items()
             },
             shortcut_extensions=lower("shortcut_extensions"),
             max_download_bytes=int(data["max_download_bytes"]),
@@ -79,11 +88,15 @@ class Verdict:
 
 @dataclass(frozen=True)
 class GateInput:
-    """What the gate sees of one file item: Graph metadata plus the folder names from the root down."""
+    """What the gate sees of one file item: Graph metadata plus the folder names from the root down.
+
+    ``parent_kind`` is set for archive members (Route G): the kind of the containing archive.
+    """
 
     name: str
     size_bytes: int | None
     folder_names: Sequence[str]
+    parent_kind: str | None = None
     is_package: bool = False
     is_shortcut: bool = False
 
@@ -119,11 +132,16 @@ def gate_item(item: GateInput, config: GateConfig) -> Verdict | None:
     for prefix in config.junk_name_prefixes:
         if name.startswith(prefix):
             return Verdict(DriveItemStatus.SKIPPED_JUNK, f"T2:{prefix}")
+    kept = config.kept_endings_by_parent_kind.get((item.parent_kind or "").casefold(), frozenset())
     for ending in config.junk_extensions:
-        if name.endswith(ending):
+        if name.endswith(ending) and ending not in kept:
             return Verdict(DriveItemStatus.SKIPPED_JUNK, f"T2:{ending}")
     for ending, globs in config.junk_extensions_under.items():
-        if name.endswith(ending) and _first_match(item.folder_names, globs) is not None:
+        if (
+            name.endswith(ending)
+            and ending not in kept
+            and _first_match(item.folder_names, globs) is not None
+        ):
             return Verdict(DriveItemStatus.SKIPPED_JUNK, f"T2:{ending}")
 
     if item.is_package:

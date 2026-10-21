@@ -17,7 +17,7 @@ Reject junk from Graph metadata (tiers 1–3), quarantine paths and secrets (tie
 Code:
 - `backend/sync/gate.py` (`GateConfig`, `GateInput`, `gate_item()` tiers 1–3, `folder_flags()`)
 - `backend/sync/scope.py` (`in_scope()`, `HELD_BY_DOWNLOAD_SCOPE`)
-- `config/gate.yaml` (planned; S5 owns `config/*.yaml`, schema in the gate.py docstring)
+- `config/gate.yaml` (S5 owns it; schema in the gate.py docstring)
 - Tier 4 (magic bytes, secret scan) arrives with `backend/sync/downloader.py` (planned)
 
 Tests and fixtures:
@@ -27,7 +27,7 @@ Tests and fixtures:
 ## Interfaces
 
 Provides:
-- `gate_item(GateInput, GateConfig) -> Verdict | None` with reasons `T1:<segment>`, `T1:quarantine:<segment>`, `T2:<ending|name|prefix>`, `T3:empty|package|shortcut|size`
+- `gate_item(GateInput, GateConfig) -> Verdict | None` (`GateInput.parent_kind` for archive members; `kept_endings_by_parent_kind` keeps e.g. `.out` inside `.wbpz`) with reasons `T1:<segment>`, `T1:quarantine:<segment>`, `T2:<ending|name|prefix>`, `T3:empty|package|shortcut|size`
 - `in_scope(scope, root_name, ancestor_folder_ids, path)`; empty scope = everything
 - gate decision + reason per item
 - HELD_BY_SCOPE handling
@@ -61,6 +61,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | Gate tiers 1–3 and the download-scope matcher as pure functions; 49 unit tests |
+| 2026-10-21 | S1 | Patterns must be strings; `parent_kind` exception (`.out` kept inside `.wbpz`, file 02 §4 / 03 §11) |
 
 ## Related
 
