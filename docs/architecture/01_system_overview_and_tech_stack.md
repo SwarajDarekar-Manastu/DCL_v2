@@ -200,7 +200,7 @@ Using Gemini means proprietary test data (pressure traces, failure photos, catal
 
 ### 7.1 Environment contract (secrets and endpoints live in `.env`, never in the database)
 
-The shared `.env` beside `backend/devops/compose.yaml` is root-owned, mode 600, never copied into an image, and scanned in CI. The code reads these names (values are filled in by the operator; placeholders are refused at startup with a clear message):
+The shared `.env` lives at the **repository root** (the compose files under `backend/devops/` reference it as `../../.env`); it is root-owned, mode 600, git-ignored, never copied into an image, and scanned in CI. The code reads these names (values are filled in by the operator; placeholders are refused at startup with a clear message):
 
 | Group | Variables | Used by |
 |-------|-----------|---------|
