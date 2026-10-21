@@ -20,7 +20,7 @@ from backend.api import (
     viewer,
     ws,
 )
-from backend.config import Role, get_settings
+from backend.config import ConfigError, Role, get_settings
 
 API_ROUTERS: list[ModuleType] = [
     health,
@@ -50,8 +50,15 @@ async def lifespan(_: FastAPI):
     yield
 
 
-def create_app() -> FastAPI:
+def _role() -> Role:
     role = get_settings().role
+    if role is None:
+        raise ConfigError("ROLE is required to start backend.main (api | models | all)")
+    return role
+
+
+def create_app() -> FastAPI:
+    role = _role()
     app = FastAPI(title=f"DCL backend ({role})", lifespan=lifespan)
     for module in ROUTERS_BY_ROLE[role]:
         app.include_router(module.router)
@@ -59,7 +66,7 @@ def create_app() -> FastAPI:
 
 
 def run() -> None:
-    role = get_settings().role
+    role = _role()
     uvicorn.run("backend.main:create_app", factory=True, host="0.0.0.0", port=DEFAULT_PORT_BY_ROLE[role])  # noqa: S104
 
 
