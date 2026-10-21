@@ -3,7 +3,7 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import auth
-from backend.api.auth import ConsoleUser, Role, require_role
+from backend.api.auth import ConsoleUser, ConsoleRole, require_role
 
 from .conftest import ADMINS, CONFIG, REVIEWERS, make_token, resolve_key
 
@@ -14,11 +14,11 @@ def client():
     app.include_router(auth.router)
 
     @app.get("/reviewer-only")
-    def reviewer_only(user: ConsoleUser = Depends(require_role(Role.REVIEWER))):
+    def reviewer_only(user: ConsoleUser = Depends(require_role(ConsoleRole.REVIEWER))):
         return {"oid": user.oid}
 
     @app.get("/admin-only")
-    def admin_only(user: ConsoleUser = Depends(require_role(Role.ADMIN))):
+    def admin_only(user: ConsoleUser = Depends(require_role(ConsoleRole.ADMIN))):
         return {"oid": user.oid}
 
     app.dependency_overrides[auth.get_auth_config] = lambda: CONFIG

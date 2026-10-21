@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, ValidationError
 
-from backend.api.auth import AuthConfig, AuthError, ConsoleUser, KeyResolver, Role, get_auth_config, get_key_resolver, verify_token
+from backend.api.auth import AuthConfig, AuthError, ConsoleUser, KeyResolver, ConsoleRole, get_auth_config, get_key_resolver, verify_token
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class Topic(StrEnum):
     OPS = "ops"  # key = counter name; events: counters
 
 
-TOPIC_ROLE = {Topic.CASE: Role.REVIEWER, Topic.RUN: Role.VIEWER, Topic.OPS: Role.VIEWER}
+TOPIC_ROLE = {Topic.CASE: ConsoleRole.REVIEWER, Topic.RUN: ConsoleRole.VIEWER, Topic.OPS: ConsoleRole.VIEWER}
 
 
 class Event(BaseModel):

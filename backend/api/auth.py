@@ -2,7 +2,7 @@
 
 Roles: any authenticated user of the tenant is `viewer`; members of `dcl-reviewers` are
 `reviewer`; members of `dcl-admins` are `admin` (admin implies reviewer). Other routers
-protect themselves with `Depends(require_role(Role.REVIEWER))`.
+protect themselves with `Depends(require_role(ConsoleRole.REVIEWER))`.
 """
 
 from collections.abc import Callable
@@ -20,13 +20,13 @@ ENTRA_AUTHORITY = "https://login.microsoftonline.com"
 CLOCK_LEEWAY_S = 60
 
 
-class Role(StrEnum):
+class ConsoleRole(StrEnum):
     VIEWER = "viewer"
     REVIEWER = "reviewer"
     ADMIN = "admin"
 
 
-ROLE_RANK = {Role.VIEWER: 0, Role.REVIEWER: 1, Role.ADMIN: 2}
+ROLE_RANK = {ConsoleRole.VIEWER: 0, ConsoleRole.REVIEWER: 1, ConsoleRole.ADMIN: 2}
 
 
 @dataclass(frozen=True)
@@ -50,9 +50,9 @@ class ConsoleUser(BaseModel):
     oid: str
     name: str
     email: str
-    roles: list[Role]
+    roles: list[ConsoleRole]
 
-    def has(self, role: Role) -> bool:
+    def has(self, role: ConsoleRole) -> bool:
         return any(ROLE_RANK[r] >= ROLE_RANK[role] for r in self.roles)
 
 
@@ -88,12 +88,12 @@ def get_key_resolver(config: AuthConfig = Depends(get_auth_config)) -> KeyResolv
     return lambda token: client.get_signing_key_from_jwt(token).key
 
 
-def roles_for_groups(groups: list[str], config: AuthConfig) -> list[Role]:
-    roles = [Role.VIEWER]
+def roles_for_groups(groups: list[str], config: AuthConfig) -> list[ConsoleRole]:
+    roles = [ConsoleRole.VIEWER]
     if config.group_reviewers in groups or config.group_admins in groups:
-        roles.append(Role.REVIEWER)
+        roles.append(ConsoleRole.REVIEWER)
     if config.group_admins in groups:
-        roles.append(Role.ADMIN)
+        roles.append(ConsoleRole.ADMIN)
     return roles
 
 
@@ -153,7 +153,7 @@ def current_user(
     return user
 
 
-def require_role(role: Role) -> Callable[..., ConsoleUser]:
+def require_role(role: ConsoleRole) -> Callable[..., ConsoleUser]:
     def dependency(user: ConsoleUser = Depends(current_user)) -> ConsoleUser:
         if not user.has(role):
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"requires role {role}")
