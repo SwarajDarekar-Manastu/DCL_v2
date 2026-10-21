@@ -100,7 +100,10 @@ def sse(*events) -> str:
     return "".join(engine.to_sse(e) for e in events)
 
 
-ANSWER = {"/v1/answer": (200, EXAMPLE.read_text(), "text/event-stream")}
+ANSWER = {
+    "/v1/answer": (200, EXAMPLE.read_text(), "text/event-stream"),
+    f"/v1/answer/{TRACE}/confirm": (202, "", "application/json"),  # the example asks one confirmation
+}
 
 
 def test_example_stream_maps_to_open_webui_events(pipe_module):
@@ -132,6 +135,8 @@ def test_example_stream_maps_to_open_webui_events(pipe_module):
     assert "iframe:height" in embeds[0]
     assert {"type": "chat:message:follow_ups", "data": {"follow_ups": ["Compare with T05?"]}} in events
 
+    assert [r.url.path for r in recorder.requests] == ["/v1/answer", f"/v1/answer/{TRACE}/confirm"]
+    assert json.loads(recorder.requests[1].content)["accepted"] is True
     sent = recorder.requests[0]
     body = json.loads(sent.content)
     assert body["messages"] == [{"role": "user", "content": "Steady-state pressure of TP07 T04?"}]

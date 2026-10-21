@@ -28,16 +28,19 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from minio import Minio
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.api.assets import get_minio
 from backend.api.auth import ConsoleRole, ConsoleUser, require_role
-from backend.dispatcher.contract import Anchor, AnchorError, format_anchor, parse_anchor
+from backend.dispatcher.contract import Anchor, AnchorError, format_anchor
 from backend.indexing.anchors import ResolutionStatus, resolve_anchor
 from backend.postgres.enums import AssetKind, DocumentSourceRole, DriveItemStatus
 from backend.postgres.models import Asset, Document, DocumentNode, DocumentSource, DriveItem
-from backend.storage.minio import RAW, raw_key, uri
+from backend.postgres.session import get_session
+from backend.storage.minio import RAW, presign_get, raw_key, uri
 
 # ---------------------------------------------------------------- anchor parameter
 # The format is owned by backend.dispatcher.contract (parse_anchor / format_anchor / Anchor).
@@ -275,12 +278,12 @@ def build_viewer_payload(
     session: Session, doc_id: UUID, anchor_text: str, translate: bool, presign: PresignFn
 ) -> ViewerPayload:
     """Resolve the anchor to the current nodes (page + hash, falling back to the page) and shape the view."""
+    anchor = Anchor.parse(doc_id, anchor_text) if anchor_text else None  # validate input before reading
     doc = session.get(Document, doc_id)
     if doc is None:
         raise DocumentNotFound(str(doc_id))
     blob = _primary_blob(session, doc_id)
 
-    anchor = Anchor.parse(doc_id, anchor_text) if anchor_text else None
     status, page_no, nodes, boxes = ResolutionStatus.EXACT, None, [], []
     if anchor is not None:
         resolution = resolve_anchor(session, anchor)
@@ -331,15 +334,14 @@ Viewer = Annotated[ConsoleUser, Depends(require_role(ConsoleRole.VIEWER))]
 def get_viewer(
     doc_id: UUID,
     user: Viewer,
+    session: Annotated[Session, Depends(get_session)],
+    minio: Annotated[Minio, Depends(get_minio)],
     anchor: Annotated[str, Query(max_length=600)] = "",
     translate: bool = False,
 ) -> ViewerPayload:
     try:
-        parse_anchor(anchor) if anchor else {}
+        return build_viewer_payload(session, doc_id, anchor, translate, lambda u: presign_get(minio, u))
     except AnchorError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-    raise HTTPException(
-        status.HTTP_501_NOT_IMPLEMENTED,
-        "viewer resolution is not wired yet: needs the Anchor model, document and asset models, "
-        "presign (S1) and resolve_anchor (S2)",
-    )
+    except DocumentNotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no document {doc_id}") from exc

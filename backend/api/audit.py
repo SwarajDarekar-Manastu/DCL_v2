@@ -7,7 +7,7 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from backend.api.auth import ConsoleRole, ConsoleUser, require_role
 from backend.postgres.enums import AuditEntityType
 from backend.postgres.models import AuditEvent
+from backend.postgres.session import get_session
 
 
 class AuditItem(BaseModel):
@@ -73,7 +74,9 @@ Reviewer = Annotated[ConsoleUser, Depends(require_role(ConsoleRole.REVIEWER))]
 
 
 @router.get("")
-def list_audit(user: Reviewer, filters: Annotated[AuditFilters, Query()]) -> AuditPage:
-    raise HTTPException(
-        status.HTTP_501_NOT_IMPLEMENTED, "audit reads wait for the request session dependency (S1)"
-    )
+def list_audit(
+    user: Reviewer,
+    session: Annotated[Session, Depends(get_session)],
+    filters: Annotated[AuditFilters, Query()],
+) -> AuditPage:
+    return query_audit(session, filters)

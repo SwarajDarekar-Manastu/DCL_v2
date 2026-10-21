@@ -304,3 +304,9 @@ Merged / ready: gateway client rework to the verified contract (ManastuGatewayAd
 Blocked on: S2 conftest change (`GEMINI_API_STYLE="openai"` in their vision test settings) before this can merge green
 Needs from others: operator — `.env` has `GEMINI_API_STYLE=gemini`; it must be `manastu` (or removed, the default) for the real gateway
 Next: CI pipeline (incl. disposable MinIO for S1's tests), observability, MinIO replacement comparison by end of M4
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: viewer endpoint wired to real tables (`build_viewer_payload` over documents, document_sources, drive_items, assets and S2's `resolve_anchor`; 404/400; page render with cited boxes, code, photo, video, text views); `GET /audit` over audit_events (reviewer, filters, cursor) and the Console Audit page with a case History link; Pipe replay test updated for the confirmation now in S2's example stream. 80 Vitest, 918 backend unit, 12 integration tests on a disposable ParadeDB (container dcl-s3-test, 127.0.0.1:55436).
+Blocked on: nothing. Open: `open_flags`/`review_case_key` in the viewer and the end-to-end re-index check wait for S1's review_flags and commit path; chat-attachment upload owner (Lead).
+Needs from others: nothing new.
+Next: Open WebUI Actions (Show trace, Add to benchmark, Report issue) and the Filter.
