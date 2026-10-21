@@ -15,7 +15,8 @@ Parent/child/table/special nodes from `ProcessedDocument.nodes`, English context
 ## Location
 
 Code:
-- `backend/indexing/chunker.py` (`chunk_document`, `build_embed_texts`, `IndexNode`, `ChunkingConfig`, table splitting)
+- `backend/indexing/chunker.py` (`chunk_document`, `build_embed_texts`, `IndexNode`, `ChunkingConfig`)
+- `backend/indexing/tables.py` (`table_rows`, `row_groups`, `split_table`, `table_to_text`)
 - `backend/indexing/anchors.py` (`content_hash`, `make_anchor`, `resolve_among`, `AnchorResolution`)
 - `backend/indexing/identifiers.py` (`extract_identifiers`, `content_codes`)
 - `backend/indexing/index_document.py` (planned: chunk → enrich → overlays → embed → commit)
@@ -46,6 +47,7 @@ Consumes:
 ## Workspace (files to touch when modifying this feature)
 
 - `backend/indexing/chunker.py`
+- `backend/indexing/tables.py`
 - `backend/indexing/anchors.py`
 - `backend/indexing/identifiers.py`
 - `backend/indexing/index_document.py`
@@ -66,6 +68,7 @@ Consumes:
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | Table helpers moved to `tables.py` (Lead approval); chunker under 600 lines |
 | 2026-10-21 | S2 | Chunker, contextual header, embed_text cap, identifiers with shared fixture, anchor hash/make/resolve; 47 tests |
 
 ## Related
