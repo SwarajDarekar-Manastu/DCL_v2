@@ -289,3 +289,8 @@ Merged / ready: `frontend/openwebui-pipe`. The Pipe against S2's /v1/answer cont
 Blocked on: nothing for the Pipe; a live run waits for the engine (M8). Confirmations use trace_id once S2's c1641d5 lands (declined until then).
 Needs from others: the Lead to decide the owner of a chat-attachment upload endpoint (the Pipe sends attachments=[]).
 Next: GET /audit (approved, owner S3, 501 until S1's audit_events model) and the Audit page; then Actions (Show trace, Add to benchmark, Report issue) and the Filter.
+## 2026-10-22 01:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: enrichment (`backend/llm_engine/enrichment/{extract,entities,numeric_facts}.py`, prompt `enrichment/parent.v1.md`), 37 tests; `resolve_anchor` over document_nodes; trace_id on ConfirmationEvent; torch-free local-model tests; vision cache on BucketStore; `indexing/tables.py`.
+Blocked on: nothing
+Needs from others: S1: who seeds `config/aerospace_synonyms.yaml` into entities/entity_aliases, and whether `sanity_ranges` is seeded into pipeline_config; your commit consumes `EntityDecisions` and `FactDecision`s
+Next: index_document (chunk → enrich → normalize → facts → embed → hand to commit), then retrieval and the BM25 DDL for S1

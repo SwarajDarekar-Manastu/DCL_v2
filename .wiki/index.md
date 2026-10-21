@@ -31,7 +31,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/route-a1-office` | planned | S2 | [Route A1: PDF, DOCX, PPTX, PPT](backend/route-a1-office.md) |
 | `backend/route-d-photos` | planned | S2 | [Route D: hardware inspection photos](backend/route-d-photos.md) |
 | `backend/route-f-video` | planned | S2 | [Route F: test-cell and workshop videos](backend/route-f-video.md) |
-| `backend/enrichment` | planned | S2 | [L2 enrichment, entity normalization, numeric facts](backend/enrichment.md) |
+| `backend/enrichment` | in-progress | S2 | [L2 enrichment, entity normalization, numeric facts](backend/enrichment.md) |
 | `backend/chunker-and-anchors` | in-progress | S2 | [Chunker, contextual headers, stable anchors, identifier extraction](backend/chunker-and-anchors.md) |
 | `backend/embedding-service` | done | S2 | [Embedding service (EmbeddingGemma 2, text + image, GPU)](backend/embedding-service.md) |
 | `backend/reranker-service` | done | S2 | [Reranker service (bge-reranker-v2-m3, GPU)](backend/reranker-service.md) |

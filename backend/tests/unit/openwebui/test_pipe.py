@@ -170,7 +170,7 @@ def test_engine_accepts_the_pipe_signature(monkeypatch):
 
 def confirmation_stream(with_trace: bool) -> str:
     event = engine.ConfirmationEvent(
-        confirmation_id="c-1", title="Use unverified value?", message="PT-101 needs review"
+        trace_id=uuid.UUID("00000000-0000-0000-0000-000000000001"), confirmation_id="c-1", title="Use unverified value?", message="PT-101 needs review"
     )
     frame = engine.to_sse(event)
     if with_trace:  # S2 adds trace_id to ConfirmationEvent (c1641d5); same wire shape
