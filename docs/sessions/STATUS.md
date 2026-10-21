@@ -432,3 +432,9 @@ Merged / ready: nothing new since a19ad4f (merge requested)
 Blocked on: DCL Lead / user decision before backups (brief task 6, file 05 §6, 10 §3 prod): (1) backup destination off this host's NVMe (disk at 91%; same-disk copies do not survive a disk loss): NAS path, second disk, or an S3-compatible bucket elsewhere; (2) RPO/RTO targets; (3) tool: S4 recommends WAL-G (base backups + continuous WAL to an S3-compatible target, point-in-time restore) over pgBackRest for its smaller footprint; (4) `backend/sync/retention.py` sits under S1's `backend/sync` although the backups map lists it for S4 — who owns it?
 Needs from others: answers above; approval of `DCL_GRAFANA_ADMIN_PASSWORD` / `DCL_GRAFANA_PORT`
 Next: backups and restore drill once answered; MinIO replacement comparison by end of M4
+
+## 2026-10-22 06:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Route A1 for PDFs end to end (`backend/routes/a1_office/{convert,structure,metadata,figures,tables_qa,handwriting,route}.py`): Docling runs by OCR plan with the second pass and `transcribe_page`, structure with references as mentions, L1 metadata, figure readings, table A/B QA, handwriting with critical-field HARD flags, CIR and assets; 67 route tests (Docling on S5's digital fixtures).
+Blocked on: nothing
+Needs from others: S1: the dispatcher's adapter call into `process_pdf` and `IMPLEMENTED_ROUTES` (signature in `.wiki/backend/route-a1-office.md`); `critical_field_patterns` from pipeline_config
+Next: A1.0 visual twin + page map, DOCX/PPTX, rotation; then Routes D and F; then the answer workflow
