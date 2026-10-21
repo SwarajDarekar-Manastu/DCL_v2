@@ -154,6 +154,7 @@ Every change records actor/time/before/after; a "rollback to version" button exi
 - `GET /review/rules` · `POST /review/rules` · `POST /review/rules/{id}/simulate` · `POST /review/rules/{id}/deactivate`
 - `GET /assets/{id}/url` (presign) · `GET /docs/{id}/pages/{n}/render` · `GET /docs/{id}/viewer?anchor=…` (deep-link page used by chat citations; the anchor is `page` + `content_sha256`, resolved to the current node, falling back to the page)
 - `GET /entities?query…` · `POST /entities/merge` · `POST /entities/split`
+- `GET /audit?entity_type=&entity_id=&actor=&action=&since=&until=&cursor=&limit=` → `{items: [{event_id, at, actor, entity_type, entity_id, action, before, after}], next_cursor}`; reviewer role; read-only over `audit_events`; a case's history is `entity_type=case&entity_id=<case_key>` plus its flag ids (owner S3, `backend/api/audit.py`)
 - `GET /ops/*`
 
 ## 5. Benchmark UI — internal structure

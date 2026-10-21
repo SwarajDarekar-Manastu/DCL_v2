@@ -22,7 +22,8 @@ DCL_v2/
     config.py                     env contract (file 01 §7.1) only (S4)
     api/                          thin routers only, no business logic
       health.py  sync.py (webhook, ops)  review.py  settings.py  benchmark.py  viewer.py  assets.py
-      entities.py  engine.py (/v1/answer SSE, traces)  models.py (/embed, /rerank; loaded when ROLE=models)
+      entities.py  audit.py (read-only audit log)  engine.py (/v1/answer SSE, traces)
+      models.py (/embed, /rerank; loaded when ROLE=models)
     celery_redis/                 app.py (Celery + Redis), queues.py (pools of §4), beat.py (schedules),
                                   tasks_sync.py  tasks_process.py  tasks_embed.py  tasks_review.py
     postgres/                     base.py (naming convention), enums.py (StrEnum → CHECK), session.py,
