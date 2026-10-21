@@ -6,7 +6,8 @@ from backend.api import health, models, sync
 
 
 @pytest.fixture(autouse=True)
-def fresh_settings():
+def fresh_settings(monkeypatch):
+    monkeypatch.setattr(config, "DEFAULT_ENV_FILE", None)
     config.get_settings.cache_clear()
     yield
     config.get_settings.cache_clear()
