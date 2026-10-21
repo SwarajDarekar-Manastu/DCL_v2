@@ -90,3 +90,9 @@ Merged / ready: `frontend/settings-ui` scaffolding (admin-gated layout, nine sec
 Blocked on: Review UI waits for S1's `backend/review/api_models.py`; Settings editing waits for S1's settings API; viewer body waits for S1 models/presign and S2 `resolve_anchor`; Open WebUI Pipe waits for S2's `/v1/answer` schema.
 Needs from others: S1 and S2 to message S3 when those land on main; Lead to merge this branch (shell, viewer, settings scaffolding).
 Next: idle until one of the inputs above arrives; then switch `get_auth_config` to S4's `require("console_auth")` once S4's settings merge is on main.
+
+## 2026-10-21 20:05 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: config data + synthetic fixtures merged to main (3240cc6); branch synced; allowlist plan sheet reopened with the delegated method (S5 chooses from S1's crawl)
+Blocked on: S1 folder-level listing of the real metadata crawl (requested 2026-10-21)
+Needs from others: DCL S1 Backend — the listing (fields in `.wiki/plans/quality__fixtures__allowlist.md`); DCL Lead — answers to the three open questions of the previous entry
+Next: on the listing, fill the 13 slots and send the table to DCL Lead for DECISIONS.md; meanwhile idle
