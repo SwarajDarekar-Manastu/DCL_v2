@@ -403,3 +403,9 @@ Merged / ready: Benchmark API over migration 0006. backend/benchmark/catalog.py 
 Blocked on: nothing.
 Needs from others: S2 to confirm the runner contract (queued → running → completed, results with failure_class and metrics, aggregate keys); S5 to author suites in the SuiteExport format.
 Next: Benchmark UI screens and the Retrieval lab.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: Benchmark UI. Suites, cases with drafts to approve, the case editor covering every CaseSpec field (edit = new version), the results dashboard with a baseline ribbon, failure classes, per-category counts and newly failing cases, the drilldown, compare runs and the Retrieval lab over S2's /v1/retrieval/search; run pages refresh on the live `run` topic. 90 Vitest; check and build clean; browser run against a mock API.
+Blocked on: nothing. A real benchmark run waits for S2's runner (M10).
+Needs from others: S2 to publish `run` events (progress, finished) through publish_event when the runner lands.
+Next: Open WebUI "Add to benchmark" action against POST /benchmark/drafts; Settings editing once S1 publishes the settings API.
