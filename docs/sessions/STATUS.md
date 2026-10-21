@@ -263,3 +263,9 @@ Merged / ready: enrichment (`backend/llm_engine/enrichment/{extract,entities,num
 Blocked on: nothing
 Needs from others: S1: who seeds `config/aerospace_synonyms.yaml` into entities/entity_aliases, and whether `sanity_ranges` is seeded into pipeline_config; your commit consumes `EntityDecisions` and `FactDecision`s
 Next: index_document (chunk → enrich → normalize → facts → embed → hand to commit), then retrieval and the BM25 DDL for S1
+
+## 2026-10-22 02:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: hybrid retrieval `backend/indexing/retrieval.py` (exact/HNSW dense, per-language BM25 on pg_search 0.26.2, RRF, parent collapse, rerank + fallback, near-dup collapse), 11 DB tests on a disposable ParadeDB; `seed_rows()` for S1; triage thinking settled with S4.
+Blocked on: nothing
+Needs from others: S1: the BM25 migration with the DDL sent today (field names verbatim); S5: `retrieval_set.yaml` (40 queries with gold anchors) for recall@30
+Next: index_document (end-to-end tail into S1's commit), then the Retrieval-lab data for S3, then Route A1
