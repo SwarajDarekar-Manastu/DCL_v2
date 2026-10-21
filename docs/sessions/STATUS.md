@@ -184,3 +184,9 @@ Merged / ready: `/v1/answer` SSE contract in `backend/api/engine.py` (request, s
 Blocked on: S1 for enrichment (EntityType/NumericFactSource/Quantity enums, M4 entity models, `backend/common/units.py`) and for `resolve_anchor` (`document_nodes` model)
 Needs from others: Lead: add `rapidfuzz` and `pint` to main dependencies and a `models` group (torch 2.14.1, torchvision 0.29.1, transformers 5.20.2, sentence-transformers 6.1.0)
 Next: enrichment extraction schema, prompt and grounding (no DB), then entity normalization once S1's enums land
+
+## 2026-10-21 23:15 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/llm_engine/engine/{sanitizer,verifier}.py` (outbound IP sanitizer, numeric claim string check), 24 tests; GPU tests now skip when the shared card has < 3 GiB free (S4's dcl-v2-models container holds ~1 GiB while loading).
+Blocked on: nothing (S1's enums and units.py are on their branch, merge requested)
+Needs from others: S1: entity tables when the Lead rules on M4 timing
+Next: enrichment extraction (schema, prompt, grounding, unit validation with S1's units.py)
