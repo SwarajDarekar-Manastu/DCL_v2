@@ -1,0 +1,39 @@
+# Secrets: the env file is root-owned on the host and never enters the repository or an image.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+secrets/
+
+# Session worktrees and local tooling
+.worktrees/
+.claude/worktrees/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+console_ui/.svelte-kit/
+console_ui/build/
+dist/
+build/
+
+# Local data and model caches (never commit corpus files or vectors)
+data/
+minio-data/
+pgdata/
+models/
+*.parquet
+*.db
+*.sqlite
+
+# Editor and OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
