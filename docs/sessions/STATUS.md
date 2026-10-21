@@ -140,3 +140,17 @@ Merged / ready: publish-first item 3: backend/review/api_models.py (queue, case 
 Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
 Needs from others: nothing new
 Next: backend/storage/minio.py get/put for S2's vision cache; then documents/document_sources/document_nodes/assets models (M2)
+
+
+
+## 2026-10-21 21:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: unchanged since e109103 (gate.yaml merge requested)
+Blocked on: Lead decision on dropping ".1" from the 02 §4 Tier-2 list (raised by S1): end-of-name matching junks team files such as "report_v1.1"; man pages only occur under Tier-1 paths. S5 agrees with dropping it; config/gate.yaml keeps it until the manual changes
+Needs from others: Lead — the ".1" decision together with the open ".out"/".ini" question; S1 — the crawl folder listing
+Next: idle until one of these arrives
+
+## 2026-10-21 21:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` without `.ini` and `.1` (manual at be5ce14), new cases for `report_v1.1` and instrument `.ini` files; 48 gate tests through S1's gate. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend` (230 passed)
+Blocked on: S1 — `parent_kind` in GateConfig/GateInput (the `.wbpz` `.out` exception needs a key or a fixed rule) and the crawl folder listing
+Needs from others: S1 — tell S5 whether the `.wbpz` exception is configured in gate.yaml (proposed key below in the message) or fixed in code
+Next: idle until S1 answers or the listing arrives

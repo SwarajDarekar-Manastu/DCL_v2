@@ -35,7 +35,7 @@ MANUAL_TIER2 = (
     ".pyc .pyi .pyd .typed .dll .exe .lib .a .so .o .qml .qmltypes .qm .pak .metainfo .mesh .frag .bin "
     ".h .c .cpp .pxd .pyx .f90 .f .f95 .pyf .inc .f2py_f2cmap .afm .ttf .mplstyle .ico .icns .ani .cls "
     ".bas .xlam .applescript .asp .pys .vbs .sct .idl .rc .chm .pyw .tab .zi .tpl .tmpl .template .build "
-    ".cmake .toml .ini .pc .pth .spec .whl .rst .1 .apache .bsd .python .external .ps1 .fish .pem .lua "
+    ".cmake .toml .pc .pth .spec .whl .rst .apache .bsd .python .external .ps1 .fish .pem .lua "
     ".xrc .al .g4 .lark .gitignore .iml "
     ".aux .log .toc .lof .lot .out .fls .fdb_latexmk .synctex .synctex(busy) .synctex.gz .bbl .blg .nav "
     ".snm .vrb .bkp .tdms_index .tmp .crdownload .part"
@@ -93,7 +93,9 @@ CASES = [
     ("11bar_10sec.dat.gz", ["APU Injector", "Pressure_Data_Files"], "ACCEPTED"),
     ("T01.dat_fail", ["APU", "Test Plan 07"], "ACCEPTED"),
     ("run.tdms_index", ["APU Heater", "Test Plan 30"], "SKIPPED_JUNK"),
-    ("numpy.1", ["APU", "tools"], "SKIPPED_JUNK"),
+    ("report_v1.1", ["APU", "Test Plan 37"], "ACCEPTED"),
+    ("LabJack_stream.ini", ["APU Injector", "Pressure_Data_Files"], "ACCEPTED"),
+    ("setup.ini", ["APU", "tools", ".venv", "Lib"], "SKIPPED_JUNK"),
     ("Thruster Config Rev C.drawio", ["APU", "Diagrams"], "ACCEPTED"),
     ("Thruster Config Rev C.drawio.bkp", ["APU", "Diagrams"], "SKIPPED_JUNK"),
     ("~$Test_Report_37.docx", ["APU", "Test Plan 37"], "SKIPPED_JUNK"),
