@@ -2,10 +2,10 @@
 
 | Feature | Status | Owner | Purpose |
 |---------|--------|-------|---------|
-| [Graph sync engine (delta, webhooks, resync)](sync-engine.md) | planned | S1 | Enumerate the four shared OneDrive folders through Microsoft Graph delta, react to webhooks, run the daily safety delta, and recover from HTTP 410 with a generation-stamped resync. |
+| [Graph sync engine (delta, webhooks, resync)](sync-engine.md) | in-progress | S1 | Enumerate the four shared OneDrive folders through Microsoft Graph delta, react to webhooks, run the daily safety delta, and recover from HTTP 410 with a generation-stamped resync. |
 | [Junk gate, quarantine, download and processing scopes](gate-and-scope.md) | planned | S1 | Reject junk from Graph metadata (tiers 1–3), quarantine paths and secrets (tier 4), and hold items outside the download or processing scope without flags. |
 | [Registry, content-addressed blobs, downloader](registry-and-blobs.md) | planned | S1 | Download accepted items into MinIO keyed by SHA-256, verify quickXorHash, deduplicate by (quick_xor_hash,size), and maintain drive_items/drive_folders/blobs/blob_derivations. |
-| [PostgreSQL schema, enums as CHECK, Alembic](schema-and-migrations.md) | planned | S1 | Own the 26-table schema in three tiers, the StrEnum→CHECK generation, naming conventions, every FK index, and hand-written migrations for HNSW/BM25/CHECK. |
+| [PostgreSQL schema, enums as CHECK, Alembic](schema-and-migrations.md) | in-progress | S1 | Own the 26-table schema in three tiers, the StrEnum→CHECK generation, naming conventions, every FK index, and hand-written migrations for HNSW/BM25/CHECK. |
 | [Dispatcher, type resolution, folder context, assembler, route gating](dispatcher-and-route-gating.md) | planned | S1 | Resolve the real file type from magic bytes, build folder context (test ids, siblings, source-origin default), assemble multi-file documents, select the adapter, and park files whose route is disabled. |
 | [Route C: telemetry, LabVIEW, spreadsheets, arrays](route-c-telemetry.md) | planned | S1 | Deterministic path from . |
 | [Route A2: JSON report sections and LaTeX sources](route-a2-source.md) | planned | S1 | Parse ground-truth report sources: JSON section schemas, LaTeX master/include resolution, macro expansion, Pandoc to Markdown with math and tables intact, page map to the PDF twin. |

@@ -30,7 +30,7 @@ flowchart LR
 
 **Decision (carried over, confirmed H4):** delegated permissions, app `dcl-reader-delegated` (`DCL_AUTH_MODE=delegated`, `DCL_DELEGATED_USERNAME`), signed in once with the device-code flow. The permission scope follows `DCL_PERMISSION_OPTION` from the env: **A** = `Files.SelectedOperations.Selected` granted on the shared folders only (preferred, no tenant-wide read), **B** = `Files.Read.All` (needs a written security sign-off). The code must work with either; with option A, every Graph call addresses the folders by the ids in `DCL_FOLDER_IDS` and the service must never try to resolve a sharing link itself (that needs write scope). Microsoft's scan guidance prefers application permissions for crawlers; the env already carries certificate variables for that future variant. The consequences of delegated auth are handled explicitly:
 
-1. **Token cache.** MSAL's serializable token cache is persisted at `DCL_TOKEN_CACHE_PATH` (a root-owned file under `DCL_TOKEN_DIR`, encrypted at rest), mounted read-write into the sync worker only. Every job calls `acquire_token_silent` first. The refresh token is rotated by MSAL; it expires after 90 days of inactivity or when a Conditional Access policy revokes it.
+1. **Token cache.** MSAL's serializable token cache is persisted at `DCL_TOKEN_CACHE_PATH` (v2's own file under `DCL_TOKEN_DIR`, mode 600 in a 700 directory, written atomically, **Fernet-encrypted with `DCL_TOKEN_CACHE_KEY`**; the v1 pipeline's plain cache is never read or modified, so v2 performs its own one-time device-code sign-in), mounted read-write into the sync worker only. Every job calls `acquire_token_silent` first. The refresh token is rotated by MSAL; it expires after 90 days of inactivity or when a Conditional Access policy revokes it.
 2. **Token health check** runs every 15 minutes (Celery beat): a `GET /me/drive` with the silent token. Failure raises an alert and sets `sync_roots.auth_status = 'REAUTH_REQUIRED'`. The DCL Console shows a banner with a "Start device-code sign-in" button; the code and verification URL are displayed to the operator, who completes sign-in as the service account. No human interaction is needed otherwise.
 3. **Least privilege.** Read-only scope. The app never calls write endpoints. There is no path in the code that could modify OneDrive.
 4. **Secrets.** Client id, tenant id, encryption key, Gemini credentials, MinIO keys live in the host secret store (Docker secrets or Vault), never in `pipeline_config`.
@@ -93,7 +93,7 @@ On 429 or 503: read `Retry-After`, **pause every Graph call process-wide** (a Re
 
 Graph returns 410 with `error.code` `resyncRequired`/`resyncChangesApplyDifferences` and a `Location` header pointing to a fresh enumeration. Procedure:
 1. Mark the root `RESYNCING` (delta runs for that root pause).
-2. Increment the root's resync generation and run the full enumeration from the `Location` link; every item seen is upserted normally **and stamped** with the new generation in `drive_items.resync_gen` (no staging table):
+2. Compute the root's new resync generation as `max(drive_items.resync_gen) + 1` over that root's items (no column on `sync_roots`) and run the full enumeration from the `Location` link; every item seen is upserted normally **and stamped** with the new generation in `drive_items.resync_gen` (no staging table):
    - known item, same `quickXorHash` → stamp only;
    - known item, different hash → treat as modified;
    - unknown item → treat as new.

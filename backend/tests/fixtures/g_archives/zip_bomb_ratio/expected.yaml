@@ -1,0 +1,19 @@
+fixture: zip_bomb_ratio
+edge_case: zip bomb, compression ratio about 1000 (file 10 §7)
+origin: synthetic
+generator: make_synthetic.py::zip_bomb_ratio
+byte_stable: true
+files: [telemetry_backup.zip]
+simulated_location: {root: APU, folder: Archives}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §11 step 1 (bomb guard: ratio <= 100, before extraction)"
+expected:
+  route: G
+  detected_mime: application/zip
+  document_status: HALTED
+  flags:
+    - {type: PARSE_FAILURE, severity: HARD, reason: "bomb guard: compression ratio > 100"}
+  flags_exact: true
+  metadata:
+    uncompressed_bytes: 10485760
+  never: [extract any member, create blob_derivations rows]

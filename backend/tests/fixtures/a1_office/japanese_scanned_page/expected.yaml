@@ -1,0 +1,33 @@
+fixture: japanese_scanned_page
+edge_case: Japanese scanned page (file 10 §7)
+origin: synthetic
+generator: make_synthetic.py::japanese_scanned_page
+byte_stable: false  # rasterized with the system font Noto Serif CJK JP
+files: [thruster_spec_ja_scan.pdf]
+simulated_location: {root: APS - Library, folder: Vendor brochures/JP}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §A1.2, §A1.3 (OCR engine by script)"
+  - "docs/architecture/03_phase2_processing_routes.md §A1.12 (library documents)"
+  - "docs/architecture/10_development_plan.md §5 M5 (non-English scanned pages, low_grade >= FAIR)"
+expected:
+  route: A1
+  detected_mime: application/pdf
+  document_status: ACTIVE
+  flags: []
+  flags_exact: true
+  metadata:
+    language: ja
+    page_types: {1: scanned_printed}
+    script: cjk
+    ocr_engine: rapidocr
+    low_grade_at_least: FAIR
+    source_origin: external_kept
+    trust_tier: 4
+  ocr_text_contains: ["スラスタ仕様書", "過酸化水素", "比推力", "燃焼室圧力"]
+  numeric_facts:
+    - {quantity: thrust, value: 1.0, unit: N, source: vendor_claim}
+    - {quantity: specific_impulse, value: 160, unit: s, source: vendor_claim}
+    - {quantity: chamber_pressure, value: 1.2, unit: MPa, source: vendor_claim}
+    - {quantity: mass, value: 0.29, unit: kg, source: vendor_claim}
+  entities:
+    - {type: propellant, canonical: HTP, surface: 過酸化水素}

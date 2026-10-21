@@ -1,0 +1,23 @@
+fixture: malicious_pickle
+edge_case: malicious pickle (file 10 §7), mystery-format extension
+origin: synthetic
+generator: make_synthetic.py::malicious_pickle
+byte_stable: true
+files: [T03.plotdata]
+simulated_location: {root: APU Heater, folder: Test Plan 30}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §1.1 (pickle magic \x80\x04 → Route C mystery)"
+  - "docs/architecture/03_phase2_processing_routes.md §C.5 (never pickle.load; pickletools.dis only)"
+  - "docs/architecture/10_development_plan.md §5 M2 (the malicious-pickle fixture is never executed)"
+expected:
+  route: C
+  detected_mime: application/x-python-pickle
+  document_status: HALTED
+  flags:
+    - {type: SCHEMA_UNKNOWN, severity: HARD, reason: pickle without labels; export to CSV with the original tool}
+  flags_exact: true
+  metadata:
+    pickle_protocol: 4
+    referenced_globals: [builtins.exec]
+  never: [pickle.load, pickle.loads, numpy.load with allow_pickle=True, pandas.read_pickle]
+notes: If executed, the payload raises SystemExit('DCL_MALICIOUS_PICKLE_EXECUTED'); a pipeline test that sees this sentinel has unpickled the file.

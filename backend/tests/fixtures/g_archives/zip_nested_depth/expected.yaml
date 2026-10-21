@@ -1,0 +1,19 @@
+fixture: zip_nested_depth
+edge_case: archive nested four deep (bomb guard, file 03 §11)
+origin: synthetic
+generator: make_synthetic.py::zip_nested_depth
+byte_stable: true
+files: [nested_archive.zip]
+simulated_location: {root: APU, folder: Archives}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §11 step 1 (nesting depth <= 3)"
+expected:
+  route: G
+  detected_mime: application/zip
+  document_status: HALTED
+  flags:
+    - {type: PARSE_FAILURE, severity: HARD, reason: "bomb guard: nesting depth 4 > 3"}
+  flags_exact: true
+  metadata:
+    nesting_depth: 4
+  never: [extract level4.zip]

@@ -1,0 +1,277 @@
+# Seed synonyms loaded into entities + entity_aliases at install time (04 §3.3 step 4).
+# Owner: S5 (DCL S5 Quality), agreed with the propulsion SME. Consumer: entity normalization (S2).
+#
+# entities[]:
+#   type       one of the closed entity types of 04 §3.2
+#   canonical  English canonical name (becomes entities.canonical name)
+#   aliases[]  {surface, lang}; surface copied as it appears in documents, lang is BCP-47
+#              ("und" for language-neutral codes and symbols)
+#   note       optional, why the seed exists
+# After canonicalization (04 §3.3 step 1: NFKC, lowercase, collapse whitespace, unify dashes,
+# strip trailing punctuation) no alias may point to two entities of the same type; the load
+# test enforces it.
+#
+# Quote every surface that YAML would read as a number or boolean ("1.4404", not 1.4404);
+# the load test rejects non-string surfaces.
+#
+# quantity_terms[]: synonyms for physical quantities (Isp, Pc). 04 §3.2 has no entity type for
+# a quantity, so these are kept apart until DCL Lead decides where they load (open question
+# in docs/sessions/STATUS.md). Same alias format.
+
+version: 1
+entities:
+  # ---- propellants -------------------------------------------------------------------
+  - type: propellant
+    canonical: HTP
+    note: manual seed "HTP <-> H2O2 <-> hydrogen peroxide <-> Wasserstoffperoxid" (04 §3.3)
+    aliases:
+      - {surface: HTP, lang: und}
+      - {surface: H2O2, lang: und}
+      - {surface: H₂O₂, lang: und}
+      - {surface: high-test peroxide, lang: en}
+      - {surface: high test peroxide, lang: en}
+      - {surface: hydrogen peroxide, lang: en}
+      - {surface: Wasserstoffperoxid, lang: de}
+      - {surface: hochkonzentriertes Wasserstoffperoxid, lang: de}
+      - {surface: peroxyde d'hydrogène, lang: fr}
+      - {surface: peróxido de hidrógeno, lang: es}
+      - {surface: perossido di idrogeno, lang: it}
+      - {surface: пероксид водорода, lang: ru}
+      - {surface: перекись водорода, lang: ru}
+      - {surface: 過酸化水素, lang: ja}
+      - {surface: 过氧化氢, lang: zh}
+    sme_confirmed: false
+  - type: propellant
+    canonical: ADN
+    note: manual seed "ADN <-> LMP-103S family" (04 §3.3)
+    aliases:
+      - {surface: ADN, lang: und}
+      - {surface: ammonium dinitramide, lang: en}
+      - {surface: LMP-103S, lang: und}
+      - {surface: Ammoniumdinitramid, lang: de}
+      - {surface: dinitramide d'ammonium, lang: fr}
+      - {surface: динитрамид аммония, lang: ru}
+      - {surface: アンモニウムジニトラミド, lang: ja}
+      - {surface: 二硝酰胺铵, lang: zh}
+    sme_confirmed: false
+  - type: propellant
+    canonical: HAN
+    note: manual seed "HAN <-> AF-M315E family" (04 §3.3); AF-M315E was renamed ASCENT
+    aliases:
+      - {surface: HAN, lang: und}
+      - {surface: hydroxylammonium nitrate, lang: en}
+      - {surface: hydroxylamine nitrate, lang: en}
+      - {surface: AF-M315E, lang: und}
+      - {surface: ASCENT, lang: und}
+      - {surface: Hydroxylammoniumnitrat, lang: de}
+      - {surface: nitrate d'hydroxylammonium, lang: fr}
+      - {surface: 硝酸ヒドロキシルアンモニウム, lang: ja}
+      - {surface: 硝酸羟胺, lang: zh}
+    sme_confirmed: false
+  - type: propellant
+    canonical: hydrazine
+    note: reference propellant of most vendor monopropellant thruster datasheets in the library
+    aliases:
+      - {surface: hydrazine, lang: en}
+      - {surface: N2H4, lang: und}
+      - {surface: N₂H₄, lang: und}
+      - {surface: Hydrazin, lang: de}
+      - {surface: гидразин, lang: ru}
+      - {surface: ヒドラジン, lang: ja}
+      - {surface: 肼, lang: zh}
+    sme_confirmed: false
+
+  # ---- components --------------------------------------------------------------------
+  - type: component
+    canonical: catalyst bed
+    aliases:
+      - {surface: catalyst bed, lang: en}
+      - {surface: cat bed, lang: en}
+      - {surface: Katalysatorbett, lang: de}
+      - {surface: lit catalytique, lang: fr}
+      - {surface: каталитический пакет, lang: ru}
+      - {surface: 触媒床, lang: ja}
+      - {surface: 催化床, lang: zh}
+    sme_confirmed: false
+  - type: component
+    canonical: injector
+    aliases:
+      - {surface: injector, lang: en}
+      - {surface: Injektor, lang: de}
+      - {surface: Einspritzkopf, lang: de}
+      - {surface: injecteur, lang: fr}
+      - {surface: форсунка, lang: ru}
+      - {surface: インジェクタ, lang: ja}
+      - {surface: 噴射器, lang: ja}
+      - {surface: 喷注器, lang: zh}
+    sme_confirmed: false
+  - type: component
+    canonical: nozzle
+    aliases:
+      - {surface: nozzle, lang: en}
+      - {surface: Düse, lang: de}
+      - {surface: Schubdüse, lang: de}
+      - {surface: tuyère, lang: fr}
+      - {surface: сопло, lang: ru}
+      - {surface: ノズル, lang: ja}
+      - {surface: 喷管, lang: zh}
+    sme_confirmed: false
+  - type: component
+    canonical: decomposition chamber
+    aliases:
+      - {surface: decomposition chamber, lang: en}
+      - {surface: Zersetzungskammer, lang: de}
+      - {surface: chambre de décomposition, lang: fr}
+      - {surface: 分解室, lang: ja}
+    sme_confirmed: false
+  - type: component
+    canonical: combustion chamber
+    aliases:
+      - {surface: combustion chamber, lang: en}
+      - {surface: Brennkammer, lang: de}
+      - {surface: chambre de combustion, lang: fr}
+      - {surface: камера сгорания, lang: ru}
+      - {surface: 燃焼室, lang: ja}
+      - {surface: 燃烧室, lang: zh}
+    sme_confirmed: false
+  - type: component
+    canonical: thruster
+    aliases:
+      - {surface: thruster, lang: en}
+      - {surface: Triebwerk, lang: de}
+      - {surface: propulseur, lang: fr}
+      - {surface: スラスタ, lang: ja}
+      - {surface: スラスター, lang: ja}
+      - {surface: 推力器, lang: zh}
+    sme_confirmed: false
+  - type: component
+    canonical: solenoid valve
+    aliases:
+      - {surface: solenoid valve, lang: en}
+      - {surface: Magnetventil, lang: de}
+      - {surface: électrovanne, lang: fr}
+      - {surface: электромагнитный клапан, lang: ru}
+      - {surface: 電磁弁, lang: ja}
+      - {surface: 电磁阀, lang: zh}
+    sme_confirmed: false
+  - type: component
+    canonical: pressure transducer
+    aliases:
+      - {surface: pressure transducer, lang: en}
+      - {surface: pressure sensor, lang: en}
+      - {surface: pressure transmitter, lang: en}
+      - {surface: Drucksensor, lang: de}
+      - {surface: Druckaufnehmer, lang: de}
+      - {surface: Drucktransmitter, lang: de}
+      - {surface: capteur de pression, lang: fr}
+      - {surface: датчик давления, lang: ru}
+      - {surface: 圧力センサ, lang: ja}
+      - {surface: 圧力センサー, lang: ja}
+      - {surface: 压力传感器, lang: zh}
+    sme_confirmed: false
+  - type: component
+    canonical: thermocouple
+    aliases:
+      - {surface: thermocouple, lang: en}
+      - {surface: Thermoelement, lang: de}
+      - {surface: термопара, lang: ru}
+      - {surface: 熱電対, lang: ja}
+      - {surface: 热电偶, lang: zh}
+    sme_confirmed: false
+
+  # ---- materials ---------------------------------------------------------------------
+  - type: material
+    canonical: C-103
+    note: niobium alloy Nb-10Hf-1Ti; manual alias examples "C103", "C-103 Niobium", "Niob C-103" (00 glossary)
+    aliases:
+      - {surface: C-103, lang: und}
+      - {surface: C103, lang: und}
+      - {surface: C-103 Niobium, lang: en}
+      - {surface: C-103 niobium alloy, lang: en}
+      - {surface: Nb-10Hf-1Ti, lang: und}
+      - {surface: Niob C-103, lang: de}
+      - {surface: Niob C103, lang: de}
+    sme_confirmed: false
+  - type: material
+    canonical: stainless steel 316L
+    note: EN 1.4404 / X2CrNiMo17-12-2 (German and European datasheets use the EN number)
+    aliases:
+      - {surface: stainless steel 316L, lang: en}
+      - {surface: 316L, lang: und}
+      - {surface: AISI 316L, lang: und}
+      - {surface: SS316L, lang: und}
+      - {surface: SS 316L, lang: und}
+      - {surface: "1.4404", lang: und}
+      - {surface: X2CrNiMo17-12-2, lang: und}
+      - {surface: Edelstahl 1.4404, lang: de}
+      - {surface: SUS316L, lang: ja}
+    sme_confirmed: false
+  - type: material
+    canonical: Inconel 718
+    note: UNS N07718, EN 2.4668 / NiCr19Fe19Nb5Mo3
+    aliases:
+      - {surface: Inconel 718, lang: und}
+      - {surface: Alloy 718, lang: und}
+      - {surface: IN718, lang: und}
+      - {surface: IN 718, lang: und}
+      - {surface: UNS N07718, lang: und}
+      - {surface: "2.4668", lang: und}
+      - {surface: NiCr19Fe19Nb5Mo3, lang: und}
+    sme_confirmed: false
+
+quantity_terms:
+  - canonical: specific impulse
+    note: manual seed "Isp <-> specific impulse" (04 §3.3)
+    aliases:
+      - {surface: Isp, lang: und}
+      - {surface: I_sp, lang: und}
+      - {surface: specific impulse, lang: en}
+      - {surface: spezifischer Impuls, lang: de}
+      - {surface: impulsion spécifique, lang: fr}
+      - {surface: impulso específico, lang: es}
+      - {surface: удельный импульс, lang: ru}
+      - {surface: 比推力, lang: ja}
+      - {surface: 比冲, lang: zh}
+    sme_confirmed: false
+  - canonical: chamber pressure
+    note: manual seed "Pc <-> chamber pressure" (04 §3.3)
+    aliases:
+      - {surface: Pc, lang: und}
+      - {surface: P_c, lang: und}
+      - {surface: chamber pressure, lang: en}
+      - {surface: Brennkammerdruck, lang: de}
+      - {surface: Kammerdruck, lang: de}
+      - {surface: pression de chambre, lang: fr}
+      - {surface: давление в камере сгорания, lang: ru}
+      - {surface: 燃焼室圧力, lang: ja}
+      - {surface: 燃烧室压力, lang: zh}
+    sme_confirmed: false
+  - canonical: thrust
+    aliases:
+      - {surface: thrust, lang: en}
+      - {surface: Schub, lang: de}
+      - {surface: Schubkraft, lang: de}
+      - {surface: poussée, lang: fr}
+      - {surface: тяга, lang: ru}
+      - {surface: 推力, lang: und}
+    sme_confirmed: false
+  - canonical: characteristic velocity
+    aliases:
+      - {surface: c*, lang: und}
+      - {surface: c-star, lang: en}
+      - {surface: characteristic velocity, lang: en}
+      - {surface: charakteristische Geschwindigkeit, lang: de}
+      - {surface: vitesse caractéristique, lang: fr}
+      - {surface: 特性排気速度, lang: ja}
+    sme_confirmed: false
+  - canonical: mass flow rate
+    aliases:
+      - {surface: mass flow rate, lang: en}
+      - {surface: mass flow, lang: en}
+      - {surface: mdot, lang: und}
+      - {surface: Massenstrom, lang: de}
+      - {surface: débit massique, lang: fr}
+      - {surface: массовый расход, lang: ru}
+      - {surface: 質量流量, lang: ja}
+      - {surface: 质量流量, lang: zh}
+    sme_confirmed: false

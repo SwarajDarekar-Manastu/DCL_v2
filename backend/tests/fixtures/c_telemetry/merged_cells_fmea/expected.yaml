@@ -1,0 +1,27 @@
+fixture: merged_cells_fmea
+edge_case: merged cells (file 10 §7), plus formulas saved without cached values and two islands
+origin: synthetic
+generator: make_synthetic.py::merged_cells_fmea
+byte_stable: true
+files: [Cooling_Duct_FMEA.xlsx]
+simulated_location: {root: APU, folder: Test Plan 37/risk}
+spec:
+  - "docs/architecture/03_phase2_processing_routes.md §C.4 steps 1, 3, 4, 5, 8"
+expected:
+  route: C
+  detected_mime: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+  document_status: ACTIVE_WITH_SOFT_FLAGS
+  flags:
+    - {type: UNIT_AMBIGUITY, severity: SOFT, reason: "numeric matrix columns S, O, D, RPN without units (03 §C.4 step 8)"}
+  flags_exact: true
+  metadata:
+    recalculated_with_libreoffice: true  # RPN formulas have no cached values
+    islands: 2
+    table_captions: ["Cooling Duct FMEA (synthetic fixture)", "Test matrix"]
+    fmea_row_children: 6
+    merged_cells_expanded: {B5: Cooling duct, B6: Cooling duct, B8: Injector, B9: Injector}
+    html_keeps_spans: true
+    rpn: {F-01: 96, F-02: 70, F-03: 108, F-04: 84, F-05: 72, F-06: 90}
+    test_matrix_units: {Preheat: K, Duration: s}
+open_questions:
+  - "FMEA score columns (S, O, D, RPN) are dimensionless. A literal reading of 03 §C.4 step 8 raises UNIT_AMBIGUITY SOFT on every FMEA; should dimensionless score columns be exempt? Raised with DCL Lead 2026-10-21."
