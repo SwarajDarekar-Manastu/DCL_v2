@@ -1,0 +1,27 @@
+{
+  "id": "chatcmpl-structured-1",
+  "object": "chat.completion",
+  "created": 1792540800,
+  "model": "gemini-3.8-flash",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"city\": \"Tokyo\", \"population_millions\": 37.1}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 120,
+    "completion_tokens": 30,
+    "total_tokens": 150,
+    "prompt_tokens_details": {
+      "cached_tokens": 20
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 12
+    }
+  }
+}
