@@ -10,13 +10,13 @@
 
 ## Purpose
 
-All services of file 01 §6 in compose project `dcl-v2`: ParadeDB pg17, Redis, MinIO built from the archived pinned tag, LibreOffice headless, the models role on the only GPU reservation, the API role, beat, one Celery worker per queue of file 10 §4, and the one-shot `minio-init` and `migrate` jobs. Observability (OTel, Grafana, Flower), Open WebUI and the Console SPA (port 8600) are not in it yet.
+All services of file 01 §6 in compose project `dcl-v2`: ParadeDB pg17, Redis, MinIO built from the archived pinned tag, LibreOffice headless, the models role on the only GPU reservation, the API role, beat, one Celery worker per queue of file 10 §4, and the one-shot `minio-init` and `migrate` jobs. Observability services (collector, Tempo, Prometheus, Alertmanager, Grafana) are part of it; Open WebUI and the Console SPA (port 8600) are not yet.
 
 ## Location
 
 Code:
 - `backend/devops/compose.yaml`, `backend/devops/compose.dev.yaml`
-- `backend/devops/docker/backend.Dockerfile` (targets `backend`, `models`; builder stage compiles deps)
+- `backend/devops/docker/backend.Dockerfile` (targets `backend`, `models` (CUDA torch), `parse` (CPU torch, Docling, RapidOCR, Tesseract scripts); builder stage compiles deps)
 - `backend/devops/docker/minio.Dockerfile` (RELEASE.2025-10-15T17-29-55Z, commit-checked)
 - `backend/devops/docker/libreoffice.Dockerfile` (unoserver on 2003)
 - `backend/devops/minio_init.py` (buckets, versioning, lifecycle, app user; idempotent)
@@ -60,7 +60,9 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] GPU visible only to the two model services (one `models` role; integration test)
 - [x] Queue memory limits match file 10 §4 (unit test; dev override only lowers them)
 - [x] No `.env` or key file in the backend image (integration test)
-- [ ] Observability services, Open WebUI and Console SPA added (next tasks)
+- [x] Observability services added (2026-10-22)
+- [x] Parse image: Docling + RapidOCR and Tesseract (Latin, Cyrillic, Devanagari, Arabic, OSD) OCR a scanned page correctly (2026-10-22)
+- [ ] Open WebUI and Console SPA added (S3 builds)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log
@@ -68,6 +70,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | `parse` image for cpu_parse (CPU torch via a group-scoped index; `models` and `parse` declared conflicting); `HF_HUB_DISABLE_XET=1`; observability services; `_incoming/` lifecycle rule; S1 process schedules |
 | 2026-10-22 | S4 | Beat schedule for S1's sync tasks (delta 02:00 Asia/Kolkata, token health 15 min, downloads 10 min) |
 | 2026-10-22 | S4 | M0 stack: images, MinIO from source, LibreOffice, models on the GPU, API, beat, six queue workers, `minio-init`, `migrate`; host ports and in-network URLs per the Lead's allocation; verified live on the dev host with the real `.env` |
 

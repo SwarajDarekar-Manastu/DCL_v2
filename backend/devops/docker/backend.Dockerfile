@@ -1,5 +1,6 @@
 # One image for every backend process (docs/architecture/10 §2.1): target `backend` runs the API role,
-# Celery workers, beat and the one-shot jobs; target `models` adds the GPU dependency group for DCL_ROLE=models.
+# Celery workers, beat and the one-shot jobs; target `models` adds the GPU dependency group for DCL_ROLE=models;
+# target `parse` adds the CPU `parse` group (Docling, RapidOCR) and Tesseract for the cpu_parse workers.
 # Dependencies are compiled in a builder stage; runtime images carry the virtualenv only, no compiler.
 # Build context: repository root. Secrets come from the runtime environment, never from the image.
 
@@ -12,6 +13,10 @@ COPY pyproject.toml uv.lock ./
 
 FROM builder AS deps-backend
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-default-groups --no-install-project
+
+FROM builder AS deps-parse
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-default-groups --group parse --no-install-project
 
 FROM builder AS deps-models
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -31,8 +36,23 @@ USER app
 EXPOSE 8200
 CMD ["python", "-m", "backend.main"]
 
+FROM runtime AS parse
+ENV HF_HOME=/home/app/.cache/huggingface HF_HUB_DISABLE_XET=1 OMP_NUM_THREADS=2
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        tesseract-ocr tesseract-ocr-osd tesseract-ocr-eng \
+        tesseract-ocr-script-latn tesseract-ocr-script-cyrl tesseract-ocr-script-deva tesseract-ocr-script-arab \
+        libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=deps-parse /opt/venv /opt/venv
+RUN python -c "from rapidocr import RapidOCR; RapidOCR()" \
+    && mkdir -p "$HF_HOME" && chown -R app:app /home/app/.cache
+COPY backend ./backend
+COPY config ./config
+USER app
+CMD ["python", "-m", "backend.main"]
+
 FROM runtime AS models
-ENV HF_HOME=/home/app/.cache/huggingface
+ENV HF_HOME=/home/app/.cache/huggingface HF_HUB_DISABLE_XET=1
 COPY --from=deps-models /opt/venv /opt/venv
 COPY backend ./backend
 COPY config ./config

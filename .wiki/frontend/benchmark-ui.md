@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `frontend/benchmark-ui` |
-| Status | in-progress (Benchmark API published; Console screens and Retrieval lab next) |
+| Status | in-progress (API and Console screens done; live runs wait for S2's runner, M10) |
 | Owner session | S3 |
 | Spec | docs/architecture/08_frontend_openwebui.md §5 |
 | Last updated | 2026-10-21 |
@@ -17,12 +17,13 @@ Golden-suite management and regression dashboards with failure classes and trace
 Code:
 - `backend/benchmark/catalog.py` (S3: `CaseSpec` for `benchmark_cases.spec`, API models, queries over S1's benchmark tables; the runner, metrics and judge in this package are S2's)
 - `backend/api/benchmark.py` (thin routes, prefix `/benchmark`)
-- `frontend/console/src/routes/benchmark/` (planned screens: suites, case editor, runs, results, drilldown, compare, retrieval lab)
+- `frontend/console/src/routes/benchmark/` (`+page.svelte` suites, recent runs, compare picker, export; `suites/[suite]` cases and drafts to approve; `cases/[case_id]` editor and history, `new` creates; `runs/[run_id]` results dashboard; `compare`; `retrieval` lab)
+- `frontend/console/src/lib/components/benchmark/` (`CaseEditor`, `ResultDrilldown`, `RetrievalLab`; logic in `case_form.ts`, `run_view.ts`, `links.ts`)
 
 Tests and fixtures:
 - `backend/tests/unit/api/test_benchmark_routes.py` (roles, validation, Pipe-only drafts)
 - `backend/tests/integration/api/test_benchmark.py` (real ParadeDB via `DCL_TEST_DATABASE_URL`)
-- `frontend/console/tests/benchmark/` (planned)
+- `frontend/console/tests/benchmark/` (form round trip of every CaseSpec field, dashboard helpers, Retrieval lab, editor, drilldown)
 
 ## Interfaces
 
@@ -35,6 +36,8 @@ Provides (viewer reads; reviewer writes):
 - `CaseSpec` (file 08 §5.3): language, paraphrases, expected_numeric {metric, value, unit, tolerance_pct}, expected_citations / must_not_cite {file_name | doc_id | standard_id, page}, expected_tools {tools, ordered}, expected_entities, retrieval_gold_anchors {doc_id, anchor `<kind>:<value>:<hash>`}, expected_behavior (5 values), clarification_answer; unknown keys are refused
 
 Every authored change writes `audit_events` (entity_type `benchmark_case`: create, new_version, approve, retired, draft_from_chat).
+
+Results dashboard: ribbon of aggregate keys (pass_rate, numeric_exactness, citation_recall, faithfulness, recall_at_8, recall_at_30, latency_p95_ms, cost_total) with deltas against a chosen baseline run, failure classes, pass counts per category, newly failing cases; drilldown reads the per-result metric keys agreed with S2 (numeric, citations, tools, faithfulness, recall_at_8/30, reranker_margin, judge_rationale, warnings) and links gold anchors to the viewer.
 
 Consumes:
 - S1 migration 0006 (`benchmark_cases`, `benchmark_runs`, `benchmark_results`, enums), S2 runner fills runs and results, S2 `POST /v1/retrieval/search` for the Retrieval lab, S5 golden suites (import format = `SuiteExport`)
@@ -58,7 +61,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] Compare lists newly failing / passing cases with failure classes and aggregate deltas
 - [ ] A deliberate regression is caught with the right failure class (needs S2's runner, M10)
 - [ ] A re-index does not zero retrieval metrics (anchors resolve; needs the runner)
-- [ ] Console screens (suites, case editor, runs, results, drilldown, compare, retrieval lab)
+- [x] Console screens (suites, case editor, runs, results with baseline, drilldown, compare, retrieval lab); checked in the browser against a mock API, including a reranker-off regression shown as RERANK_MISS with the config diff
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log
@@ -67,6 +70,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | Benchmark API and `CaseSpec` over migration 0006; unit and ParadeDB integration tests |
+| 2026-10-22 | S3 | Console screens and Retrieval lab; live `run` topic refreshes run pages |
 
 ## Related
 

@@ -19,7 +19,7 @@
 		const user = session.user;
 		if (session.status !== 'signed_in' || !user || getConfig().auth.mode === 'dev') return;
 		const channel: LiveChannel = openLiveChannel({
-			topics: hasRole(user.roles, 'reviewer') ? ['ops', 'case'] : ['ops'],
+			topics: hasRole(user.roles, 'reviewer') ? ['ops', 'run', 'case'] : ['ops', 'run'],
 			onStatus: (status) => (live.status = status),
 			onEvent: applyLiveEvent
 		});

@@ -24,6 +24,7 @@ from typing import Any
 
 import httpx
 
+from backend.common.telemetry import METRICS
 from backend.config import FORBIDDEN_NAMES, ConfigError, Group, Settings, get_settings
 from backend.llm_engine.gemini_adapters import (
     ADAPTERS,
@@ -259,10 +260,14 @@ class GeminiClient:
         stream: bool,
         **options,
     ) -> _Call:
-        if self._budget is not None:
-            self._budget.check()
-        if self.quota_remaining is not None and self.quota_remaining <= 0:
-            raise BudgetExhausted("the gateway reports its daily quota as used up")
+        try:
+            if self._budget is not None:
+                self._budget.check()
+            if self.quota_remaining is not None and self.quota_remaining <= 0:
+                raise BudgetExhausted("the gateway reports its daily quota as used up")
+        except BudgetExhausted:
+            METRICS.llm_budget_exhausted_total.add(1, {"model": model})
+            raise
         include_thoughts = options.pop("include_thoughts", None)
         req = GenerateRequest(
             model=model,
@@ -308,6 +313,17 @@ class GeminiClient:
             request_id=request_id or call.idempotency_key,
             usage_estimated=usage.estimated,
         )
+        labels = {"model": record.model, "purpose": record.purpose}
+        METRICS.llm_calls_total.add(1, {**labels, "status": record.status})
+        for kind, tokens in (
+            ("input", usage.input_tokens),
+            ("output", usage.output_tokens),
+            ("cached", usage.cached_tokens),
+        ):
+            if tokens:
+                METRICS.llm_tokens_total.add(tokens, {**labels, "kind": kind})
+        if record.cost_estimate:
+            METRICS.llm_cost_total.add(record.cost_estimate, {"model": record.model})
         if self._ledger is not None:
             try:
                 self._ledger(record)

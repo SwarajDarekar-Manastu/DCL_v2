@@ -23,6 +23,30 @@ export type AuditPage = Schemas['AuditPage'];
 export type AuditEntityType = Schemas['AuditEntityType'];
 export type AuditFilters = NonNullable<operations['list_audit_audit_get']['parameters']['query']>;
 
+/** backend/api/benchmark.py, backend/benchmark/catalog.py */
+export type BenchmarkCategory = Schemas['BenchmarkCategory'];
+export type FailureClass = Schemas['FailureClass'];
+export type ExpectedBehavior = Schemas['ExpectedBehavior'];
+export type CaseSpec = Schemas['CaseSpec'];
+export type BenchmarkCase = Schemas['CaseView'];
+export type BenchmarkCaseList = Schemas['BenchmarkCaseList'];
+export type BenchmarkCaseContent = Schemas['CaseContent'];
+export type BenchmarkCaseCreate = Schemas['CaseCreate'];
+export type SuiteSummary = Schemas['SuiteSummary'];
+export type SuiteExport = Schemas['SuiteExport'];
+export type ImportCounts = Schemas['ImportCounts'];
+export type RunRequest = Schemas['RunRequest'];
+export type BenchmarkRun = Schemas['RunView'];
+export type BenchmarkResult = Schemas['ResultView'];
+export type RunResults = Schemas['RunResults'];
+export type RunComparison = Schemas['RunComparison'];
+export type BenchmarkCaseFilters = NonNullable<operations['get_cases_benchmark_cases_get']['parameters']['query']>;
+
+/** backend/api/engine.py retrieval lab (S2) */
+export type RetrievalLabRequest = Schemas['RetrievalLabRequest'];
+export type SearchResult = Schemas['SearchResult'];
+export type SearchHit = Schemas['Hit'];
+
 /** backend/api/assets.py */
 export type AssetUrl = Schemas['AssetUrl'];
 
@@ -161,6 +185,35 @@ export function listAudit(filters: AuditFilters = {}): Promise<AuditPage> {
 	const text = q.toString();
 	return request<AuditPage>('GET', `/audit${text ? `?${text}` : ''}`);
 }
+
+// ---------------------------------------------------------------- benchmark (backend/api/benchmark.py)
+
+const benchCase = (caseId: string) => `/benchmark/cases/${encodeURIComponent(caseId)}`;
+
+export const listSuites = () => request<SuiteSummary[]>('GET', '/benchmark/suites');
+export const exportSuite = (suite: string) =>
+	request<SuiteExport>('GET', `/benchmark/suites/${encodeURIComponent(suite)}/export`);
+export const importSuite = (suite: string, cases: BenchmarkCaseCreate[]) =>
+	request<ImportCounts>('POST', `/benchmark/suites/${encodeURIComponent(suite)}/import`, { cases });
+export const listBenchmarkCases = (filters: BenchmarkCaseFilters = {}) =>
+	request<BenchmarkCaseList>('GET', `/benchmark/cases${query(filters)}`);
+export const caseHistory = (caseId: string) => request<BenchmarkCase[]>('GET', benchCase(caseId));
+export const createBenchmarkCase = (body: BenchmarkCaseCreate) => request<BenchmarkCase>('POST', '/benchmark/cases', body);
+export const addCaseVersion = (caseId: string, body: BenchmarkCaseContent) =>
+	request<BenchmarkCase>('POST', `${benchCase(caseId)}/versions`, body);
+export const approveCase = (caseId: string) => request<BenchmarkCase>('POST', `${benchCase(caseId)}/approve`);
+export const retireCase = (caseId: string) => request<BenchmarkCase>('POST', `${benchCase(caseId)}/retire`);
+export const listRuns = (suite?: string, limit = 50) =>
+	request<BenchmarkRun[]>('GET', `/benchmark/runs${query({ suite, limit })}`);
+export const startRun = (body: RunRequest) => request<BenchmarkRun>('POST', '/benchmark/runs', body);
+export const getRun = (runId: string) => request<RunResults>('GET', `/benchmark/runs/${encodeURIComponent(runId)}`);
+export const cancelRun = (runId: string) =>
+	request<BenchmarkRun>('POST', `/benchmark/runs/${encodeURIComponent(runId)}/cancel`);
+export const compareRuns = (base: string, head: string) =>
+	request<RunComparison>('GET', `/benchmark/compare${query({ base, head })}`);
+
+/** POST /v1/retrieval/search (backend/api/engine.py, S2): the Retrieval lab */
+export const retrievalSearch = (body: RetrievalLabRequest) => request<SearchResult>('POST', '/v1/retrieval/search', body);
 
 const casePath = (caseKey: string) => `/review/cases/${encodeURIComponent(caseKey)}`;
 

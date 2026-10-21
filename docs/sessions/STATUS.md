@@ -415,3 +415,32 @@ Read-only census of the stack: 20 of the 40 waiting C documents are LabJack (18 
 Blocked on: merge + stack image rebuild, then `routes.C.enabled = true` on the stack and a re-dispatch (live counts follow)
 Needs from others: Lead: approval for the `telemetry_runs`/`telemetry_channels` migration (step 2); S4: rebuild the worker image after the merge
 Next: live Route C run and counts; then step 2 (normalized Parquet, t0, metrics, catalog tables, commit path) and the A1/D/F adapter wiring S2 published
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: Benchmark UI. Suites, cases with drafts to approve, the case editor covering every CaseSpec field (edit = new version), the results dashboard with a baseline ribbon, failure classes, per-category counts and newly failing cases, the drilldown, compare runs and the Retrieval lab over S2's /v1/retrieval/search; run pages refresh on the live `run` topic. 90 Vitest; check and build clean; browser run against a mock API.
+Blocked on: nothing. A real benchmark run waits for S2's runner (M10).
+Needs from others: S2 to publish `run` events (progress, finished) through publish_event when the runner lands.
+Next: Open WebUI "Add to benchmark" action against POST /benchmark/drafts; Settings editing once S1 publishes the settings API.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: "Add to benchmark" Open WebUI action. It prefills a draft from the trace (verified numeric claims, cited pages, tools) and posts it to POST /benchmark/drafts; the prefill is tested against the API's DraftFromChat model. 68 Open WebUI tests pass on source and bundles.
+Blocked on: nothing. Settings editing waits for S1's settings API; live Pipe and actions wait for the engine (M8).
+Needs from others: nothing new.
+Next: idle until S1's settings API, or new tasks.
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: observability (telemetry module + metric catalogue of file 02 §10, collector, Prometheus + 7 operational alerts with promtool tests, Alertmanager → Teams, Tempo, Grafana dashboard; verified live in a throwaway project); `parse` image for cpu_parse (Docling 2.141 + RapidOCR + onnxruntime on CPU torch, Tesseract OSD + Latin/Cyrillic/Devanagari/Arabic; scanned page OCR'd correctly by both engines); `HF_HUB_DISABLE_XET=1` in model images; `_incoming/` lifecycle rule; S1's process schedules; parse image in CI scan. Stack on the host runs main 65dd09f at migration 0008. Test: `uv run pytest` green (alert-rule tests need Docker)
+Blocked on: nothing
+Needs from others: Lead — approve `DCL_GRAFANA_ADMIN_PASSWORD` (secret) and compose-only `DCL_GRAFANA_PORT` (default 3300); note `models`/`parse` groups now conflict in uv (sync one at a time); S1 — call `backend.common.telemetry.METRICS` from the sync code; host disk at 91%
+Next: backups (PostgreSQL base + WAL, MinIO versioning checks), retention jobs, remaining runbooks; MinIO replacement comparison by end of M4
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: nothing new since a19ad4f (merge requested)
+Blocked on: DCL Lead / user decision before backups (brief task 6, file 05 §6, 10 §3 prod): (1) backup destination off this host's NVMe (disk at 91%; same-disk copies do not survive a disk loss): NAS path, second disk, or an S3-compatible bucket elsewhere; (2) RPO/RTO targets; (3) tool: S4 recommends WAL-G (base backups + continuous WAL to an S3-compatible target, point-in-time restore) over pgBackRest for its smaller footprint; (4) `backend/sync/retention.py` sits under S1's `backend/sync` although the backups map lists it for S4 — who owns it?
+Needs from others: answers above; approval of `DCL_GRAFANA_ADMIN_PASSWORD` / `DCL_GRAFANA_PORT`
+Next: backups and restore drill once answered; MinIO replacement comparison by end of M4
+
+## 2026-10-22 06:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Route A1 for PDFs end to end (`backend/routes/a1_office/{convert,structure,metadata,figures,tables_qa,handwriting,route}.py`): Docling runs by OCR plan with the second pass and `transcribe_page`, structure with references as mentions, L1 metadata, figure readings, table A/B QA, handwriting with critical-field HARD flags, CIR and assets; 67 route tests (Docling on S5's digital fixtures).
+Blocked on: nothing
+Needs from others: S1: the dispatcher's adapter call into `process_pdf` and `IMPLEMENTED_ROUTES` (signature in `.wiki/backend/route-a1-office.md`); `critical_field_patterns` from pipeline_config
+Next: A1.0 visual twin + page map, DOCX/PPTX, rotation; then Routes D and F; then the answer workflow
