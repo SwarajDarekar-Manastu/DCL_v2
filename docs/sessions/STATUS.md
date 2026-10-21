@@ -168,3 +168,9 @@ Blocked on: Lead answers of 100eae2 for the delta crawl
 Needs from others: S4 — CI service for a disposable MinIO with DCL_TEST_MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY, like the DB tests
 Next: provisional evidence/suggestion models per flag type (S3 asked), then the M2 documents/nodes/assets models
 >>>>>>> main
+
+## 2026-10-21 22:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` with `kept_endings_by_parent_kind: {wbpz: [".out"]}` per the Lead's ruling; 5 archive-member decision cases through the documented rule and S1's gate (58 gate tests). Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: S1 crawl folder listing (allowlist)
+Needs from others: nothing else
+Next: idle until the listing arrives
