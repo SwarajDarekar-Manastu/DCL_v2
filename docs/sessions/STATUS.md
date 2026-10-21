@@ -269,3 +269,9 @@ Merged / ready: hybrid retrieval `backend/indexing/retrieval.py` (exact/HNSW den
 Blocked on: nothing
 Needs from others: S1: the BM25 migration with the DDL sent today (field names verbatim); S5: `retrieval_set.yaml` (40 queries with gold anchors) for recall@30
 Next: index_document (end-to-end tail into S1's commit), then the Retrieval-lab data for S3, then Route A1
+
+## 2026-10-22 03:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/indexing/index_document.py` (ProcessedDocument → IndexPlan: chunk, enrich per parent, entities, facts, route mentions, question proxies, headers, vector reuse, image vectors, aggregation), 11 tests; trace lookup and feedback routes for S3; sanity range by origin and role.
+Blocked on: nothing
+Needs from others: S1: `commit.py` consuming `IndexPlan` (shape in `.wiki/backend/chunker-and-anchors.md`); the pipeline task that calls `index_document`
+Next: Retrieval-lab data for S3, `tasks_embed.py`, then Route A1 (pre-flight, triage, Docling by script)
