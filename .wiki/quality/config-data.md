@@ -72,7 +72,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] RocketCEA reproduces the published HTP 90/98 decomposition temperatures within 1.5%
 - [x] `gate.yaml` equals the file 02 §4 lists plus two recorded judgment calls; decisions verified through S1's GateConfig (S1 branch 100eae2; the test runs it automatically once on main)
 - [ ] Gate rejection counts checked against the real crawl (segments build/env/backup, endings .log/.bin/.tab/.out)
-- [ ] `.out` kept for `.wbpz` members once S1 adds `parent_kind` to GateConfig (03 §11)
+- [ ] Decision case for `.out` under `parent_kind = wbpz` once GateInput has the field (fixed rule in S1 code, 03 §11)
 - [ ] SME has reviewed every entry (`sme_confirmed: true`)
 - [ ] `config/rules/` exported operator rules load against the S1 rules schema
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted

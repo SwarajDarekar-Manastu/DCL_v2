@@ -19,7 +19,7 @@
 # Manual decisions (Lead, 2026-10-21): ".ini" is data, not junk (02 §4; Tier-4 secret scan
 # still applies); ".1" is not junk (man pages only occur under Tier-1 paths); ".out" stays
 # junk except for members of an ANSYS .wbpz archive (gate input parent_kind = wbpz, 03 §11).
-# The .wbpz exception has no key here yet: it follows when S1 adds parent_kind to GateConfig.
+# The .wbpz exception is a fixed rule in backend/sync/gate.py, not a key in this file.
 #
 # To verify against the real crawl (M1): rejection counts for the segments "build", "env",
 # "backup" and the endings ".log", ".bin", ".tab", ".out" in team folders.
