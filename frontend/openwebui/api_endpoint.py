@@ -179,6 +179,19 @@ async def send_feedback(
         raise EngineError(response.status_code, _detail(response.status_code, response.content))
 
 
+async def create_benchmark_draft(
+    config: DclConfig, identity: Identity, draft: dict, client: httpx.AsyncClient | None = None
+) -> dict:
+    """POST /benchmark/drafts (backend/api/benchmark.py): a draft case a reviewer approves in the Console."""
+    body = json.dumps(draft).encode()
+    headers = identity_headers(config, identity, body) | {"Content-Type": "application/json"}
+    async with _client(config, client) as http:
+        response = await http.post(f"{config.engine_url}/benchmark/drafts", content=body, headers=headers)
+    if response.status_code != 201:
+        raise EngineError(response.status_code, _detail(response.status_code, response.content))
+    return response.json()
+
+
 async def get_trace(
     config: DclConfig, identity: Identity, trace_id: str, client: httpx.AsyncClient | None = None
 ) -> dict:

@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from frontend.openwebui.api_endpoint import (  # inline
     EngineError,
     Identity,
+    create_benchmark_draft,
     find_trace,
     open_webui_groups,
     send_feedback,
@@ -51,6 +52,56 @@ HEIGHT_SCRIPT = (
     "<script>(function(){function h(){parent.postMessage({type:'iframe:height',"
     "height:document.documentElement.scrollHeight},'*')}window.addEventListener('load',h);h()})();</script>"
 )
+
+
+NUMBER_WITH_UNIT = re.compile(r"(-?\d+(?:\.\d+)?)\s*([A-Za-z%°µ][A-Za-z0-9%°µ/()·^-]*)")
+
+
+def draft_from_trace(trace: dict, suite: str) -> dict:
+    """A draft benchmark case prefilled from the answer (file 08 §2.2); a reviewer checks it."""
+    tools = sorted(
+        {
+            t.get("tool") or t.get("name")
+            for t in trace.get("tool_calls") or []
+            if t.get("tool") or t.get("name")
+        }
+    )
+    numeric = []
+    for claim in trace.get("claims") or []:
+        if claim.get("kind") != "numeric" or claim.get("verdict", "entailed") != "entailed":
+            continue
+        match = NUMBER_WITH_UNIT.search(str(claim.get("text", "")))
+        if match:
+            numeric.append(
+                {
+                    "metric": str(claim.get("text", ""))[:80],
+                    "value": float(match.group(1)),
+                    "unit": match.group(2),
+                    "tolerance_pct": 1.0,
+                }
+            )
+    citations, seen = [], set()
+    for citation in trace.get("citations") or []:
+        anchor = citation.get("anchor") if isinstance(citation.get("anchor"), dict) else {}
+        doc_id = anchor.get("doc_id") or citation.get("doc_id")
+        page = anchor.get("page_no") or anchor.get("page") or citation.get("page_no")
+        if doc_id and (doc_id, page) not in seen:
+            seen.add((doc_id, page))
+            citations.append({"doc_id": doc_id, "page": page})
+    analysis = trace.get("query_analysis") or {}
+    return {
+        "suite": suite,
+        "category": "TELEMETRY_MATH" if "query_telemetry" in tools else "FACT_LOOKUP",
+        "question": trace.get("question") or "",
+        "notes": "Drafted from chat; check the expected values before approving.",
+        "source_trace_id": trace["trace_id"],
+        "spec": {
+            "language": analysis.get("language") or "en",
+            "expected_numeric": numeric,
+            "expected_citations": citations,
+            "expected_tools": {"tools": tools, "ordered": False} if tools else None,
+        },
+    }
 
 
 def parse_report(text: str) -> tuple[str, str | None] | None:
@@ -130,6 +181,7 @@ def trace_html(trace: dict) -> str:
 class Action:
     actions = [
         {"id": "show_trace", "name": "Show trace"},
+        {"id": "add_to_benchmark", "name": "Add to benchmark"},
         {"id": "report_issue", "name": "Report issue"},
     ]
 
@@ -176,6 +228,34 @@ class Action:
         except EngineError as exc:
             reason = {404: "This answer has no engine trace.", 501: "Traces are not available yet."}
             await notify("warning", reason.get(exc.status, exc.detail))
+            return None
+
+        if __id__ == "add_to_benchmark":
+            reply = None
+            if __event_call__:
+                reply = await __event_call__(
+                    {
+                        "type": "input",
+                        "data": {
+                            "title": "Add this answer to a benchmark suite",
+                            "message": "Suite name (a reviewer approves the draft in the DCL Console):",
+                            "placeholder": "from-chat",
+                        },
+                    }
+                )
+            if reply is None or reply is False or isinstance(reply, dict):
+                return None  # cancelled or timed out
+            suite = str(reply).strip() or "from-chat"
+            try:
+                draft = await create_benchmark_draft(
+                    config, identity, draft_from_trace(trace, suite), self.http_client
+                )
+            except EngineError as exc:
+                await notify("error", f"The draft could not be created: {exc.detail}")
+                return None
+            await notify(
+                "success", f"Draft case {draft.get('case_id')} added to {suite}; approve it in the Console."
+            )
             return None
 
         if __id__ == "report_issue":
