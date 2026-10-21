@@ -189,7 +189,6 @@ Merged / ready: 31ed593 (gate.yaml header wording), not yet requested
 Blocked on: Lead — the `.wbpz` `.out` exception: Lead ruled "fixed rule in code, no gate.yaml key"; S1 implemented a gate.yaml key `kept_endings_by_parent_kind` (S1 c861d3a, merge requested). S5 adds the entry and three decision cases once the Lead confirms which one stands
 Needs from others: Lead — that confirmation; S1 — the crawl folder listing
 Next: idle
-<<<<<<< HEAD
 ## 2026-10-22 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: `config/sanity_ranges.yaml` v2 for S1's channel_map body (a7cf42d): ordered ranges keyed by `physical_quantity` + `canonical_name_glob`, first match wins, same four manual values; selection cases on S1-style names. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend` (246 passed)
 Blocked on: S1 crawl folder listing (allowlist); S1 CIR snapshot format (with the CIR writer)
@@ -201,6 +200,7 @@ Merged / ready: `/v1/answer` SSE contract in `backend/api/engine.py` (request, s
 Blocked on: S1 for enrichment (EntityType/NumericFactSource/Quantity enums, M4 entity models, `backend/common/units.py`) and for `resolve_anchor` (`document_nodes` model)
 Needs from others: Lead: add `rapidfuzz` and `pint` to main dependencies and a `models` group (torch 2.14.1, torchvision 0.29.1, transformers 5.20.2, sentence-transformers 6.1.0)
 Next: enrichment extraction schema, prompt and grounding (no DB), then entity normalization once S1's enums land
+<<<<<<< HEAD
 ## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready: task 4 core: backend/sync/downloader.py land_item() (zero-download link, tokenless 302 fetch, one-pass SHA-256 + quickXorHash, verify, content-addressed copy, conflict-safe blob insert); backend/postgres/session.py; Job.key_for(); quickxorhash dep. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend` (627 passed, 3 skipped with both servers)
 Blocked on: Lead answers of 100eae2 for the crawl and for dispatch after landing (processing.scope)
@@ -212,7 +212,6 @@ Merged / ready: backend/common/units.py (pint + config/units.txt with S5's alias
 Blocked on: Lead answers of 100eae2 (crawl) and on whether the M4 entity tables may be created now (S2 asked)
 Needs from others: nothing new
 Next: M2 models documents/document_sources/document_relations/document_nodes/assets once the Lead confirms the table timing; otherwise Tier 4 (magic bytes, secret scan)
-=======
 
 ## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
 Merged / ready: `frontend/review-ui` MVP against S1's review API: queue (filters in the URL, impact sort, j/k/Enter, aging, live refresh), case view (typed evidence panes, consoles from `allowed_actions`, dry-run gate, folder-scoped rule in one resolve, assign/reject/undo), rules page; types generated from OpenAPI (`npm run gen:api`); `GET /assets/url` presign route. 75 Vitest, backend unit suite green; browser run against a mock API.
@@ -225,4 +224,11 @@ Merged / ready: `config/sanity_ranges.yaml` v2 for S1's channel_map body (a7cf42
 Blocked on: S1 crawl folder listing (allowlist); S1 CIR snapshot format (with the CIR writer)
 Needs from others: nothing else; `config/rules/` stays empty until operator rules exist (format now known from S1)
 Next: idle until the listing arrives
->>>>>>> claude/cranky-rhodes-0cb23f
+=======
+
+## 2026-10-21 23:15 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/llm_engine/engine/{sanitizer,verifier}.py` (outbound IP sanitizer, numeric claim string check), 24 tests; GPU tests now skip when the shared card has < 3 GiB free (S4's dcl-v2-models container holds ~1 GiB while loading).
+Blocked on: nothing (S1's enums and units.py are on their branch, merge requested)
+Needs from others: S1: entity tables when the Lead rules on M4 timing
+Next: enrichment extraction (schema, prompt, grounding, unit validation with S1's units.py)
+>>>>>>> claude/infallible-swartz-58c96b
