@@ -150,7 +150,14 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("parent_blob_sha256", "member_path"),
         sa.ForeignKeyConstraint(["parent_blob_sha256"], ["blobs.sha256"]),
         sa.ForeignKeyConstraint(["child_blob_sha256"], ["blobs.sha256"]),
-        check("kind", "archive_member", "pdf_attachment", "embedded_object", "redacted_copy", "replacement_upload"),
+        check(
+            "kind",
+            "archive_member",
+            "pdf_attachment",
+            "embedded_object",
+            "redacted_copy",
+            "replacement_upload",
+        ),
     )
     op.create_index(op.f("ix_blob_derivations_child_blob_sha256"), "blob_derivations", ["child_blob_sha256"])
 

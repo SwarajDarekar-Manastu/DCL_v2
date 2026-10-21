@@ -9,9 +9,9 @@ from alembic import command
 from sqlalchemy import CheckConstraint, text
 from sqlalchemy.exc import IntegrityError
 
+import backend.postgres.models  # noqa: F401
 from backend.postgres import enums
 from backend.postgres.base import Base, Tier
-import backend.postgres.models  # noqa: F401
 
 M1_TABLES = {"sync_roots", "drive_folders", "drive_items", "blobs", "blob_derivations", "jobs"}
 
@@ -81,20 +81,36 @@ def test_every_status_and_checked_column_has_an_enum_check():
 # ---------- database ----------
 
 
+JOB_KEY = f"download:{SHA_A}:v1.1"
+
+
+def _insert(conn, table: str, **values):
+    columns = ", ".join(values)
+    params = ", ".join(f":{name}" for name in values)
+    return conn.execute(text(f"INSERT INTO {table} ({columns}) VALUES ({params})"), values)
+
+
+def _item(conn, item_id: str, drive_id: str = "d1", **extra):
+    return _insert(
+        conn, "drive_items", drive_id=drive_id, item_id=item_id, root_name="APU", name=item_id, **extra
+    )
+
+
 def _seed(conn) -> None:
-    conn.execute(text("INSERT INTO sync_roots (root_name, remote_drive_id, remote_item_id) VALUES ('APU', 'd1', 'r1')"))
-    conn.execute(text(f"INSERT INTO blobs (sha256, size_bytes, minio_uri) VALUES ('{SHA_A}', 1, 's3://a'), ('{SHA_B}', 1, 's3://b')"))
-    conn.execute(text("INSERT INTO drive_folders (drive_id, item_id, root_name, name) VALUES ('d1', 'f1', 'APU', 'TP07')"))
-    conn.execute(
-        text(f"INSERT INTO drive_items (drive_id, item_id, root_name, name, blob_sha256) VALUES ('d1', 'i1', 'APU', 'x.dat', '{SHA_A}')")
+    _insert(conn, "sync_roots", root_name="APU", remote_drive_id="d1", remote_item_id="r1")
+    _insert(conn, "blobs", sha256=SHA_A, size_bytes=1, minio_uri="s3://a")
+    _insert(conn, "blobs", sha256=SHA_B, size_bytes=1, minio_uri="s3://b")
+    _insert(conn, "drive_folders", drive_id="d1", item_id="f1", root_name="APU", name="TP07")
+    _item(conn, "i1", blob_sha256=SHA_A)
+    _insert(
+        conn,
+        "blob_derivations",
+        parent_blob_sha256=SHA_A,
+        member_path="inner/x.dat",
+        child_blob_sha256=SHA_B,
+        kind="archive_member",
     )
-    conn.execute(
-        text(
-            "INSERT INTO blob_derivations (parent_blob_sha256, member_path, child_blob_sha256, kind) "
-            f"VALUES ('{SHA_A}', 'inner/x.dat', '{SHA_B}', 'archive_member')"
-        )
-    )
-    conn.execute(text("INSERT INTO jobs (job_key, stage) VALUES ('download:" + SHA_A + ":v1.1', 'download')"))
+    _insert(conn, "jobs", job_key=JOB_KEY, stage="download")
 
 
 def _own_tables(engine) -> set[str]:
@@ -154,19 +170,23 @@ def test_drive_item_identity_is_drive_and_item_id(migrated):
             _seed(conn)
         with pytest.raises(IntegrityError, match="uq_drive_items_drive_id_item_id"):
             with conn.begin():
-                conn.execute(text("INSERT INTO drive_items (drive_id, item_id, root_name, name) VALUES ('d1', 'i1', 'APU', 'copy')"))
+                _item(conn, "i1")
         with conn.begin():
-            conn.execute(text("INSERT INTO drive_items (drive_id, item_id, root_name, name) VALUES ('d2', 'i1', 'APU', 'other drive')"))
+            _item(conn, "i1", drive_id="d2")
 
 
 def test_parent_item_id_has_no_foreign_key(migrated):
     with migrated.begin() as conn:
         _seed(conn)
-        conn.execute(
-            text("INSERT INTO drive_items (drive_id, item_id, root_name, name, parent_item_id) VALUES ('d1', 'i9', 'APU', 'orphan', 'unknown-parent')")
-        )
-        conn.execute(
-            text("INSERT INTO drive_folders (drive_id, item_id, root_name, name, parent_item_id) VALUES ('d1', 'f9', 'APU', 'early', 'unknown-parent')")
+        _item(conn, "i9", parent_item_id="unknown-parent")
+        _insert(
+            conn,
+            "drive_folders",
+            drive_id="d1",
+            item_id="f9",
+            root_name="APU",
+            name="early",
+            parent_item_id="unknown-parent",
         )
 
 
@@ -174,10 +194,17 @@ def test_blob_insert_is_conflict_safe(migrated):
     with migrated.begin() as conn:
         _seed(conn)
         result = conn.execute(
-            text(f"INSERT INTO blobs (sha256, size_bytes, minio_uri) VALUES ('{SHA_A}', 1, 's3://dup') ON CONFLICT DO NOTHING")
+            text(
+                "INSERT INTO blobs (sha256, size_bytes, minio_uri) VALUES (:sha, 1, 's3://dup') "
+                "ON CONFLICT DO NOTHING"
+            ),
+            {"sha": SHA_A},
         )
         assert result.rowcount == 0
-        assert conn.execute(text(f"SELECT minio_uri FROM blobs WHERE sha256 = '{SHA_A}'")).scalar_one() == "s3://a"
+        uri = conn.execute(
+            text("SELECT minio_uri FROM blobs WHERE sha256 = :sha"), {"sha": SHA_A}
+        ).scalar_one()
+        assert uri == "s3://a"
 
 
 def test_job_key_is_unique(migrated):
@@ -186,7 +213,7 @@ def test_job_key_is_unique(migrated):
             _seed(conn)
         with pytest.raises(IntegrityError, match="uq_jobs_job_key"):
             with conn.begin():
-                conn.execute(text("INSERT INTO jobs (job_key, stage) VALUES ('download:" + SHA_A + ":v1.1', 'download')"))
+                _insert(conn, "jobs", job_key=JOB_KEY, stage="download")
 
 
 def test_downgrade_base_removes_every_table(alembic_config, engine):
