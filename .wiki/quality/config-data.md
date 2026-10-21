@@ -84,6 +84,7 @@ Verification: `uv run pytest backend/tests/unit/config_data && uv run ruff check
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S5 | `sanity_ranges.yaml`: one `<quantity>_general` range per quantity (force 0–5,000 N, temperature 0–3,500 K, mass flow 0–5 kg/s, power 0–50 kW, pressure 0–700 bar renamed `pressure_general`), the only ranges that check external facts; Route C bounds unchanged |
 | 2026-10-22 | S5 | `sanity_ranges.yaml`: feed/valve/tank 0–400 bar and general 0–700 bar pressure ranges; `checks_external_kept` (only the general range checks external facts); Route C values unchanged (Lead ruling, S2 finding) |
 | 2026-10-22 | S5 | `sanity_ranges.yaml` v2 keyed by S1's channel_map quantity + canonical-name glob, first match wins; selection cases on S1-style names |
 | 2026-10-21 | S5 | `gate.yaml`: `kept_endings_by_parent_kind: {wbpz: [.out]}` (Lead ruling); 5 archive-member cases; 58 gate tests |

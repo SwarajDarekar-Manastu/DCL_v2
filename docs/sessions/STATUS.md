@@ -328,3 +328,9 @@ Merged / ready: `config/sanity_ranges.yaml` per the Lead ruling (feed/valve/tank
 Blocked on: the user's answer on the sample list (repository is public: Lead recommends Tier B only)
 Needs from others: S2 — read `checks_external_kept` for external facts and the role id for internal facts (message sent)
 Next: on the answer, export and verify the telemetry cases; meanwhile idle
+
+## 2026-10-22 04:10 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` general fallback per quantity (Lead ruling): force_general 0–5,000 N, temperature_general 0–3,500 K, mass_flow_general 0–5 kg/s, power_general 0–50 kW, `pressure` renamed `pressure_general`; role ranges keep the Route C values and no longer check external facts. Test: `uv run pytest backend/tests/unit/config_data && uv run ruff check backend`
+Blocked on: the user's answer on the sample list
+Needs from others: nothing new (S2 told of the id rename)
+Next: on the answer, export and verify the telemetry cases; the retrieval set once allowlisted documents are indexed (S2's anchor format received)
