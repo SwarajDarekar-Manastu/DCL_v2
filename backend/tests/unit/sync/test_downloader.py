@@ -226,3 +226,14 @@ def test_no_temp_bytes_survive_on_a_versioned_bucket(session, minio, onedrive):
     _land(session, minio, onedrive, _item(session, "i1", CONTENT))
     leftovers = list(minio.list_objects(RAW, prefix=INCOMING_PREFIX, recursive=True, include_version=True))
     assert leftovers == []
+
+
+def test_non_ascii_names_land_with_percent_encoded_metadata(session, minio, onedrive):
+    from urllib.parse import unquote
+
+    name = "Hydrogen Peroxide – Water – Ethanol Blend für CubeSat.pdf"
+    loc = _item(session, "i1", CONTENT, name=name)
+    result = _land(session, minio, onedrive, loc)
+    stored = minio.stat_object(RAW, raw_key(result.blob_sha256))
+    meta = {k.lower(): v for k, v in stored.metadata.items()}
+    assert unquote(meta["x-amz-meta-original_name"]) == name
