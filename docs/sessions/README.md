@@ -38,7 +38,7 @@ Layout and coding principles: `docs/architecture/10_development_plan.md` §2 and
 ## Branches and worktrees
 
 - `main` is always green (tests pass, `alembic check` passes).
-- Each role session works in its own worktree on its own branch: `s1-backend`, `s2-ml`, `s3-frontend`, `s4-devops`, `s5-quality`. The desktop app creates the worktree when the session starts from a task chip; a session started manually runs `git worktree add ../dcl_v2-s1 -b s1-backend` (adjust the suffix).
+- Each role session works in its own worktree on its own branch. When the app starts a session from a task chip it creates both (`.claude/worktrees/<name>`, branch `claude/<name>`); **keep that branch name** and record the session → branch mapping in `STATUS.md`. A session started manually runs `git worktree add ../dcl_v2-s1 -b s1-backend` (adjust the suffix).
 - Sessions bring their branch up to date with `main` at least daily (the app's "sync with base branch" action in app-made worktrees, otherwise `git merge main`).
 - Merging to `main` is done by the Lead from a session's request (message: "ready to merge: branch, scope, test command, what it publishes"). Small, frequent merges; never a week of work in one merge.
 - A session never commits secrets. `.env` stays untracked (`.gitignore`); the `.env.example` with names only is owned by S4.
@@ -73,7 +73,7 @@ Click the task chip the Lead created for the role (the app opens the session in 
 ```
 You are "DCL S1 Backend". Read docs/sessions/README.md, docs/sessions/S1_backend_data.md and .wiki/README.md first,
 then docs/architecture/00_README.md and the architecture files your brief names.
-Set your session title to "DCL S1 Backend". Work only in the directories you own, on branch s1-backend.
+Set your session title to "DCL S1 Backend". Work only in the directories you own, on your worktree's branch.
 For every task: plan sheet first, workspace only, rubric, map page update, delete the plan sheet.
 When in doubt or blocked: write STATUS.md, message DCL Lead once, end your turn.
 Start with the "First tasks" list in your brief.
