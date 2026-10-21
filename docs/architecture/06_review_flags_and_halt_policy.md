@@ -145,7 +145,7 @@ Enrichment and embeddings are re-run **only** for nodes whose `embed_text_hash` 
 
 ## 8. Rules: scope, precedence, retroactivity
 
-- Scope is four **columns** (`scope_root`, `scope_folder_id`, `scope_filename_glob`, `scope_extension`), because scope is the matching key and the specificity order: the most specific matching rule wins, then `origin = operator` beats derived rules (`cfg`, `header`, `config_json`, `tdms_props`), then `precedence`, then newest.
+- Scope is four **columns** (`scope_root`, `scope_folder_id`, `scope_filename_glob`, `scope_extension`), because scope is the matching key and the specificity order. Specificity, most to least: the file's own folder, a farther ancestor folder, no folder; then a filename glob, then an extension, then a root; a global rule last (so "this folder" beats a root-wide `*.dat`). Ties: `origin = operator` beats derived rules (`cfg`, `header`, `config_json`, `tdms_props`), then `precedence`, then newest.
 - Operator rules are **immutable and versioned**: a change inserts a new row with `supersedes_rule_id` and deactivates the old one. Derived rules are replaced when their source file (`source_blob_sha256`) changes.
 - Creating or changing a rule triggers a **retroactive pass**: all documents whose staged payload or `telemetry_runs.channel_map_rule_id` would be affected are re-run from CIR/staged payload. The Console shows the count before confirming ("this will re-process 116 runs").
 - "Files affected" and "applied count" are derived from `review_flags.resolution_rule_id` and `telemetry_runs.channel_map_rule_id` (view `v_rule_usage`), never stored on the rule.

@@ -155,19 +155,22 @@ Blocked on: S1 — `parent_kind` in GateConfig/GateInput (the `.wbpz` `.out` exc
 Needs from others: S1 — tell S5 whether the `.wbpz` exception is configured in gate.yaml (proposed key below in the message) or fixed in code
 Next: idle until S1 answers or the listing arrives
 
-<<<<<<< HEAD
 ## 2026-10-21 22:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: 31ed593 (gate.yaml header wording), not yet requested
 Blocked on: Lead — the `.wbpz` `.out` exception: Lead ruled "fixed rule in code, no gate.yaml key"; S1 implemented a gate.yaml key `kept_endings_by_parent_kind` (S1 c861d3a, merge requested). S5 adds the entry and three decision cases once the Lead confirms which one stands
 Needs from others: Lead — that confirmation; S1 — the crawl folder listing
 Next: idle
-=======
 ## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready: backend/storage/minio.py (BucketStore get/put for S2's vision cache, presign_get 15 min for S3, ensure_buckets, raw_key); 11 tests, the server tests green against S4's dcl-v2-minio:RELEASE.2025-10-15T17-29-55Z. Test: `DCL_TEST_MINIO_ENDPOINT=<disposable> uv run pytest && uv run ruff check backend`
 Blocked on: Lead answers of 100eae2 for the delta crawl
 Needs from others: S4 — CI service for a disposable MinIO with DCL_TEST_MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY, like the DB tests
 Next: provisional evidence/suggestion models per flag type (S3 asked), then the M2 documents/nodes/assets models
->>>>>>> main
+
+## 2026-10-21 21:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/indexing/{chunker,anchors,identifiers}.py` (chunk_document, build_embed_texts, IndexNode, extract_identifiers, make_anchor, resolve_among), 47 tests; vision media resolution aligned with 03 §3.
+Blocked on: S1 `document_nodes` model for `resolve_anchor` (S3's viewer waits on it)
+Needs from others: S1: route node conventions in `.wiki/backend/chunker-and-anchors.md` (text as parent/child, every node needs a locator, run summaries t_start_ms 0); `IndexNode` is the commit input
+Next: enrichment (extract, entities, numeric facts), then index_document and retrieval
 
 ## 2026-10-21 22:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: `config/gate.yaml` with `kept_endings_by_parent_kind: {wbpz: [".out"]}` per the Lead's ruling; 5 archive-member decision cases through the documented rule and S1's gate (58 gate tests). Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
@@ -175,8 +178,32 @@ Blocked on: S1 crawl folder listing (allowlist)
 Needs from others: nothing else
 Next: idle until the listing arrives
 
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: publish-first item 4: backend/review/rules.py (precedence resolver, typed bodies per rule_type incl. channel_map, config/rules YAML format); RuleDraft.body validated; also typed flag evidence (3db8ffa), MinIO store (e75440c), gate parent_kind (c861d3a). Test: `uv run pytest && uv run ruff check backend` (600 passed, 24 skipped)
+Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl and the downloader's dispatch step
+Needs from others: nothing new
+Next: downloader core (streamed SHA-256 + local quickXorHash, conflict-safe blob insert), job_key builder; then the M2 documents/nodes/assets models
+
+## 2026-10-21 22:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: 31ed593 (gate.yaml header wording), not yet requested
+Blocked on: Lead — the `.wbpz` `.out` exception: Lead ruled "fixed rule in code, no gate.yaml key"; S1 implemented a gate.yaml key `kept_endings_by_parent_kind` (S1 c861d3a, merge requested). S5 adds the entry and three decision cases once the Lead confirms which one stands
+Needs from others: Lead — that confirmation; S1 — the crawl folder listing
+Next: idle
+
+## 2026-10-21 22:45 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `/v1/answer` SSE contract in `backend/api/engine.py` (request, seven event models, `to_sse`, HMAC identity, TraceView, example stream), 9 tests; endpoints 501 until M8.
+Blocked on: S1 for enrichment (EntityType/NumericFactSource/Quantity enums, M4 entity models, `backend/common/units.py`) and for `resolve_anchor` (`document_nodes` model)
+Needs from others: Lead: add `rapidfuzz` and `pint` to main dependencies and a `models` group (torch 2.14.1, torchvision 0.29.1, transformers 5.20.2, sentence-transformers 6.1.0)
+Next: enrichment extraction schema, prompt and grounding (no DB), then entity normalization once S1's enums land
+
 ## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
 Merged / ready: `frontend/review-ui` MVP against S1's review API: queue (filters in the URL, impact sort, j/k/Enter, aging, live refresh), case view (typed evidence panes, consoles from `allowed_actions`, dry-run gate, folder-scoped rule in one resolve, assign/reject/undo), rules page; types generated from OpenAPI (`npm run gen:api`); `GET /assets/url` presign route. 75 Vitest, backend unit suite green; browser run against a mock API.
 Blocked on: end-to-end resume needs S1's M2 tables; Audit page needs the audit route (proposed to Lead); viewer body needs S2's `resolve_anchor` DB wrapper.
 Needs from others: Lead decision on GET /audit owner; S4 note: presigned URLs use DCL_MINIO_ENDPOINT, which must be reachable from browsers (or a public endpoint setting).
 Next: Open WebUI Pipe against S2's /v1/answer contract (S2 branch 13c7c94, merge pending).
+
+## 2026-10-22 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/sanity_ranges.yaml` v2 for S1's channel_map body (a7cf42d): ordered ranges keyed by `physical_quantity` + `canonical_name_glob`, first match wins, same four manual values; selection cases on S1-style names. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend` (246 passed)
+Blocked on: S1 crawl folder listing (allowlist); S1 CIR snapshot format (with the CIR writer)
+Needs from others: nothing else; `config/rules/` stays empty until operator rules exist (format now known from S1)
+Next: idle until the listing arrives
