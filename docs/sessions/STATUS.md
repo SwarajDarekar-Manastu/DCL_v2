@@ -91,6 +91,23 @@ Blocked on: Review UI waits for S1's `backend/review/api_models.py`; Settings ed
 Needs from others: S1 and S2 to message S3 when those land on main; Lead to merge this branch (shell, viewer, settings scaffolding).
 Next: idle until one of the inputs above arrives; then switch `get_auth_config` to S4's `require("console_auth")` once S4's settings merge is on main.
 
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: task 2: backend/sync/auth.py (Fernet-encrypted MSAL cache, mode 600/700, atomic writes, v1 cache refused untouched; silent-first TokenProvider; device-code sign-in that rejects any account but DCL_DELEGATED_USERNAME; check_access for the roots and the outside item) + GET-only backend/sync/graph_client.py; 28 unit tests; device flow verified live against the tenant with scope A. Test: `uv run pytest && uv run ruff check backend` (159 passed, 18 skipped)
+Blocked on: nothing for code. Live sign-in and `check` need S4's config fields on main (S4 merge request 14c8c4d) and the operator: in .env set DCL_TOKEN_CACHE_PATH to a NEW v2 file under a 700 DCL_TOKEN_DIR (it still points at v1's cache, which the code refuses), add DCL_TOKEN_CACHE_KEY (Fernet key), optionally DCL_TEST_OUTSIDE_DRIVE_ID; then run `uv run python -m backend.sync.auth sign-in` and complete the code as ai@manastuspace.com, then `uv run python -m backend.sync.auth check`
+Needs from others: Lead — merge S4's config fields; relay the operator step above to the user. Open for the health-check task: file 02 §1 probes `GET /me/drive`, which option A may refuse; I will confirm live once signed in
+Next: task 3, delta crawl of the four roots (metadata only), folder tree and paths, gate tiers 1–3, HELD_BY_SCOPE
+
+## 2026-10-21 20:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/llm_engine/local_models.py` + `backend/api/models.py` (EmbeddingGemma 2 text+image 768-d, bge-reranker-v2-m3, `ModelsClient`), 27 unit tests + 5 GPU tests green; throughput in `.wiki/backend/embedding-service.md`. Branch mapping: S2 = claude/infallible-swartz-58c96b.
+Blocked on: nothing
+Needs from others: S4: GPU image pins (torch 2.14.1 cu130, transformers 5.20.2, sentence-transformers 6.1.0, torchvision 0.29.1, pillow, numpy), HF cache volume, compose healthcheck on `/models/health` with ~60 s start period. Lead: pyproject `models` dependency group with the same pins.
+Next: chunker + anchors + identifiers (S3 waits on `resolve_anchor`), then VisionService on S4's gateway client
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: task 3 part 1: backend/sync/gate.py (tiers 1–3, reasons in the file 05 format) + scope.py (download-scope matcher), 49 unit tests. Test: `uv run pytest && uv run ruff check backend`
+Blocked on: DCL Lead, for the rest of task 3 and the live sign-in. (1) The app dcl-reader-delegated has admin consent only for delegated Files.Read.All (v1 docs/GRAPH_SETUP.md, 13 Oct). .env sets DCL_PERMISSION_OPTION=A, which requests Files.SelectedOperations.Selected, so sign-in will most likely stop at "Need admin approval". Either set B (the security sign-off of file 02 §1 applies) or have an admin consent to A and grant the four folders. (2) M1 code reads sync.download_scope and processing.scope from pipeline_config, but file 05 §7 creates that table in M2–M3. Proposal: migration 0002 creates pipeline_config + v_config_current in M1. Who owns typed reads (file 10 §2 puts them in backend/config.py, S4)? (3) Gate source: config/gate.yaml (brief; S5 owns config/*.yaml, while my map page lists it in S1's workspace) seeds pipeline_config gate.* (file 05 lists gate.* keys)? (4) bbox convention for the contract: proposal `{page_no, x0, y0, x1, y1}` normalized 0..1 with a top-left origin, a list per node
+Needs from others: S5 — config/gate.yaml in the GateConfig schema (docstring of backend/sync/gate.py; a test copy is in backend/tests/unit/sync/gate_test_config.yaml)
+Next: backend/dispatcher/contract.py (publish-first item 2: S2 and S3 wait on it), then the delta crawl once (1)–(3) are answered
+
 ## 2026-10-21 20:05 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: config data + synthetic fixtures merged to main (3240cc6); branch synced; allowlist plan sheet reopened with the delegated method (S5 chooses from S1's crawl)
 Blocked on: S1 folder-level listing of the real metadata crawl (requested 2026-10-21)

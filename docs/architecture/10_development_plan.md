@@ -19,13 +19,14 @@ DCL_v2/
   backend/                        one Python package: `python -m backend.main`
     main.py                       THE FastAPI app. Mounts the routers from api/ according to ROLE
                                   (api | models | all); startup checks (env, DB, MinIO, GPU for models)
-    config.py                     env contract (file 01 §7.1) + typed access to pipeline_config
+    config.py                     env contract (file 01 §7.1) only (S4)
     api/                          thin routers only, no business logic
       health.py  sync.py (webhook, ops)  review.py  settings.py  benchmark.py  viewer.py  assets.py
       entities.py  engine.py (/v1/answer SSE, traces)  models.py (/embed, /rerank; loaded when ROLE=models)
     celery_redis/                 app.py (Celery + Redis), queues.py (pools of §4), beat.py (schedules),
                                   tasks_sync.py  tasks_process.py  tasks_embed.py  tasks_review.py
     postgres/                     base.py (naming convention), enums.py (StrEnum → CHECK), session.py,
+                                  pipeline_config.py (typed get/set over the config table + YAML seeding; S1),
                                   models/ (registry.py documents.py nodes.py entities.py telemetry.py
                                   review.py ops.py benchmark.py), views.sql, backend/postgres/migrations/ (Alembic)
     storage/                      minio.py (buckets, keys, presign), parquet.py (conventions of file 05 §2)

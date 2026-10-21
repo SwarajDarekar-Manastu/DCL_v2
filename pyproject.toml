@@ -16,9 +16,19 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pyjwt[crypto]>=2.9",
     "redis>=5.0",
+    "msal>=1.31",
+    "cryptography>=43",
 ]
 
 [dependency-groups]
+models = [
+    "torch==2.14.1",
+    "torchvision==0.29.1",
+    "transformers==5.20.2",
+    "sentence-transformers==6.1.0",
+    "pillow>=10",
+    "numpy>=1.26",
+]
 dev = [
     "jsonschema>=4.23",
     "openpyxl>=3.1",
