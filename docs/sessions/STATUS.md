@@ -439,6 +439,16 @@ Blocked on: nothing
 Needs from others: S1: the dispatcher's adapter call into `process_pdf` and `IMPLEMENTED_ROUTES` (signature in `.wiki/backend/route-a1-office.md`); `critical_field_patterns` from pipeline_config
 Next: A1.0 visual twin + page map, DOCX/PPTX, rotation; then Routes D and F; then the answer workflow
 
+## 2026-10-22 05:10 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: M1.md row 10 with S4's queue load-test procedure and expected report (from S4, at the Lead's request)
+Blocked on: the user's answer on the sample list
+Needs from others: nothing new
+Next: idle until the answer
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: dead-letter list + poison-task stop for every task (`DclTask` in `backend/celery_redis/app.py`; `Queue.DEAD_LETTER` removed, the list is `dcl:dead_letter`, read with `dead_letters()`); M1 queue load test harness `backend/devops/ci/queue_load_test.sh` + `backend.celery_redis.load_test` — passed on a throwaway project (5,002 tasks, no loss, no misrouting, 54 dead letters as planned, kills confined to telemetry_stream); 24 h lifecycle on `dcl-exports/uploads/` (applied live). Test: `uv run pytest` green
+Blocked on: backups questions (destination, RPO/RTO, tool, retention ownership) with DCL Lead
+Needs from others: S5 — add the load-test command and expected output to `backend/tests/acceptance/M1.md` row 10 (sent); S3/S1 — Console "Failed tasks" page reads `dead_letters()`
+Next: office conversion client for S1/S2 (`backend/common/office.py`, env name pending Lead), then backups once answered
 ## 2026-10-22 07:30 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: Route D (`backend/routes/d_photos.py`, `classify_image` capability) and Route F (`backend/routes/f_video.py`), 17 tests; Route A1 for PDFs requested earlier.
 Blocked on: nothing (A1 DOCX/PPTX waits for S4's `backend/common/office.py`, signature agreed)

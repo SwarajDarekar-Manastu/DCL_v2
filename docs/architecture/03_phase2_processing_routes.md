@@ -140,9 +140,10 @@ All routes that need a vision model call the same component, `VisionService`, so
 | `read_schematic` | 3.8 Flash | figure crop | `{components:[{tag, type, label}], connections:[{from,to,medium,label}], notes}` |
 | `inspect_hardware_photo` | 3.8 Flash | photo + folder context | `{components_visible[], failure_modes:[{mode, location, severity, confidence}], visible_text[], test_stage_hint, description}` |
 | `describe_slide` | 3.8 Flash | slide image + extracted text | `{summary, diagram_description, key_numbers[]}` |
+| `classify_image` | Flash-Lite, media_resolution low, minimal thinking | photo thumbnail + folder context (Route D step 3, classify-first) | `{image_class: hardware_photo \| plot_or_screenshot \| document_scan \| diagram \| people_or_other, confidence}` |
 | `video_timeline` | 3.8 Flash (video input) | clip ≤ 2 min or keyframes | `{events:[{t_s, type, description}], anomalies[]}` |
 
-**Media resolution per capability** (Gemini 3 per-part `mediaResolution`; tokens per image low 280 / medium 560 / high 1120): `triage_page` → `low`; `transcribe_handwriting`, `transcribe_page`, `read_table_image`, `digitize_plot`, `read_schematic` → `high`; `inspect_hardware_photo`, `describe_slide` → `medium` (a `relook` at answer time may use `high`); whole PDF pages (rare) → `medium`; `video_timeline` → `low`, `high` only when text in frames must be read. The M5 calibration study compares `medium` and `high` on the handwriting set and may lower the handwriting default.
+**Media resolution per capability** (Gemini 3 per-part `mediaResolution`; tokens per image low 280 / medium 560 / high 1120): `triage_page`, `classify_image` → `low`; `transcribe_handwriting`, `transcribe_page`, `read_table_image`, `digitize_plot`, `read_schematic` → `high`; `inspect_hardware_photo`, `describe_slide` → `medium` (a `relook` at answer time may use `high`); whole PDF pages (rare) → `medium`; `video_timeline` → `low`, `high` only when text in frames must be read. The M5 calibration study compares `medium` and `high` on the handwriting set and may lower the handwriting default.
 
 Rules:
 1. Every call is logged to `llm_calls` with `doc_id`, `purpose`, token counts.
