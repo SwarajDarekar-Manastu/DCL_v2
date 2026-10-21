@@ -279,6 +279,47 @@ export interface components {
              */
             action: "approve_internal";
         };
+        /**
+         * ArraySchemaEvidence
+         * @description SCHEMA_UNKNOWN on an array, headerless table, HDF5 or pickle (never unpickled).
+         */
+        ArraySchemaEvidence: {
+            /**
+             * Columns
+             * @default []
+             */
+            columns: components["schemas"]["ColumnStats"][];
+            /** Dtype */
+            dtype?: string | null;
+            /**
+             * First Rows
+             * @default []
+             */
+            first_rows: (number | string | null)[][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "array_schema";
+            /**
+             * Pickle Classes
+             * @description from pickletools.dis, without executing
+             * @default []
+             */
+            pickle_classes: string[];
+            /**
+             * Recommendation
+             * @default
+             */
+            recommendation: string;
+            /** Shape */
+            shape: number[];
+            /**
+             * Siblings
+             * @default []
+             */
+            siblings: string[];
+        };
         /** AssignRequest */
         AssignRequest: {
             /**
@@ -300,6 +341,20 @@ export interface components {
             y0: number;
             /** Y1 */
             y1: number;
+        };
+        /** CandidateUnit */
+        CandidateUnit: {
+            /** @default n/a */
+            gauge_or_abs: components["schemas"]["GaugeOrAbs"];
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Score */
+            score: number;
+            /** Unit */
+            unit: string;
         };
         /** CaseDetail */
         CaseDetail: {
@@ -328,8 +383,20 @@ export interface components {
             /** Open Soft */
             open_soft: number;
         };
-        /** CaseLocation */
+        /**
+         * CaseLocation
+         * @description One OneDrive location of the case's file, with the values the rule-scope selector needs.
+         */
         CaseLocation: {
+            /** Extension */
+            extension: string | null;
+            /** File Name */
+            file_name: string;
+            /**
+             * Folder Id
+             * @description Graph item id of the parent folder (RuleScope.scope_folder_id)
+             */
+            folder_id: string | null;
             /** Path */
             path: string;
             /** Root Name */
@@ -407,6 +474,23 @@ export interface components {
             /** Within Sanity */
             within_sanity: boolean | null;
         };
+        /** ChannelStats */
+        ChannelStats: {
+            /** Max */
+            max?: number | null;
+            /** Mean */
+            mean?: number | null;
+            /** Min */
+            min?: number | null;
+            /** N */
+            n?: number | null;
+            /** P50 */
+            p50?: number | null;
+            /** P99 */
+            p99?: number | null;
+            /** Std */
+            std?: number | null;
+        };
         /**
          * ChooseSource
          * @description CONFLICT: pick the authoritative value or document.
@@ -479,6 +563,60 @@ export interface components {
             /** Unit */
             unit?: string | null;
         };
+        /** ColumnStats */
+        ColumnStats: {
+            /** Dtype */
+            dtype?: string | null;
+            /** Index */
+            index: number;
+            /** Max */
+            max?: number | null;
+            /** Mean */
+            mean?: number | null;
+            /** Min */
+            min?: number | null;
+            /** N */
+            n?: number | null;
+            /** P50 */
+            p50?: number | null;
+            /** P99 */
+            p99?: number | null;
+            /** Sparkline Uri */
+            sparkline_uri?: string | null;
+            /** Std */
+            std?: number | null;
+        };
+        /**
+         * ConflictEvidence
+         * @description CONFLICT: two sources disagree.
+         */
+        ConflictEvidence: {
+            a: components["schemas"]["ConflictSide"];
+            b: components["schemas"]["ConflictSide"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "conflict";
+            /** Subject */
+            subject: string;
+        };
+        /** ConflictSide */
+        ConflictSide: {
+            /** Date */
+            date?: string | null;
+            /** Doc Id */
+            doc_id?: string | null;
+            /** Label */
+            label: string;
+            /**
+             * Provenance
+             * @description file, header line, page or rule the value came from
+             */
+            provenance: string;
+            /** Value */
+            value: string;
+        };
         /**
          * ConsoleRole
          * @enum {string}
@@ -542,6 +680,44 @@ export interface components {
              */
             action: "exclude";
         };
+        /** ExtractionCrop */
+        ExtractionCrop: {
+            /**
+             * Alternatives
+             * @default []
+             */
+            alternatives: string[];
+            /** Confidence */
+            confidence?: number | null;
+            /** Crop Uri */
+            crop_uri: string;
+            /** Model Value */
+            model_value?: string | null;
+            /** Printed Label */
+            printed_label?: string | null;
+        };
+        /**
+         * FileFactsEvidence
+         * @description HELD_LARGE_FILE and CLOUD_RESTRICTED: facts about the file only.
+         */
+        FileFactsEvidence: {
+            /** Extension */
+            extension?: string | null;
+            /** Folder */
+            folder?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "file_facts";
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Size Bytes */
+            size_bytes?: number | null;
+        };
         /**
          * FlagAnchor
          * @description Where in the CIR a flag points (file 05 §4.5 ``review_flags.anchor``); never a node id.
@@ -588,6 +764,11 @@ export interface components {
         FlagType: "UNIT_AMBIGUITY" | "SCHEMA_UNKNOWN" | "LOW_CONFIDENCE_EXTRACTION" | "PARSE_FAILURE" | "UNSUPPORTED_FORMAT" | "CONFLICT" | "SENSITIVE_CONTENT" | "HELD_LARGE_FILE" | "CLOUD_RESTRICTED";
         /** FlagView */
         FlagView: {
+            /**
+             * Allowed Actions
+             * @description ALLOWED_ACTIONS for this flag type, minus ADMIN_ONLY_ACTIONS for non-admins
+             */
+            allowed_actions: string[];
             anchor: components["schemas"]["FlagAnchor"];
             /** Assigned To */
             assigned_to: string | null;
@@ -599,9 +780,7 @@ export interface components {
             /** Due At */
             due_at: string | null;
             /** Evidence */
-            evidence: {
-                [key: string]: unknown;
-            };
+            evidence: (components["schemas"]["UnitTelemetryEvidence"] | components["schemas"]["UnitFactEvidence"] | components["schemas"]["ArraySchemaEvidence"] | components["schemas"]["JsonSchemaEvidence"] | components["schemas"]["ConflictEvidence"] | components["schemas"]["ParseFailureEvidence"] | components["schemas"]["LowConfidenceEvidence"] | components["schemas"]["SensitiveEvidence"] | components["schemas"]["FileFactsEvidence"]) | null;
             /** Fingerprint */
             fingerprint: string;
             /**
@@ -611,9 +790,7 @@ export interface components {
             flag_id: string;
             flag_type: components["schemas"]["FlagType"];
             /** Resolution */
-            resolution: {
-                [key: string]: unknown;
-            } | null;
+            resolution: (components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"]) | null;
             /** Resolution Rule Id */
             resolution_rule_id: string | null;
             /** Resolved At */
@@ -623,10 +800,7 @@ export interface components {
             route: components["schemas"]["Route"] | null;
             severity: components["schemas"]["FlagSeverity"];
             status: components["schemas"]["FlagStatus"];
-            /** Suggested Resolution */
-            suggested_resolution: {
-                [key: string]: unknown;
-            } | null;
+            suggested_resolution: components["schemas"]["Suggestion"] | null;
         };
         /**
          * GaugeOrAbs
@@ -674,6 +848,51 @@ export interface components {
             regions: components["schemas"]["Region"][];
             /** Width */
             width: number;
+        };
+        /**
+         * JsonSchemaEvidence
+         * @description SCHEMA_UNKNOWN on a JSON file.
+         */
+        JsonSchemaEvidence: {
+            /** Closest Schema */
+            closest_schema?: string | null;
+            /**
+             * Flattened Sample
+             * @default []
+             */
+            flattened_sample: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "json_schema";
+            /**
+             * Missing Keys
+             * @default []
+             */
+            missing_keys: string[];
+            /** Top Level Keys */
+            top_level_keys: string[];
+        };
+        /**
+         * LowConfidenceEvidence
+         * @description LOW_CONFIDENCE_EXTRACTION: crops with the model's reading, or two table versions.
+         */
+        LowConfidenceEvidence: {
+            /**
+             * Crops
+             * @default []
+             */
+            crops: components["schemas"]["ExtractionCrop"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "low_confidence";
+            /** Table A Html */
+            table_a_html?: string | null;
+            /** Table B Html */
+            table_b_html?: string | null;
         };
         /**
          * MapColumns
@@ -760,6 +979,37 @@ export interface components {
             text: string;
             /** Width */
             width: number;
+        };
+        /**
+         * ParseFailureEvidence
+         * @description PARSE_FAILURE (and the 'what is this?' preview of UNSUPPORTED_FORMAT).
+         */
+        ParseFailureEvidence: {
+            /** Detected Mime */
+            detected_mime?: string | null;
+            /** Error */
+            error: string;
+            /** Extension */
+            extension?: string | null;
+            /**
+             * First Kb Preview
+             * @default
+             */
+            first_kb_preview: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "parse_failure";
+            /**
+             * Magic Bytes Hex
+             * @default
+             */
+            magic_bytes_hex: string;
+            /** Partial Output */
+            partial_output?: string | null;
+            /** Size Bytes */
+            size_bytes?: number | null;
         };
         /**
          * Redact
@@ -958,6 +1208,36 @@ export interface components {
             /** Supersedes Rule Id */
             supersedes_rule_id: string | null;
         };
+        /** SanityBounds */
+        SanityBounds: {
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+            /** Quantity */
+            quantity: string;
+            /** Unit */
+            unit: string;
+        };
+        /**
+         * SensitiveEvidence
+         * @description SENSITIVE_CONTENT: the matched pattern with a redacted preview (never the secret).
+         */
+        SensitiveEvidence: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "sensitive";
+            /** Line */
+            line?: number | null;
+            /** Page */
+            page?: number | null;
+            /** Pattern */
+            pattern: string;
+            /** Redacted Preview */
+            redacted_preview: string;
+        };
         /**
          * SetFactUnit
          * @description UNIT_AMBIGUITY on a number in prose or a table: a unit, or keep it as text.
@@ -1026,6 +1306,20 @@ export interface components {
              */
             value?: string | null;
         };
+        /** SiblingUnit */
+        SiblingUnit: {
+            /** Channel */
+            channel: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Source
+             * @description cfg | header | rule | config_json | tdms_props
+             */
+            source: string;
+            /** Unit */
+            unit: string;
+        };
         /** Skip */
         Skip: {
             /**
@@ -1033,6 +1327,28 @@ export interface components {
              * @enum {string}
              */
             action: "skip";
+        };
+        /**
+         * Suggestion
+         * @description A proposed resolution (file 06 §5): deterministic heuristics first, else one Gemini proposal.
+         *     Applied automatically only when ``confidence >= 0.9`` and a matching rule exists.
+         */
+        Suggestion: {
+            /** Confidence */
+            confidence: number;
+            /**
+             * Proposed By
+             * @default heuristic
+             * @enum {string}
+             */
+            proposed_by: "heuristic" | "rule" | "llm";
+            /**
+             * Rationale
+             * @default
+             */
+            rationale: string;
+            /** Resolution */
+            resolution: components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"];
         };
         /** TableView */
         TableView: {
@@ -1081,6 +1397,66 @@ export interface components {
             rebuild_doc_id: string | null;
             /** Reopened Flag Ids */
             reopened_flag_ids: string[];
+        };
+        /**
+         * UnitFactEvidence
+         * @description UNIT_AMBIGUITY on a number in prose or a table.
+         */
+        UnitFactEvidence: {
+            /**
+             * Candidate Units
+             * @default []
+             */
+            candidate_units: components["schemas"]["CandidateUnit"][];
+            /**
+             * Context
+             * @default
+             */
+            context: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "unit_fact";
+            /** Value Raw */
+            value_raw: string;
+        };
+        /**
+         * UnitTelemetryEvidence
+         * @description UNIT_AMBIGUITY on a time-series channel (Route C).
+         */
+        UnitTelemetryEvidence: {
+            /**
+             * Candidate Units
+             * @default []
+             */
+            candidate_units: components["schemas"]["CandidateUnit"][];
+            /** Channel */
+            channel: string;
+            /**
+             * Header Lines
+             * @default []
+             */
+            header_lines: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "unit_telemetry";
+            /** Quantity Guess */
+            quantity_guess?: string | null;
+            /** Raw Unit */
+            raw_unit?: string | null;
+            sanity?: components["schemas"]["SanityBounds"] | null;
+            /**
+             * Sibling Units
+             * @default []
+             */
+            sibling_units: components["schemas"]["SiblingUnit"][];
+            /** Sparkline Uri */
+            sparkline_uri?: string | null;
+            /** @default {} */
+            stats: components["schemas"]["ChannelStats"];
         };
         /**
          * UseReplacement

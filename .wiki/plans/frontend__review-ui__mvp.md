@@ -23,7 +23,8 @@ Files to change (exact):
 - `frontend/console/src/lib/api_schema.d.ts` (generated)
 - `frontend/console/src/lib/api_endpoint.ts` (types from the schema; review calls)
 - `frontend/console/src/lib/components/review/`
-- `frontend/console/src/routes/review/` (`+page.svelte` queue, `[case_key]/+page.svelte`, `rules/+page.svelte`)
+- `frontend/console/src/lib/live.svelte.ts` (shared live state, so the layout's one websocket feeds the queue) and `frontend/console/src/routes/+layout.svelte` (uses it)
+- `frontend/console/src/routes/review/` (`+page.svelte` queue and case side by side, case chosen by `?case=<case_key>`; `rules/+page.svelte`)
 - `frontend/console/tests/review/`, `frontend/console/tests/api_endpoint.test.ts`
 
 Files explicitly out of scope (owned by another session → message them):
