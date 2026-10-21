@@ -84,3 +84,9 @@ Merged / ready: `quality/config-data` (six `config/` data files from the manual 
 Blocked on: SME answer to the 13-slot allowlist table (sent to DCL Lead 2026-10-21); real per-format fixtures, telemetry cases and retrieval set wait for it
 Needs from others: Lead decisions on three questions: (1) quantity synonyms Isp/Pc have no entity type in 04 §3.2, so where do `quantity_terms` load? (2) 04 §2 lets a vendor name alone turn a document `external_kept`, but internal reports name sensor/DAQ vendors (LabJack, Kistler); should vendors marked `internal_equipment: true` need a datasheet/brochure cue too? (3) FMEA score columns (S, O, D, RPN) are dimensionless; does 03 §C.4 step 8 really raise UNIT_AMBIGUITY SOFT on them? S1: apply `config/units.txt` alias lines before pint (pint reads `bar(g)` as bar·gram); S1 rules YAML schema for `config/rules/`
 Next: on the allowlist answer, collect real fixtures with expected outcomes and the first 15 telemetry cases; meanwhile idle
+
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: `frontend/settings-ui` scaffolding (admin-gated layout, nine sections of 08 §3.2 with their `pipeline_config` keys, redirect and 404); 39 Vitest pass, build clean.
+Blocked on: Review UI waits for S1's `backend/review/api_models.py`; Settings editing waits for S1's settings API; viewer body waits for S1 models/presign and S2 `resolve_anchor`; Open WebUI Pipe waits for S2's `/v1/answer` schema.
+Needs from others: S1 and S2 to message S3 when those land on main; Lead to merge this branch (shell, viewer, settings scaffolding).
+Next: idle until one of the inputs above arrives; then switch `get_auth_config` to S4's `require("console_auth")` once S4's settings merge is on main.
