@@ -17,5 +17,6 @@ Written by `DCL Lead` only. Newest at the bottom. Each entry names the sessions 
 | 2026-10-21 | Stable anchors everywhere; node ids never stored durably | S1, S2, S3, S5 | file 04 §4.4 |
 | 2026-10-21 | Env names for service wiring fixed: `DCL_ENV`, `DCL_ROLE`, `DCL_REDIS_URL`, `DCL_MINIO_*`, `DCL_MODELS_URL`, `DCL_API_BASE_URL`, `DCL_CONSOLE_BASE_URL`, `DCL_PIPE_SHARED_SECRET` (file 01 §7.1) | S1, S2, S3, S4 | S3 interface gap |
 | 2026-10-21 | Console Entra ID auth: `DCL_CONSOLE_API_AUDIENCE`, `DCL_CONSOLE_GROUP_{REVIEWERS,ADMINS,EXTERNAL_SEARCH}`, `DCL_CONSOLE_ALLOWED_ORIGINS`; role rule viewer/reviewer/admin as in file 01 §7.1; group overage → 403; SPA build names are S3's `config.ts` | S3, S4 | S3 interface gap |
+| 2026-10-21 | `DCL_GEMINI_API_KEY` is a legacy alias of `GEMINI_GATEWAY_KEY` (gateway credential, not a Google key); loader uses the primary, falls back to the alias, refuses `AIza…` values | S4 | user + format check |
 | pending | Allowlist folders for `processing.scope` | S1, S5 | S5 first task |
 | pending | Gateway capability probe result | S2, S4 | S4 first tasks |
