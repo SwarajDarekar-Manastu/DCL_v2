@@ -20,7 +20,7 @@ Code:
 - `backend/postgres/models/__init__.py`, `backend/postgres/models/registry.py` (M1: `sync_roots`, `drive_folders`, `drive_items`, `blobs`, `blob_derivations`, `jobs`)
 - `backend/postgres/alembic.ini`, `backend/postgres/migrations/env.py`, `backend/postgres/migrations/script.py.mako`
 - `backend/postgres/migrations/versions/0001_m1_registry.py`
-- `backend/postgres/session.py` (planned)
+- `backend/postgres/session.py` (`engine_from_settings`, `session_factory`, `normalize_url`)
 - `backend/postgres/views.sql` (planned, M2–M3)
 
 Tests and fixtures:
@@ -73,6 +73,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | Base, naming convention, enums→CHECK, M1 registry models, migration 0001, schema tests, FK-without-index query |
+| 2026-10-21 | S1 | session.py; `Job.key_for()` |
 
 ## Related
 

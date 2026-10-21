@@ -20,7 +20,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/registry-and-blobs` | in-progress | S1 | [Registry, content-addressed blobs, downloader](backend/registry-and-blobs.md) |
 | `backend/schema-and-migrations` | in-progress | S1 | [PostgreSQL schema, enums as CHECK, Alembic](backend/schema-and-migrations.md) |
 | `backend/dispatcher-and-route-gating` | in-progress | S1 | [Dispatcher, type resolution, folder context, assembler, route gating](backend/dispatcher-and-route-gating.md) |
-| `backend/route-c-telemetry` | planned | S1 | [Route C: telemetry, LabVIEW, spreadsheets, arrays](backend/route-c-telemetry.md) |
+| `backend/route-c-telemetry` | in-progress | S1 | [Route C: telemetry, LabVIEW, spreadsheets, arrays](backend/route-c-telemetry.md) |
 | `backend/route-a2-source` | planned | S1 | [Route A2: JSON report sections and LaTeX sources](backend/route-a2-source.md) |
 | `backend/route-b-code` | planned | S1 | [Route B: Python scripts and tooling docs](backend/route-b-code.md) |
 | `backend/route-e-diagrams` | planned | S1 | [Route E: draw.io diagrams and XSD](backend/route-e-diagrams.md) |
@@ -38,7 +38,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/retrieval` | planned | S2 | [Hybrid retrieval (dense exact/HNSW, BM25 per language, RRF, rerank, parent expansion)](backend/retrieval.md) |
 | `backend/answer-engine` | in-progress | S2 | [Answer Engine (workflow, tools, playbooks, sanitizer, verifier, DBOS)](backend/answer-engine.md) |
 | `frontend/console-shell-auth` | in-progress | S3 | [Console shell, Entra ID login, roles, websocket](frontend/console-shell-auth.md) |
-| `frontend/review-ui` | planned | S3 | [Review UI (queue, case view, resolution consoles, rules, audit)](frontend/review-ui.md) |
+| `frontend/review-ui` | in-progress | S3 | [Review UI (queue, case view, resolution consoles, rules, audit)](frontend/review-ui.md) |
 | `frontend/viewer` | in-progress | S3 | [Shared document viewer with anchor resolution and translate toggle](frontend/viewer.md) |
 | `frontend/settings-ui` | in-progress | S3 | [Settings UI (sources, scopes, gate, routes, models, translation, flags, prompts)](frontend/settings-ui.md) |
 | `frontend/benchmark-ui` | planned | S3 | [Benchmark UI (suites, cases, runs, results, drilldown, compare, retrieval lab)](frontend/benchmark-ui.md) |

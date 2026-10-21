@@ -21,7 +21,7 @@
 			class="region region-{region.kind}"
 			data-testid="region"
 			style="left: {pct(region.bbox[0])}; top: {pct(region.bbox[1])}; width: {pct(region.bbox[2] - region.bbox[0])}; height: {pct(region.bbox[3] - region.bbox[1])}"
-			title={region.label + (region.confidence === null ? '' : ` (confidence ${region.confidence.toFixed(2)})`)}
+			title={region.label + (region.confidence == null ? '' : ` (confidence ${region.confidence.toFixed(2)})`)}
 		></div>
 	{/each}
 </div>

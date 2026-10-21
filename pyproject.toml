@@ -14,11 +14,13 @@ dependencies = [
     "sqlalchemy>=2.0.40",
     "alembic>=1.16",
     "psycopg[binary]>=3.2",
+    "rapidfuzz>=3.9",
     "pyjwt[crypto]>=2.9",
     "redis>=5.0",
     "msal>=1.31",
     "cryptography>=43",
     "minio>=7.2",
+    "quickxorhash>=0.3",
 ]
 
 [dependency-groups]
