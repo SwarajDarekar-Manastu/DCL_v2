@@ -16,13 +16,14 @@ Resolve the real file type from magic bytes, build folder context (test ids, sib
 
 Code:
 - `backend/dispatcher/type_resolution.py` (`resolve_type(head, name, zip_names) -> ResolvedType{kind, mime, route, by, ext_mismatch}`)
-- `backend/dispatcher/folder_context.py` (planned)
-- `backend/dispatcher/assembler.py` (planned)
-- `backend/dispatcher/registry.py` (planned)
+- `backend/dispatcher/folder_context.py` (`build_folder_context`: breadcrumb, TP/T/INJ ids with source, conflicts, siblings, folder kind, origin, trust tier)
+- `backend/dispatcher/assembler.py` (`assemble`: LaTeX master + parts + PDF twin, orphan .tex, JSON section sets)
+- `backend/dispatcher/routing.py` (`dispatch`: processing scope, typing, assembly, documents + document_sources, gating, UNSUPPORTED_FORMAT, CONFLICT flags; CLI `dispatch`)
+- `backend/celery_redis/tasks_process.py` (`dcl.process.dispatch`, io_light)
 - `backend/dispatcher/contract.py` (published: `ProcessedDocument` and parts, `Flag` fingerprint, `Anchor` + `parse_anchor`/`format_anchor`)
 
 Tests and fixtures:
-- `backend/tests/unit/dispatcher/test_contract.py`, `backend/tests/unit/dispatcher/test_type_resolution.py`
+- `backend/tests/unit/dispatcher/test_contract.py`, `test_type_resolution.py`, `test_folder_context.py`, `test_assembler.py`, `test_dispatch.py` (DB + MinIO), `conftest.py`
 - `backend/tests/fixtures/dispatcher/`
 
 ## Interfaces
@@ -48,7 +49,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/dispatcher/type_resolution.py`
 - `backend/dispatcher/folder_context.py`
 - `backend/dispatcher/assembler.py`
-- `backend/dispatcher/registry.py`
+- `backend/dispatcher/routing.py`
+- `backend/celery_redis/tasks_process.py`
 - `backend/dispatcher/contract.py`
 - `backend/tests/unit/dispatcher/`
 - `backend/tests/fixtures/dispatcher/`
@@ -57,9 +59,11 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 - [x] Output contract published with JSON round trip, fingerprint and reference tests
 - [x] Extension/content mismatch resolved by content and recorded (unit-tested incl. S5 fixture pdf_is_html; storing it on drive_items comes with the dispatcher)
-- [ ] Disabled route parks documents as WAITING_FOR_ROUTE with no flag
-- [ ] LaTeX master + parts become one document with document_sources roles
-- [ ] Unknown type raises UNSUPPORTED_FORMAT HARD
+- [x] Disabled route parks documents as WAITING_FOR_ROUTE with no flag (DB test)
+- [x] LaTeX master + parts become one document with document_sources roles (S5 fixture two_latex_masters, DB test)
+- [x] Unknown type raises UNSUPPORTED_FORMAT HARD (S5 fixture pdf_is_html: route NULL, HALTED, staged payload)
+- [ ] Live dispatch over E1–E11 on the stack DB (needs migrations 0006/0007 on main)
+- [ ] Supersession on in-place modification (column question to the Lead)
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log

@@ -42,7 +42,16 @@ def session(engine):
         s.commit()
         yield s
         s.rollback()
-        tables = ("review_flags", "drive_items", "drive_folders", "blobs", "sync_roots", "pipeline_config")
+        tables = (
+            "review_flags",
+            "document_sources",
+            "documents",
+            "drive_items",
+            "drive_folders",
+            "blobs",
+            "sync_roots",
+            "pipeline_config",
+        )
         for table in tables:
             s.execute(text(f"DELETE FROM {table}"))
         s.commit()
