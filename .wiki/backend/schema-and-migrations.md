@@ -38,7 +38,7 @@ Provides:
 Consumes:
 - ParadeDB image (platform/compose-stack)
 - `DCL_DATABASE_URL` (platform/env-contract); the migration env reads it directly until `backend/config.py` exists
-- `DCL_TEST_DATABASE_URL`: a disposable database for `backend/tests/schema` (upgrades and downgrades the whole schema; tests skip without it)
+- `DCL_TEST_DATABASE_URL`: a disposable database for `backend/tests/schema` (upgrades and downgrades the whole schema; tests skip without it). Run: `DCL_TEST_DATABASE_URL=… uv run pytest backend/tests/schema`
 
 Conventions fixed here:
 - Constraint names: `pk_<t>`, `uq_<t>_<cols>`, `ix_<t>_<cols>`, `fk_<t>_<cols>_<referred>`, `ck_<t>_<column>`.

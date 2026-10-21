@@ -34,7 +34,7 @@ Needs from others: consumers call `get_settings().require(Group.GRAPH)` / `(Grou
 Next: Gemini gateway client + capability probe (OpenAI-compatible shape, every capability behind a flag)
 
 ## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541 (S1 → this branch)
-Merged / ready: backend/postgres base + naming convention, enums→CHECK, M1 registry models (6 tables), migration 0001, backend/tests/schema (21 tests: upgrade/check/downgrade, FK-index query, CHECK = enums) green on paradedb:latest (PG 18.6, pg_search 0.26.2) and postgres:16
+Merged / ready: backend/postgres base + naming convention, enums→CHECK, M1 registry models (6 tables), migration 0001, backend/tests/schema (21 tests) + sqlalchemy/alembic/psycopg in pyproject. Test: `DCL_TEST_DATABASE_URL=<disposable db> uv run pytest && uv run ruff check backend` (76 passed on paradedb:latest = PG 18.6, pg_search 0.26.2; also green on postgres:16)
 Blocked on: nothing
-Needs from others: S4 — pin the ParadeDB tag (latest is PG 18; manual says 16/17), add sqlalchemy>=2.0.40, alembic>=1.16, psycopg[binary]>=3.2, pytest to the deps, and run `pytest backend/tests/schema` in CI with DCL_TEST_DATABASE_URL (disposable DB); Lead — sync_roots has no resync-generation column (file 02 §3.5 vs file 05 §4.1), see merge request
+Needs from others: S4 — pin the ParadeDB tag (latest is PG 18; manual says 16/17) and run the suite in CI with DCL_TEST_DATABASE_URL on a disposable DB; Lead — sync_roots has no resync-generation column (file 02 §3.5 vs file 05 §4.1), see merge request
 Next: task 2, MSAL device-code sign-in, silent refresh, outside-share negative check
