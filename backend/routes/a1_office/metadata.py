@@ -23,7 +23,7 @@ from pathlib import Path
 
 import yaml
 
-from backend.dispatcher.contract import DocumentFields, ExternalIds, Flag, FlagAnchor
+from backend.dispatcher.contract import DocumentFields, ExternalIds, Flag, FlagAnchor, SensitiveEvidence
 from backend.dispatcher.folder_context import FolderContext
 from backend.postgres.enums import DocKind, FlagSeverity, FlagType, SourceOrigin
 
@@ -225,7 +225,14 @@ def extract_metadata(
     flags = []
     if marking in HARD_MARKINGS:
         flags.append(
-            Flag(flag_type=FlagType.SENSITIVE_CONTENT, severity=FlagSeverity.HARD, anchor=FlagAnchor(page=1))
+            Flag(
+                flag_type=FlagType.SENSITIVE_CONTENT,
+                severity=FlagSeverity.HARD,
+                anchor=FlagAnchor(page=1),
+                evidence=SensitiveEvidence(
+                    pattern=marking, redacted_preview=f"marking {marking!r} on page 1", page=1
+                ),
+            )
         )
 
     tier = TIER_BY_KIND.get(kind) or (2 if origin == SourceOrigin.INTERNAL else folder.trust_tier)

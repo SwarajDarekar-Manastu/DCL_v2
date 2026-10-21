@@ -164,3 +164,20 @@ def render_page(
         return buffer.getvalue()
     finally:
         document.close()
+
+
+def render_crop(pdf_bytes: bytes, box, *, dpi: int = 300, pad_px: int = 20) -> bytes:
+    """PNG of a region (`PageBox`, 0..1 top-left) at `dpi` with `pad_px` padding, for Gemini (A1.3, A1.7)."""
+    document = pdfium.PdfDocument(pdf_bytes)
+    try:
+        image = document[box.page_no - 1].render(scale=dpi / 72).to_pil()
+        width, height = image.size
+        left = max(0, int(box.x0 * width) - pad_px)
+        top = max(0, int(box.y0 * height) - pad_px)
+        right = min(width, int(box.x1 * width) + pad_px)
+        bottom = min(height, int(box.y1 * height) + pad_px)
+        buffer = io.BytesIO()
+        image.crop((left, top, max(right, left + 1), max(bottom, top + 1))).save(buffer, format="PNG")
+        return buffer.getvalue()
+    finally:
+        document.close()

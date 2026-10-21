@@ -42,24 +42,25 @@ def test_runs_split_by_ocr_plan_and_contiguity():
     ]
     assert plan_runs(decisions) == [
         Run(1, 2, None),
-        Run(3, 4, OcrPlan("tesseract", ("deu", "eng"))),
+        Run(3, 4, OcrPlan("tesseract", ("Latin",))),
         Run(5, 5, OcrPlan("rapidocr", ("japan",))),
         Run(6, 6, None),
-        Run(7, 7, OcrPlan("tesseract", ("deu", "eng"))),
+        Run(7, 7, OcrPlan("tesseract", ("Latin",))),
     ]
 
 
 @pytest.mark.parametrize(
-    ("engine", "language", "codes"),
+    ("engine", "language", "script", "codes"),
     [
-        ("tesseract", "ru", ("rus", "eng")),
-        ("tesseract", "en-GB", ("eng",)),
-        ("rapidocr", "zh", ("chinese",)),
-        ("tesseract", None, ("eng",)),
+        ("tesseract", "ru", "cyrillic", ("Cyrillic",)),
+        ("tesseract", "de", "latin", ("Latin",)),
+        ("tesseract", None, None, ("Latin",)),
+        ("rapidocr", "zh", "cjk", ("chinese",)),
+        ("easyocr", "de", "latin", ("de", "en")),
     ],
 )
-def test_engine_language_codes(engine, language, codes):
-    assert engine_languages(engine, language) == codes
+def test_engine_language_codes(engine, language, script, codes):
+    assert engine_languages(engine, language, script) == codes
 
 
 def test_pipeline_options_ocr_only_on_scanned_runs_and_never_remote():

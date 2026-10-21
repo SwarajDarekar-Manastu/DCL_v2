@@ -20,7 +20,11 @@ Code:
 - `backend/routes/a1_office/convert.py` (A1.3: `plan_runs`, `Run`, `OcrPlan`, `pipeline_options`, `convert_run`, `low_ocr_pages`)
 - `backend/routes/a1_office/structure.py` (A1.3/A1.11/A1.12: `build_structure` → route nodes, breadcrumbs, references as mentions, furniture)
 - `backend/routes/a1_office/metadata.py` (L1 for PDFs: `extract_metadata` → `DocumentFields` + SENSITIVE_CONTENT flags; DOI/arXiv/ISBN, running head, copyright, vendors with the internal-equipment rule, markings, standard id, kind rules, tier, locale)
-- planned: second OCR pass and `transcribe_page`, tables QA (A1.4), figures (A1.6), handwriting (A1.7), page map (A1.0), metadata scan and assembly into `ProcessedDocument`
+- `backend/routes/a1_office/figures.py` (A1.6: `read_figures`; plots, schematics, photos, table images, skip list, crops as assets)
+- `backend/routes/a1_office/tables_qa.py` (A1.4: spans grid, units per column, QA reasons, VLM A/B with agreement, flag with both versions)
+- `backend/routes/a1_office/handwriting.py` (A1.7: regions, nearest label, transcription node after its label, SOFT/HARD by critical field)
+- `backend/routes/a1_office/route.py` (`process_pdf` → `ProcessedDocument`; second OCR pass, `transcribe_page`, page renders, CIR keys)
+- planned: visual twin and page map (A1.0), DOCX/PPTX (A1.9–A1.10), rotation fix before OCR, checkbox-state call
 
 Tests and fixtures:
 - `backend/tests/unit/routes/a1_office/` (reads S5's `backend/tests/fixtures/a1_office/`)
@@ -33,7 +37,9 @@ Provides:
 - `ocr_groups(decisions)` → pages per (engine, language); `plan_runs(decisions)` → contiguous `Run`s with one OCR plan each
 - `convert_run(pdf_bytes, run) -> RunResult(document, page_confidence)` (CPU, TableFormer accurate, no remote services)
 - `build_structure(documents, pages, fallback_title=) -> Structure(nodes, mentions, furniture, title, references)`: one `child` node per paragraph with page and 0..1 top-left `PageBox`, `table` HTML nodes, `figure` placeholders; references → `reference` mentions on the first text node
-- later: page/table/figure/handwriting nodes, page renders and crops as assets
+- `process_pdf(pdf_bytes, blob_sha256=, file_name=, folder: FolderContext, vision=, stores=Stores(put_cir, put_asset), cloud_allowed=, doc_id=, critical_field_patterns=, engine_by_script=) -> ProcessedDocument` (PARSE_FAILURE HARD document on a failed pre-flight)
+- CIR under `dcl-cir/{sha256}/A1/v1/`: `docling/{first}-{last}.json`, `pages/{n}.txt`, `pages/{n}.meta.json`, `page_hashes.json`; assets `pages/{sha}/{page:04d}.png` (150 dpi), `figures/…`, `crops/…` (300 dpi)
+- OCR: Tesseract script models (`Latin`, `Cyrillic`, `Devanagari`, `Arabic`) and RapidOCR in S4's parse image
 
 Consumes:
 - `backend/vision-service` (`triage_page`)
@@ -61,6 +67,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | Figures, tables QA, handwriting and `process_pdf` assembly; Tesseract script models; 38 tests (route tests run real Docling on S5's digital fixtures) |
 | 2026-10-22 | S2 | A1 metadata scan (origin overrides, markings, kind, tier, locale); 11 tests |
 | 2026-10-22 | S2 | Docling runs by OCR plan and the structure mapping (breadcrumbs, references as mentions, furniture, tables, figure placeholders); 15 tests, Docling ones skip without cached models |
 | 2026-10-22 | S2 | Pre-flight (encryption, repair, density, Unicode-aware garbage ratio, windows) and page triage (signals bound the model, OCR engine by script, no-cloud path); 19 tests on S5's fixtures |

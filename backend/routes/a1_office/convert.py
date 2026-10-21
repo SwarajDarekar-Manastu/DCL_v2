@@ -19,18 +19,14 @@ from typing import Any
 from backend.routes.a1_office.triage import PageDecision
 
 LOW_OCR_SCORE = 0.6
+TESSERACT_SCRIPT_MODELS = {  # the parse image ships Tesseract script models (S4), one per script group
+    "latin": "Latin",
+    "cyrillic": "Cyrillic",
+    "devanagari": "Devanagari",
+    "arabic": "Arabic",
+    "mixed": "Latin",
+}
 DOCLING_LANGUAGE_CODES = {
-    "tesseract": {
-        "en": "eng",
-        "de": "deu",
-        "fr": "fra",
-        "es": "spa",
-        "it": "ita",
-        "ru": "rus",
-        "hi": "hin",
-        "ar": "ara",
-        "uk": "ukr",
-    },
     "rapidocr": {"ja": "japan", "zh": "chinese", "ko": "korean"},
     "easyocr": {"en": "en", "de": "de", "fr": "fr", "es": "es", "it": "it"},
 }
@@ -62,12 +58,15 @@ class RunResult:
     page_confidence: dict[int, dict[str, Any]] = field(default_factory=dict)
 
 
-def engine_languages(engine: str, language: str | None) -> tuple[str, ...]:
-    """The engine's language codes for a BCP-47 tag, always with English as a fallback for Latin engines."""
+def engine_languages(engine: str, language: str | None, script: str | None = None) -> tuple[str, ...]:
+    """Tesseract: the script model of the page (`Latin`, `Cyrillic`, …). RapidOCR and EasyOCR: the language
+    code for the BCP-47 tag (EasyOCR always with English as a fallback)."""
+    if engine == "tesseract":
+        return (TESSERACT_SCRIPT_MODELS.get(str(script or "latin"), "Latin"),)
     codes = DOCLING_LANGUAGE_CODES.get(engine, {})
     primary = (language or "en").split("-")[0].lower()
     chosen = [codes[primary]] if primary in codes else []
-    if engine in ("tesseract", "easyocr") and codes.get("en") not in chosen:
+    if engine == "easyocr" and codes["en"] not in chosen:
         chosen.append(codes["en"])
     return tuple(chosen)
 
@@ -77,7 +76,9 @@ def plan_runs(decisions: Iterable[PageDecision]) -> list[Run]:
     runs: list[Run] = []
     for decision in sorted(decisions, key=lambda d: d.page_no):
         plan = (
-            OcrPlan(decision.ocr_engine, engine_languages(decision.ocr_engine, decision.language))
+            OcrPlan(
+                decision.ocr_engine, engine_languages(decision.ocr_engine, decision.language, decision.script)
+            )
             if decision.ocr_engine
             else None
         )

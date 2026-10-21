@@ -403,3 +403,9 @@ Merged / ready: Benchmark API over migration 0006. backend/benchmark/catalog.py 
 Blocked on: nothing.
 Needs from others: S2 to confirm the runner contract (queued → running → completed, results with failure_class and metrics, aggregate keys); S5 to author suites in the SuiteExport format.
 Next: Benchmark UI screens and the Retrieval lab.
+
+## 2026-10-22 06:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Route A1 for PDFs end to end (`backend/routes/a1_office/{convert,structure,metadata,figures,tables_qa,handwriting,route}.py`): Docling runs by OCR plan with the second pass and `transcribe_page`, structure with references as mentions, L1 metadata, figure readings, table A/B QA, handwriting with critical-field HARD flags, CIR and assets; 67 route tests (Docling on S5's digital fixtures).
+Blocked on: nothing
+Needs from others: S1: the dispatcher's adapter call into `process_pdf` and `IMPLEMENTED_ROUTES` (signature in `.wiki/backend/route-a1-office.md`); `critical_field_patterns` from pipeline_config
+Next: A1.0 visual twin + page map, DOCX/PPTX, rotation; then Routes D and F; then the answer workflow
