@@ -352,6 +352,24 @@ async def probe(client: GeminiClient, model: str = DEFAULT_MODEL, lite_model: st
             usage_result,
         ]
 
+    async def google_search() -> ProbeResult:
+        result = await client.generate(
+            model=model,
+            messages=[
+                Message.user(
+                    "What is the latest stable release of the Python programming language? One sentence."
+                )
+            ],
+            context=CONTEXT,
+            thinking=low,
+            google_search=True,
+        )
+        grounding = result.grounding
+        if grounding and grounding.sources:
+            evidence = f"{len(grounding.queries)} queries, {len(grounding.sources)} web sources"
+            return ProbeResult(Capability.GOOGLE_SEARCH, S.SUPPORTED, evidence)
+        return ProbeResult(Capability.GOOGLE_SEARCH, S.INCONCLUSIVE, "accepted; no grounding metadata")
+
     def endpoint(capability: Capability, path: str, note: str):
         async def check() -> ProbeResult:
             code = await _get_status(client, path)
@@ -383,6 +401,7 @@ async def probe(client: GeminiClient, model: str = DEFAULT_MODEL, lite_model: st
         *await _check(Capability.IMAGE_INPUT, image),
         *await _check(Capability.PDF_INPUT, pdf),
         *await _check(Capability.STREAMING, streaming),
+        *await _check(Capability.GOOGLE_SEARCH, google_search),
         *await _check(
             Capability.CONTEXT_CACHE,
             endpoint(

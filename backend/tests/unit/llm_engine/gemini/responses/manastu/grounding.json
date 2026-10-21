@@ -1,0 +1,82 @@
+{
+ "status": 200,
+ "body": {
+  "automatic_function_calling_history": [],
+  "candidates": [
+   {
+    "content": {
+     "parts": [
+      {
+       "text": "As of October 2026, the latest stable release of the Python programming language is Python 3.15.1.",
+       "thought_signature": "sig-redacted"
+      }
+     ],
+     "role": "model"
+    },
+    "finish_reason": "STOP",
+    "grounding_metadata": {
+     "grounding_chunks": [
+      {
+       "web": {
+        "domain": "wikipedia.org",
+        "title": "wikipedia.org",
+        "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHPRw3GVL1Cm9Y4cs6B5vOMOuZdlGzsI3DSskK2UK9zqgKUsW8kPBYG2feg7vpXhAlWGmjt4aBu_PZKlzVO_0fKUlVnP51ppVpTQTa9g5Xrizu9K3_Z9k97C-D4o5ydQeQdvLnMdca_iAWZ"
+       }
+      },
+      {
+       "web": {
+        "domain": "python.org",
+        "title": "python.org",
+        "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE4vOQZk0sXYjbzCc1TG1Yp0Tk1__ZppQu-MLJW5NW4AQkadWTlv-fziQT4bz1dfRM0hnfcOMGrlYaILBaSrByTBWsYMPZFGfiKACY23_VALiiD90k5C8ZQ7Ev4ib5oLvlL3p0="
+       }
+      }
+     ],
+     "grounding_supports": [
+      {
+       "grounding_chunk_indices": [
+        0,
+        1
+       ],
+       "segment": {
+        "end_index": 97,
+        "text": "As of October 2026, the latest stable release of the Python programming language is Python 3.15.1"
+       }
+      }
+     ],
+     "search_entry_point": {
+      "rendered_content": "<redacted search widget>"
+     },
+     "web_search_queries": [
+      "latest stable release of Python",
+      "Python latest release"
+     ]
+    }
+   }
+  ],
+  "model_version": "gemini-3.8-flash",
+  "quota": {
+   "limit": 1000000,
+   "remaining": 990000,
+   "used_today": 10000
+  },
+  "response_id": "resp-fixture",
+  "usage_metadata": {
+   "candidates_token_count": 41,
+   "candidates_tokens_details": [
+    {
+     "modality": "TEXT",
+     "token_count": 41
+    }
+   ],
+   "prompt_token_count": 39,
+   "prompt_tokens_details": [
+    {
+     "modality": "TEXT",
+     "token_count": 39
+    }
+   ],
+   "total_token_count": 80,
+   "traffic_type": "ON_DEMAND"
+  }
+ }
+}

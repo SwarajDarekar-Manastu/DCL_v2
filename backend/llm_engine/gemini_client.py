@@ -452,6 +452,7 @@ class GeminiClient:
             latency_ms=latency_ms,
             thoughts=parsed.thoughts,
             quota=parsed.quota,
+            grounding=parsed.grounding,
         )
 
     def _finish(self, call: _Call, response: httpx.Response) -> GenerateResult:
@@ -475,7 +476,8 @@ class GeminiClient:
         **options: Any,
     ) -> GenerateResult:
         """Options: tools, tool_choice, thinking, include_thoughts, media_resolution, temperature,
-        max_output_tokens, cached_content."""
+        max_output_tokens, cached_content, google_search (only with an already-sanitized query: the model
+        writes the Google queries from the whole prompt; they come back in result.grounding.queries)."""
         call = self._prepare(model, messages, context, schema, False, **options)
         async with self._limits.async_(model):
             response = await self._apost(call)
