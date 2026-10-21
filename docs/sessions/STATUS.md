@@ -275,3 +275,17 @@ Merged / ready: `quality/acceptance` M1: checklist (M1.md) mapping all ten crite
 Blocked on: S1 — E1–E11 downloads, the read-only `export_blobs` command, the file-level listing (real fixtures, telemetry cases); a 410-resync command and the M1 load-test harness (procedures 8, 10)
 Needs from others: Lead — run the M1 live checks once downloads finish (`DCL_ACCEPTANCE=1 DCL_DATABASE_URL=<stack db> uv run pytest backend/tests/acceptance`), or give S5 a read-only DB URL
 Next: idle until S1's export and listing arrive. Local test container `dcl-s5-test` (ParadeDB 0.26.2-pg17, 127.0.0.1:55435, throwaway credentials) runs for the seeded-DB proofs
+
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: Review UI MVP merge requested (head 0d428b2) plus e0255ef (removed the parse_anchor_param alias). Open WebUI Pipe not started in code; research done against Open WebUI v0.12.3 source:
+- `__user__` = user.model_dump() with `valves` = UserValves; no groups, which come from `await open_webui.models.groups.Groups.get_groups_by_member_id(user_id)` (`.name`). Manifold `pipes()` → model id `manastu_engine.main`. `__task__` is set for title/tags/follow-up calls, which must not reach the engine.
+- Errors raised while the stream is consumed are not caught by Open WebUI. Yield `{"error": {"detail": ...}}` to get the error state (middleware: no choices + error). Events are status, source/citation (`{source:{id,name,url}, document:[...], metadata:[{source,name,url}]}`), embeds (`{embeds:[...], replace?}`), `chat:message:follow_ups`. A confirmation `__event_call__` returns the browser reply or `{"error": ...}`, so accept only `True`.
+- Single-file install: functions cannot import siblings, so config.py and api_endpoint.py get inlined by a build script into dist/.
+Blocked on: S2 to add trace_id to ConfirmationEvent (asked); owner of a chat-attachment upload endpoint (to raise with the Lead); Lead answers on GET /audit and on the GET /assets/url uri form.
+Next: Pipe plan sheet, then frontend/openwebui/{config.py, api_endpoint.py, pipe_manastu_engine.py, build script}, with tests replaying S2's example_answer_stream.sse.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: `frontend/openwebui-pipe`. The Pipe against S2's /v1/answer contract has config.py, api_endpoint.py (signed identity mirroring engine.sign_identity, SSE parser, confirm, trace), the event mapping checked against Open WebUI v0.12.3 source, and a single-file bundle in frontend/openwebui/bundled (build_functions.py --check). 27 tests replay S2's recorded stream through the source and the bundle; the engine's own pipe_identity accepts the Pipe's headers.
+Blocked on: nothing for the Pipe; a live run waits for the engine (M8). Confirmations use trace_id once S2's c1641d5 lands (declined until then).
+Needs from others: the Lead to decide the owner of a chat-attachment upload endpoint (the Pipe sends attachments=[]).
+Next: GET /audit (approved, owner S3, 501 until S1's audit_events model) and the Audit page; then Actions (Show trace, Add to benchmark, Report issue) and the Filter.
