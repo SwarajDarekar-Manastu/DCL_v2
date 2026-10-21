@@ -357,3 +357,9 @@ Merged / ready: `backend/indexing/index_document.py` (ProcessedDocument → Inde
 Blocked on: nothing
 Needs from others: S1: `commit.py` consuming `IndexPlan` (shape in `.wiki/backend/chunker-and-anchors.md`); the pipeline task that calls `index_document`
 Next: Retrieval-lab data for S3, `tasks_embed.py`, then Route A1 (pre-flight, triage, Docling by script)
+
+## 2026-10-22 04:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Route A1 pre-flight and page triage (`backend/routes/a1_office/{preflight,triage}.py`), 19 tests on S5's fixtures; Retrieval-lab endpoint `POST /v1/retrieval/search`.
+Blocked on: nothing
+Needs from others: Lead: a `parse` dependency group (pypdfium2==5.14.0, pikepdf==10.17.0; docling next) — tests skip without them; S4: Tesseract (osd + Latin/Cyrillic/Devanagari/Arabic traineddata) and RapidOCR in the parse image; S5: openpyxl lxml writer makes byte-stable xlsx fixtures drift once pikepdf (lxml) is installed (told S5)
+Next: A1.3 Docling conversion by script group, then tables QA, figures, handwriting, page map

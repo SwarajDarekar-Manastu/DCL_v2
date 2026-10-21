@@ -1,0 +1,166 @@
+"""A1.1 pre-flight (file 03 §A1.1): can the PDF be read, and what does each page's text layer look like.
+
+- Encrypted or password-protected → `PreflightFailure("encrypted")`; the route raises PARSE_FAILURE (HARD).
+- A damaged file is repaired by rewriting it with pikepdf (`repaired = True`); unrepairable → failure.
+- Per page: characters in the text layer, a garbage ratio, embedded image count, rotation, size.
+  A page with fewer than 50 characters or more than 40% garbage is image-only for triage. Garbage is counted
+  by Unicode category (private use, unassigned, control, replacement character) and by "words" that carry no
+  run of two letters, so Japanese or Cyrillic text is not garbage while a font without a ToUnicode map is.
+- More than 400 pages → processing windows of 100 pages over the same CIR.
+"""
+
+import io
+import unicodedata
+from dataclasses import dataclass, field
+
+import pikepdf
+import pypdfium2 as pdfium
+
+IMAGE_ONLY_MAX_CHARS = 50
+GARBAGE_MAX_RATIO = 0.40
+WINDOW_PAGES = 100
+WINDOWED_ABOVE_PAGES = 400
+BAD_CATEGORIES = frozenset({"Co", "Cn", "Cs", "Cc"})
+
+
+class PreflightFailure(ValueError):
+    """The PDF cannot be processed; `reason` goes into the PARSE_FAILURE flag."""
+
+    def __init__(self, reason: str, detail: str = ""):
+        super().__init__(f"{reason}: {detail}" if detail else reason)
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class PageSignals:
+    page_no: int
+    width_pt: float
+    height_pt: float
+    rotation: int
+    chars: int
+    garbage_ratio: float
+    image_count: int
+
+    @property
+    def image_only(self) -> bool:
+        return self.chars < IMAGE_ONLY_MAX_CHARS or self.garbage_ratio > GARBAGE_MAX_RATIO
+
+
+@dataclass(frozen=True)
+class Preflight:
+    pdf_bytes: bytes
+    page_count: int
+    repaired: bool
+    pages: list[PageSignals]
+    windows: list[tuple[int, int]] = field(default_factory=list)
+
+    def page(self, page_no: int) -> PageSignals:
+        return self.pages[page_no - 1]
+
+
+def garbage_ratio(text: str) -> float:
+    """Share of the text that is not language: bad code points plus symbol-soup tokens."""
+    stripped = "".join(text.split())
+    if not stripped:
+        return 0.0
+    bad = sum(
+        1
+        for ch in stripped
+        if ch == "�" or unicodedata.category(ch) in BAD_CATEGORIES or (unicodedata.category(ch) == "Cc")
+    )
+    tokens = text.split()
+    soup = [t for t in tokens if len(t) >= 3 and not _has_letter_run(t) and not _is_number_like(t)]
+    soup_chars = sum(len(t) for t in soup)
+    return min(1.0, (bad + soup_chars) / len(stripped))
+
+
+def _has_letter_run(token: str) -> bool:
+    run = 0
+    for ch in token:
+        run = run + 1 if ch.isalpha() else 0
+        if run >= 2 or (ch.isalpha() and unicodedata.east_asian_width(ch) in "WF"):
+            return True
+    return False
+
+
+def _is_number_like(token: str) -> bool:
+    return sum(ch.isdigit() for ch in token) >= len(token) / 2
+
+
+def windows(page_count: int) -> list[tuple[int, int]]:
+    """1-based inclusive page windows; one window when the document is not long."""
+    if page_count <= WINDOWED_ABOVE_PAGES:
+        return [(1, page_count)] if page_count else []
+    return [
+        (start, min(start + WINDOW_PAGES - 1, page_count)) for start in range(1, page_count + 1, WINDOW_PAGES)
+    ]
+
+
+def _open(pdf_bytes: bytes) -> tuple[pdfium.PdfDocument, bytes, bool]:
+    try:
+        with pikepdf.open(io.BytesIO(pdf_bytes)) as probe:
+            if probe.is_encrypted:
+                raise PreflightFailure("encrypted", "the PDF is password-protected or encrypted")
+    except pikepdf.PasswordError as exc:
+        raise PreflightFailure("encrypted", "the PDF needs a password") from exc
+    except pikepdf.PdfError:
+        pass  # damaged: repaired below
+    try:
+        return pdfium.PdfDocument(pdf_bytes), pdf_bytes, False
+    except pdfium.PdfiumError:
+        pass
+    try:
+        out = io.BytesIO()
+        with pikepdf.open(io.BytesIO(pdf_bytes)) as damaged:
+            damaged.save(out)
+        repaired = out.getvalue()
+        return pdfium.PdfDocument(repaired), repaired, True
+    except (pikepdf.PdfError, pdfium.PdfiumError) as exc:
+        raise PreflightFailure("unrepairable", str(exc)[:200]) from exc
+
+
+def preflight(pdf_bytes: bytes) -> Preflight:
+    document, usable, repaired = _open(pdf_bytes)
+    try:
+        if len(document) == 0:
+            raise PreflightFailure("no_pages", "the PDF has no pages")
+        pages = []
+        for index in range(len(document)):
+            page = document[index]
+            text = page.get_textpage().get_text_range()
+            width, height = page.get_size()
+            images = sum(1 for obj in page.get_objects() if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE)
+            pages.append(
+                PageSignals(
+                    page_no=index + 1,
+                    width_pt=width,
+                    height_pt=height,
+                    rotation=page.get_rotation(),
+                    chars=len("".join(text.split())),
+                    garbage_ratio=garbage_ratio(text),
+                    image_count=images,
+                )
+            )
+        return Preflight(usable, len(pages), repaired, pages, windows(len(pages)))
+    finally:
+        document.close()
+
+
+def render_page(
+    pdf_bytes: bytes, page_no: int, *, long_side_px: int | None = None, dpi: int | None = None
+) -> bytes:
+    """PNG of one page: thumbnail by long side (triage 768 px) or render at a dpi (150 assets, 300 crops)."""
+    document = pdfium.PdfDocument(pdf_bytes)
+    try:
+        page = document[page_no - 1]
+        width, height = page.get_size()
+        if long_side_px is not None:
+            scale = long_side_px / max(width, height)
+        else:
+            scale = (dpi or 150) / 72
+        image = page.render(scale=scale).to_pil()
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        return buffer.getvalue()
+    finally:
+        document.close()

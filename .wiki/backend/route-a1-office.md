@@ -3,10 +3,10 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `backend/route-a1-office` |
-| Status | planned |
+| Status | in-progress |
 | Owner session | S2 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §4 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
@@ -15,21 +15,24 @@ Pre-flight, page triage with language/script, Docling by script group, tables QA
 ## Location
 
 Code:
-- `backend/routes/a1_office/`
+- `backend/routes/a1_office/preflight.py` (A1.1: `preflight`, `Preflight`, `PageSignals`, `PreflightFailure`, `garbage_ratio`, `windows`, `render_page`)
+- `backend/routes/a1_office/triage.py` (A1.2: `triage_pages`, `PageDecision`, `combine`, `ocr_groups`, `DEFAULT_OCR_ENGINE_BY_SCRIPT`)
+- planned: Docling conversion by script group (A1.3), tables QA (A1.4), figures (A1.6), handwriting (A1.7), section tree and page map (A1.11, A1.0), assembly into `ProcessedDocument`
 
 Tests and fixtures:
-- `backend/tests/unit/routes/a1_office/`
-- `backend/tests/fixtures/route_a1/`
+- `backend/tests/unit/routes/a1_office/` (reads S5's `backend/tests/fixtures/a1_office/`)
 
 ## Interfaces
 
 Provides:
-- page/table/figure/handwriting nodes
-- page renders and crops as assets
+- `preflight(pdf_bytes) -> Preflight(page_count, repaired, pages, windows)`; `PreflightFailure.reason` (`encrypted`, `unrepairable`, `no_pages`) for the PARSE_FAILURE flag
+- `triage_pages(preflight, vision, context=, doc_id=, cloud_allowed=, engine_by_script=) -> list[PageDecision]`; `PageDecision.meta()` is the triage part of `pages/{n}.meta.json`
+- `ocr_groups(decisions)` → pages per (engine, language) for Docling runs
+- later: page/table/figure/handwriting nodes, page renders and crops as assets
 
 Consumes:
-- vision-service
-- embedding/enrichment via index_document
+- `backend/vision-service` (`triage_page`)
+- pypdfium2, pikepdf (parse dependencies; Lead adds them to pyproject)
 
 ## Workspace (files to touch when modifying this feature)
 
@@ -37,7 +40,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 - `backend/routes/a1_office/`
 - `backend/tests/unit/routes/a1_office/`
-- `backend/tests/fixtures/route_a1/`
+- `backend/tests/fixtures/a1_office/` (S5's, read only)
 
 ## Rubric (what "done" means for this feature)
 
@@ -53,6 +56,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | Pre-flight (encryption, repair, density, Unicode-aware garbage ratio, windows) and page triage (signals bound the model, OCR engine by script, no-cloud path); 19 tests on S5's fixtures |
 
 ## Related
 
