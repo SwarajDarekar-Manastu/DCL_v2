@@ -403,6 +403,12 @@ Merged / ready: Benchmark API over migration 0006. backend/benchmark/catalog.py 
 Blocked on: nothing.
 Needs from others: S2 to confirm the runner contract (queued → running → completed, results with failure_class and metrics, aggregate keys); S5 to author suites in the SuiteExport format.
 Next: Benchmark UI screens and the Retrieval lab.
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: live dispatch over E1–E11 on the stack DB (0008): 182 documents WAITING_FOR_ROUTE (A1 25, A2 23, B 4, C 40, D 84, E 2, F 4), 44 parts, 1 visual twin, 8 SOFT CONFLICTs, 0 HALTED. Fixes from the live run: ZIP-member typing in dispatch (18 xlsx/docx had gone to G; repaired with `retype`), .scdoc, LaTeX includes vs ancestor folders, orphan wording; `reassemble` command. Downloads (stack workers): 1,729 landed, 3,343 pending
+Blocked on: nothing
+Needs from others: nothing
+Next: Route C
+
 
 ## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
 Merged / ready: Benchmark UI. Suites, cases with drafts to approve, the case editor covering every CaseSpec field (edit = new version), the results dashboard with a baseline ribbon, failure classes, per-category counts and newly failing cases, the drilldown, compare runs and the Retrieval lab over S2's /v1/retrieval/search; run pages refresh on the live `run` topic. 90 Vitest; check and build clean; browser run against a mock API.
