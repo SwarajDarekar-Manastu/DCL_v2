@@ -141,6 +141,8 @@ All routes that need a vision model call the same component, `VisionService`, so
 | `describe_slide` | 3.8 Flash | slide image + extracted text | `{summary, diagram_description, key_numbers[]}` |
 | `video_timeline` | 3.8 Flash (video input) | clip ≤ 2 min or keyframes | `{events:[{t_s, type, description}], anomalies[]}` |
 
+**Media resolution per capability** (Gemini 3 per-part `mediaResolution`; tokens per image low 280 / medium 560 / high 1120): `triage_page` → `low`; `transcribe_handwriting`, `transcribe_page`, `read_table_image`, `digitize_plot`, `read_schematic` → `high`; `inspect_hardware_photo`, `describe_slide` → `medium` (a `relook` at answer time may use `high`); whole PDF pages (rare) → `medium`; `video_timeline` → `low`, `high` only when text in frames must be read. The M5 calibration study compares `medium` and `high` on the handwriting set and may lower the handwriting default.
+
 Rules:
 1. Every call is logged to `llm_calls` with `doc_id`, `purpose`, token counts.
 2. Results are cached in MinIO under `dcl-cir/_vision_cache/{model}/{prompt_version}/{input_sha256}.json` (lifecycle-expired, no database writes on a hit); identical crops (e.g., the same logo on 300 pages) cost once.
@@ -431,7 +433,7 @@ Per workbook:
 5. **Merged cells** are expanded (value copied to all covered cells in the normalized representation; HTML keeps spans). Excel date serials converted. Percent formats preserved as numbers with `unit = %`.
 6. **Charts** in the workbook: series references are read from `chart.xml` to produce `figure` nodes from data, no image needed.
 7. Named ranges and defined names are recorded as mentions (`defined_name: Pc_max → Sheet1!B12`).
-8. **Units**: header parsing; a dedicated `units` row; cell number formats (`0.0 "bar"`); if a numeric column in a time-series island has none → `UNIT_AMBIGUITY` HARD; in a matrix table → SOFT.
+8. **Units**: header parsing; a dedicated `units` row; cell number formats (`0.0 "bar"`); if a numeric column in a time-series island has none → `UNIT_AMBIGUITY` HARD; in a matrix table → SOFT, **except** columns whose header matches the configurable dimensionless list (`S`, `O`, `D`, `RPN`, `Severity`, `Occurrence`, `Detection`, `Score`, `Rank`, `Index`, `Count`, `%`), which are stored as dimensionless numbers without a flag (FMEA and risk registers would otherwise flag on every row).
 
 ### C.5 Mystery formats (`.npy`, `.plotdata`, extensionless `t02_00…`)
 

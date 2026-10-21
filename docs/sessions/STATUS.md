@@ -96,3 +96,9 @@ Merged / ready: task 2: backend/sync/auth.py (Fernet-encrypted MSAL cache, mode 
 Blocked on: nothing for code. Live sign-in and `check` need S4's config fields on main (S4 merge request 14c8c4d) and the operator: in .env set DCL_TOKEN_CACHE_PATH to a NEW v2 file under a 700 DCL_TOKEN_DIR (it still points at v1's cache, which the code refuses), add DCL_TOKEN_CACHE_KEY (Fernet key), optionally DCL_TEST_OUTSIDE_DRIVE_ID; then run `uv run python -m backend.sync.auth sign-in` and complete the code as ai@manastuspace.com, then `uv run python -m backend.sync.auth check`
 Needs from others: Lead — merge S4's config fields; relay the operator step above to the user. Open for the health-check task: file 02 §1 probes `GET /me/drive`, which option A may refuse; I will confirm live once signed in
 Next: task 3, delta crawl of the four roots (metadata only), folder tree and paths, gate tiers 1–3, HELD_BY_SCOPE
+
+## 2026-10-21 20:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/llm_engine/local_models.py` + `backend/api/models.py` (EmbeddingGemma 2 text+image 768-d, bge-reranker-v2-m3, `ModelsClient`), 27 unit tests + 5 GPU tests green; throughput in `.wiki/backend/embedding-service.md`. Branch mapping: S2 = claude/infallible-swartz-58c96b.
+Blocked on: nothing
+Needs from others: S4: GPU image pins (torch 2.14.1 cu130, transformers 5.20.2, sentence-transformers 6.1.0, torchvision 0.29.1, pillow, numpy), HF cache volume, compose healthcheck on `/models/health` with ~60 s start period. Lead: pyproject `models` dependency group with the same pins.
+Next: chunker + anchors + identifiers (S3 waits on `resolve_anchor`), then VisionService on S4's gateway client
