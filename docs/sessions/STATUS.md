@@ -200,12 +200,6 @@ Merged / ready: `/v1/answer` SSE contract in `backend/api/engine.py` (request, s
 Blocked on: S1 for enrichment (EntityType/NumericFactSource/Quantity enums, M4 entity models, `backend/common/units.py`) and for `resolve_anchor` (`document_nodes` model)
 Needs from others: Lead: add `rapidfuzz` and `pint` to main dependencies and a `models` group (torch 2.14.1, torchvision 0.29.1, transformers 5.20.2, sentence-transformers 6.1.0)
 Next: enrichment extraction schema, prompt and grounding (no DB), then entity normalization once S1's enums land
-
-## 2026-10-21 23:15 — DCL S2 ML — claude/infallible-swartz-58c96b
-Merged / ready: `backend/llm_engine/engine/{sanitizer,verifier}.py` (outbound IP sanitizer, numeric claim string check), 24 tests; GPU tests now skip when the shared card has < 3 GiB free (S4's dcl-v2-models container holds ~1 GiB while loading).
-Blocked on: nothing (S1's enums and units.py are on their branch, merge requested)
-Needs from others: S1: entity tables when the Lead rules on M4 timing
-Next: enrichment extraction (schema, prompt, grounding, unit validation with S1's units.py)
 ## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready: task 4 core: backend/sync/downloader.py land_item() (zero-download link, tokenless 302 fetch, one-pass SHA-256 + quickXorHash, verify, content-addressed copy, conflict-safe blob insert); backend/postgres/session.py; Job.key_for(); quickxorhash dep. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend` (627 passed, 3 skipped with both servers)
 Blocked on: Lead answers of 100eae2 for the crawl and for dispatch after landing (processing.scope)
@@ -229,3 +223,31 @@ Merged / ready: `config/sanity_ranges.yaml` v2 for S1's channel_map body (a7cf42
 Blocked on: S1 crawl folder listing (allowlist); S1 CIR snapshot format (with the CIR writer)
 Needs from others: nothing else; `config/rules/` stays empty until operator rules exist (format now known from S1)
 Next: idle until the listing arrives
+
+## 2026-10-21 23:15 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/llm_engine/engine/{sanitizer,verifier}.py` (outbound IP sanitizer, numeric claim string check), 24 tests; GPU tests now skip when the shared card has < 3 GiB free (S4's dcl-v2-models container holds ~1 GiB while loading).
+Blocked on: nothing (S1's enums and units.py are on their branch, merge requested)
+Needs from others: S1: entity tables when the Lead rules on M4 timing
+Next: enrichment extraction (schema, prompt, grounding, unit validation with S1's units.py)
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: type resolution (4d9d56e) and the Tier 4 secret scan (pure functions, redacted previews). Test: `uv run pytest && uv run ruff check backend`
+Blocked on: Lead answers: 100eae2 questions (permission option, pipeline_config in M1, gate source); creating the M2/M4 tables now; the document_nodes bbox column name
+Needs from others: S4 — libmagic1 in the images, a disposable MinIO in CI
+Next: after the answers: delta crawl, dispatch after landing, M2 tables, review flags write path
+
+## 2026-10-22 — DCL Lead — main
+Merged / ready: OneDrive delegated sign-in completed by the user (option B); v2 encrypted token cache exists; access check: all four roots HTTP 200, outside-share item 404 (pass). Gateway contract verified live and written to file 09 §H.1.
+Blocked on: nothing
+Needs from others: S4 to build ManastuGatewayAdapter per 09 §H.1; S1 to run the metadata crawl when it resumes
+Next: merge rounds; relay S1's crawl listing to S5 for the allowlist
+## 2026-10-21 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: not yet requested. Compose stack is on the branch and verified live: 13 services healthy (ParadeDB 0.26.2-pg17, Redis 8.6.7, MinIO built from the pinned archived tag, LibreOffice/unoserver, models with GPU, api, beat, six queue workers per file 10 §4), GPU visible only to `models`, all workers answer ping, no `.env`/key files in the backend image. `uv run pytest` green; `DCL_STACK_PROJECT=dcl-v2 uv run pytest backend/tests/integration/stack` 9 passed
+Blocked on: nothing (session paused on usage limit)
+Needs from others: nothing new
+Next: add `libmagic1` to the backend image (S1 request), CI service MinIO + DCL_TEST_MINIO_* (S1 request), finish the compose-stack map page, delete plan sheet `platform__compose-stack__m0-stack`, request merge; tell S2 the models service uses `/models/health` with a 900 s start period and the `hf-cache` volume
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: Compose stack (project `dcl-v2`) running on the dev host with the real `.env`: ParadeDB 0.26.2-pg17 (host 5435, db `dcl_v2`, migrated to head by the one-shot `migrate`), Redis (6381), MinIO from the pinned archived tag (9100/9101; `minio-init` creates the five buckets, versioning on dcl-raw/dcl-cir, vision-cache lifecycle, separate app user), LibreOffice/unoserver, models on the only GPU (8500), API (8200), beat, six queue workers per file 10 §4; in-network URLs set per container; token dir mounted only into `worker-io-light`; libmagic1 in the image; builder stage compiles `quickxorhash`. Test: `uv run pytest` green; `DCL_STACK_PROJECT=dcl-v2 uv run pytest backend/tests/integration/stack` 11 passed
+Blocked on: nothing
+Needs from others: S3 — Console SPA and Open WebUI service definitions (port 8600) when their builds exist
+Next: gateway client rework to the verified Manastu contract (ManastuGatewayAdapter, X-API-Key, /generate, /stream; production-patterns checklist; real probe run), then CI (incl. disposable MinIO for S1's tests), observability, MinIO replacement comparison by end of M4

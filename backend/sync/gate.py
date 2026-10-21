@@ -18,10 +18,11 @@ Config keys (one mapping; the source file is ``config/gate.yaml``):
     max_download_bytes       larger files → HELD_LARGE_FILE                        (T3:size)
 """
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
@@ -153,3 +154,77 @@ def gate_item(item: GateInput, config: GateConfig) -> Verdict | None:
     if item.size_bytes > config.max_download_bytes:
         return Verdict(DriveItemStatus.HELD_LARGE_FILE, "T3:size")
     return None
+
+
+# ---------------------------------------------------------------- Tier 4: secret scan (after download)
+
+SECRET_SCAN_EXTENSIONS = frozenset({".cfg", ".txt", ".py", ".json", ".ini", ".env", ".bat", ".md"})
+SECRET_VERDICT = Verdict(DriveItemStatus.QUARANTINED, "T4:secret")
+PLACEHOLDER_SECRET = re.compile(
+    r"^(<.*>|\$\{.*\}|\$\(.*\)|%\(.*\)s|\{\{.*\}\}|x{4,}|\*{4,}|changeme|change[-_]me|replace[-_]?me|"
+    r"your[-_].*|example.*|dummy.*|placeholder|password|secret|none|null|todo|tbd)$",
+    re.IGNORECASE,
+)
+SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("private_key", re.compile(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----")),
+    ("aws_access_key_id", re.compile(r"\b(?P<secret>AKIA[0-9A-Z]{16})\b")),
+    ("google_api_key", re.compile(r"(?P<secret>AIza[0-9A-Za-z_\-]{35})")),
+    ("github_token", re.compile(r"\b(?P<secret>gh[pousr]_[A-Za-z0-9]{36,})")),
+    ("slack_token", re.compile(r"\b(?P<secret>xox[abposr]-[A-Za-z0-9-]{10,})")),
+    ("jwt", re.compile(r"\b(?P<secret>eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})")),
+    ("bearer_token", re.compile(r"(?i)\bbearer\s+(?P<secret>[A-Za-z0-9._~+/-]{20,}=*)")),
+    (
+        "connection_string",
+        re.compile(
+            r"(?i)\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|amqps?|mssql|sqlserver)"
+            r"(?:\+\w+)?://[^:/\s@]+:(?P<secret>[^@\s]+)@"
+        ),
+    ),
+    ("azure_key", re.compile(r"(?i)\b(?:AccountKey|SharedAccessKey|sig)=(?P<secret>[A-Za-z0-9+/=%]{20,})")),
+    (
+        "assigned_secret",
+        re.compile(
+            r"(?i)\b(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret)"
+            r"\b\s*[:=]\s*(?P<q>['\"])(?P<secret>[^'\"\s]{8,})(?P=q)"
+        ),
+    ),
+)
+
+
+@dataclass(frozen=True)
+class SecretHit:
+    pattern: str
+    line: int
+    redacted_preview: str
+
+
+def should_scan(name: str) -> bool:
+    folded = name.casefold()
+    return (
+        folded == ".env"
+        or folded.startswith(".env.")
+        or PurePosixPath(folded).suffix in SECRET_SCAN_EXTENSIONS
+    )
+
+
+def _redact(line: str, match: re.Match[str]) -> str:
+    if "secret" in match.re.groupindex and match.group("secret"):
+        start, end = match.span("secret")
+        shown = line[start : start + 4]
+        line = f"{line[:start]}{shown}…[REDACTED]{line[end:]}"
+    else:
+        line = line[: match.end()] + " [REDACTED]"
+    return line.strip()[:200]
+
+
+def scan_secrets(text: str) -> list[SecretHit]:
+    """Every secret-looking literal, one hit per pattern and line; previews keep at most 4 characters."""
+    hits = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        for name, pattern in SECRET_PATTERNS:
+            for match in pattern.finditer(line):
+                if "secret" in pattern.groupindex and PLACEHOLDER_SECRET.match(match.group("secret") or ""):
+                    continue
+                hits.append(SecretHit(pattern=name, line=number, redacted_preview=_redact(line, match)))
+                break
+    return hits
