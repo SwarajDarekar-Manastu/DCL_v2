@@ -60,7 +60,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 ## Rubric (what "done" means for this feature)
 
-- [x] alembic upgrade head and alembic check pass (M1 tables; ParadeDB `latest` = PG 18.6, pg_search 0.26.2, and postgres:16; CI wiring pending S4)
+- [x] alembic upgrade head and alembic check pass (M1 tables; ParadeDB `latest-pg17` = PG 17.11, pg_search 0.26.2, also PG 18 and postgres:16; CI wiring pending S4)
 - [x] FK-without-index query returns no rows (and is proven to detect a missing index)
 - [x] Every status column has a CHECK generated from a Python enum (M1 tables)
 - [x] Tables are created in the milestone whose code writes them (only the six M1 tables exist)
