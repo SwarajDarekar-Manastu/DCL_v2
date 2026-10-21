@@ -11,6 +11,7 @@ the integrity tests read them back from the generated files.
 
 import argparse
 import io
+import os
 import pickle
 import re
 import struct
@@ -18,8 +19,6 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from openpyxl import Workbook
-from openpyxl.styles import Font
 from PIL import Image, ImageDraw, ImageFont
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
@@ -333,6 +332,13 @@ TEST_MATRIX = [("T01", 473, 10), ("T02", 523, 10), ("T03", 573, 20)]
 
 
 def merged_cells_fmea(out: Path) -> None:
+    # openpyxl switches to its lxml writer whenever lxml is importable, and the bytes differ;
+    # the committed workbook is written by the standard-library writer. The variable is read at
+    # openpyxl's first import, so it is set here, before the import (S2 finding, 2026-10-22).
+    os.environ["OPENPYXL_LXML"] = "False"
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
     wb = Workbook()
     wb.properties.created = DOC_TIME
     wb.properties.modified = DOC_TIME
