@@ -107,3 +107,16 @@ def test_require_role(client, token, path, groups, expected):
 
 def test_require_role_without_token_is_401(client, token):
     assert client.get("/admin-only").status_code == 401
+
+
+def test_partial_configuration_is_a_clear_503():
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as refused:
+        auth.auth_config_from(tenant_id="t", audience=None, group_reviewers="r", group_admins="")
+    assert refused.value.status_code == 503
+    assert refused.value.detail == "Console sign-in is not configured: missing audience, group_admins"
+    assert (
+        auth.auth_config_from(tenant_id="t", audience="a", group_reviewers="r", group_admins="g").audience
+        == "a"
+    )
