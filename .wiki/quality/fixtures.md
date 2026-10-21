@@ -58,6 +58,7 @@ Verification: `uv run pytest backend/tests/fixtures && uv run ruff check backend
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S5 | generator pins openpyxl's standard-library writer (`OPENPYXL_LXML=False`), so regeneration is byte-stable with or without lxml (S2 finding) |
 | 2026-10-22 | S5 | processing.scope allowlist chosen from S1's crawl and recorded by the Lead (DECISIONS.md); .npy slot dropped per ruling |
 | 2026-10-22 | S5 | unlabeled_npy synthetic fixture (no accepted corpus .npy exists; all are under _to_delete); numpy cross-check with allow_pickle=False |
 | 2026-10-21 | S5 | merged_cells_fmea expects no flag: S/O/D/RPN are on the dimensionless list (03 §C.4 step 8, Lead decision) |

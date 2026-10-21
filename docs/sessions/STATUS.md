@@ -357,3 +357,9 @@ Merged / ready: `backend/indexing/index_document.py` (ProcessedDocument → Inde
 Blocked on: nothing
 Needs from others: S1: `commit.py` consuming `IndexPlan` (shape in `.wiki/backend/chunker-and-anchors.md`); the pipeline task that calls `index_document`
 Next: Retrieval-lab data for S3, `tasks_embed.py`, then Route A1 (pre-flight, triage, Docling by script)
+
+## 2026-10-22 04:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: fixture generator pins openpyxl's standard-library writer, so the byte-stable check passes with lxml installed (S2 finding; verified with `uv run --with lxml`). Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend`
+Blocked on: the user's answer on the sample list
+Needs from others: nothing new
+Next: idle until the answer
