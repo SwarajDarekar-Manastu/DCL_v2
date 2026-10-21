@@ -38,6 +38,7 @@ Merged / ready: Gemini gateway client `backend/llm_engine/gemini_client.py` + pr
 Blocked on: real probe needs `GEMINI_BACKEND` and `GEMINI_GATEWAY_URL` in `.env` (operator) and the gateway contract answers sent to DCL Lead
 Needs from others: S2 builds VisionService/engine on `GeminiClient` (interface on the map page); S1 tells S4 when `llm_calls` exists so the ledger hook and budget `usage_today` are wired to it
 Next: Compose stack (`backend/devops/compose.yaml`, `compose.dev.yaml`, Dockerfiles) with the GPU runtime for the ROLE=models container
+
 ## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541 (S1 → this branch)
 Merged / ready: backend/postgres base + naming convention, enums→CHECK, M1 registry models (6 tables), migration 0001, backend/tests/schema (21 tests) + sqlalchemy/alembic/psycopg in pyproject. Test: `DCL_TEST_DATABASE_URL=<disposable db> uv run pytest && uv run ruff check backend` (76 passed on paradedb:latest = PG 18.6, pg_search 0.26.2; also green on postgres:16)
 Blocked on: nothing
@@ -66,3 +67,14 @@ Merged / ready: `frontend/viewer` contract and Console UI: deep link `/docs/{id}
 Blocked on: wiring the viewer body needs S1 (`Anchor`, documents, `v_doc_locations`, page-render assets, presign) and S2 (`resolve_anchor`); both told the contract 2026-10-21.
 Needs from others: S2 to emit citation links with `viewer_path()`; nothing else new.
 Next: Settings scaffolding (`frontend/settings-ui`), then the Open WebUI Pipe skeleton once S2's `/v1/answer` schema is on main.
+## 2026-10-21 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: nothing new since the gateway client entry (three merge requests open: skeleton 136603d, loader b960763, client 7591007)
+Blocked on: DCL Lead decision on MinIO before the Compose stack. The official MinIO images are no longer pullable (Docker Hub repo removed, quay.io gone, GitHub minio/minio archived; last tag RELEASE.2025-10-15T17-29-55Z), so file 01 §5.5 / §6 cannot be deployed reproducibly as written. Options: (A) build MinIO from the archived pinned source tag in `backend/devops/docker/minio.Dockerfile` (unmaintained, AGPL, internal only); (B) replace it with a maintained S3-compatible store (needs a manual change: versioning, lifecycle expiry, presign, DuckDB httpfs); (C) Chainguard `minio:latest` (maintained, but not pinnable on the free tier). S4 recommends A now and B evaluated before M11. Also still open: MinIO/Redis env names, `DCL_GEMINI_API_KEY`, Console auth names, DB URL composition, `.env` location, gateway contract questions
+Needs from others: DCL Lead answers; operator adds `GEMINI_BACKEND` and `GEMINI_GATEWAY_URL` and fills `DCL_DB_USER`/`DCL_DB_PASSWORD` in `.env`
+Next: Compose stack (project name `dcl-v2`, because a paused DCL v1 stack on this host uses project `dcl` and host port 5432), GPU runtime for the ROLE=models container, Celery queues of file 10 §4
+
+## 2026-10-21 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: env-contract follow-up (wiring + Console names of file 01 §7.1, `DCL_ENV` dev-only defaults, `DCL_ROLE` with `ROLE` alias, `DCL_GEMINI_API_KEY` fallback + `AIza` refusal, `stack_database_url()`, S1's `DCL_TOKEN_CACHE_KEY` (Fernet-checked, in the graph group) and `DCL_TEST_OUTSIDE_DRIVE_ID`, tests that `.env.example` and the loader cover every manual name); gemini types split into `gemini_types.py` (client 590 lines); httpx2 in dev deps. Test: `uv run pytest` (156 passed, 18 skipped without a test DB)
+Blocked on: nothing (MinIO decision received: build from the archived pinned tag)
+Needs from others: operator fills in `.env`: `DCL_TOKEN_CACHE_KEY`, `GEMINI_BACKEND`, `GEMINI_GATEWAY_URL`, `DCL_DB_USER`/`DCL_DB_PASSWORD`, `DCL_MINIO_*` keys, Console auth names, `DCL_PIPE_SHARED_SECRET`; S2 imports types from `backend.llm_engine.gemini_types`
+Next: Compose stack with the GPU runtime for the ROLE=models container, ParadeDB pinned to a pg17 tag, MinIO built from source

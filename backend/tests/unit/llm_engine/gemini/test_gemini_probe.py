@@ -6,7 +6,11 @@ import pytest
 from backend import config
 from backend.config import Settings
 from backend.llm_engine import gemini_probe
-from backend.llm_engine.gemini_client import Capabilities, Capability, CapabilityStatus
+from backend.llm_engine.gemini_types import (
+    Capabilities,
+    Capability,
+    CapabilityStatus,
+)
 
 KEY = "probe-key-never-printed-987"
 URL = "https://gateway.manastu.test/v1"

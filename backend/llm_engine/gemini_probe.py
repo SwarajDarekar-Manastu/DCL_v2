@@ -22,14 +22,14 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from backend.config import ThinkingLevel
-from backend.llm_engine.gemini_client import (
+from backend.llm_engine.gemini_client import GeminiClient
+from backend.llm_engine.gemini_types import (
     CAPABILITIES_FILE,
     CallContext,
     Capabilities,
     Capability,
     CapabilityStatus,
     GatewayError,
-    GeminiClient,
     GeminiError,
     Image,
     Message,

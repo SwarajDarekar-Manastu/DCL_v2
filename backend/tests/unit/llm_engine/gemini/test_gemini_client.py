@@ -9,7 +9,8 @@ from pydantic import BaseModel
 from backend import config
 from backend.config import ConfigError, Settings, ThinkingLevel
 from backend.llm_engine import gemini_client as gc
-from backend.llm_engine.gemini_client import (
+from backend.llm_engine.gemini_client import GeminiClient, backoff_delay
+from backend.llm_engine.gemini_types import (
     BudgetExhausted,
     CallContext,
     Capabilities,
@@ -17,7 +18,6 @@ from backend.llm_engine.gemini_client import (
     CapabilityUnavailable,
     DailyTokenBudget,
     GatewayError,
-    GeminiClient,
     Image,
     Message,
     ModelPrice,
@@ -26,7 +26,6 @@ from backend.llm_engine.gemini_client import (
     StructuredOutputError,
     TextDelta,
     ToolSpec,
-    backoff_delay,
 )
 
 RESPONSES = Path(__file__).parent / "responses"

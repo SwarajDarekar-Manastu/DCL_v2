@@ -15,7 +15,8 @@ The only module that talks to the Manastu Cloud Run gateway: structured output, 
 ## Location
 
 Code:
-- `backend/llm_engine/gemini_client.py` (~800 lines after formatting; types + request builder + parser + client)
+- `backend/llm_engine/gemini_client.py` (request builder, parser, retry, client)
+- `backend/llm_engine/gemini_types.py` (capability flags, parts, messages, results, records, budget, errors)
 - `backend/llm_engine/gemini_probe.py`
 - `backend/llm_engine/gemini_capabilities.json` (written by the probe; committed; all `unknown` until the first real probe)
 
@@ -31,6 +32,7 @@ Provides:
 - `GeminiClient(settings=None, *, capabilities=None, ledger=None, budget=None, prices=None, …)`; refuses to start with `GOOGLE_API_KEY` set or the Gemini group incomplete
 - `await client.generate(model=, messages=, context=CallContext(purpose=…), schema=None, tools=, tool_choice=, thinking=, include_thoughts=, media_resolution=, temperature=, max_output_tokens=, cached_content=)` → `GenerateResult(text, parsed, tool_calls, usage, model, finish_reason, request_id, latency_ms, thoughts)`; `generate_sync(...)` for Celery prefork workers
 - `client.stream(...)` → `TextDelta`… then one `StreamDone(result)`
+- Types import from `backend.llm_engine.gemini_types`, the client from `backend.llm_engine.gemini_client`
 - `Message.system/user/assistant/tool_result`, parts `Text`, `Image(bytes, mime)`, `Pdf(bytes, filename)`, `ToolSpec`, `ToolCall`
 - Capability flags `Capability.*`, `Capabilities.load()`; disabled → fallback (structured output: schema in prompt + local validation; streaming: one chunk; thinking, thoughts, media resolution, cache: omitted) or `CapabilityUnavailable` (tools, image, PDF)
 - Errors: `GatewayError(status_code, retryable)`, `BudgetExhausted` (retry later so queues wait), `StructuredOutputError(raw_text)`, `CapabilityUnavailable`
@@ -46,6 +48,7 @@ Consumes:
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
 - `backend/llm_engine/gemini_client.py`
+- `backend/llm_engine/gemini_types.py`
 - `backend/llm_engine/gemini_probe.py`
 - `backend/llm_engine/gemini_capabilities.json`
 - `backend/tests/unit/llm_engine/gemini/`
@@ -64,6 +67,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-21 | S4 | Types, flags and errors moved to `gemini_types.py` (no behavior change); client under 600 lines |
 | 2026-10-21 | S4 | Client and probe against the OpenAI-compatible shape; every capability behind a flag; retry with Retry-After; budget guard; ledger hook; 45 tests on fixture responses; real probe blocked on missing gateway env names |
 
 ## Related

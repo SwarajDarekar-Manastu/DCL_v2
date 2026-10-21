@@ -16,7 +16,9 @@ GOOGLE_SDK = re.compile(
     r"|langchain_google|llama_index\.llms\.(gemini|vertex|google))\b|['\"]@google/(genai|generative-ai)['\"]",
     re.MULTILINE,
 )
-GATEWAY_URL = re.compile(r"GEMINI_GATEWAY_URL|gemini_gateway_url|GEMINI_GATEWAY_KEY|gemini_gateway_key")
+GATEWAY_URL = re.compile(
+    r"GEMINI_GATEWAY_URL|gemini_gateway_url|GEMINI_GATEWAY_KEY|gemini_gateway_key|DCL_GEMINI_API_KEY"
+)
 
 
 def source_files():
