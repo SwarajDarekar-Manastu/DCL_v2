@@ -23,6 +23,11 @@ dependencies = [
     "quickxorhash>=0.3",
     "python-magic>=0.4.27",
     "celery[redis]>=5.6",
+    "opentelemetry-sdk>=1.45",
+    "opentelemetry-exporter-otlp-proto-http>=1.45",
+    "opentelemetry-instrumentation-fastapi>=0.66b0",
+    "opentelemetry-instrumentation-httpx>=0.66b0",
+    "opentelemetry-instrumentation-celery>=0.66b0",
     "pgvector>=0.4",
 ]
 
@@ -31,6 +36,9 @@ parse = [
     "pypdfium2==5.14.0",
     "pikepdf==10.17.0",
     "docling==2.141.0",
+    "torch==2.14.1",
+    "torchvision==0.29.1",
+    "onnxruntime==1.31.0",
 ]
 models = [
     "torch==2.14.1",
@@ -54,6 +62,18 @@ dev = [
     "pytest-asyncio>=0.24",
     "httpx2>=2.16.0",
 ]
+
+[tool.uv]
+conflicts = [[{ group = "models" }, { group = "parse" }]]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", group = "parse" }]
+torchvision = [{ index = "pytorch-cpu", group = "parse" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling>=1.25"]

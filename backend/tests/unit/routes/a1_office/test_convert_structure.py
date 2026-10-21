@@ -2,6 +2,9 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("pikepdf")
+pytest.importorskip("pypdfium2")
+
 from backend.llm_engine.vision.schemas import PageType, Script
 from backend.postgres.enums import NodeSource, NodeType
 from backend.routes.a1_office.convert import (

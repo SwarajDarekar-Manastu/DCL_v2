@@ -48,7 +48,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `platform/env-contract` | in-progress | S4 | [Environment contract loader and .env.example](platform/env-contract.md) |
 | `platform/gemini-gateway-client` | in-progress | S4 | [Gemini gateway client and capability probe](platform/gemini-gateway-client.md) |
 | `platform/ci` | in-progress | S4 | [CI pipeline and gates](platform/ci.md) |
-| `platform/observability` | planned | S4 | [OpenTelemetry, metrics, dashboards, alerts](platform/observability.md) |
+| `platform/observability` | in-progress | S4 | [OpenTelemetry, metrics, dashboards, alerts](platform/observability.md) |
 | `platform/backups-retention` | planned | S4 | [Backups, retention jobs, runbooks](platform/backups-retention.md) |
 | `quality/fixtures` | in-progress | S5 | [Fixture corpus and expected outcomes](quality/fixtures.md) |
 | `quality/config-data` | in-progress | S5 | [Domain configuration data (synonyms, vendors, sanity ranges, units, propellants, report schemas, rules)](quality/config-data.md) |

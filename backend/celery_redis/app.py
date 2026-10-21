@@ -7,12 +7,13 @@ compose file holds the exact commands. Task modules are imported when they exist
 
 import importlib.util
 
-from celery import Celery
+from celery import Celery, signals
 from kombu import Exchange
 from kombu import Queue as KombuQueue
 
 from backend.celery_redis.beat import BEAT_SCHEDULE, BEAT_TIMEZONE
 from backend.celery_redis.queues import VISIBILITY_TIMEOUT_S, Queue
+from backend.common.telemetry import instrument_celery, setup_telemetry
 from backend.config import Group, get_settings
 
 TASK_MODULES = (
@@ -56,6 +57,17 @@ def create_celery() -> Celery:
 
 
 app = create_celery()
+
+
+@signals.worker_process_init.connect
+def _telemetry_in_worker_process(**_) -> None:
+    setup_telemetry("dcl-worker")
+    instrument_celery()
+
+
+@signals.beat_init.connect
+def _telemetry_in_beat(**_) -> None:
+    setup_telemetry("dcl-beat")
 
 
 @app.task(name="dcl.ping")

@@ -164,6 +164,8 @@ def _sniff(head: bytes, extension: str, zip_names: Sequence[str] | None) -> str 
     if head.startswith(b"%PDF-"):
         return "pdf"
     if head.startswith(b"PK\x03\x04"):
+        if extension == ".scdoc":
+            return "scdoc"  # SpaceClaim documents are ZIP containers
         return _zip_kind(zip_names)
     if head.startswith(b"\xd0\xcf\x11\xe0"):
         return OLE2_BY_EXTENSION.get(extension, "ole2")

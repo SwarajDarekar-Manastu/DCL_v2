@@ -94,6 +94,16 @@ jobs:
           load: true
           cache-from: type=gha,scope=libreoffice
           cache-to: type=gha,scope=libreoffice,mode=max
+      - name: Build the parse image (Docling, RapidOCR, Tesseract)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/devops/docker/backend.Dockerfile
+          target: parse
+          tags: dcl-v2-parse:ci
+          load: true
+          cache-from: type=gha,scope=parse
+          cache-to: type=gha,scope=parse,mode=max
       - name: Build MinIO from the pinned source tag
         uses: docker/build-push-action@v6
         with:
@@ -105,6 +115,6 @@ jobs:
       - run: uv sync --frozen
       - name: Secret scan of every image layer
         run: |
-          for image in dcl-v2-backend:ci dcl-v2-libreoffice:ci "$MINIO_IMAGE"; do
+          for image in dcl-v2-backend:ci dcl-v2-parse:ci dcl-v2-libreoffice:ci "$MINIO_IMAGE"; do
             uv run python backend/devops/ci/scan_image_secrets.py "$image"
           done

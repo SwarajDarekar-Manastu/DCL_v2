@@ -6,8 +6,9 @@ text. Output: one ``DocumentPlan`` per logical document, with the primary file, 
 
 - LaTeX: a ``.tex`` containing ``\\documentclass`` is a master; ``\\input``, ``\\include``,
   ``\\subfile`` and ``\\import{dir}{file}`` are resolved recursively relative to the master's folder
-  and become ``part``s. Two masters in one folder: both become documents with a CONFLICT. ``.tex``
-  files that no master includes are assembled per folder by file name, with a CONFLICT.
+  (or, when not found there, its nearest ancestor that has the path) and become ``part``s.
+  Two masters in one folder: both become documents with a CONFLICT. ``.tex`` files that no master
+  includes are assembled per folder by file name, with a CONFLICT.
 - A ``.pdf`` with the same stem as a master in its folder is that document's ``visual_twin``.
 - JSON section files (``section_file_sets`` of ``config/report_json_schemas.yaml``): two or more in one
   folder become one document named after the folder, in the configured section order.
@@ -84,6 +85,23 @@ def _normalize(path: str) -> str:
     return "/".join(parts).casefold()
 
 
+def _find(include: str, master_folder: str, by_path: Mapping[str, FileRef]) -> tuple[FileRef | None, str]:
+    """An include path is relative to the folder LaTeX compiles from: the master's folder, or (common
+    with masters in ``Main_Files/``) an ancestor such as the project root. The nearest match wins."""
+    relative = (
+        PurePosixPath(include).relative_to(master_folder) if include.startswith(master_folder + "/") else None
+    )
+    key = _normalize(include)
+    if key in by_path or relative is None:
+        return by_path.get(key), key
+    base = PurePosixPath(master_folder)
+    for ancestor in base.parents:
+        candidate = _normalize(str(ancestor / relative))
+        if candidate in by_path:
+            return by_path[candidate], candidate
+    return None, key
+
+
 def assemble(
     files: Sequence[FileRef],
     read_text: Callable[[FileRef], str],
@@ -109,11 +127,10 @@ def assemble(
             while queue:
                 current = queue.pop(0)
                 for include in _includes(text_of.get(current.path, ""), PurePosixPath(master.folder)):
-                    key = _normalize(include)
+                    part, key = _find(include, master.folder, by_path)
                     if key in seen:
                         continue
                     seen.add(key)
-                    part = by_path.get(key)
                     if part is None:
                         plan.missing_includes.append(include)
                         continue
@@ -136,7 +153,8 @@ def assemble(
         group.sort(key=lambda f: f.name)
         plan = DocumentPlan(primary=group[0], title=PurePosixPath(folder).name or group[0].stem)
         plan.parts = [(f, DocumentSourceRole.PART) for f in group[1:]]
-        plan.conflicts.append(f"no master found in folder {folder}, assembled by filename")
+        reason = "not included by any master" if masters else "no master found"
+        plan.conflicts.append(f"{reason} in folder {folder}, assembled by filename")
         claimed.update(f.path for f in group)
         plans.append(plan)
 
