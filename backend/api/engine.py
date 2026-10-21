@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 from backend.api.auth import CurrentUser
 from backend.config import Group, get_settings
 from backend.indexing.retrieval import Scope, SearchFilters, SearchResult, search
+from backend.llm_engine.engine.tools import Provenance
 
 MAX_CLOCK_SKEW_S = 300
 SSE_MEDIA_TYPE = "text/event-stream"
@@ -108,17 +109,6 @@ class StepName(StrEnum):
     SYNTHESIS = "synthesis"
     VERIFICATION = "verification"
     RENDER = "render"
-
-
-class Provenance(StrEnum):
-    """Label every cited claim carries (file 07 §7)."""
-
-    MEASURED = "measured"
-    INTERNAL_REPORT = "internal_report"
-    STANDARD = "standard"
-    VENDOR_CLAIM = "vendor_claim"
-    LITERATURE = "literature"
-    WEB = "web"
 
 
 class AnswerMode(StrEnum):

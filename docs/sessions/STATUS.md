@@ -454,3 +454,9 @@ Merged / ready: Route D (`backend/routes/d_photos.py`, `classify_image` capabili
 Blocked on: nothing (A1 DOCX/PPTX waits for S4's `backend/common/office.py`, signature agreed)
 Needs from others: Lead: parse/media deps pillow-heif==1.8.1, imagehash==4.3.2, faster-whisper==1.2.1; S1: dispatcher calls for `process_photo` (with `cluster_photos` in the assembler) and `process_video`
 Next: the Answer Engine workflow (query analysis, planner, tools T1–T6/U1–U2, synthesis, verifier, DBOS)
+
+## 2026-10-22 09:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: engine tools T1 search_documents, U1 get_document, U2 catalog_lookup, T4 code and diagrams, T5 physics_calculator (`backend/llm_engine/engine/tools/`), 17 tests; one `Provenance` enum (adds `calculation`); retrieval test on migration 0004. (Route wiring now goes through S1's adapter registry in `backend/dispatcher/adapters.py`, not IMPLEMENTED_ROUTES.)
+Blocked on: nothing
+Needs from others: S1: telemetry_runs/channels and Parquet for T2; the diagram catalog shape in `.wiki/backend/answer-engine.md` for Route E; S4: whether the gateway proxies Google Search grounding for T6
+Next: T2/T3/T6, then query analysis, synthesis, entailment verifier, workflow + DBOS, /v1/answer streaming
