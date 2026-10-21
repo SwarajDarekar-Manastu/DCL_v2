@@ -32,7 +32,6 @@ from backend.review.api_models import (
 router = APIRouter(prefix="/review", tags=["review"])
 
 Reviewer = Annotated[ConsoleUser, Depends(require_role(ConsoleRole.REVIEWER))]
-Admin = Annotated[ConsoleUser, Depends(require_role(ConsoleRole.ADMIN))]
 NOT_YET = "review tables arrive in M2 (backend/review-backend)"
 
 
@@ -91,5 +90,5 @@ def simulate_rule(user: Reviewer, rule_id: uuid.UUID) -> RuleSimulation:
 
 
 @router.post("/rules/{rule_id}/deactivate")
-def deactivate_rule(user: Admin, rule_id: uuid.UUID) -> RuleView:
+def deactivate_rule(user: Reviewer, rule_id: uuid.UUID) -> RuleView:
     raise _not_implemented()
