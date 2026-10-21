@@ -18,7 +18,7 @@ Code:
 - `frontend/openwebui/pipe_manastu_engine.py` (the Pipe: Valves, UserValves, `pipes()` → `manastu_engine.main`, event mapping)
 - `frontend/openwebui/api_endpoint.py` (every backend call: signed identity headers, SSE parser, `stream_answer`, `confirm`, `get_trace`; mirror of `api_endpoint.ts`)
 - `frontend/openwebui/config.py` (`build_config` from the Valves; mirror of `config.ts`)
-- `frontend/openwebui/build_functions.py` → `frontend/openwebui/dist/manastu_engine.py` (generated single file to install; never edit)
+- `frontend/openwebui/build_functions.py` → `frontend/openwebui/bundled/manastu_engine.py` (generated single file to install; never edit)
 
 Tests and fixtures:
 - `backend/tests/unit/openwebui/test_pipe.py` (replays S2's `backend/tests/unit/llm_engine/engine/example_answer_stream.sse` through both the source and the bundle)
@@ -26,7 +26,7 @@ Tests and fixtures:
 ## Interfaces
 
 Provides:
-- Model "Manastu Propulsion Engine", id `manastu_engine.main` (install `dist/manastu_engine.py` as function id `manastu_engine`)
+- Model "Manastu Propulsion Engine", id `manastu_engine.main` (install `bundled/manastu_engine.py` as function id `manastu_engine`)
 - Valves: `ENGINE_URL`, `ENGINE_SHARED_SECRET`, `CONSOLE_URL`, `DEFAULT_THINKING_LEVEL`, `SHOW_STATUS_EVENTS`, `MAX_EMBEDS_PER_MESSAGE`; UserValves `strict_numbers`, `show_debug_trace`
 
 Consumes:
@@ -42,7 +42,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `frontend/openwebui/pipe_manastu_engine.py`
 - `frontend/openwebui/api_endpoint.py`
 - `frontend/openwebui/config.py`
-- `frontend/openwebui/build_functions.py`, `frontend/openwebui/dist/` (regenerate only)
+- `frontend/openwebui/build_functions.py`, `frontend/openwebui/bundled/` (regenerate only)
 - `backend/tests/unit/openwebui/test_pipe.py`
 
 ## Rubric (what "done" means for this feature)

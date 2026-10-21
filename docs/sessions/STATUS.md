@@ -279,7 +279,7 @@ Blocked on: S2 to add trace_id to ConfirmationEvent (asked); owner of a chat-att
 Next: Pipe plan sheet, then frontend/openwebui/{config.py, api_endpoint.py, pipe_manastu_engine.py, build script}, with tests replaying S2's example_answer_stream.sse.
 
 ## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
-Merged / ready: `frontend/openwebui-pipe`. The Pipe against S2's /v1/answer contract has config.py, api_endpoint.py (signed identity mirroring engine.sign_identity, SSE parser, confirm, trace), the event mapping checked against Open WebUI v0.12.3 source, and a single-file bundle in frontend/openwebui/dist (build_functions.py --check). 27 tests replay S2's recorded stream through the source and the bundle; the engine's own pipe_identity accepts the Pipe's headers.
+Merged / ready: `frontend/openwebui-pipe`. The Pipe against S2's /v1/answer contract has config.py, api_endpoint.py (signed identity mirroring engine.sign_identity, SSE parser, confirm, trace), the event mapping checked against Open WebUI v0.12.3 source, and a single-file bundle in frontend/openwebui/bundled (build_functions.py --check). 27 tests replay S2's recorded stream through the source and the bundle; the engine's own pipe_identity accepts the Pipe's headers.
 Blocked on: nothing for the Pipe; a live run waits for the engine (M8). Confirmations use trace_id once S2's c1641d5 lands (declined until then).
 Needs from others: the Lead to decide the owner of a chat-attachment upload endpoint (the Pipe sends attachments=[]).
 Next: GET /audit (approved, owner S3, 501 until S1's audit_events model) and the Audit page; then Actions (Show trace, Add to benchmark, Report issue) and the Filter.

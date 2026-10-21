@@ -1,6 +1,6 @@
 """The Open WebUI Pipe against S2's /v1/answer contract, replayed through a mock HTTP transport.
 
-Every Pipe test runs twice: on the source module and on the installable bundle in dist/.
+Every Pipe test runs twice: on the source module and on the installable bundle in bundled/.
 """
 
 import asyncio
@@ -22,7 +22,7 @@ from frontend.openwebui.build_functions import bundle
 
 ROOT = Path(__file__).resolve().parents[4]
 EXAMPLE = ROOT / "backend/tests/unit/llm_engine/engine/example_answer_stream.sse"
-DIST = ROOT / "frontend/openwebui/dist/manastu_engine.py"
+DIST = ROOT / "frontend/openwebui/bundled/manastu_engine.py"
 SECRET = "test-shared-secret"
 TRACE = "0b6d9f0e-1111-4222-8333-444455556666"
 

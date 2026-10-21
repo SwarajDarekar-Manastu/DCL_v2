@@ -1,11 +1,11 @@
-"""Bundle each Open WebUI function into one installable file under dist/.
+"""Bundle each Open WebUI function into one installable file under bundled/.
 
 Open WebUI stores a function as a single Python source, so it cannot import config.py or
 api_endpoint.py. Every `from frontend.openwebui.<module> import …  # inline` line is replaced by
 that module's code (once per bundle, recursively). Run from the repository root:
 
-    uv run python frontend/openwebui/build_functions.py          # write dist/
-    uv run python frontend/openwebui/build_functions.py --check  # fail if dist/ is stale
+    uv run python frontend/openwebui/build_functions.py          # write bundled/
+    uv run python frontend/openwebui/build_functions.py --check  # fail if bundled/ is stale
 """
 
 import ast
@@ -14,8 +14,8 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DIST = HERE / "dist"
-# installed function id (file name in dist/) → source module
+DIST = HERE / "bundled"
+# installed function id (file name in bundled/) → source module
 FUNCTIONS = {"manastu_engine.py": "pipe_manastu_engine.py"}
 INLINE = re.compile(r"^from frontend\.openwebui\.(\w+) import .+  # inline$")
 
