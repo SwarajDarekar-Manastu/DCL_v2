@@ -310,3 +310,9 @@ Merged / ready: 410 + forced resync (delta.py, CLI `resync`), downloader lock re
 Blocked on: nothing; asked the Lead whether to land the remaining ~4,826 items host-side or wait for the workers
 Needs from others: S2 — seed_rows() on main (then seed-entities)
 Next: dispatcher (folder context, assembler, route gating, document rows, CIR writer), Route C, queue load test
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: download fixes (temp version removal, ASCII metadata, resilient host run), presign_put, migration 0005 (rules, review_flags), 0006 (benchmark tables, S3 unblocked), Tier 4 on landed blobs (inspect.py), UTF-16 text detection. Live: 726 landed items inspected, 0 secrets, 3 real mismatches (JPEG bytes in .png). Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend && uv run ruff format --check <S1 paths>`
+Blocked on: nothing. Accepted corpus = 5,072 items, 24.0 GB (19.45 GB downloadable + one 4.57 GB held video; videos 13.4 GB in total); host download in progress
+Needs from others: S2/S5 — `ruff format --check backend` fails on 4 of their files (llm_engine/vision/service.py, tests/acceptance/m1_state.py, tests/acceptance/test_m1_checks_on_seeded_db.py, tests/fixtures/test_fixture_integrity.py)
+Next: dispatcher (folder context, assembler, route gating, documents/document_sources rows, CIR writer), then Route C
