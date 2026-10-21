@@ -28,11 +28,30 @@ def exec_in(service: str, *cmd: str) -> subprocess.CompletedProcess:
     return docker("compose", "-p", PROJECT, "exec", "-T", service, *cmd, check=False)
 
 
+ONE_SHOT = ("minio-init", "migrate")
+
+
 def test_every_service_is_running_and_healthy_where_checked():
-    states = {c["Service"]: (c["State"], c.get("Health", "")) for c in containers()}
+    states = {c["Service"]: (c["State"], c.get("Health", ""), c.get("ExitCode")) for c in containers()}
     assert states, "project has no containers"
-    bad = {s: st for s, st in states.items() if st[0] != "running" or st[1] not in ("", "healthy")}
+    bad = {
+        s: st
+        for s, st in states.items()
+        if (s in ONE_SHOT and (st[0], st[2]) != ("exited", 0))
+        or (s not in ONE_SHOT and (st[0] != "running" or st[1] not in ("", "healthy")))
+    }
     assert bad == {}
+
+
+def test_migrations_are_at_head():
+    result = exec_in("api", "alembic", "-c", "backend/postgres/alembic.ini", "current")
+    assert "(head)" in result.stdout
+
+
+def test_token_dir_is_writable_only_in_the_sync_worker():
+    probe = 'test -w "${DCL_TOKEN_DIR:-/nonexistent}" && echo writable || echo absent'
+    assert exec_in("worker-io-light", "sh", "-c", probe).stdout.strip() == "writable"
+    assert exec_in("api", "sh", "-c", probe).stdout.strip() == "absent"
 
 
 def test_gpu_is_visible_to_models():

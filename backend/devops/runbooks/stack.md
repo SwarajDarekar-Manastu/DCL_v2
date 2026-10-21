@@ -6,14 +6,18 @@ Spec: docs/architecture/01 §6, 10 §3–§4. Map: `.wiki/platform/compose-stack
 
 ```bash
 docker compose --env-file .env -f backend/devops/compose.yaml -f backend/devops/compose.dev.yaml up -d --build --wait
-docker compose -p dcl-v2 ps
+docker compose -p dcl-v2 ps -a
 docker compose -p dcl-v2 down            # keeps volumes
 ```
 
-- Staging and prod omit `compose.dev.yaml`; `.env` must then hold `DCL_DB_USER`, `DCL_DB_PASSWORD`, `DCL_MINIO_ROOT_*` and a separate `DCL_MINIO_ACCESS_KEY`/`DCL_MINIO_SECRET_KEY` service account.
+- Every `up` first runs two one-shot jobs: `minio-init` (buckets, versioning on dcl-raw and dcl-cir, lifecycle, the application user) and `migrate` (`alembic upgrade head`). Both are idempotent and must show `Exited (0)`.
+- Host ports on `DCL_BIND_HOST`: PostgreSQL `DCL_DB_PORT` (5435 on the dev host), Redis 6381, MinIO API 9100, MinIO console `DCL_MINIO_CONSOLE_PORT` (9101), models 8500, API 8200.
+- `.env` holds host-side URLs for operator CLIs (`127.0.0.1:5435`, …). Compose sets the in-network URLs per container (`postgres:5432`, `redis:6379`, `minio:9000`, `models:8500`). Credentials are interpolated into URLs and must be URL-safe.
+- Only `worker-io-light` mounts `DCL_TOKEN_DIR` (read-write). In dev it runs as uid 1001, the owner of that directory.
+- Running from a worktree, which has no `.env` of its own: `export DCL_ENV_FILE=/home/ai/Desktop/Swaraj_/dcl_v2/.env` and pass the same path to `--env-file`.
+- Staging and prod omit `compose.dev.yaml`. `.env` must then hold `DCL_DB_USER`, `DCL_DB_PASSWORD`, `DCL_MINIO_ROOT_*` and a separate `DCL_MINIO_ACCESS_KEY`/`DCL_MINIO_SECRET_KEY` service account.
 - The project name is `dcl-v2`. Never run compose with `-p dcl`: that is the paused v1 stack on the dev host.
-- `DCL_DB_PORT` is the host port of PostgreSQL. On the dev host v1 holds 5432, so set another port.
-- `down -v` deletes the database, MinIO data, the token cache and the model cache. Do not use it outside a throwaway test project.
+- `down -v` deletes the database, MinIO data and the model cache. Do not use it outside a throwaway test project.
 
 ## Check health
 
@@ -22,7 +26,7 @@ docker compose -p dcl-v2 ps --format 'table {{.Service}}\t{{.State}}\t{{.Health}
 DCL_STACK_PROJECT=dcl-v2 uv run pytest backend/tests/integration/stack -q
 ```
 
-The integration tests check that every service is healthy, the GPU is visible only to `models`, every worker answers a ping, and no `.env` or key file exists in the backend image.
+The integration tests check that every service is healthy, the one-shot jobs exited 0, migrations are at head, the GPU is visible only to `models`, the token dir is writable only in the sync worker, every worker answers a ping, and no `.env` or key file exists in the backend image.
 
 ## GPU check
 

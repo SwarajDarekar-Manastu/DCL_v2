@@ -1,17 +1,16 @@
 # Dev overrides for the GPU workstation (docs/architecture/10 §3). Never used in staging/prod.
-# - Host ports on 127.0.0.1 for psql, MinIO console, Redis and the models role.
-# - Dev-only defaults for the database and MinIO pairs (the Lead allows them here only); the application
-#   MinIO keys default to the root pair. Staging/prod set a separate MinIO service account.
+# - Dev-only defaults for the database and MinIO pairs when .env leaves them empty (the Lead allows them here
+#   only); the application MinIO keys then default to the root pair.
+# - The sync worker runs as the host user (uid 1001 on the dev host) so it can use DCL_TOKEN_DIR (mode 700).
 # - Lower concurrency and memory for cpu_parse and telemetry_stream: this host has 15 GB RAM, while the
 #   production limits of file 10 §4 add up to about 38 GB.
 
 x-dev-env: &dev-env
   DCL_ENV: dev
-  DCL_DATABASE_URL: ""
-  DCL_TOKEN_DIR: /var/lib/dcl/tokens
-  DCL_TOKEN_CACHE_PATH: /var/lib/dcl/tokens/msal_token_cache.bin
-  DCL_DB_USER: ${DCL_DB_USER:-dcl}
-  DCL_DB_PASSWORD: ${DCL_DB_PASSWORD:-dcl-dev-only}
+  DCL_DATABASE_URL: postgresql+psycopg://${DCL_DB_USER:-dcl}:${DCL_DB_PASSWORD:-dcl-dev-only}@postgres:5432/dcl_v2
+  DCL_REDIS_URL: redis://redis:6379/0
+  DCL_MINIO_ENDPOINT: http://minio:9000
+  DCL_MODELS_URL: http://models:8500
   DCL_MINIO_ACCESS_KEY: ${DCL_MINIO_ACCESS_KEY:-${DCL_MINIO_ROOT_USER:-dcl-dev}}
   DCL_MINIO_SECRET_KEY: ${DCL_MINIO_SECRET_KEY:-${DCL_MINIO_ROOT_PASSWORD:-dcl-dev-only-minio}}
 
@@ -21,24 +20,25 @@ services:
       POSTGRES_USER: ${DCL_DB_USER:-dcl}
       POSTGRES_PASSWORD: ${DCL_DB_PASSWORD:-dcl-dev-only}
 
-  redis:
-    ports:
-      - "127.0.0.1:6379:6379"
-
   minio:
     environment:
       MINIO_ROOT_USER: ${DCL_MINIO_ROOT_USER:-dcl-dev}
       MINIO_ROOT_PASSWORD: ${DCL_MINIO_ROOT_PASSWORD:-dcl-dev-only-minio}
-    ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9091:9001"
+
+  minio-init:
+    environment:
+      MINIO_ROOT_USER: ${DCL_MINIO_ROOT_USER:-dcl-dev}
+      MINIO_ROOT_PASSWORD: ${DCL_MINIO_ROOT_PASSWORD:-dcl-dev-only-minio}
+      DCL_MINIO_ACCESS_KEY: ${DCL_MINIO_ACCESS_KEY:-${DCL_MINIO_ROOT_USER:-dcl-dev}}
+      DCL_MINIO_SECRET_KEY: ${DCL_MINIO_SECRET_KEY:-${DCL_MINIO_ROOT_PASSWORD:-dcl-dev-only-minio}}
+
+  migrate:
+    environment: *dev-env
 
   models:
     environment:
       <<: *dev-env
       DCL_ROLE: models
-    ports:
-      - "127.0.0.1:8500:8500"
 
   api:
     environment:
@@ -50,6 +50,7 @@ services:
 
   worker-io-light:
     environment: *dev-env
+    user: "1001:1001"
 
   worker-cpu-parse:
     environment: *dev-env

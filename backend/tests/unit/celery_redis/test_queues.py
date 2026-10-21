@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -85,11 +86,53 @@ def test_dev_override_only_lowers_limits():
             )
 
 
-def test_backend_containers_never_inherit_the_host_database_url():
+IN_NETWORK = {
+    "DCL_REDIS_URL": "redis://redis:6379/0",
+    "DCL_MINIO_ENDPOINT": "http://minio:9000",
+    "DCL_MODELS_URL": "http://models:8500",
+}
+
+
+@pytest.mark.parametrize("name", ["compose.yaml", "compose.dev.yaml"])
+def test_backend_containers_get_in_network_urls_never_host_ones(name):
+    base = compose("compose.yaml")["services"]
+    services = compose(name)["services"]
+    for service, svc in services.items():
+        image = base[service].get("image", "")
+        if not image.startswith(("dcl-v2-backend", "dcl-v2-models")) or service == "minio-init":
+            continue
+        env = svc["environment"]
+        for key, value in IN_NETWORK.items():
+            assert env[key] == value, (name, service, key)
+        assert "@postgres:5432/dcl_v2" in env["DCL_DATABASE_URL"], (name, service)
+        assert "127.0.0.1" not in str(env), (name, service)
+
+
+def test_token_dir_is_mounted_only_into_the_sync_worker():
     services = compose("compose.yaml")["services"]
-    for name, svc in services.items():
-        if svc.get("image", "").startswith(("dcl-v2-backend", "dcl-v2-models")):
-            assert svc["environment"]["DCL_DATABASE_URL"] == "", name
+    with_tokens = {
+        n for n, svc in services.items() if any("DCL_TOKEN_DIR" in str(v) for v in svc.get("volumes", []))
+    }
+    assert with_tokens == {"worker-io-light"}
+
+
+def test_published_host_ports_follow_the_lead_allocation():
+    services = compose("compose.yaml")["services"]
+    ports = [port for svc in services.values() for port in svc.get("ports", [])]
+    published = {re.fullmatch(r"\$\{DCL_BIND_HOST:-127\.0\.0\.1\}:(.+):\d+", port).group(1) for port in ports}
+    assert published == {
+        "${DCL_DB_PORT:-5435}",
+        "6381",
+        "9100",
+        "${DCL_MINIO_CONSOLE_PORT:-9101}",
+        "8500",
+        "8200",
+    }
+    assert all(
+        p.startswith("${DCL_BIND_HOST:-127.0.0.1}:")
+        for svc in services.values()
+        for p in svc.get("ports", [])
+    )
 
 
 def test_celery_app_declares_every_queue_and_safe_defaults():

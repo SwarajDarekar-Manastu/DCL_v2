@@ -1,9 +1,18 @@
-# DCL v2 stack (docs/architecture/01 §6, 10 §4). Run from the repository root:
+# DCL v2 stack (docs/architecture/01 §6, 10 §3–§4). Run from the repository root:
 #   docker compose --env-file .env -f backend/devops/compose.yaml [-f backend/devops/compose.dev.yaml] up -d --wait
-# Secrets come from ../../.env at runtime (never from an image). The GPU is reserved for `models` only.
-# Worker pools, concurrency and memory limits mirror backend/celery_redis/queues.py (a unit test checks).
+# .env carries host-side values for operator CLIs; this file sets the in-network URLs per container, so no
+# container inherits a 127.0.0.1 URL. Secrets come from ../../.env at runtime, never from an image. The GPU is
+# reserved for `models` only. Worker pools mirror backend/celery_redis/queues.py (a unit test checks).
+# Credentials are interpolated into URLs and must therefore be URL-safe (letters, digits, . _ ~ -).
 
 name: dcl-v2
+
+x-stack-env: &stack-env
+  DCL_ENV: ${DCL_ENV:-dev}
+  DCL_DATABASE_URL: postgresql+psycopg://${DCL_DB_USER}:${DCL_DB_PASSWORD}@postgres:5432/dcl_v2
+  DCL_REDIS_URL: redis://redis:6379/0
+  DCL_MINIO_ENDPOINT: http://minio:9000
+  DCL_MODELS_URL: http://models:8500
 
 x-backend: &backend
   image: dcl-v2-backend:local
@@ -12,21 +21,17 @@ x-backend: &backend
     dockerfile: backend/devops/docker/backend.Dockerfile
     target: backend
   env_file:
-    - path: ../../.env
+    - path: ${DCL_ENV_FILE:-../../.env}
       required: false
-  environment: &backend-env
-    DCL_ENV: ${DCL_ENV:-dev}
-    DCL_DATABASE_URL: ""
-    DCL_TOKEN_DIR: /var/lib/dcl/tokens
-    DCL_TOKEN_CACHE_PATH: /var/lib/dcl/tokens/msal_token_cache.bin
+  environment: *stack-env
   restart: unless-stopped
   depends_on:
-    postgres:
-      condition: service_healthy
     redis:
       condition: service_healthy
-    minio:
-      condition: service_healthy
+    minio-init:
+      condition: service_completed_successfully
+    migrate:
+      condition: service_completed_successfully
 
 x-worker-health: &worker-health
   interval: 60s
@@ -40,13 +45,13 @@ services:
     environment:
       POSTGRES_USER: ${DCL_DB_USER:-}
       POSTGRES_PASSWORD: ${DCL_DB_PASSWORD:-}
-      POSTGRES_DB: dcl
+      POSTGRES_DB: dcl_v2
     ports:
-      - "${DCL_BIND_HOST:-127.0.0.1}:${DCL_DB_PORT:-5432}:5432"
+      - "${DCL_BIND_HOST:-127.0.0.1}:${DCL_DB_PORT:-5435}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d dcl"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d dcl_v2"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -56,6 +61,8 @@ services:
   redis:
     image: redis:8.6.7
     command: ["redis-server", "--appendonly", "yes", "--save", "300", "100"]
+    ports:
+      - "${DCL_BIND_HOST:-127.0.0.1}:6381:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -73,6 +80,9 @@ services:
     environment:
       MINIO_ROOT_USER: ${DCL_MINIO_ROOT_USER:-}
       MINIO_ROOT_PASSWORD: ${DCL_MINIO_ROOT_PASSWORD:-}
+    ports:
+      - "${DCL_BIND_HOST:-127.0.0.1}:9100:9000"
+      - "${DCL_BIND_HOST:-127.0.0.1}:${DCL_MINIO_CONSOLE_PORT:-9101}:9001"
     volumes:
       - minio-data:/data
     healthcheck:
@@ -82,6 +92,35 @@ services:
       retries: 10
       start_period: 10s
     restart: unless-stopped
+
+  minio-init:
+    image: dcl-v2-backend:local
+    command: ["python", "/opt/dcl/minio_init.py"]
+    environment:
+      DCL_MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${DCL_MINIO_ROOT_USER:-}
+      MINIO_ROOT_PASSWORD: ${DCL_MINIO_ROOT_PASSWORD:-}
+      DCL_MINIO_ACCESS_KEY: ${DCL_MINIO_ACCESS_KEY:-}
+      DCL_MINIO_SECRET_KEY: ${DCL_MINIO_SECRET_KEY:-}
+      PYTHONPATH: /app
+    volumes:
+      - ./minio_init.py:/opt/dcl/minio_init.py:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
+  migrate:
+    image: dcl-v2-backend:local
+    command: ["alembic", "-c", "backend/postgres/alembic.ini", "upgrade", "head"]
+    env_file:
+      - path: ${DCL_ENV_FILE:-../../.env}
+        required: false
+    environment: *stack-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   libreoffice:
     image: dcl-v2-libreoffice:local
@@ -108,9 +147,11 @@ services:
       dockerfile: backend/devops/docker/backend.Dockerfile
       target: models
     environment:
-      <<: *backend-env
+      <<: *stack-env
       DCL_ROLE: models
     depends_on: {}
+    ports:
+      - "${DCL_BIND_HOST:-127.0.0.1}:8500:8500"
     volumes:
       - hf-cache:/home/app/.cache/huggingface
     healthcheck:
@@ -130,12 +171,10 @@ services:
   api:
     <<: *backend
     environment:
-      <<: *backend-env
+      <<: *stack-env
       DCL_ROLE: api
     ports:
       - "${DCL_BIND_HOST:-127.0.0.1}:8200:8200"
-    volumes:
-      - dcl-tokens:/var/lib/dcl/tokens
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8200/healthz', timeout=5)"]
       interval: 15s
@@ -158,7 +197,7 @@ services:
         limits:
           memory: 1024M
     volumes:
-      - dcl-tokens:/var/lib/dcl/tokens
+      - ${DCL_TOKEN_DIR:?DCL_TOKEN_DIR is required}:${DCL_TOKEN_DIR}
 
   worker-cpu-parse:
     <<: *backend
@@ -220,4 +259,3 @@ volumes:
   redis-data:
   minio-data:
   hf-cache:
-  dcl-tokens:
