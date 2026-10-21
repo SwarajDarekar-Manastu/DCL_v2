@@ -1,5 +1,6 @@
 # Operational alerts only (docs/architecture/02 §10, 06 §9): they go to the Teams webhook. Review aging is
-# shown in the Console, never sent (decision H6).
+# shown in the Console, never sent (decision H6). Counters are created on first use, so a series that appears
+# already above zero counts as an increase (the `unless … offset` branch).
 groups:
   - name: dcl-operations
     rules:
@@ -17,7 +18,9 @@ groups:
         annotations:
           summary: "Root {{ $labels.root }} has not answered for 15 minutes"
       - alert: DclResyncStarted
-        expr: sum by (root) (increase(sync_resync_started_total[15m])) > 0
+        expr: |
+          sum by (root) (increase(sync_resync_started_total[15m])) > 0
+          or sum by (root) (sync_resync_started_total unless sync_resync_started_total offset 15m) > 0
         labels: {severity: warning}
         annotations:
           summary: "A 410 or forced resync started for root {{ $labels.root }}"
@@ -42,7 +45,9 @@ groups:
         annotations:
           summary: "io_light holds more than 2,000 waiting tasks for 30 minutes"
       - alert: DclGeminiBudgetCap
-        expr: sum(increase(llm_budget_exhausted_total[15m])) > 0
+        expr: |
+          sum(increase(llm_budget_exhausted_total[15m])) > 0
+          or sum(llm_budget_exhausted_total unless llm_budget_exhausted_total offset 15m) > 0
         labels: {severity: warning}
         annotations:
           summary: "Gemini calls are being refused by the daily budget or the gateway quota"

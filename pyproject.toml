@@ -36,6 +36,9 @@ parse = [
     "pypdfium2==5.14.0",
     "pikepdf==10.17.0",
     "docling==2.141.0",
+    "torch==2.14.1",
+    "torchvision==0.29.1",
+    "onnxruntime==1.31.0",
 ]
 models = [
     "torch==2.14.1",
@@ -59,6 +62,18 @@ dev = [
     "pytest-asyncio>=0.24",
     "httpx2>=2.16.0",
 ]
+
+[tool.uv]
+conflicts = [[{ group = "models" }, { group = "parse" }]]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", group = "parse" }]
+torchvision = [{ index = "pytorch-cpu", group = "parse" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling>=1.25"]

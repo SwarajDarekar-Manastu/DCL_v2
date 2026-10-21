@@ -74,3 +74,25 @@ tests:
       - eval_time: 15m
         alertname: DclGraphAuthFailure
         exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: 'llm_budget_exhausted_total{model="gemini-3.8-flash", exported_instance="new-process"}'
+        values: '_ _ _ 2 2 2'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: DclGeminiBudgetCap
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Gemini calls are being refused by the daily budget or the gateway quota"
+  - interval: 1m
+    input_series:
+      - series: 'sync_resync_started_total{root="APU Heater"}'
+        values: '_ _ 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: DclResyncStarted
+        exp_alerts:
+          - exp_labels: {severity: warning, root: APU Heater}
+            exp_annotations:
+              summary: "A 410 or forced resync started for root APU Heater"

@@ -277,6 +277,11 @@ services:
 
   worker-cpu-parse:
     <<: *backend
+    image: dcl-v2-parse:local
+    build:
+      context: ../..
+      dockerfile: backend/devops/docker/backend.Dockerfile
+      target: parse
     command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "cpu_parse@%h", "--loglevel", "INFO", "--queues", "cpu_parse", "--pool", "prefork", "--concurrency", "4", "--soft-time-limit", "1800", "--time-limit", "2100", "--max-memory-per-child", "6291456"]
     healthcheck:
       <<: *worker-health
@@ -285,6 +290,8 @@ services:
       resources:
         limits:
           memory: 24576M
+    volumes:
+      - hf-cache:/home/app/.cache/huggingface
 
   worker-telemetry-stream:
     <<: *backend

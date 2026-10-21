@@ -397,3 +397,9 @@ Merged / ready: supersession per the Lead's decision: migration 0008 drive_items
 Blocked on: S4 — stack redeploy from main before the live dispatch over E1–E11
 Needs from others: S4 — beat entries dcl.process.dispatch (every 30 min) and dcl.process.sweep_documents (daily)
 Next: live dispatch + counts; Route C
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: observability (telemetry module + metric catalogue of file 02 §10, collector, Prometheus + 7 operational alerts with promtool tests, Alertmanager → Teams, Tempo, Grafana dashboard; verified live in a throwaway project); `parse` image for cpu_parse (Docling 2.141 + RapidOCR + onnxruntime on CPU torch, Tesseract OSD + Latin/Cyrillic/Devanagari/Arabic; scanned page OCR'd correctly by both engines); `HF_HUB_DISABLE_XET=1` in model images; `_incoming/` lifecycle rule; S1's process schedules; parse image in CI scan. Stack on the host runs main 65dd09f at migration 0008. Test: `uv run pytest` green (alert-rule tests need Docker)
+Blocked on: nothing
+Needs from others: Lead — approve `DCL_GRAFANA_ADMIN_PASSWORD` (secret) and compose-only `DCL_GRAFANA_PORT` (default 3300); note `models`/`parse` groups now conflict in uv (sync one at a time); S1 — call `backend.common.telemetry.METRICS` from the sync code; host disk at 91%
+Next: backups (PostgreSQL base + WAL, MinIO versioning checks), retention jobs, remaining runbooks; MinIO replacement comparison by end of M4

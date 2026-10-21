@@ -170,11 +170,16 @@ def test_beat_schedule_runs_the_sync_tasks_on_io_light_in_local_time():
         "dcl.sync.delta_all",
         "dcl.sync.token_health",
         "dcl.sync.enqueue_downloads",
+        "dcl.process.dispatch",
+        "dcl.process.sweep_documents",
     }
     assert all(e["options"]["queue"] == "io_light" for e in schedule.values())
     daily = schedule["sync-delta-all-daily"]["schedule"]
     assert isinstance(daily, crontab) and daily.hour == {2} and daily.minute == {0}
     assert schedule["sync-token-health"]["schedule"] == 900.0
     assert schedule["sync-enqueue-downloads"]["schedule"] == 600.0
+    assert schedule["process-dispatch"]["schedule"] == 1800.0
+    sweep = schedule["process-sweep-documents-daily"]["schedule"]
+    assert sweep.hour == {3} and sweep.minute == {0}
     assert celery_app.app.conf.timezone == "Asia/Kolkata"
     assert celery_app.app.conf.enable_utc is True
