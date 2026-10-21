@@ -235,11 +235,58 @@ def test_download_scope_holds_accepted_items_outside_it(session):
     assert got["i-venv"][0] == S.SKIPPED_JUNK
 
 
-def test_expired_delta_token_raises_resync_required_with_the_location(session):
+RESYNC = "https://graph.microsoft.com/v1.0/drives/D/items/ROOT/delta?token=fresh-enumeration"
+DELTA3 = "https://graph.microsoft.com/v1.0/drives/D/items/ROOT/delta?token=after-resync"
+
+
+def _enumeration_without(*missing):
+    return [item for item in PAGE1 + PAGE2 if item["id"] not in missing]
+
+
+def test_410_resync_deletes_only_what_a_direct_get_confirms(session):
     run(session, FakeGraph(crawl_pages()))
-    with pytest.raises(ResyncRequired) as info:
-        run(session, FakeGraph({DELTA: [(410, {"error": {"code": "resyncRequired"}}, {"Location": DELTA2})]}))
-    assert info.value.location == DELTA2
+    fake = FakeGraph(
+        {
+            DELTA: [(410, {"error": {"code": "resyncRequired"}}, {"Location": RESYNC})],
+            RESYNC: [
+                (200, {"value": _enumeration_without("i-pdf", "i-lock"), "@odata.deltaLink": DELTA3}, None)
+            ],
+            "/v1.0/drives/D/items/i-pdf": [(404, {"error": {"code": "itemNotFound"}}, None)],
+            "/v1.0/drives/D/items/i-lock": [(200, {"id": "i-lock"}, None)],
+        }
+    )
+    stats = run(session, fake)
+    got = state(session)
+    assert got["i-pdf"][0] == S.DELETED
+    assert got["i-lock"][0] == S.SKIPPED_JUNK
+    assert (stats.resynced, stats.deleted_after_check, stats.kept_after_check) == (True, 1, 1)
+    root = session.get(SyncRoot, "APU Injector")
+    assert (root.status, root.delta_link, root.next_link_checkpoint) == ("ACTIVE", DELTA3, None)
+    gens = set(session.scalars(select(DriveItem.resync_gen).where(DriveItem.status != S.DELETED)))
+    assert gens == {1}
+
+
+def test_forced_resync_enumerates_afresh_and_runs_the_same_checks(session):
+    run(session, FakeGraph(crawl_pages()))
+    fresh = "/v1.0/drives/D/items/ROOT/delta"
+    fake = FakeGraph(
+        {
+            fresh: [(200, {"value": _enumeration_without("i-dat"), "@odata.deltaLink": DELTA3}, None)],
+            "/v1.0/drives/D/items/i-dat": [(200, {"id": "i-dat"}, None)],
+        }
+    )
+    root = session.get(SyncRoot, "APU Injector")
+    graph_client = GraphClient(lambda: "t", transport=httpx.MockTransport(fake))
+    stats = run_root(session, graph_client, root, sleep=lambda _: None, force_resync=True)
+    assert (stats.resynced, stats.deleted_after_check, stats.kept_after_check) == (True, 0, 1)
+    assert state(session)["i-dat"][0] == S.PENDING_DOWNLOAD
+
+
+def test_a_410_during_a_resync_raises(session):
+    run(session, FakeGraph(crawl_pages()))
+    gone = (410, {"error": {"code": "resyncRequired"}}, {"Location": RESYNC})
+    with pytest.raises(ResyncRequired):
+        run(session, FakeGraph({DELTA: [gone], RESYNC: [gone]}))
 
 
 def test_folder_listing_reports_accepted_files_per_folder_with_slot_flags(session, tmp_path):
