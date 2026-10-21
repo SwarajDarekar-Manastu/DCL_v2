@@ -1,10 +1,9 @@
-import json
-
 import pytest
 
-from backend.llm_engine.gemini_types import Capabilities, CapabilityUnavailable, Image, StructuredOutputError
+from backend.config import Settings, ThinkingLevel
+from backend.llm_engine.gemini_types import CapabilityUnavailable, Image, StructuredOutputError, Text
 from backend.llm_engine.vision.schemas import HandwritingReading, PageTriage
-from backend.llm_engine.vision.service import TASKS, VisionCapability
+from backend.llm_engine.vision.service import TASKS, VisionCapability, vision_cache
 
 PNG = Image(b"\x89PNG fake crop bytes", "image/png")
 OTHER_PNG = Image(b"\x89PNG another crop", "image/png")
@@ -91,37 +90,37 @@ CALLS = {
 
 @pytest.mark.parametrize("capability", list(VisionCapability))
 def test_every_capability_renders_its_prompt_and_returns_its_schema(make_service, capability):
-    service, gateway, ledger, _ = make_service(READINGS[capability])
+    service, client, _ = make_service(READINGS[capability])
     output = CALLS[capability](service)
     assert isinstance(output.reading, TASKS[capability].schema)
     assert output.prompt_version == f"{capability}.v1"
-    assert gateway.bodies[0]["model"] == TASKS[capability].model
-    assert ledger[0].purpose == f"vision.{capability}"
+    assert client.calls[0]["model"] == TASKS[capability].model
+    assert client.calls[0]["schema"] is TASKS[capability].schema
+    assert client.contexts[0].purpose == f"vision.{capability}"
 
 
 def test_identical_crops_cost_once(make_service):
-    service, gateway, ledger, cache = make_service(TRIAGE)
+    service, client, cache = make_service(TRIAGE)
     first = service.triage_page(PNG, context="TP37 run sheet p.1", doc_id="doc-1")
     second = service.triage_page(PNG, context="TP37 run sheet p.1", doc_id="doc-2")
     assert (first.cached, second.cached) == (False, True)
     assert second.reading == first.reading
-    assert len(gateway.requests) == 1
-    assert len(ledger) == 1
+    assert len(client.calls) == 1
     assert list(cache.objects) == [
         f"_vision_cache/gemini-3.5-flash-lite/triage_page.v1/{first.input_sha256}.json"
     ]
 
 
 def test_different_bytes_or_context_are_new_calls(make_service):
-    service, gateway, _, _ = make_service(TRIAGE)
+    service, client, _ = make_service(TRIAGE)
     service.triage_page(PNG, context="p.1")
     service.triage_page(OTHER_PNG, context="p.1")
     service.triage_page(PNG, context="p.2")
-    assert len(gateway.requests) == 3
+    assert len(client.calls) == 3
 
 
-def test_every_call_reaches_the_ledger_with_doc_reference_prompt_version_and_tokens(make_service):
-    service, _, ledger, _ = make_service(HANDWRITING)
+def test_every_call_carries_the_ledger_context_doc_reference_and_prompt_version(make_service):
+    service, client, _ = make_service(HANDWRITING)
     service.transcribe_handwriting(
         PNG,
         field_label="dia (mm)",
@@ -130,48 +129,50 @@ def test_every_call_reaches_the_ledger_with_doc_reference_prompt_version_and_tok
         doc_id="doc-9",
         anchor="page:3:ab12",
     )
-    (record,) = ledger
-    assert (record.purpose, record.prompt_version) == (
+    (context,) = client.contexts
+    assert (context.purpose, context.prompt_version) == (
         "vision.transcribe_handwriting",
         "transcribe_handwriting.v1",
     )
-    assert (record.doc_id, record.node_anchor) == ("doc-9", "page:3:ab12")
-    assert (record.input_tokens, record.output_tokens, record.status) == (300, 40, "ok")
+    assert (context.doc_id, context.node_anchor) == ("doc-9", "page:3:ab12")
 
 
-def test_request_carries_prompt_file_image_resolution_and_temperature_zero(make_service):
-    service, gateway, _, _ = make_service(HANDWRITING)
+def test_call_sends_the_prompt_file_the_crop_resolution_thinking_and_temperature_zero(make_service):
+    service, client, _ = make_service(HANDWRITING)
     service.transcribe_handwriting(PNG, field_label="dia (mm)", allowed_units=["mm", "bar"], context="TP37")
-    body = gateway.bodies[0]
-    system, user = body["messages"][0], body["messages"][-1]
-    assert "never invent or complete a digit" in system["content"]
-    assert "Allowed units for this page: mm, bar" in user["content"][0]["text"]
-    assert user["content"][1]["image_url"]["detail"] == "high"
-    assert user["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
-    assert body["temperature"] == 0.0
-    assert body["response_format"]["json_schema"]["name"] == "HandwritingReading"
+    call = client.calls[0]
+    system, user = call["messages"]
+    assert (system.role, user.role) == ("system", "user")
+    assert "never invent or complete a digit" in system.parts[0].text
+    assert isinstance(user.parts[0], Text) and "Allowed units for this page: mm, bar" in user.parts[0].text
+    assert user.parts[1] == PNG
+    assert (call["media_resolution"], call["thinking"], call["temperature"]) == (
+        "high",
+        ThinkingLevel.LOW,
+        0.0,
+    )
 
 
 def test_image_capability_off_raises_before_any_request_or_cache_write(make_service):
-    service, gateway, ledger, cache = make_service(TRIAGE, capabilities=Capabilities())
+    service, client, cache = make_service(TRIAGE, image_input=False)
     with pytest.raises(CapabilityUnavailable):
         service.triage_page(PNG, context="p.1")
-    assert (gateway.requests, ledger, cache.objects) == ([], [], {})
+    assert (client.calls, cache.objects) == ([], {})
 
 
 def test_invalid_reply_raises_and_is_not_cached(make_service):
-    service, _, _, cache = make_service(json.dumps({"page_type": "poster"}))
+    service, _, cache = make_service({"page_type": "poster"})
     with pytest.raises(StructuredOutputError):
         service.triage_page(PNG, context="p.1")
     assert cache.objects == {}
 
 
 def test_video_keyframes_are_sent_after_their_timestamps(make_service):
-    service, gateway, _, _ = make_service(READINGS[VisionCapability.VIDEO_TIMELINE])
+    service, client, _ = make_service(READINGS[VisionCapability.VIDEO_TIMELINE])
     service.video_timeline([(0.0, PNG), (0.5, OTHER_PNG)], folder_context="TP19/cam1.mp4")
-    content = gateway.bodies[0]["messages"][-1]["content"]
-    assert [c["type"] for c in content] == ["text", "text", "image_url", "text", "image_url"]
-    assert [content[1]["text"], content[3]["text"]] == ["t = 0.00 s", "t = 0.50 s"]
+    parts = client.calls[0]["messages"][-1].parts
+    assert [type(p).__name__ for p in parts] == ["Text", "Text", "Image", "Text", "Image"]
+    assert [parts[1].text, parts[3].text] == ["t = 0.00 s", "t = 0.50 s"]
 
 
 @pytest.mark.parametrize(
@@ -183,7 +184,7 @@ def test_video_keyframes_are_sent_after_their_timestamps(make_service):
     ],
 )
 def test_handwriting_never_returns_a_guessed_digit(make_service, reply, expected_number):
-    service, _, _, _ = make_service(reply)
+    service, _, _ = make_service(reply)
     reading = service.transcribe_handwriting(
         PNG, field_label="dia", allowed_units=["mm"], context="TP37"
     ).reading
@@ -216,3 +217,13 @@ def test_media_resolution_per_capability_follows_file_03_section_3():
         "video_timeline": "low",
     }
     assert {str(c): t.media_resolution for c, t in TASKS.items()} == expected
+
+
+def test_production_cache_is_the_cir_bucket():
+    settings = Settings(
+        _env_file=None,
+        DCL_MINIO_ENDPOINT="http://minio:9000",
+        DCL_MINIO_ACCESS_KEY="dcl-access",
+        DCL_MINIO_SECRET_KEY="dcl-secret-value-0123456789",
+    )
+    assert vision_cache(settings).bucket == "dcl-cir"

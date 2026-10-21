@@ -1,14 +1,16 @@
-import json
-
-import httpx
 import pytest
 
-from backend.config import Settings
-from backend.llm_engine.gemini_client import GeminiClient
-from backend.llm_engine.gemini_types import Capabilities
+from backend.llm_engine.gemini_types import (
+    CallContext,
+    Capability,
+    CapabilityUnavailable,
+    GenerateResult,
+    Image,
+    Message,
+    StructuredOutputError,
+    Usage,
+)
 from backend.llm_engine.vision.service import VisionService
-
-URL = "https://gateway.manastu.test/v1"
 
 
 class MemoryCache:
@@ -22,48 +24,46 @@ class MemoryCache:
         self.objects[key] = data
 
 
-class Gateway:
-    """Mock gateway: replies with the queued readings as OpenAI-compatible structured responses."""
+class FakeClient:
+    """Stands in for GeminiClient through its adapter-neutral interface only (no wire format).
 
-    def __init__(self, *readings: dict | str):
+    It records what VisionService asks for and, like the real client, refuses image parts while the
+    image_input capability is off and raises StructuredOutputError for a reply that fails the schema.
+    """
+
+    def __init__(self, *readings: dict, image_input: bool = True):
         self.readings = list(readings)
-        self.requests: list[httpx.Request] = []
+        self.image_input = image_input
+        self.calls: list[dict] = []
+        self.contexts: list[CallContext] = []
 
-    def __call__(self, request: httpx.Request) -> httpx.Response:
-        self.requests.append(request)
+    def generate_sync(self, *, model: str, messages: list[Message], context: CallContext, schema, **options):
+        if not self.image_input and any(isinstance(p, Image) for m in messages for p in m.parts):
+            raise CapabilityUnavailable(Capability.IMAGE_INPUT)
+        self.calls.append({"model": model, "messages": messages, "schema": schema, **options})
+        self.contexts.append(context)
         reading = self.readings.pop(0) if len(self.readings) > 1 else self.readings[0]
-        content = reading if isinstance(reading, str) else json.dumps(reading)
-        body = {
-            "id": f"req-{len(self.requests)}",
-            "model": json.loads(request.content)["model"],
-            "choices": [
-                {"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}
-            ],
-            "usage": {"prompt_tokens": 300, "completion_tokens": 40, "total_tokens": 340},
-        }
-        return httpx.Response(200, json=body, headers={"x-request-id": f"req-{len(self.requests)}"})
-
-    @property
-    def bodies(self) -> list[dict]:
-        return [json.loads(r.content) for r in self.requests]
+        try:
+            parsed = schema.model_validate(reading)
+        except ValueError:
+            raise StructuredOutputError("response does not match the schema", raw_text=str(reading)) from None
+        return GenerateResult(
+            text=str(reading),
+            parsed=parsed,
+            tool_calls=(),
+            usage=Usage(input_tokens=300, output_tokens=40),
+            model=model,
+            finish_reason="stop",
+            request_id=f"req-{len(self.calls)}",
+            latency_ms=5,
+        )
 
 
 @pytest.fixture
 def make_service():
-    def build(*readings, capabilities=None):
-        gateway = Gateway(*readings)
-        ledger: list = []
-        settings = Settings(
-            _env_file=None, GEMINI_BACKEND="gateway", GEMINI_GATEWAY_URL=URL, GEMINI_GATEWAY_KEY="k" * 32
-        )
-        client = GeminiClient(
-            settings,
-            capabilities=capabilities or Capabilities.all(),
-            ledger=ledger.append,
-            transport=httpx.MockTransport(gateway),
-            sleep=lambda _: None,
-        )
+    def build(*readings, image_input=True):
+        client = FakeClient(*readings, image_input=image_input)
         cache = MemoryCache()
-        return VisionService(client, cache), gateway, ledger, cache
+        return VisionService(client, cache), client, cache
 
     return build
