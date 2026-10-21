@@ -66,6 +66,8 @@ def build_config(engine_url: str, shared_secret: str, console_url: str = "") -> 
         shared_secret=shared_secret.strip(),
         console_url=console_url.strip().rstrip("/"),
     )
+
+
 # ---- end of config.py
 
 
@@ -273,6 +275,8 @@ async def put_upload(
         response = await http.put(upload_url, content=content, headers={"Content-Type": mime_type})
     if response.status_code >= 300:
         raise EngineError(response.status_code, f"upload refused by storage (HTTP {response.status_code})")
+
+
 # ---- end of api_endpoint.py
 
 Emitter = Callable[[dict], Awaitable[Any]] | None

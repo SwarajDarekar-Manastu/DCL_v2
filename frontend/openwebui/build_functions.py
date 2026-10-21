@@ -48,8 +48,10 @@ def _expand(lines: list[str], seen: set[str]) -> list[str]:
         seen.add(module)
         source = (HERE / f"{module}.py").read_text()
         out.append(f"# ---- inlined from frontend/openwebui/{module}.py")
-        out += _expand(_body_without_docstring(source), seen)
-        out.append(f"# ---- end of {module}.py")
+        body = _expand(_body_without_docstring(source), seen)
+        while body and not body[-1].strip():
+            body.pop()
+        out += [*body, "", "", f"# ---- end of {module}.py"]  # PEP 8 spacing keeps ruff format stable
     return out
 
 
