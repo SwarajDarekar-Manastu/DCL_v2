@@ -18,6 +18,7 @@ dependencies = [
     "redis>=5.0",
     "msal>=1.31",
     "cryptography>=43",
+    "minio>=7.2",
 ]
 
 [dependency-groups]
