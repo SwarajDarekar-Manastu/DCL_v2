@@ -269,3 +269,9 @@ Merged / ready: allowlist close-out (recorded by the Lead in DECISIONS.md; plan 
 Blocked on: nothing for the next task
 Needs from others: S1 — first-page language/DOI check over the downloaded library PDFs (Lead ruling 3), and word when the allowlisted blobs have landed in MinIO
 Next: real fixtures from E1–E11 (user approves the copies; nothing proprietary in git) and the first 15 telemetry cases verified with own Python over the raw .dat of E1–E3
+
+## 2026-10-22 02:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `quality/acceptance` M1: checklist (M1.md) mapping all ten criteria; five automated read-only checks (crawl bands, decided-with-reason, downloads complete, scope = DECISIONS allowlist, dispatch only in scope) opt-in via `DCL_ACCEPTANCE=1`; snapshot/compare CLI for the rename/modify/410/re-run procedures; seven proofs on a disposable DB; M2 draft. Test: `DCL_TEST_DATABASE_URL=<disposable> uv run pytest backend/tests/acceptance` (7 passed; live checks skipped without opt-in)
+Blocked on: S1 — E1–E11 downloads, the read-only `export_blobs` command, the file-level listing (real fixtures, telemetry cases); a 410-resync command and the M1 load-test harness (procedures 8, 10)
+Needs from others: Lead — run the M1 live checks once downloads finish (`DCL_ACCEPTANCE=1 DCL_DATABASE_URL=<stack db> uv run pytest backend/tests/acceptance`), or give S5 a read-only DB URL
+Next: idle until S1's export and listing arrive. Local test container `dcl-s5-test` (ParadeDB 0.26.2-pg17, 127.0.0.1:55435, throwaway credentials) runs for the seeded-DB proofs

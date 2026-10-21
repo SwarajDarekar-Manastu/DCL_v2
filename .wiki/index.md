@@ -53,7 +53,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `quality/fixtures` | in-progress | S5 | [Fixture corpus and expected outcomes](quality/fixtures.md) |
 | `quality/config-data` | in-progress | S5 | [Domain configuration data (synonyms, vendors, sanity ranges, units, propellants, report schemas, rules)](quality/config-data.md) |
 | `quality/benchmark-suites` | planned | S5 | [Golden benchmark suites and verification notes](quality/benchmark-suites.md) |
-| `quality/acceptance` | planned | S5 | [Milestone acceptance checklists](quality/acceptance.md) |
+| `quality/acceptance` | in-progress | S5 | [Milestone acceptance checklists](quality/acceptance.md) |
 
 ## Active plan sheets
 
