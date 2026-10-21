@@ -1,0 +1,40 @@
+# Known report JSON shapes for Route A2 (03 §A2.1) and the JSON section-file set for the
+# folder-level assembler (03 §1.3).
+# Owner: S5 (DCL S5 Quality). Consumer: Route A2 schema sniffer and assembler (S1).
+# The Review Console's "save as new report schema" action (06 §6, SCHEMA_UNKNOWN JSON) appends
+# a schema here; the file is then re-read and the affected documents re-run from the CIR.
+#
+# schemas[]: a JSON file whose top-level keys include every required_key is that schema.
+#   Its keys become section nodes in the order of `sections`, titled by `title`
+#   (breadcrumb "Test T01 › Observations"). The value of test_id_key sets test_run_id.
+# section_file_sets[]: files with these names in one folder form one logical document named
+#   after the folder, sections in the listed order.
+#
+# Draft from the example keys in the manual. Required keys are confirmed against real files
+# once the allowlist folders are processed (sme_confirmed stays false until then).
+
+version: 1
+schemas:
+  - id: test_report_sections
+    description: One test's report sections as top-level keys of a single JSON file
+    required_keys: [test_id]
+    test_id_key: test_id
+    sections:
+      - {key: objectives, title: Objectives}
+      - {key: pre_firing_checklist, title: Pre-firing checklist}
+      - {key: emergency_procedures, title: Emergency procedures}
+      - {key: observations, title: Observations}
+      - {key: conclusions, title: Conclusions}
+    source: docs/architecture/03_phase2_processing_routes.md §A2.1 step 1
+    sme_confirmed: false
+
+section_file_sets:
+  - id: test_report_section_files
+    description: One JSON file per report section, in one folder
+    files:
+      - {file: objectives.json, title: Objectives}
+      - {file: checklist.json, title: Checklist}
+      - {file: observations.json, title: Observations}
+      - {file: conclusions.json, title: Conclusions}
+    source: docs/architecture/03_phase2_processing_routes.md §1.3
+    sme_confirmed: false

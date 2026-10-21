@@ -1,0 +1,85 @@
+# DCL v2 project unit definitions for pint.
+# Owner: S5 (DCL S5 Quality). Consumer: backend/common/units.py (S1); enrichment unit check (S2).
+# Spec: docs/architecture/04 §8 (unit check), 03 §C.1 step 3 (gauge/absolute), 03 §A1.12 (locale units).
+# Load with: pint.UnitRegistry().load_definitions("config/units.txt") on top of pint's default registry.
+#
+# The file has two parts.
+#
+# Part 1: pint definitions. Plain pint syntax; pint reads these lines.
+#
+# Part 2: surface aliases, one per line, in the form
+#     #= <surface> => <pint expression> | <dimension>
+# pint ignores them because they start with "#". They cover spellings pint cannot parse as
+# identifiers (℃, ㎫, kgf/cm2) or parses WRONGLY (pint reads "bar(g)" as bar * gram).
+# backend/common/units.py replaces each surface in the unit string before calling pint,
+# longest surface first, exact (case-sensitive) substring match. Aliases are chosen so that
+# no surface is a substring of a correct spelling (no "bar a", which would corrupt "bar abs").
+# The "°С" line uses the Cyrillic letter С (U+0421), a common OCR and copy-paste trap.
+# <dimension> is the pint dimensionality the expression must have; the load test checks
+# every line.
+#
+# Gauge and absolute pressure: psig/psia and barg/bara have the magnitude of psi and bar.
+# pint carries no gauge/absolute reference. units.py records the reference from the suffix
+# and converts gauge to absolute with the run's ambient condition (03 §C.1 step 3), storing
+# the absolute value as a separate column. Never let pint convert gauge to absolute.
+
+# ---- Part 1: pint definitions ------------------------------------------------------------
+
+# pressure with an explicit reference (magnitude only; reference handled by units.py)
+psig = psi
+psia = psi
+barg = bar
+bara = bar
+# technical atmosphere, absolute and gauge (German "ata"/"atü", Russian "ата"/"ати")
+ata = technical_atmosphere
+atu = technical_atmosphere
+atü = technical_atmosphere
+# capitalised spelling used on gauges and in datasheets
+@alias torr = Torr
+# kilopond (kp), common in German and older European documents: kp/cm² = kgf/cm²
+@alias kilogram_force = kp
+# pound-mass spelling used in US datasheets
+@alias pound = lbm
+# gas flow at standard conditions, same convention as pint's built-in slpm (atm * volume / time)
+standard_cubic_centimeter_per_minute = standard_atmosphere * cubic_centimeter / minute = sccm
+
+# ---- Part 2: surface aliases ---------------------------------------------------------------
+
+#= bar(g) => barg | [pressure]
+#= bar(a) => bara | [pressure]
+#= psi(g) => psig | [pressure]
+#= psi(a) => psia | [pressure]
+#= kgf/cm2 => kgf/cm**2 | [pressure]
+#= kp/cm2 => kp/cm**2 | [pressure]
+#= kg/cm² => kgf/cm**2 | [pressure]
+#= kg/cm2 => kgf/cm**2 | [pressure]
+#= кгс/см² => kgf/cm**2 | [pressure]
+#= кгс/см2 => kgf/cm**2 | [pressure]
+#= атм => atm | [pressure]
+#= ата => ata | [pressure]
+#= ати => atu | [pressure]
+#= МПа => MPa | [pressure]
+#= кПа => kPa | [pressure]
+#= Па => Pa | [pressure]
+#= ㎫ => MPa | [pressure]
+#= ㎪ => kPa | [pressure]
+#= ㍴ => bar | [pressure]
+#= ℃ => degC | [temperature]
+#= ℉ => degF | [temperature]
+#= °С => degC | [temperature]
+#= ° C => degC | [temperature]
+#= deg C => degC | [temperature]
+#= deg F => degF | [temperature]
+#= ㎏ => kg | [mass]
+#= ㎜ => mm | [length]
+#= ㎝ => cm | [length]
+#= ㎞ => km | [length]
+#= ㎖ => mL | [volume]
+#= ℓ => L | [volume]
+#= Nl/min => slpm | [power]
+#= NL/min => slpm | [power]
+#= ㎐ => Hz | 1 / [time]
+#= ㎑ => kHz | 1 / [time]
+#= ㎾ => kW | [power]
+#= ㎽ => mW | [power]
+#= ㎷ => mV | [electric_potential]

@@ -1,0 +1,46 @@
+# Sanity bounds per physical quantity.
+# Owner: S5 (DCL S5 Quality), values agreed with the propulsion SME.
+# Consumers: Route C normalizer (S1, 03 §C.1 step 4) and numeric-fact quality control (S2, 04 §8).
+# Effect: a telemetry channel whose 99th percentile falls outside [min, max] after conversion
+# raises UNIT_AMBIGUITY HARD (03 §C.1 step 4); a numeric fact outside the range is stored with
+# suspect = true (04 §8).
+#
+# Fields per quantity:
+#   dimension      pint dimension the unit must have (checked by the load test)
+#   unit           unit of min and max, parsed with config/units.txt
+#   min, max       inclusive bounds in that unit
+#   source         where the value comes from
+#   sme_confirmed  false until the SME has reviewed the entry
+#
+# Quantity names are provisional until S1 publishes the physical_quantity values of Route C.
+
+version: 1
+quantities:
+  chamber_pressure:
+    dimension: "[pressure]"
+    unit: bar
+    min: 0
+    max: 150
+    source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
+    sme_confirmed: false
+  thrust:
+    dimension: "[force]"
+    unit: N
+    min: 0
+    max: 200
+    source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
+    sme_confirmed: false
+  temperature:
+    dimension: "[temperature]"
+    unit: K
+    min: 200
+    max: 2000
+    source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
+    sme_confirmed: false
+  mass_flow:
+    dimension: "[mass] / [time]"
+    unit: g/s
+    min: 0
+    max: 50
+    source: docs/architecture/03_phase2_processing_routes.md §C.1 step 4
+    sme_confirmed: false
