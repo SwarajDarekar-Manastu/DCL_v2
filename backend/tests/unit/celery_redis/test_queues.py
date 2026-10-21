@@ -142,7 +142,11 @@ def test_celery_app_declares_every_queue_and_safe_defaults():
     assert conf.task_reject_on_worker_lost is True
     assert conf.worker_prefetch_multiplier == 1
     assert conf.broker_transport_options["visibility_timeout"] == VISIBILITY_TIMEOUT_S
-    assert conf.broker_url == "redis://redis:6379/0"
+    # The broker follows the configured DCL_REDIS_URL (host-side in a developer .env, in-network in compose);
+    # the literal dev default only applies when no .env provides one.
+    from backend.config import get_settings
+
+    assert conf.broker_url == str(get_settings().redis_url)
 
 
 def test_ping_task_runs_eagerly():

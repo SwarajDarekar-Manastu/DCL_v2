@@ -335,3 +335,45 @@ class Quantity(StrEnum):
     RATIO = "ratio"
     VALVE_STATE = "valve_state"
     OTHER = "other"
+
+
+# ---------- documents (file 05 §4.2) and audit (file 05 §4.5) ----------
+
+
+class DocumentStatus(StrEnum):
+    WAITING_FOR_ROUTE = "WAITING_FOR_ROUTE"
+    PROCESSING = "PROCESSING"
+    HALTED = "HALTED"
+    ACTIVE = "ACTIVE"
+    ACTIVE_WITH_SOFT_FLAGS = "ACTIVE_WITH_SOFT_FLAGS"
+    SUPERSEDED = "SUPERSEDED"
+    QUARANTINED = "QUARANTINED"
+    DELETED = "DELETED"
+    FAILED = "FAILED"
+
+
+class DocumentSourceRole(StrEnum):
+    PRIMARY = "primary"
+    PART = "part"
+    VISUAL_TWIN = "visual_twin"
+    CHANNEL_MAP = "channel_map"
+    CALIBRATION = "calibration"
+    BIBLIOGRAPHY = "bibliography"
+    ATTACHMENT = "attachment"
+    REPLACEMENT = "replacement"
+
+
+class DocumentRelationType(StrEnum):
+    SUPERSEDES = "SUPERSEDES"
+    NEAR_DUPLICATE = "NEAR_DUPLICATE"
+    REFERENCES = "REFERENCES"
+
+
+class AuditEntityType(StrEnum):
+    FLAG = "flag"
+    CASE = "case"
+    RULE = "rule"
+    ENTITY = "entity"
+    CONFIG = "config"
+    BENCHMARK_CASE = "benchmark_case"
+    DOCUMENT = "document"

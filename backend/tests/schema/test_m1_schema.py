@@ -13,9 +13,30 @@ import backend.postgres.models  # noqa: F401
 from backend.postgres import enums
 from backend.postgres.base import Base, Tier
 
-M1_TABLES = {"sync_roots", "drive_folders", "drive_items", "blobs", "blob_derivations", "jobs"}
+M1_TABLES = {
+    "sync_roots",
+    "drive_folders",
+    "drive_items",
+    "blobs",
+    "blob_derivations",
+    "jobs",
+    "pipeline_config",
+}
+M2_M4_TABLES = {
+    "documents",
+    "document_sources",
+    "document_relations",
+    "document_nodes",
+    "assets",
+    "entities",
+    "entity_aliases",
+    "entity_mentions",
+    "numeric_facts",
+    "audit_events",
+}
+EXPECTED_TABLES = M1_TABLES | M2_M4_TABLES
 
-# Every ✓ column of file 05 §4.1 and the enum it must follow.
+# Every ✓ column of file 05 and the enum it must follow.
 CHECKED_COLUMNS: dict[tuple[str, str], type[StrEnum]] = {
     ("sync_roots", "status"): enums.SyncRootStatus,
     ("sync_roots", "auth_status"): enums.AuthStatus,
@@ -25,6 +46,33 @@ CHECKED_COLUMNS: dict[tuple[str, str], type[StrEnum]] = {
     ("blob_derivations", "kind"): enums.BlobDerivationKind,
     ("jobs", "stage"): enums.JobStage,
     ("jobs", "status"): enums.JobStatus,
+    ("documents", "route"): enums.Route,
+    ("documents", "doc_kind"): enums.DocKind,
+    ("documents", "status"): enums.DocumentStatus,
+    ("documents", "source_origin"): enums.SourceOrigin,
+    ("document_sources", "role"): enums.DocumentSourceRole,
+    ("document_relations", "relation"): enums.DocumentRelationType,
+    ("assets", "kind"): enums.AssetKind,
+    ("document_nodes", "node_type"): enums.NodeType,
+    ("document_nodes", "source"): enums.NodeSource,
+    ("document_nodes", "doc_kind"): enums.DocKind,
+    ("document_nodes", "source_origin"): enums.SourceOrigin,
+    ("document_nodes", "doc_status"): enums.DocumentStatus,
+    ("entities", "type"): enums.EntityType,
+    ("entities", "created_by"): enums.EntityCreatedBy,
+    ("entity_aliases", "type"): enums.EntityType,
+    ("entity_aliases", "created_by"): enums.AliasCreatedBy,
+    ("entity_mentions", "source"): enums.MentionSource,
+    ("numeric_facts", "quantity"): enums.Quantity,
+    ("numeric_facts", "gauge_or_abs"): enums.GaugeOrAbs,
+    ("numeric_facts", "source"): enums.NumericFactSource,
+    ("audit_events", "entity_type"): enums.AuditEntityType,
+}
+# Hand-written CHECKs that are not enum lists.
+OTHER_CHECKS = {
+    "ck_documents_trust_tier",
+    "ck_documents_staged_when_halted",
+    "ck_document_relations_symmetric_order",
 }
 
 FK_WITHOUT_INDEX_SQL = (Path(__file__).parent / "fk_without_index.sql").read_text()
@@ -61,13 +109,17 @@ def test_every_model_has_a_tier_label():
         assert table.info.get("tier") in set(Tier), table.name
 
 
-def test_only_m1_tables_are_modelled():
-    assert set(Base.metadata.tables) == M1_TABLES
+def test_only_the_scheduled_tables_are_modelled():
+    assert set(Base.metadata.tables) == EXPECTED_TABLES
 
 
 def test_every_status_and_checked_column_has_an_enum_check():
     for table in Base.metadata.tables.values():
-        checks = {c.name: c for c in table.constraints if isinstance(c, CheckConstraint)}
+        checks = {
+            c.name: c
+            for c in table.constraints
+            if isinstance(c, CheckConstraint) and c.name not in OTHER_CHECKS
+        }
         expected = {col for (tbl, col) in CHECKED_COLUMNS if tbl == table.name}
         status_cols = {c.name for c in table.columns if c.name == "status"}
         assert status_cols <= expected, table.name
@@ -82,6 +134,11 @@ def test_every_status_and_checked_column_has_an_enum_check():
 
 
 JOB_KEY = f"download:{SHA_A}:v1.1"
+DOC_A = "00000000-0000-4000-8000-00000000000a"
+DOC_B = "00000000-0000-4000-8000-00000000000b"
+ASSET = "00000000-0000-4000-8000-0000000000a5"
+NODE = "00000000-0000-4000-8000-0000000000a6"
+ENTITY = "00000000-0000-4000-8000-0000000000e1"
 
 
 def _insert(conn, table: str, **values):
@@ -111,6 +168,53 @@ def _seed(conn) -> None:
         kind="archive_member",
     )
     _insert(conn, "jobs", job_key=JOB_KEY, stage="download")
+    _insert(conn, "documents", doc_id=DOC_A, route="C", status="ACTIVE")
+    _insert(conn, "documents", doc_id=DOC_B, route="C", status="ACTIVE")
+    _insert(conn, "document_sources", doc_id=DOC_A, blob_sha256=SHA_A, role="primary")
+    _insert(conn, "document_relations", doc_id_a=DOC_A, doc_id_b=DOC_B, relation="NEAR_DUPLICATE")
+    _insert(
+        conn, "assets", asset_id=ASSET, minio_uri="s3://dcl-assets/x.png", blob_sha256=SHA_A, kind="sparkline"
+    )
+    _insert(
+        conn,
+        "document_nodes",
+        node_id=NODE,
+        doc_id=DOC_A,
+        node_type="run_summary",
+        ordinal=0,
+        content="x",
+        source="structured",
+    )
+    _insert(
+        conn,
+        "entities",
+        entity_id=ENTITY,
+        type="material",
+        canonical_name="C-103",
+        canonical_key="c-103",
+        created_by="seed",
+    )
+    _insert(
+        conn,
+        "entity_aliases",
+        type="material",
+        alias_key="c103",
+        entity_id=ENTITY,
+        alias="C103",
+        created_by="seed",
+    )
+    _insert(
+        conn, "entity_mentions", node_id=NODE, doc_id=DOC_A, entity_id=ENTITY, surface="C103", source="regex"
+    )
+    _insert(conn, "numeric_facts", node_id=NODE, doc_id=DOC_A, quantity="pressure", source="table")
+    _insert(conn, "audit_events", actor="r@x", entity_type="rule", entity_id="1", action="create")
+
+
+def _paired(table: str, column: str) -> str:
+    """Columns another CHECK ties to this one: a HALTED document carries a staged payload."""
+    if (table, column) == ("documents", "status"):
+        return ", staged_payload_uri = CASE WHEN :v = 'HALTED' THEN 's3://dcl-cir/x/staged.json' END"
+    return ""
 
 
 def _own_tables(engine) -> set[str]:
@@ -118,8 +222,8 @@ def _own_tables(engine) -> set[str]:
         return set(conn.execute(text(OWN_TABLES_SQL)).scalars()) - {"alembic_version"}
 
 
-def test_upgrade_creates_exactly_the_m1_tables(migrated):
-    assert _own_tables(migrated) == M1_TABLES
+def test_upgrade_creates_exactly_the_scheduled_tables(migrated):
+    assert _own_tables(migrated) == EXPECTED_TABLES
 
 
 def test_alembic_check_reports_no_drift(migrated, alembic_config):
@@ -143,7 +247,8 @@ def test_fk_index_query_detects_a_missing_index(migrated):
 def test_database_checks_match_python_enums(migrated):
     with migrated.connect() as conn:
         rows = conn.execute(text(OWN_CHECKS_SQL)).all()
-    found = {r.conname: _check_values(r.definition) for r in rows}
+    found = {r.conname: _check_values(r.definition) for r in rows if r.conname not in OTHER_CHECKS}
+    assert OTHER_CHECKS <= {r.conname for r in rows}
     expected = {f"ck_{tbl}_{col}": [m.value for m in enum] for (tbl, col), enum in CHECKED_COLUMNS.items()}
     assert found == expected
 
@@ -156,7 +261,9 @@ def test_check_accepts_every_enum_value_and_rejects_others(migrated, table, colu
             _seed(conn)
         for member in enum:
             with conn.begin():
-                conn.execute(text(f"UPDATE {table} SET {column} = :v"), {"v": member.value})
+                conn.execute(
+                    text(f"UPDATE {table} SET {column} = :v{_paired(table, column)}"), {"v": member.value}
+                )
         first = next(iter(enum)).value
         for bad in ("NOT_A_VALUE", first.swapcase(), f" {first}"):
             with pytest.raises(IntegrityError, match=f"ck_{table}_{column}"):
@@ -220,3 +327,64 @@ def test_downgrade_base_removes_every_table(alembic_config, engine):
     command.upgrade(alembic_config, "head")
     command.downgrade(alembic_config, "base")
     assert _own_tables(engine) == set()
+
+
+def test_a_halted_document_needs_a_staged_payload_and_only_then(migrated):
+    with migrated.connect() as conn:
+        with conn.begin():
+            _seed(conn)
+        with pytest.raises(IntegrityError, match="ck_documents_staged_when_halted"):
+            with conn.begin():
+                conn.execute(text("UPDATE documents SET status = 'HALTED' WHERE doc_id = :d"), {"d": DOC_A})
+        with conn.begin():
+            conn.execute(
+                text(
+                    "UPDATE documents SET status = 'HALTED', "
+                    "staged_payload_uri = 's3://dcl-cir/x/staged.json' WHERE doc_id = :d"
+                ),
+                {"d": DOC_A},
+            )
+
+
+def test_one_document_per_primary_blob(migrated):
+    with migrated.connect() as conn:
+        with conn.begin():
+            _seed(conn)
+        with pytest.raises(IntegrityError, match="uq_document_sources_primary_blob"):
+            with conn.begin():
+                _insert(conn, "document_sources", doc_id=DOC_B, blob_sha256=SHA_A, role="primary")
+
+
+def test_deleting_a_document_removes_its_nodes_mentions_and_facts(migrated):
+    with migrated.connect() as conn:
+        with conn.begin():
+            _seed(conn)
+            conn.execute(text("DELETE FROM document_nodes WHERE doc_id = :d"), {"d": DOC_A})
+            counts = [
+                conn.execute(text(f"SELECT count(*) FROM {t}")).scalar_one()
+                for t in ("entity_mentions", "numeric_facts")
+            ]
+    assert counts == [0, 0]
+
+
+def test_hnsw_indexes_exist_on_both_vector_columns(migrated):
+    with migrated.connect() as conn:
+        names = set(
+            conn.execute(
+                text("SELECT indexname FROM pg_indexes WHERE indexdef LIKE '%USING hnsw%'")
+            ).scalars()
+        )
+    assert names == {"hnsw_document_nodes_embedding", "hnsw_document_nodes_image_embedding"}
+
+
+def test_bm25_indexes_exist_and_answer_a_query(migrated):
+    with migrated.begin() as conn:
+        _seed(conn)
+        names = set(
+            conn.execute(
+                text("SELECT indexname FROM pg_indexes WHERE indexdef LIKE '%USING bm25%'")
+            ).scalars()
+        )
+        hits = conn.execute(text("SELECT count(*) FROM document_nodes WHERE content @@@ 'x'")).scalar_one()
+    assert names == {"bm25_document_nodes", "bm25_documents"}
+    assert hits == 1

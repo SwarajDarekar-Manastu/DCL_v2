@@ -207,3 +207,12 @@ def test_truncated_download_leaves_no_blob_no_object_and_keeps_the_item_pending(
     assert session.scalar(select(func.count()).select_from(Blob)) == 0
     assert list(minio.list_objects(RAW, recursive=True)) == []
     assert session.get(DriveItem, loc).status == DriveItemStatus.PENDING_DOWNLOAD
+
+
+def test_an_item_landed_by_another_worker_is_not_downloaded_again(session, minio, onedrive):
+    loc = _item(session, "i1", CONTENT, quick_xor_hash=None)
+    _land(session, minio, onedrive, loc)
+    onedrive.content_requests.clear()
+    result = _land(session, minio, onedrive, loc)  # a duplicate task for the same item
+    assert (result.downloaded, result.new_blob) == (False, False)
+    assert onedrive.content_requests == []

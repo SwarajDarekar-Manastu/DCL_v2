@@ -30,7 +30,7 @@ Tests and fixtures:
 
 Provides:
 - review API models (`backend.review.api_models`): `CaseFilters`, `CaseList`/`CaseSummary` (rows of `v_review_cases`), `CaseDetail`, `CaseLocation` (folder id, file name, extension for the scope selector), `FlagView` (typed evidence/suggestion/resolution, `allowed_actions`), `allowed_actions_for()`, `check_actions()`; the action models live in `backend/dispatcher/contract.py`, `ResolveRequest/Response`, `RejectRequest`, `UndoResponse`, `DryRunRequest/Response`, `RuleDraft`, `RuleView`, `RuleSimulation`
-- routes: `/review/cases[/{case_key}[/assign|resolve|reject|undo]]`, `/review/dry-run`, `/review/rules[/{id}/simulate|deactivate]`; reviewer role, deactivate needs admin
+- routes: `/review/cases[/{case_key}[/assign|resolve|reject|undo]]`, `/review/dry-run`, `/review/rules[/{id}/simulate|deactivate]`; reviewer role for all, including rule deactivation (Lead ruling 2026-10-21)
 - rules resolver: `resolve(rules, RuleTarget, rule_type)`; order = scope specificity (nearer folder > ancestor > none; then filename glob; then extension; then root), then operator over derived, then precedence, then newest
 - rule bodies: `ChannelMapBody` (`channels: {raw → ChannelMapEntry{canonical_name, physical_quantity, unit, gauge_or_abs, scaling{slope, offset} | expression, sensor_tag, range_min/max}}`, ambient), `UnitMappingBody`, `SchemaMappingBody`, `SupersessionBody`, `IgnorePatternBody`, `OriginOverrideBody`; `RuleDraft.body` validated by type
 - `config/rules/*.yaml` format: `{version: 1, rules: [{rule_type, scope, precedence, body, created_by}]}`, operator rules only (`export_yaml` / `load_yaml`)

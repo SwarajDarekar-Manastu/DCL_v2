@@ -14,8 +14,6 @@ from PIL import Image
 from backend.api import models as models_router
 from backend.llm_engine.local_models import ModelRequestRejected, ModelsClient, ModelServerUnavailable
 
-pytest.importorskip("torch")  # default unit suite runs without GPU libraries (S2: fake-backend path for CI)
-
 
 @pytest.fixture
 def app(make_models):
