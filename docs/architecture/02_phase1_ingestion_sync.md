@@ -124,12 +124,14 @@ If any segment of the computed path matches: `.venv`, `venv`, `env`, `site-packa
 
 ### Tier 2 — Extensions (never download)
 
-- Compiled/environment: `.pyc .pyi .pyd .typed .dll .exe .lib .a .so .o .qml .qmltypes .qm .pak .metainfo .mesh .frag .bin .h .c .cpp .pxd .pyx .f90 .f .f95 .pyf .inc .f2py_f2cmap .afm .ttf .mplstyle .ico .icns .ani .cls .bas .xlam .xlsm(when under library) .applescript .asp .pys .vbs .sct .idl .rc .chm .pyw .tab .zi .tpl .tmpl .template .build .cmake .toml .ini .pc .pth .spec .whl .rst .1 .apache .bsd .python .external .ps1 .fish .pem .lua .xrc .al .g4 .lark .gitignore .iml`
-- LaTeX intermediates: `.aux .log .toc .lof .lot .out .fls .fdb_latexmk .synctex .synctex(busy) .synctex.gz .bbl .blg .nav .snm .vrb`
+- Compiled/environment: `.pyc .pyi .pyd .typed .dll .exe .lib .a .so .o .qml .qmltypes .qm .pak .metainfo .mesh .frag .bin .h .c .cpp .pxd .pyx .f90 .f .f95 .pyf .inc .f2py_f2cmap .afm .ttf .mplstyle .ico .icns .ani .cls .bas .xlam .xlsm(when under library) .applescript .asp .pys .vbs .sct .idl .rc .chm .pyw .tab .zi .tpl .tmpl .template .build .cmake .toml .pc .pth .spec .whl .rst .1 .apache .bsd .python .external .ps1 .fish .pem .lua .xrc .al .g4 .lark .gitignore .iml`
+- LaTeX intermediates: `.aux .log .toc .lof .lot .out .fls .fdb_latexmk .synctex .synctex(busy) .synctex.gz .bbl .blg .nav .snm .vrb` (exception: members of an ANSYS `.wbpz` archive are gated with `parent_kind = wbpz`, under which `.out` solver logs are kept, file 03 §11)
 - Redundant companions: `.bkp` (draw.io backups), `.tdms_index`
 - OS/editor noise: `.DS_Store`, `Thumbs.db`, `desktop.ini`, names starting with `~$` (Office lock files), `.tmp`, `.crdownload`, `.part`
 
 → `SKIPPED_JUNK:EXT`.
+
+`.ini` is **not** Tier-2 junk: in team folders it is instrument or tool configuration (routed like `.cfg`) and it is secret-scanned at Tier 4; under Tier-1 paths it is dropped with everything else.
 
 **Important nuance:** the extension list is applied **after** Tier 1. Data-like extensions (`.mat .sav .arff .nc .wav .npz .fits .pkl .html .xml .csv .png`) are junk only when under a Tier-1 path (they are library sample data). The same extensions in a team folder are real and go to a route.
 
