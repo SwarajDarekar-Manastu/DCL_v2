@@ -397,3 +397,9 @@ Merged / ready: supersession per the Lead's decision: migration 0008 drive_items
 Blocked on: S4 — stack redeploy from main before the live dispatch over E1–E11
 Needs from others: S4 — beat entries dcl.process.dispatch (every 30 min) and dcl.process.sweep_documents (daily)
 Next: live dispatch + counts; Route C
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: Benchmark API over migration 0006. backend/benchmark/catalog.py (CaseSpec, models, queries; S3 file in S2's package, flagged to the Lead) and backend/api/benchmark.py (15 thin routes). It covers suites, versioned cases with audit, Pipe-only chat drafts, run snapshots, results, compare, and export/import. 1018 backend unit tests and 16 ParadeDB integration tests pass; Console types regenerated (benchmark `CaseList` renamed `BenchmarkCaseList` to avoid the OpenAPI clash with review).
+Blocked on: nothing.
+Needs from others: S2 to confirm the runner contract (queued → running → completed, results with failure_class and metrics, aggregate keys); S5 to author suites in the SuiteExport format.
+Next: Benchmark UI screens and the Retrieval lab.
