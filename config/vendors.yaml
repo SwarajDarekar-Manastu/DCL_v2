@@ -11,9 +11,9 @@
 #   domains[]           web domains, for URL footers on datasheets
 #   category            propulsion | sensors | fluidics | daq_software | materials | chemicals
 #   internal_equipment  true when the team uses this vendor's equipment, so its name also
-#                       appears in internal reports, run sheets and telemetry headers. A name
-#                       match alone must not turn such a document external (open question in
-#                       docs/sessions/STATUS.md)
+#                       appears in internal reports, run sheets and telemetry headers. Such a
+#                       vendor turns a document external_kept only together with a datasheet or
+#                       brochure cue (title word, or the vendor's domain in the footer), 04 §2
 #   sme_confirmed       false until the SME has reviewed the entry
 
 version: 1

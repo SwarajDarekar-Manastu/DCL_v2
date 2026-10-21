@@ -1,0 +1,63 @@
+# Junk gate, tiers 1-3 (docs/architecture/02_phase1_ingestion_sync.md §4). Metadata only:
+# a rejected item is never downloaded.
+# Owner: S5 (DCL S5 Quality). Consumer: backend/sync/gate.py (S1), schema GateConfig.
+#
+# Matching (GateConfig docstring): case-insensitive; path patterns are shell globs matched
+# against one folder name at a time, from the root folder down (the root name included);
+# endings and names are matched against the end of the file name, so ".synctex.gz" is junk
+# while a plain ".gz" is not. Tier 4 (magic bytes, secret scan) runs after download.
+#
+# Every value is quoted: YAML reads a bare .1 as the number 0.1.
+#
+# S5 judgment calls (02 §4 leaves them open):
+#   1. ".xlsm (when under library)" means environment library folders (Python/conda "Lib",
+#      "lib64", "Library", "*-packages"), matched as whole folder names. It must not match the
+#      "APS - Library" root, whose macro workbooks are vendor and literature material.
+#   2. Quarantine adds "* (old)" to the 02 §4 defaults, so a folder renamed "TP30 (old)"
+#      quarantines its subtree (02 §9 case 4).
+#
+# To verify against the real crawl (M1): rejection counts for the segments "build", "env",
+# "backup" and the endings ".log", ".bin", ".tab", ".out", ".1" in team folders.
+
+# Tier 1: a folder whose name matches stops traversal -> SKIPPED_JUNK (T1:<segment>)
+junk_path_segments: [".venv", "venv", "env", "site-packages", "__pycache__", ".git", ".idea",
+  ".vscode", "build", "dist", "node_modules", ".ipynb_checkpoints", ".mypy_cache", ".pytest_cache",
+  ".tox", ".eggs", "*.egg-info"]
+
+# Tier 1: a folder whose name matches -> QUARANTINED (metadata kept, nothing downloaded)
+quarantine_path_patterns: ["_to_delete", "old", "archive_old", "backup", "* (old)"]
+
+# Tier 2: file-name endings -> SKIPPED_JUNK (T2:<ending>)
+junk_extensions: [
+  # compiled and environment files
+  ".pyc", ".pyi", ".pyd", ".typed", ".dll", ".exe", ".lib", ".a", ".so", ".o", ".qml", ".qmltypes",
+  ".qm", ".pak", ".metainfo", ".mesh", ".frag", ".bin", ".h", ".c", ".cpp", ".pxd", ".pyx", ".f90",
+  ".f", ".f95", ".pyf", ".inc", ".f2py_f2cmap", ".afm", ".ttf", ".mplstyle", ".ico", ".icns", ".ani",
+  ".cls", ".bas", ".xlam", ".applescript", ".asp", ".pys", ".vbs", ".sct", ".idl", ".rc", ".chm",
+  ".pyw", ".tab", ".zi", ".tpl", ".tmpl", ".template", ".build", ".cmake", ".toml", ".ini", ".pc",
+  ".pth", ".spec", ".whl", ".rst", ".1", ".apache", ".bsd", ".python", ".external", ".ps1", ".fish",
+  ".pem", ".lua", ".xrc", ".al", ".g4", ".lark", ".gitignore", ".iml",
+  # LaTeX intermediates
+  ".aux", ".log", ".toc", ".lof", ".lot", ".out", ".fls", ".fdb_latexmk", ".synctex",
+  ".synctex(busy)", ".synctex.gz", ".bbl", ".blg", ".nav", ".snm", ".vrb",
+  # redundant companions
+  ".bkp", ".tdms_index",
+  # OS and editor noise
+  ".tmp", ".crdownload", ".part",
+]
+
+# Tier 2: exact file names -> SKIPPED_JUNK (T2:<name>)
+junk_names: [".DS_Store", "Thumbs.db", "desktop.ini"]
+
+# Tier 2: name prefixes -> SKIPPED_JUNK (Office lock files)
+junk_name_prefixes: ["~$"]
+
+# Tier 2: an ending that is junk only below a matching folder (judgment call 1 above)
+junk_extensions_under:
+  ".xlsm": ["lib", "lib64", "library", "*-packages"]
+
+# Tier 3: shortcuts -> SKIPPED_SHORTCUT
+shortcut_extensions: [".url", ".lnk"]
+
+# Tier 3: larger files -> HELD_LARGE_FILE (SOFT flag, operator approves). 4 GiB.
+max_download_bytes: 4294967296

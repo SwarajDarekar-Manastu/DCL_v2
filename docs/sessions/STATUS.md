@@ -113,3 +113,9 @@ Merged / ready: config data + synthetic fixtures merged to main (3240cc6); branc
 Blocked on: S1 folder-level listing of the real metadata crawl (requested 2026-10-21)
 Needs from others: DCL S1 Backend — the listing (fields in `.wiki/plans/quality__fixtures__allowlist.md`); DCL Lead — answers to the three open questions of the previous entry
 Next: on the listing, fill the 13 slots and send the table to DCL Lead for DECISIONS.md; meanwhile idle
+
+## 2026-10-21 20:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` for S1's GateConfig (file 02 §4 lists; `.1` kept as a string; `.xlsm` junk only under environment library folders, not `APS - Library`; `* (old)` quarantine), 44 tests incl. S1's real gate; config headers and the FMEA fixture aligned with the Lead's three decisions. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: S1 folder-level listing of the real crawl (allowlist); S1 rules YAML schema and CIR snapshot format (M2)
+Needs from others: Lead — decide `.out` (LaTeX junk in 02 §4 vs ANSYS solver logs kept in 03 §11 step 5; archive members pass the same gate) and `.ini` (Tier-2 junk vs Tier-4 secret-scan list)
+Next: allowlist from the crawl listing, then real fixtures and the first 15 telemetry cases; meanwhile idle
