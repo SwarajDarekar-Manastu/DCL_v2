@@ -28,3 +28,8 @@ Written by `DCL Lead` only. Newest at the bottom. Each entry names the sessions 
 | 2026-10-22 | `benchmark_runs.status` values: QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED (migration 0006) | S1, S3, S5 | file 05 benchmark_runs |
 | 2026-10-22 | `parse` dependency group in pyproject (pypdfium2 5.14.0, pikepdf 10.17.0; docling added with A1.3); lxml arrives with pikepdf, so the fixture generator pins `OPENPYXL_LXML=False` | S2, S4, S5 | Lead |
 | 2026-10-22 | CI test job installs `fonts-dejavu-core` and `fonts-noto-cjk` for the synthetic fixture generator (Lead edit in S4's workflow, S4 informed) | S4, S5 | ci.yml |
+| 2026-10-22 | `DCL_GRAFANA_ADMIN_PASSWORD` (secret, required outside dev) and `DCL_GRAFANA_PORT` (compose-only, default 3300) approved and added to the env contract (file 01 §7.1) | S4 | Lead |
+| 2026-10-22 | Backups: WAL-G (base + continuous WAL, point-in-time restore) to an S3-compatible off-host target; MinIO buckets mirrored to the same target; RPO 15 min, RTO 2 h, proven by the restore drill in M11. Destination and credential env names come from the user | S4 | file 10 §3 prod |
+| 2026-10-22 | Retention deletes: the code (`backend/sync/retention.py`) is S1's; S4 schedules it in beat and owns the backup/restore tooling | S1, S4 | S4 question 4 |
+| 2026-10-22 | `models` and `parse` dependency groups conflict by design (CPU torch in `parse`, CUDA torch in `models`); the parse image syncs only `parse`; onnxruntime 1.31.0 in `parse` for RapidOCR | S2, S4 | S4 merge a19ad4f |
+
