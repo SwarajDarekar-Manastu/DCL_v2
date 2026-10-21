@@ -108,6 +108,12 @@ Blocked on: DCL Lead, for the rest of task 3 and the live sign-in. (1) The app d
 Needs from others: S5 — config/gate.yaml in the GateConfig schema (docstring of backend/sync/gate.py; a test copy is in backend/tests/unit/sync/gate_test_config.yaml)
 Next: backend/dispatcher/contract.py (publish-first item 2: S2 and S3 wait on it), then the delta crawl once (1)–(3) are answered
 
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: publish-first item 2: backend/dispatcher/contract.py (ProcessedDocument, ProcessedNode, ProcessedAsset, telemetry run/channel records, Mention, Flag with fingerprint, UnitHash, Anchor + the one copy of the <kind>:<value>:<hash> format) and the contract enums in backend/postgres/enums.py; 27 tests. Test: `uv run pytest && uv run ruff check backend` (470 passed, 18 skipped)
+Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
+Needs from others: S3 — import parse_anchor/format_anchor from backend.dispatcher.contract in backend/api/viewer.py and drop the local copies (one owner of the format, as S2 asked)
+Next: backend/review/api_models.py (publish-first item 3, for S3), MinIO get/put for S2's vision cache, then the documents/nodes/assets models
+
 ## 2026-10-21 20:05 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: config data + synthetic fixtures merged to main (3240cc6); branch synced; allowlist plan sheet reopened with the delegated method (S5 chooses from S1's crawl)
 Blocked on: S1 folder-level listing of the real metadata crawl (requested 2026-10-21)
