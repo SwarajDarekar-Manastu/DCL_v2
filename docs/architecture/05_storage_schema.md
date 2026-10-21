@@ -205,7 +205,7 @@ Index on `doc_id_b`. Part-of, visual-twin, archive and photo-cluster relationshi
 | `image_embedding` | halfvec(768) | photo/figure nodes only |
 | `embedding_model` | text | `embeddinggemma-2@768` |
 | `token_count` | int | — |
-| `page_no`, `page_end`, `bbox`, `line_start`, `line_end`, `t_start_ms`, `t_end_ms`, `sheet_name`, `cell_range` | anchors | — |
+| `page_no`, `page_end`, `bbox`, `line_start`, `line_end`, `t_start_ms`, `t_end_ms`, `sheet_name`, `cell_range` | anchors | `bbox` is a JSON list of `{page_no, x0, y0, x1, y1}` **normalized to 0..1 with a top-left origin** (one entry per page the node spans), so overlays scale to any render; routes convert Docling's bottom-left points |
 | `asset_id` | uuid FK → assets, indexed | figure/photo/frame/crop |
 | `source` ✓ | text | `printed`, `ocr`, `vlm`, `source_code`, `structured`, `human` |
 | `confidence` | real | for `ocr`/`vlm` |
@@ -357,4 +357,4 @@ Nightly batched deletes with an index on the timestamp column; no partitioning.
 
 ## 7. Creation schedule
 
-Tables are created in the milestone whose code first writes them (file 10): registry and `jobs` in M1; `documents`, `document_sources`, `document_relations`, `document_nodes`, `assets`, `review_flags`, `rules`, `audit_events`, `pipeline_config`, `telemetry_*`, `llm_calls` in M2–M3; `entities`, `entity_aliases`, `entity_mentions`, `numeric_facts` in M4; `answer_traces` in M8; benchmark tables in M10. Creating empty tables early only guarantees they have the wrong shape when the code arrives.
+Tables are created in the milestone whose code first writes them (file 10): registry, `jobs` and `pipeline_config` (with `v_config_current`; the scopes and gate keys are read in M1) in M1; `documents`, `document_sources`, `document_relations`, `document_nodes`, `assets`, `review_flags`, `rules`, `audit_events`, `pipeline_config`, `telemetry_*`, `llm_calls` in M2–M3; `entities`, `entity_aliases`, `entity_mentions`, `numeric_facts` in M4; `answer_traces` in M8; benchmark tables in M10. Creating empty tables early only guarantees they have the wrong shape when the code arrives.

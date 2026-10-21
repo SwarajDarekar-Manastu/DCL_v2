@@ -5,7 +5,7 @@ import pytest
 from backend.llm_engine import local_models
 from backend.llm_engine.local_models import EmbedKind, InputTooLong, rank_scores, resolve_dtype
 
-pytest.importorskip("torch")  # the default unit suite runs without the GPU libraries; S2 keeps a fake-backend path for CI
+pytest.importorskip("torch")  # default unit suite runs without GPU libraries (S2: fake-backend path for CI)
 
 @pytest.mark.parametrize("name", ["float16", "half", "fp16", "int8"])
 def test_resolve_dtype_refuses_everything_but_bfloat16_and_float32(name):

@@ -114,7 +114,7 @@ Graph returns 410 with `error.code` `resyncRequired`/`resyncChangesApplyDifferen
 
 ## 4. What is rejected (the junk gate) and why
 
-The gate runs on metadata only. Decisions are stored (`drive_items.status`, `gate_reason`) so the Console can show "why is my file not indexed?" without guessing. Rejected items are **not downloaded** and have no `blobs` row.
+The gate runs on metadata only. Its patterns live in `pipeline_config` (`gate.*` keys), **seeded from `config/gate.yaml`** on first start or by an explicit re-seed command, and edited afterwards in the Settings UI; the gate never reads the YAML directly at run time. S5 owns the YAML content, S1 the loader and the gate. Decisions are stored (`drive_items.status`, `gate_reason`) so the Console can show "why is my file not indexed?" without guessing. Rejected items are **not downloaded** and have no `blobs` row.
 
 ### Tier 1 — Path segments (stop traversal)
 

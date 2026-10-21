@@ -81,7 +81,8 @@ ProcessedDocument
   document        : row for `documents` (title, doc_kind, route, dates, canonical flags)
   cir_uri         : s3://dcl-cir/{sha256}/{route}/v{parser_version}/…
   nodes[]         : hierarchical nodes (parent/child), each with content, node_type,
-                    page/line/slide/time anchors, bbox, breadcrumb, unit-normalized numbers
+                    page/line/slide/time anchors, bbox (list of {page_no,x0,y0,x1,y1}, normalized
+                    0..1, top-left origin), breadcrumb, unit-normalized numbers
   assets[]        : page renders, crops, photos, frames (→ dcl-assets, rows in `assets`)
   catalog[]       : telemetry_runs / telemetry_channels rows, or a JSON payload for
                     documents.catalog (diagram graph, CAE summary, CAD reference)
