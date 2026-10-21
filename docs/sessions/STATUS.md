@@ -328,3 +328,15 @@ Merged / ready: `config/sanity_ranges.yaml` per the Lead ruling (feed/valve/tank
 Blocked on: the user's answer on the sample list (repository is public: Lead recommends Tier B only)
 Needs from others: S2 — read `checks_external_kept` for external facts and the role id for internal facts (message sent)
 Next: on the answer, export and verify the telemetry cases; meanwhile idle
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: viewer endpoint wired to real tables (`build_viewer_payload` over documents, document_sources, drive_items, assets and S2's `resolve_anchor`; 404/400; page render with cited boxes, code, photo, video, text views); `GET /audit` over audit_events (reviewer, filters, cursor) and the Console Audit page with a case History link; Pipe replay test updated for the confirmation now in S2's example stream. 80 Vitest, 918 backend unit, 12 integration tests on a disposable ParadeDB (container dcl-s3-test, 127.0.0.1:55436).
+Blocked on: nothing. Open: `open_flags`/`review_case_key` in the viewer and the end-to-end re-index check wait for S1's review_flags and commit path; chat-attachment upload owner (Lead).
+Needs from others: nothing new.
+Next: Open WebUI Actions (Show trace, Add to benchmark, Report issue) and the Filter.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: nothing new since the viewer/audit merge request.
+Blocked on: Open WebUI Actions. Show trace needs GET /v1/traces?chat_id&message_id and Report issue needs POST /v1/traces/{id}/feedback (both asked of S2 2026-10-22). Add to benchmark and the Benchmark UI need the benchmark enums (category, case/run status, failure class) in backend/postgres/enums.py and the benchmark_cases/runs/results models (S1's area; owner and timing asked of the Lead).
+Needs from others: Lead decision on the Filter of 08 §1, which the signed groups in the Pipe make redundant today (proposal: defer it until attachments exist).
+Next: idle until S2's trace routes or the benchmark models land.

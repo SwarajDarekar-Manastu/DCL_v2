@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `frontend/viewer` |
-| Status | in-progress (contract and Console UI done; endpoint body waits for S1 models/presign and S2 `resolve_anchor`) |
+| Status | in-progress (wired to the database; end-to-end citation check after a real re-index waits for S1's commit path) |
 | Owner session | S3 |
 | Spec | docs/architecture/08_frontend_openwebui.md §6, §4.4; 04 §4.4, §10 |
 | Last updated | 2026-10-21 |
@@ -15,7 +15,7 @@ One page for every citation, review case and benchmark drilldown: renders the ci
 ## Location
 
 Code:
-- `backend/api/viewer.py` (`viewer_path`, `ViewerPayload` models, `GET /docs/{doc_id}/viewer`; the anchor format itself is `parse_anchor` / `format_anchor` in `backend/dispatcher/contract.py`, S1)
+- `backend/api/viewer.py` (`viewer_path`, `ViewerPayload` models, `build_viewer_payload` over documents, document_sources, drive_items, assets and `resolve_anchor`; `GET /docs/{doc_id}/viewer` with `get_session`; the anchor format itself is `parse_anchor` / `format_anchor` in `backend/dispatcher/contract.py`, S1)
 - `frontend/console/src/lib/api_endpoint.ts` (`ViewerPayload` types, `getViewer`)
 - `frontend/console/src/lib/components/viewer/` (`DocumentViewer`, `ImageWithRegions`, `TableView`, `CodeView`, `MetaPanel`)
 - `frontend/console/src/routes/docs/[id]/viewer/+page.svelte`
@@ -23,13 +23,14 @@ Code:
 
 Tests and fixtures:
 - `backend/tests/unit/api/test_viewer.py`
+- `backend/tests/integration/api/test_viewer_payload.py` (real ParadeDB via `DCL_TEST_DATABASE_URL`)
 - `frontend/console/tests/viewer/` (`fixtures.ts`, `DocumentViewer.test.ts`, `ImageWithRegions.test.ts`)
 
 ## Interfaces
 
 Provides:
 - Deep link `{CONSOLE_URL}/docs/{doc_id}/viewer?anchor=<kind>:<value>:<content_sha256>`; kinds `page:12:<h>`, `line:120:<h>`, `t:83500:<h>` (ms), `cells:<sheet>!<A1 range>:<h>`; hash lowercase hex 16–64 or empty; trailing colon always written; never a node id. Build with `viewer_path(doc_id, anchor.locator_fields())`; the format is owned by `backend/dispatcher/contract.py`.
-- `GET /docs/{doc_id}/viewer?anchor=…&translate=true|false` (role viewer) → `ViewerPayload`: `document` (kind, origin, tier, language, test ids, date, status, open flags), `resolution` (`exact` | `page_fallback` | `document_only` + message), `view` (discriminated by `kind`: `page`, `image`, `table`, `code`, `text`, `video`), `links` (all OneDrive locations, presigned original, review case key), `translation` (source language, available, translated text, pending). Regions are normalized 0–1 of the rendered image, origin top-left. Table cells are text, never HTML. Currently 400 on a bad anchor and 501 otherwise.
+- `GET /docs/{doc_id}/viewer?anchor=…&translate=true|false` (role viewer) → `ViewerPayload`: `document` (kind, origin, tier, language, test ids, date, status, open flags), `resolution` (`exact` | `page_fallback` | `document_only` + message), `view` (discriminated by `kind`: `page`, `image`, `table`, `code`, `text`, `video`), `links` (all OneDrive locations, presigned original, review case key), `translation` (source language, available, translated text, pending). Regions are normalized 0–1 of the rendered image, origin top-left. Table cells are text, never HTML. 400 on a bad anchor (checked before any read), 404 for an unknown document. View choice: page render asset of the resolved page → `page` with the cited boxes; code nodes → `code` (line anchors highlight the line); photo nodes → `image`; transcript/video nodes → `video` of the original; otherwise `text`. Locations come from `drive_items` of the primary blob until `v_doc_locations` exists; `open_flags` and `review_case_key` stay empty until `review_flags` exists.
 
 Consumes (to wire the endpoint body):
 - `Anchor`, `parse_anchor`, `format_anchor`, `PageBox` (S1 `backend/dispatcher/contract.py`, on main), documents, `v_doc_locations`, `assets` page renders with width/height, presign 15 min (S1 `backend/storage`)
@@ -43,10 +44,12 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/api/viewer.py`
 - `backend/api/assets.py`
 - `backend/tests/unit/api/test_viewer.py`
+- `backend/tests/integration/api/test_viewer_payload.py` (real ParadeDB via `DCL_TEST_DATABASE_URL`)
 - `frontend/console/src/lib/api_endpoint.ts` (viewer section)
 - `frontend/console/src/lib/components/viewer/`
 - `frontend/console/src/routes/docs/[id]/viewer/`
 - `frontend/console/tests/viewer/`
+- `backend/tests/integration/api/test_viewer_payload.py`
 
 ## Rubric (what "done" means for this feature)
 
@@ -55,7 +58,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] Anchor link codec round-trips page, line, time and cells (sheet names with `:` and `!`); malformed anchors get 400
 - [x] bbox overlays follow normalized coordinates at any rendered size (component test; checked at 1280 px and 375 px)
 - [x] No node id in links, payloads or Console state (grep)
-- [ ] Endpoint body wired to real data (presign route exists; needs S2's `resolve_anchor` DB wrapper and S1's node model)
+- [x] Endpoint body wired to real data (integration tests: exact with boxes, changed hash → page fallback, moved passage still exact, location gone → document start, code line, translation)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 Verify:
@@ -74,6 +77,7 @@ Deployment note: presigned MinIO URLs must be reachable from engineers' browsers
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S3 | Deep-link contract, payload models, Console viewer page and components, tests; endpoint 501 until wired |
+| 2026-10-22 | S3 | Endpoint wired: `build_viewer_payload` over real tables and `resolve_anchor`; integration tests on ParadeDB |
 | 2026-10-21 | S3 | Anchor codec delegated to `backend/dispatcher/contract.py`; viewer keeps `viewer_path` (the temporary `parse_anchor_param` alias is removed) |
 
 ## Related

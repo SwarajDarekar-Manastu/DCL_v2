@@ -15,7 +15,13 @@ export type ConsoleUser = Schemas['ConsoleUser'];
 export type ViewerPayload = Schemas['ViewerPayload'];
 export type ViewerView = ViewerPayload['view'];
 export type ViewerRegion = Schemas['Region'];
-export type ResolutionStatus = Schemas['ResolutionStatus'];
+export type ResolutionStatus = Schemas['ViewerStatus'];
+
+/** backend/api/audit.py */
+export type AuditItem = Schemas['AuditItem'];
+export type AuditPage = Schemas['AuditPage'];
+export type AuditEntityType = Schemas['AuditEntityType'];
+export type AuditFilters = NonNullable<operations['list_audit_audit_get']['parameters']['query']>;
 
 /** backend/api/assets.py */
 export type AssetUrl = Schemas['AssetUrl'];
@@ -145,6 +151,15 @@ function query(params: Record<string, string | number | boolean | null | undefin
 /** GET /assets/url?uri=s3://dcl-assets/... (backend/api/assets.py): a 15-minute URL for an asset */
 export function presignAsset(uri: string): Promise<AssetUrl> {
 	return request<AssetUrl>('GET', `/assets/url${query({ uri })}`);
+}
+
+/** GET /audit (reviewer): audit_events newest first; entity_id may repeat */
+export function listAudit(filters: AuditFilters = {}): Promise<AuditPage> {
+	const { entity_id = [], ...rest } = filters;
+	const q = new URLSearchParams(query(rest).slice(1));
+	for (const id of entity_id) q.append('entity_id', id);
+	const text = q.toString();
+	return request<AuditPage>('GET', `/audit${text ? `?${text}` : ''}`);
 }
 
 const casePath = (caseKey: string) => `/review/cases/${encodeURIComponent(caseKey)}`;
