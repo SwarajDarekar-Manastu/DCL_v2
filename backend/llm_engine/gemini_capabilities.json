@@ -1,0 +1,51 @@
+{
+  "probed_at": null,
+  "model": null,
+  "baseline": {},
+  "capabilities": {
+    "structured_output": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    },
+    "function_calling": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    },
+    "thinking_level": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    },
+    "include_thoughts": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    },
+    "image_input": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    },
+    "pdf_input": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    },
+    "media_resolution": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    },
+    "streaming": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    },
+    "stream_usage": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    },
+    "context_cache": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    },
+    "batch": {
+      "status": "unknown",
+      "evidence": "not probed yet; run python -m backend.llm_engine.gemini_probe --write"
+    }
+  }
+}
