@@ -37,7 +37,7 @@ FORBIDDEN_NAMES = ("GOOGLE_API_KEY",)
 GATEWAY_KEY_NAMES = ("GEMINI_GATEWAY_KEY", "DCL_GEMINI_API_KEY")
 DEVELOPER_KEY_PREFIX = "AIza"
 STACK_DATABASE_HOST = "postgres:5432"
-STACK_DATABASE_NAME = "dcl"
+STACK_DATABASE_NAME = "dcl_v2"
 PLACEHOLDER = re.compile(
     r"^\s*(<.*>|\$\{.*\}|\.\.\.|x{3,}|changeme|change[-_]me|replace[-_]?me|todo|tbd|placeholder"
     r"|your[-_ ].*|fill[-_ ]?me|fill[-_ ]?in|none|null)\s*$",

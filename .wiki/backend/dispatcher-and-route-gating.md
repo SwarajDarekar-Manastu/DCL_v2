@@ -15,14 +15,14 @@ Resolve the real file type from magic bytes, build folder context (test ids, sib
 ## Location
 
 Code:
-- `backend/dispatcher/type_resolution.py`
-- `backend/dispatcher/folder_context.py`
-- `backend/dispatcher/assembler.py`
-- `backend/dispatcher/registry.py`
+- `backend/dispatcher/type_resolution.py` (`resolve_type(head, name, zip_names) -> ResolvedType{kind, mime, route, by, ext_mismatch}`)
+- `backend/dispatcher/folder_context.py` (planned)
+- `backend/dispatcher/assembler.py` (planned)
+- `backend/dispatcher/registry.py` (planned)
 - `backend/dispatcher/contract.py` (published: `ProcessedDocument` and parts, `Flag` fingerprint, `Anchor` + `parse_anchor`/`format_anchor`)
 
 Tests and fixtures:
-- `backend/tests/unit/dispatcher/test_contract.py`
+- `backend/tests/unit/dispatcher/test_contract.py`, `backend/tests/unit/dispatcher/test_type_resolution.py`
 - `backend/tests/fixtures/dispatcher/`
 
 ## Interfaces
@@ -34,6 +34,7 @@ Provides:
 - Box convention: `PageBox {page_no, x0, y0, x1, y1}` in 0..1, origin top-left, a list per node
 - Flag evidence (`Evidence`, union on `kind`: unit_telemetry, unit_fact, array_schema, json_schema, conflict, parse_failure, low_confidence, sensitive, file_facts; provisional) and `Suggestion {resolution, confidence, rationale, proposed_by}`
 - Resolution actions (`Resolution`, union on `action`), `ALLOWED_ACTIONS`, `ADMIN_ONLY_ACTIONS`: the file 06 §6 vocabulary shared by routes, review API and overlays
+- type resolution: content first (file 03 §1.1 signatures, ZIP member names, delimiter sniff), extension refines text, `ext_mismatch` for `drive_items`; route None → `UNSUPPORTED_FORMAT`; pickles are named, never loaded; LabJack header regex pending a real sample
 - route selection
 
 Consumes:
@@ -55,7 +56,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 ## Rubric (what "done" means for this feature)
 
 - [x] Output contract published with JSON round trip, fingerprint and reference tests
-- [ ] Extension/content mismatch resolved by content and recorded
+- [x] Extension/content mismatch resolved by content and recorded (unit-tested incl. S5 fixture pdf_is_html; storing it on drive_items comes with the dispatcher)
 - [ ] Disabled route parks documents as WAITING_FOR_ROUTE with no flag
 - [ ] LaTeX master + parts become one document with document_sources roles
 - [ ] Unknown type raises UNSUPPORTED_FORMAT HARD
@@ -68,6 +69,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | Published `contract.py` (route output contract, flags with fingerprints, stable anchors and their link format); 27 tests |
 | 2026-10-21 | S1 | Typed flag evidence and suggestions; resolution actions moved here from review/api_models |
+| 2026-10-21 | S1 | Type resolution (magic bytes, sniffers, extension refinement, mismatch); 39 tests |
 
 ## Related
 

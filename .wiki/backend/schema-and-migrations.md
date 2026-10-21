@@ -17,14 +17,15 @@ Own the 26-table schema in three tiers, the StrEnum→CHECK generation, naming c
 Code:
 - `backend/postgres/base.py` (naming convention, `Base`, `Tier`, `tier()`)
 - `backend/postgres/enums.py` (one `StrEnum` per ✓ column, `enum_check()`)
-- `backend/postgres/models/__init__.py`, `backend/postgres/models/registry.py` (M1: `sync_roots`, `drive_folders`, `drive_items`, `blobs`, `blob_derivations`, `jobs`)
+- `backend/postgres/models/__init__.py`, `backend/postgres/models/registry.py` (M1: `sync_roots`, `drive_folders`, `drive_items`, `blobs`, `blob_derivations`, `jobs`), `backend/postgres/models/ops.py` (`pipeline_config`), `documents.py` (documents, document_sources, document_relations), `nodes.py` (document_nodes with `halfvec(768)` and `bbox` = JSON list of PageBox, assets), `entities.py` (entities, entity_aliases, entity_mentions, numeric_facts), `review.py` (audit_events)
+- `backend/postgres/pipeline_config.py` (get / get_prefix / set_value, `seed_gate` from `config/gate.yaml`, `gate_config()`, `download_scope()`, `processing_scope()`; CLI `seed-gate [--reseed]`)
 - `backend/postgres/alembic.ini`, `backend/postgres/migrations/env.py`, `backend/postgres/migrations/script.py.mako`
-- `backend/postgres/migrations/versions/0001_m1_registry.py`
-- `backend/postgres/session.py` (planned)
+- `backend/postgres/migrations/versions/0001_m1_registry.py`, `0002_pipeline_config.py` (table + `v_config_current`), `0003_documents_entities_audit.py` (vector extension, 10 tables, `hnsw_document_nodes_embedding` / `_image_embedding`; BM25 follows with retrieval)
+- `backend/postgres/session.py` (`engine_from_settings`, `session_factory`, `normalize_url`)
 - `backend/postgres/views.sql` (planned, M2–M3)
 
 Tests and fixtures:
-- `backend/tests/schema/conftest.py`, `backend/tests/schema/test_m1_schema.py`
+- `backend/tests/schema/conftest.py`, `backend/tests/schema/test_m1_schema.py`, `backend/tests/schema/test_pipeline_config.py`
 - `backend/tests/schema/fk_without_index.sql` (the CI query: any row fails the build)
 
 ## Interfaces
@@ -53,6 +54,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 - `backend/postgres/base.py`
 - `backend/postgres/enums.py`
+- `backend/postgres/pipeline_config.py`
 - `backend/postgres/models/`
 - `backend/postgres/alembic.ini`
 - `backend/postgres/migrations/`
@@ -64,7 +66,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] FK-without-index query returns no rows (and is proven to detect a missing index)
 - [x] Every status column has a CHECK generated from a Python enum (M1 tables)
 - [x] Tables are created in the milestone whose code writes them (only the six M1 tables exist)
-- [ ] Remaining 20 tables, extensions, views, HNSW/BM25 migrations (M2–M10)
+- [x] Document, node, asset, entity, fact and audit tables with HNSW indexes (0003)
+- [ ] review_flags, rules, telemetry_*, llm_calls, answer/benchmark tables, BM25 index, views (M2–M10)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log
@@ -73,6 +76,9 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | Base, naming convention, enums→CHECK, M1 registry models, migration 0001, schema tests, FK-without-index query |
+| 2026-10-21 | S1 | session.py; `Job.key_for()` |
+| 2026-10-22 | S1 | Migration 0002 `pipeline_config` + `v_config_current` (M1, Lead decision); typed access and gate seeding |
+| 2026-10-22 | S1 | Migration 0003: M2 document tables, M4 entity/fact tables, audit_events (Lead decision); HNSW indexes; pgvector dep |
 
 ## Related
 

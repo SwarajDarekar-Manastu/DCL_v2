@@ -10,7 +10,16 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 torch = pytest.importorskip("torch")
-pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA GPU")
+NEEDED_GPU_BYTES = 3 * 2**30
+
+
+def _gpu_free_bytes() -> int:
+    return torch.cuda.mem_get_info()[0] if torch.cuda.is_available() else 0
+
+
+pytestmark = pytest.mark.skipif(
+    _gpu_free_bytes() < NEEDED_GPU_BYTES, reason="needs a CUDA GPU with 3 GiB free (the card is shared)"
+)
 
 from backend.api import models as models_router  # noqa: E402
 from backend.llm_engine import local_models  # noqa: E402

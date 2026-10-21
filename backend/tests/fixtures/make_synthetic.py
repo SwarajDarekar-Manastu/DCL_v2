@@ -13,6 +13,7 @@ import argparse
 import io
 import pickle
 import re
+import struct
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -37,6 +38,7 @@ PAGE_PX = (827, 1169)  # A4 at 100 dpi
 
 # ---- helpers ---------------------------------------------------------------------------
 
+
 def zip_bytes(members: list[tuple[str, bytes]]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
@@ -54,8 +56,15 @@ def rezip_fixed_time(data: bytes) -> bytes:
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         members = [(i.filename, zf.read(i.filename)) for i in zf.infolist()]
     stamp = DOC_TIME.strftime("%Y-%m-%dT%H:%M:%SZ").encode()
-    members = [(name, re.sub(rb"(<dcterms:modified[^>]*>)[^<]*", rb"\g<1>" + stamp, body)
-                if name == "docProps/core.xml" else body) for name, body in members]
+    members = [
+        (
+            name,
+            re.sub(rb"(<dcterms:modified[^>]*>)[^<]*", rb"\g<1>" + stamp, body)
+            if name == "docProps/core.xml"
+            else body,
+        )
+        for name, body in members
+    ]
     return zip_bytes(members)
 
 
@@ -162,8 +171,9 @@ def german_datasheet(out: Path) -> None:
         c.drawString(100 * mm, y, value)
         y -= 7 * mm
     c.setFont("Helvetica", 8)
-    c.drawString(20 * mm, 15 * mm,
-                 "www.beispiel-antrieb.example - Technische Änderungen vorbehalten. Ausgabe 2025-03")
+    c.drawString(
+        20 * mm, 15 * mm, "www.beispiel-antrieb.example - Technische Änderungen vorbehalten. Ausgabe 2025-03"
+    )
     c.showPage()
     c.save()
     write(out, "a1_office/german_datasheet/MT-1_Datenblatt_DE.pdf", buf.getvalue())
@@ -184,13 +194,23 @@ def doi_paper(out: Path) -> None:
     styles = getSampleStyleSheet()
     body, head = styles["BodyText"], styles["Heading2"]
     buf = io.BytesIO()
-    doc = BaseDocTemplate(buf, pagesize=A4, invariant=1, title="Catalyst bed preheating (synthetic)",
-                          author="A. Example; B. Sample", leftMargin=15 * mm, rightMargin=15 * mm,
-                          topMargin=40 * mm, bottomMargin=15 * mm)
+    doc = BaseDocTemplate(
+        buf,
+        pagesize=A4,
+        invariant=1,
+        title="Catalyst bed preheating (synthetic)",
+        author="A. Example; B. Sample",
+        leftMargin=15 * mm,
+        rightMargin=15 * mm,
+        topMargin=40 * mm,
+        bottomMargin=15 * mm,
+    )
     gap = 6 * mm
     col_w = (doc.width - gap) / 2
-    frames = [Frame(doc.leftMargin, doc.bottomMargin, col_w, doc.height, id="left"),
-              Frame(doc.leftMargin + col_w + gap, doc.bottomMargin, col_w, doc.height, id="right")]
+    frames = [
+        Frame(doc.leftMargin, doc.bottomMargin, col_w, doc.height, id="left"),
+        Frame(doc.leftMargin + col_w + gap, doc.bottomMargin, col_w, doc.height, id="right"),
+    ]
 
     def header(c, _doc):
         c.saveState()
@@ -200,27 +220,36 @@ def doi_paper(out: Path) -> None:
         c.setFont("Helvetica-Bold", 13)
         c.drawString(15 * mm, 274 * mm, "Catalyst bed preheating effects on HTP monopropellant start-up")
         c.setFont("Helvetica", 9)
-        c.drawString(15 * mm, 268 * mm,
-                     "A. Example, B. Sample - Example Institute of Technology (synthetic fixture)")
+        c.drawString(
+            15 * mm, 268 * mm, "A. Example, B. Sample - Example Institute of Technology (synthetic fixture)"
+        )
         c.restoreState()
 
     doc.addPageTemplates([PageTemplate(id="two_col", frames=frames, onPage=header)])
-    story = [Paragraph("Abstract", head),
-             Paragraph("We report start-up tests of a 1 N thruster fed with 90 % hydrogen peroxide. "
-                       "Preheating the silver catalyst bed to 473 K shortened the pressure rise time. "
-                       "The chamber pressure reached 11.8 bar at a preheat temperature of 473 K.", body),
-             Paragraph("1 Introduction", head),
-             Paragraph("Cold starts of peroxide thrusters show long ignition delays [1]. " * 6, body),
-             Paragraph("2 Method", head),
-             Paragraph("The catalyst bed was heated electrically before each firing [2]. " * 8, body),
-             Paragraph("3 Results", head),
-             Paragraph("The chamber pressure reached 11.8 bar at a preheat temperature of 473 K. "
-                       "Without preheating the rise time was 0.8 s; "
-                       "with preheating it was 0.2 s. " * 3, body),
-             Paragraph("4 Conclusions", head),
-             Paragraph("Preheating is recommended for repeatable start-up [3]. " * 6, body),
-             Spacer(1, 4 * mm),
-             Paragraph("References", head)]
+    story = [
+        Paragraph("Abstract", head),
+        Paragraph(
+            "We report start-up tests of a 1 N thruster fed with 90 % hydrogen peroxide. "
+            "Preheating the silver catalyst bed to 473 K shortened the pressure rise time. "
+            "The chamber pressure reached 11.8 bar at a preheat temperature of 473 K.",
+            body,
+        ),
+        Paragraph("1 Introduction", head),
+        Paragraph("Cold starts of peroxide thrusters show long ignition delays [1]. " * 6, body),
+        Paragraph("2 Method", head),
+        Paragraph("The catalyst bed was heated electrically before each firing [2]. " * 8, body),
+        Paragraph("3 Results", head),
+        Paragraph(
+            "The chamber pressure reached 11.8 bar at a preheat temperature of 473 K. "
+            "Without preheating the rise time was 0.8 s; "
+            "with preheating it was 0.2 s. " * 3,
+            body,
+        ),
+        Paragraph("4 Conclusions", head),
+        Paragraph("Preheating is recommended for repeatable start-up [3]. " * 6, body),
+        Spacer(1, 4 * mm),
+        Paragraph("References", head),
+    ]
     story += [Paragraph(r, body) for r in PAPER_REFERENCES]
     doc.build(story)
     write(out, "a1_office/doi_paper/preheat_paper_synthetic.pdf", buf.getvalue())
@@ -228,9 +257,13 @@ def doi_paper(out: Path) -> None:
 
 # ---- A2: two LaTeX masters ------------------------------------------------------------------
 
+
 def two_latex_masters(out: Path) -> None:
     base = "a2_source/two_latex_masters/"
-    write(out, base + "report_main.tex", rb"""\documentclass{article}
+    write(
+        out,
+        base + "report_main.tex",
+        rb"""\documentclass{article}
 \usepackage{siunitx}
 \title{Test Report 37 -- Hot Fire Campaign (synthetic fixture)}
 \begin{document}
@@ -239,28 +272,45 @@ def two_latex_masters(out: Path) -> None:
 This report summarises the hot fire campaign of Test Plan 37.
 \input{sections/results}
 \end{document}
-""")
-    write(out, base + "report_draft.tex", rb"""\documentclass{article}
+""",
+    )
+    write(
+        out,
+        base + "report_draft.tex",
+        rb"""\documentclass{article}
 \title{Test Report 37 -- DRAFT (synthetic fixture)}
 \begin{document}
 \maketitle
 \section{Draft notes}
 Early draft kept next to the final report; it is also a master document.
 \end{document}
-""")
-    write(out, base + "sections/results.tex", rb"""\section{Results}
+""",
+    )
+    write(
+        out,
+        base + "sections/results.tex",
+        rb"""\section{Results}
 The chamber pressure peaked at \SI{12.4}{\bar} and the catalyst bed reached \SI{845}{\kelvin}.
-""")
+""",
+    )
 
 
 # ---- C: headerless CSV ------------------------------------------------------------------------
+
 
 def headerless_csv_rows() -> list[list[str]]:
     rows = []
     for i in range(200):
         t = i / 1000
-        rows.append([f"{t:.3f}", f"{0.5 + 0.002 * i:.4f}", f"{1.2 + 0.001 * (i % 50):.4f}",
-                     f"{300 + 0.25 * i:.2f}", f"{(i % 2):d}"])
+        rows.append(
+            [
+                f"{t:.3f}",
+                f"{0.5 + 0.002 * i:.4f}",
+                f"{1.2 + 0.001 * (i % 50):.4f}",
+                f"{300 + 0.25 * i:.2f}",
+                f"{(i % 2):d}",
+            ]
+        )
     return rows
 
 
@@ -337,20 +387,48 @@ def malicious_pickle(out: Path) -> None:
     write(out, "c_telemetry/malicious_pickle/T03.plotdata", pickle.dumps(_Exploit(), protocol=4))
 
 
+# ---- C: unlabeled .npy array --------------------------------------------------------------------
+
+NPY_SHAPE = (300, 4)
+
+
+def npy_bytes(rows: list[tuple[float, ...]]) -> bytes:
+    """NumPy .npy format 1.0 written directly: magic, header dict, little-endian float64 C order."""
+    header = f"{{'descr': '<f8', 'fortran_order': False, 'shape': ({len(rows)}, {len(rows[0])}), }}"
+    pad = 64 - (10 + len(header) + 1) % 64
+    header_bytes = (header + " " * pad + "\n").encode("latin1")
+    body = struct.pack(f"<{len(rows) * len(rows[0])}d", *[v for row in rows for v in row])
+    return b"\x93NUMPY\x01\x00" + struct.pack("<H", len(header_bytes)) + header_bytes + body
+
+
+def unlabeled_npy(out: Path) -> None:
+    # Four unnamed columns: time (s), a pressure-like ramp, a temperature-like ramp, a 0/1 state.
+    rows = [(i / 100, 1.0 + 0.04 * i, 300.0 + 1.5 * i, float(i >= 50)) for i in range(NPY_SHAPE[0])]
+    write(out, "c_telemetry/unlabeled_npy/T01.npy", npy_bytes(rows))
+
+
 # ---- G: archive guards ----------------------------------------------------------------------------
 
 BOMB_SIZE = 10 * 1024 * 1024
 
 
 def zip_bomb_ratio(out: Path) -> None:
-    write(out, "g_archives/zip_bomb_ratio/telemetry_backup.zip",
-          zip_bytes([("zeros.bin", b"\0" * BOMB_SIZE)]))
+    write(
+        out, "g_archives/zip_bomb_ratio/telemetry_backup.zip", zip_bytes([("zeros.bin", b"\0" * BOMB_SIZE)])
+    )
 
 
 def zip_path_traversal(out: Path) -> None:
-    write(out, "g_archives/zip_path_traversal/scripts_bundle.zip",
-          zip_bytes([("readme.txt", b"synthetic fixture\n"),
-                     ("../../outside_the_scratch_dir.txt", b"must never be written\n")]))
+    write(
+        out,
+        "g_archives/zip_path_traversal/scripts_bundle.zip",
+        zip_bytes(
+            [
+                ("readme.txt", b"synthetic fixture\n"),
+                ("../../outside_the_scratch_dir.txt", b"must never be written\n"),
+            ]
+        ),
+    )
 
 
 def zip_nested_depth(out: Path) -> None:
@@ -362,8 +440,12 @@ def zip_nested_depth(out: Path) -> None:
 
 # ---- dispatcher: .pdf that is HTML -----------------------------------------------------------------
 
+
 def pdf_is_html(out: Path) -> None:
-    write(out, "dispatcher/pdf_is_html/Test_Report_12.pdf", b"""<!DOCTYPE html>
+    write(
+        out,
+        "dispatcher/pdf_is_html/Test_Report_12.pdf",
+        b"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><title>Sign in required</title></head>
 <body>
@@ -371,12 +453,25 @@ def pdf_is_html(out: Path) -> None:
 <p>This page was saved instead of the document (synthetic fixture).</p>
 </body>
 </html>
-""")
+""",
+    )
 
 
-GENERATORS = [rotated_scan, japanese_scanned_page, german_datasheet, doi_paper, two_latex_masters,
-              headerless_csv, merged_cells_fmea, malicious_pickle, zip_bomb_ratio, zip_path_traversal,
-              zip_nested_depth, pdf_is_html]
+GENERATORS = [
+    rotated_scan,
+    japanese_scanned_page,
+    german_datasheet,
+    doi_paper,
+    two_latex_masters,
+    headerless_csv,
+    merged_cells_fmea,
+    malicious_pickle,
+    unlabeled_npy,
+    zip_bomb_ratio,
+    zip_path_traversal,
+    zip_nested_depth,
+    pdf_is_html,
+]
 
 
 def main() -> None:

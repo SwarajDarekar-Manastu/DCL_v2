@@ -11,8 +11,16 @@ import pytest
 STRINGS = {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": True}
 SCHEMA = {
     "type": "object",
-    "required": ["junk_path_segments", "quarantine_path_patterns", "junk_extensions", "junk_names",
-                 "junk_name_prefixes", "junk_extensions_under", "shortcut_extensions", "max_download_bytes"],
+    "required": [
+        "junk_path_segments",
+        "quarantine_path_patterns",
+        "junk_extensions",
+        "junk_names",
+        "junk_name_prefixes",
+        "junk_extensions_under",
+        "shortcut_extensions",
+        "max_download_bytes",
+    ],
     "additionalProperties": False,
     "properties": {
         "junk_path_segments": STRINGS,
@@ -28,9 +36,25 @@ SCHEMA = {
 }
 
 # Literal lists of docs/architecture/02_phase1_ingestion_sync.md §4.
-MANUAL_TIER1 = [".venv", "venv", "env", "site-packages", "__pycache__", ".git", ".idea", ".vscode",
-                "build", "dist", "node_modules", ".ipynb_checkpoints", ".mypy_cache", ".pytest_cache",
-                ".tox", ".eggs", "*.egg-info"]
+MANUAL_TIER1 = [
+    ".venv",
+    "venv",
+    "env",
+    "site-packages",
+    "__pycache__",
+    ".git",
+    ".idea",
+    ".vscode",
+    "build",
+    "dist",
+    "node_modules",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".tox",
+    ".eggs",
+    "*.egg-info",
+]
 MANUAL_QUARANTINE = ["_to_delete", "old", "archive_old", "backup"]
 MANUAL_TIER2 = (
     ".pyc .pyi .pyd .typed .dll .exe .lib .a .so .o .qml .qmltypes .qm .pak .metainfo .mesh .frag .bin "
@@ -52,8 +76,12 @@ def reference_decision(cfg, name, folders, size=1000, parent_kind=None):
     """The matching rule documented in config/gate.yaml and backend/sync/gate.py."""
     fold = [f.casefold() for f in folders]
     low = name.casefold()
-    kept = {e.casefold() for k, endings in (cfg.get("kept_endings_by_parent_kind") or {}).items()
-            if k.casefold() == (parent_kind or "").casefold() for e in endings}
+    kept = {
+        e.casefold()
+        for k, endings in (cfg.get("kept_endings_by_parent_kind") or {}).items()
+        if k.casefold() == (parent_kind or "").casefold()
+        for e in endings
+    }
 
     def hit(globs):
         return any(fnmatchcase(f, g.casefold()) for f in fold for g in globs)
@@ -62,11 +90,15 @@ def reference_decision(cfg, name, folders, size=1000, parent_kind=None):
         return "SKIPPED_JUNK"
     if hit(cfg["quarantine_path_patterns"]):
         return "QUARANTINED"
-    if low in {n.casefold() for n in cfg["junk_names"]} \
-            or any(low.startswith(p.casefold()) for p in cfg["junk_name_prefixes"]) \
-            or any(low.endswith(e.casefold()) and e.casefold() not in kept for e in cfg["junk_extensions"]) \
-            or any(low.endswith(e.casefold()) and e.casefold() not in kept and hit(g)
-                   for e, g in cfg["junk_extensions_under"].items()):
+    if (
+        low in {n.casefold() for n in cfg["junk_names"]}
+        or any(low.startswith(p.casefold()) for p in cfg["junk_name_prefixes"])
+        or any(low.endswith(e.casefold()) and e.casefold() not in kept for e in cfg["junk_extensions"])
+        or any(
+            low.endswith(e.casefold()) and e.casefold() not in kept and hit(g)
+            for e, g in cfg["junk_extensions_under"].items()
+        )
+    ):
         return "SKIPPED_JUNK"
     if any(low.endswith(e.casefold()) for e in cfg["shortcut_extensions"]):
         return "SKIPPED_SHORTCUT"
@@ -83,15 +115,23 @@ def s1_decision(_cfg, name, folders, size=1000, parent_kind=None):
     from backend.sync.gate import GateConfig, GateInput, gate_item
 
     config = GateConfig.load(Path(__file__).resolve().parents[4] / "config" / "gate.yaml")
-    verdict = gate_item(GateInput(name=name, size_bytes=size, folder_names=folders,
-                                  parent_kind=parent_kind), config)
+    verdict = gate_item(
+        GateInput(name=name, size_bytes=size, folder_names=folders, parent_kind=parent_kind), config
+    )
     return "ACCEPTED" if verdict is None else str(verdict.status)
 
 
-DECIDERS = [pytest.param(reference_decision, id="documented_rule"),
-            pytest.param(s1_decision, id="s1_gate", marks=pytest.mark.skipif(
-                importlib.util.find_spec("backend.sync.gate") is None,
-                reason="backend/sync/gate.py not on main yet"))]
+DECIDERS = [
+    pytest.param(reference_decision, id="documented_rule"),
+    pytest.param(
+        s1_decision,
+        id="s1_gate",
+        marks=pytest.mark.skipif(
+            importlib.util.find_spec("backend.sync.gate") is None,
+            reason="backend/sync/gate.py not on main yet",
+        ),
+    ),
+]
 
 CASES = [
     ("report.synctex.gz", ["APU", "Test Plan 37", "report"], "SKIPPED_JUNK"),
@@ -142,8 +182,21 @@ def test_lists_equal_the_manual(gate):
 
 def test_manual_not_rejected_list_survives(gate):
     # 02 §4 "What is deliberately not rejected"
-    for name in ("run.dat_fail", "a.csv", "a.xlsx", "t02_00", "a.png", "a.jpg", "a.bat", "a.txt", "a.md",
-                 "a.xsd", "a.drawio", "a.wbpz", "a.scdoc"):
+    for name in (
+        "run.dat_fail",
+        "a.csv",
+        "a.xlsx",
+        "t02_00",
+        "a.png",
+        "a.jpg",
+        "a.bat",
+        "a.txt",
+        "a.md",
+        "a.xsd",
+        "a.drawio",
+        "a.wbpz",
+        "a.scdoc",
+    ):
         assert reference_decision(gate, name, ["APU", "Test Plan 37"]) == "ACCEPTED", name
 
 
@@ -170,7 +223,10 @@ ARCHIVE_CASES = [  # (name, folders, parent_kind, expected): 03 §11 step 3 and 
 
 
 @pytest.mark.parametrize("decide", DECIDERS)
-@pytest.mark.parametrize("name, folders, parent_kind, expected", ARCHIVE_CASES,
-                         ids=[f"{c[0]}@{c[2]}@{'/'.join(c[1])}" for c in ARCHIVE_CASES])
+@pytest.mark.parametrize(
+    "name, folders, parent_kind, expected",
+    ARCHIVE_CASES,
+    ids=[f"{c[0]}@{c[2]}@{'/'.join(c[1])}" for c in ARCHIVE_CASES],
+)
 def test_archive_member_exception(gate, decide, name, folders, parent_kind, expected):
     assert decide(gate, name, folders, parent_kind=parent_kind) == expected

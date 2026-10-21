@@ -376,7 +376,7 @@ def test_developer_key_format_is_refused_for_both_names(monkeypatch, tmp_path, n
 def test_stack_database_url_is_built_from_parts_and_escaped(monkeypatch):
     set_env(monkeypatch, {"DCL_DB_USER": "dcl", "DCL_DB_PASSWORD": "p@ss/w:rd"})
     url = load_settings(env_file=None).stack_database_url().get_secret_value()
-    assert url == "postgresql+psycopg://dcl:p%40ss%2Fw%3Ard@postgres:5432/dcl"
+    assert url == "postgresql+psycopg://dcl:p%40ss%2Fw%3Ard@postgres:5432/dcl_v2"
 
 
 def test_database_url_wins_when_set(monkeypatch):

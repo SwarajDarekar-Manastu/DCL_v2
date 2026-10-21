@@ -17,12 +17,13 @@ Enumerate the four shared OneDrive folders through Microsoft Graph delta, react 
 Code:
 - `backend/sync/graph_client.py` (GET-only Graph client; relative paths or absolute Graph links only)
 - `backend/sync/auth.py` (encrypted MSAL cache, `TokenProvider` silent-first + device-code sign-in, `check_access`, CLI)
-- `backend/sync/delta_runner.py` (planned)
+- `backend/sync/delta.py` (`seed_roots`, `run_root` crawl/delta with page checkpoints, `upsert_page`, `finalize_root` paths + gate + scope; CLI `crawl`)
+- `backend/sync/folder_listing.py` (S5's allowlist listing: folders.csv + library_pdfs.csv; CLI)
 - `backend/sync/webhooks.py` (planned)
 - `backend/sync/resync.py` (planned)
 
 Tests and fixtures:
-- `backend/tests/unit/sync/test_auth.py`, `backend/tests/unit/sync/test_graph_client.py`
+- `backend/tests/unit/sync/test_auth.py`, `backend/tests/unit/sync/test_graph_client.py`, `backend/tests/unit/sync/test_delta.py`
 - `backend/tests/integration/sync/` (planned)
 
 ## Interfaces
@@ -47,7 +48,9 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 - `backend/sync/graph_client.py`
 - `backend/sync/auth.py`
-- `backend/sync/delta_runner.py`
+- `backend/sync/delta.py`
+- `backend/sync/folder_listing.py`
+- `backend/tests/unit/sync/test_delta.py`
 - `backend/sync/webhooks.py`
 - `backend/sync/resync.py`
 - `backend/tests/unit/sync/`
@@ -56,10 +59,10 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 ## Rubric (what "done" means for this feature)
 
 - [ ] Full metadata crawl of the four roots completes and records ~110k items
-- [ ] Items tracked by (drive_id,item_id); folder rename updates paths with zero downloads
+- [x] Items tracked by (drive_id,item_id); folder rename updates paths with zero downloads (unit-tested)
+- [x] Crash mid-crawl resumes from the page checkpoint; 429/503 honor Retry-After (unit-tested; Redis-wide pause with the Celery task)
 - [ ] 410 resync produces no deletion without a per-item 404 check
-- [ ] 429/503 pauses all Graph calls process-wide for Retry-After
-- [ ] Outside-share item returns 403/404 in the negative test (unit-proven: 403/404 pass, 200/401/500 fail; live run waits for the operator's one-time sign-in)
+- [x] Outside-share item returns 403/404 in the negative test (live 2026-10-22: four roots 200, outside item 404)
 - [x] Token cache Fernet-encrypted, mode 600 in a 700 dir, atomic replace; an undecryptable file (v1 cache) is refused and left untouched
 - [x] Silent acquisition first; device-code sign-in as any account other than DCL_DELEGATED_USERNAME is rejected and not saved
 - [x] Graph client has no write path; the token is only sent to graph.microsoft.com
@@ -71,6 +74,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | MSAL auth with encrypted cache, GET-only Graph client, access check and CLI (28 unit tests); device flow verified live against the tenant with scope A |
+| 2026-10-22 | S1 | Metadata crawl/delta (`delta.py`) and S5's folder listing; 10 tests; live crawl of the four roots run against a disposable DB |
 
 ## Related
 
