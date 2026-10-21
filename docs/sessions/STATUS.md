@@ -397,3 +397,9 @@ Merged / ready: supersession per the Lead's decision: migration 0008 drive_items
 Blocked on: S4 — stack redeploy from main before the live dispatch over E1–E11
 Needs from others: S4 — beat entries dcl.process.dispatch (every 30 min) and dcl.process.sweep_documents (daily)
 Next: live dispatch + counts; Route C
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: live dispatch over E1–E11 on the stack DB (0008): 182 documents WAITING_FOR_ROUTE (A1 25, A2 23, B 4, C 40, D 84, E 2, F 4), 44 parts, 1 visual twin, 8 SOFT CONFLICTs, 0 HALTED. Fixes from the live run: ZIP-member typing in dispatch (18 xlsx/docx had gone to G; repaired with `retype`), .scdoc, LaTeX includes vs ancestor folders, orphan wording; `reassemble` command. Downloads (stack workers): 1,729 landed, 3,343 pending
+Blocked on: nothing
+Needs from others: nothing
+Next: Route C

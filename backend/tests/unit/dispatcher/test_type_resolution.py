@@ -128,3 +128,8 @@ def test_utf16_text_with_a_bom_is_text_refined_by_its_extension():
 def test_a_png_that_holds_jpeg_bytes_is_jpeg_with_a_mismatch():
     resolved = resolve_type(b"\xff\xd8\xff\xe0" + b"\x00" * 20, "1.png")
     assert (resolved.kind, resolved.route, resolved.ext_mismatch) == ("jpeg", Route.D, True)
+
+
+def test_spaceclaim_documents_are_zip_containers_without_a_mismatch():
+    resolved = resolve_type(b"PK\x03\x04" + b"\x00" * 30, "Geometry - O-ring Seal Analysis.scdoc", ["a.xml"])
+    assert (resolved.kind, resolved.route, resolved.ext_mismatch) == ("scdoc", Route.G, False)

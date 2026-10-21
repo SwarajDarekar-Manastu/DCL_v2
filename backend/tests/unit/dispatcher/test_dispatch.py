@@ -224,3 +224,66 @@ def test_sweep_settles_documents_no_live_location_holds(session, minio):
         item.status = S.LANDED
     session.commit()
     assert sweep_documents(session)["reactivated"] == 1
+
+
+def _zip_bytes(*members: str) -> bytes:
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for member in members:
+            archive.writestr(member, "x")
+    return buffer.getvalue()
+
+
+def test_office_files_are_routed_by_their_zip_members_and_retype_fixes_older_rows(session, minio):
+    from backend.dispatcher.routing import retype_waiting
+
+    _seed(session, minio)
+    xlsx = _zip_bytes("[Content_Types].xml", "xl/workbook.xml")
+    docx = _zip_bytes("[Content_Types].xml", "word/document.xml")
+    _file(
+        session,
+        minio,
+        "xlsx",
+        "F-TP12",
+        "Setup.xlsx",
+        xlsx,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    _file(
+        session,
+        minio,
+        "docx",
+        "F-TP12",
+        "Report.docx",
+        docx,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    session.commit()
+    dispatch(session, minio)
+    docs = _docs(session)
+    assert (docs["Setup"].route, docs["Report"].route) == ("C", "A1")
+
+    docs["Setup"].route = "G"  # as written by the first live dispatch before the fix
+    session.commit()
+    assert retype_waiting(session, minio) == {"G->C": 1}
+    session.refresh(docs["Setup"])
+    assert docs["Setup"].route == "C"
+
+
+def test_reassemble_rebuilds_untouched_waiting_documents_of_a_route(session, minio):
+    from backend.dispatcher.routing import reset_waiting
+    from backend.postgres.enums import Route
+
+    _seed(session, minio)
+    dispatch(session, minio)
+    touched = _docs(session)["report_draft"]
+    for flag in session.scalars(select(ReviewFlag).where(ReviewFlag.doc_id == touched.doc_id)):
+        flag.status = "IN_PROGRESS"
+    session.commit()
+    assert reset_waiting(session, Route.A2) == 1  # report_main only; report_draft has a flag in progress
+    session.commit()
+    again = dispatch(session, minio)
+    assert again.created == 1
+    assert set(_docs(session)) == {"report_main", "report_draft", "Test_Report_12", "TP12_T01"}
