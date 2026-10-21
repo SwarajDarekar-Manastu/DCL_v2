@@ -216,3 +216,13 @@ def test_an_item_landed_by_another_worker_is_not_downloaded_again(session, minio
     result = _land(session, minio, onedrive, loc)  # a duplicate task for the same item
     assert (result.downloaded, result.new_blob) == (False, False)
     assert onedrive.content_requests == []
+
+
+def test_no_temp_bytes_survive_on_a_versioned_bucket(session, minio, onedrive):
+    from minio.commonconfig import ENABLED
+    from minio.versioningconfig import VersioningConfig
+
+    minio.set_bucket_versioning(RAW, VersioningConfig(ENABLED))
+    _land(session, minio, onedrive, _item(session, "i1", CONTENT))
+    leftovers = list(minio.list_objects(RAW, prefix=INCOMING_PREFIX, recursive=True, include_version=True))
+    assert leftovers == []
