@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `backend/route-c-telemetry` |
-| Status | planned |
+| Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §7; 05 §4.4; 06 §4 |
 | Last updated | 2026-10-21 |
@@ -15,16 +15,18 @@ Deterministic path from .dat/.tdms/.csv/.xlsx/.npy to normalized Parquet, teleme
 ## Location
 
 Code:
-- `backend/routes/c_telemetry/`
-- `backend/common/units.py`
+- `backend/routes/c_telemetry/` (planned)
+- `backend/common/units.py` (pint registry + `config/units.txt`, S5 aliases, gauge/absolute from the spelling, canonical units, gauge → absolute)
 
 Tests and fixtures:
-- `backend/tests/unit/routes/c_telemetry/`
+- `backend/tests/unit/common/test_units.py`
+- `backend/tests/unit/routes/c_telemetry/` (planned)
 - `backend/tests/fixtures/route_c/`
 
 ## Interfaces
 
 Provides:
+- `parse_unit(text) -> ParsedUnit{unit, dimension, gauge_or_abs, canonical}` (raises `UnitError`), `to_canonical(value, unit) -> (value, unit)` in bar / N / K / g/s / W or base SI, `ambient_bar_abs(condition, recorded)`, `gauge_to_absolute()`, `has_dimension()` (used by S2's numeric-fact check)
 - telemetry_runs/telemetry_channels rows
 - `normalized.parquet`
 - run summary node
@@ -39,6 +41,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 - `backend/routes/c_telemetry/`
 - `backend/common/units.py`
+- `backend/tests/unit/common/test_units.py`
 - `backend/tests/unit/routes/c_telemetry/`
 - `backend/tests/fixtures/route_c/`
 
@@ -56,6 +59,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-21 | S1 | backend/common/units.py (registry, aliases, references, canonical units); 29 tests |
 
 ## Related
 
