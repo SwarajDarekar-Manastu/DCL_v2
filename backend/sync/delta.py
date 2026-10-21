@@ -63,6 +63,7 @@ class GraphCallFailed(RuntimeError):
 @dataclass
 class CrawlStats:
     root_name: str
+    finished: bool = False
     pages: int = 0
     folders_seen: int = 0
     items_seen: int = 0
@@ -316,8 +317,14 @@ def run_root(
     *,
     sleep: Callable[[float], None] = time.sleep,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    deadline: float | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> CrawlStats:
-    """Crawl (no delta link yet) or incremental delta for one root; commits after every page."""
+    """Crawl (no delta link yet) or incremental delta for one root; commits after every page.
+
+    With a ``deadline`` (a ``clock()`` value) the run stops after the first committed page past it,
+    leaving ``next_link_checkpoint`` for the next run; ``finished`` says whether the root completed.
+    """
     stats = CrawlStats(root.root_name)
     first_crawl = root.delta_link is None
     if root.next_link_checkpoint:
@@ -343,6 +350,8 @@ def run_root(
         if next_link:
             root.next_link_checkpoint = next_link
             session.commit()
+            if deadline is not None and clock() >= deadline:
+                return stats
             url, params = next_link, None
             continue
         finalize_root(
@@ -359,6 +368,7 @@ def run_root(
         if first_crawl:
             root.last_full_crawl_at = root.last_delta_at
         session.commit()
+        stats.finished = True
         break
 
     counts = session.execute(
