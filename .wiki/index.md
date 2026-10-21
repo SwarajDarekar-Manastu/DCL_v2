@@ -61,6 +61,7 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
+| [frontend__openwebui-actions-skills__actions.md](plans/frontend__openwebui-actions-skills__actions.md) | `frontend/openwebui-actions-skills` | S3 | 2026-10-22 |
 | [frontend__openwebui-pipe__attachments.md](plans/frontend__openwebui-pipe__attachments.md) | `frontend/openwebui-pipe` | S3 | 2026-10-22 |
 
 ## Maintenance
