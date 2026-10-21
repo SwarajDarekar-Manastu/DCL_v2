@@ -174,3 +174,9 @@ Merged / ready: `config/gate.yaml` with `kept_endings_by_parent_kind: {wbpz: [".
 Blocked on: S1 crawl folder listing (allowlist)
 Needs from others: nothing else
 Next: idle until the listing arrives
+
+## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: `frontend/review-ui` MVP against S1's review API: queue (filters in the URL, impact sort, j/k/Enter, aging, live refresh), case view (typed evidence panes, consoles from `allowed_actions`, dry-run gate, folder-scoped rule in one resolve, assign/reject/undo), rules page; types generated from OpenAPI (`npm run gen:api`); `GET /assets/url` presign route. 75 Vitest, backend unit suite green; browser run against a mock API.
+Blocked on: end-to-end resume needs S1's M2 tables; Audit page needs the audit route (proposed to Lead); viewer body needs S2's `resolve_anchor` DB wrapper.
+Needs from others: Lead decision on GET /audit owner; S4 note: presigned URLs use DCL_MINIO_ENDPOINT, which must be reachable from browsers (or a public endpoint setting).
+Next: Open WebUI Pipe against S2's /v1/answer contract (S2 branch 13c7c94, merge pending).

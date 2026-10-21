@@ -7,19 +7,26 @@
 
 	interface Props {
 		flag: FlagView;
-		isAdmin: boolean;
 		draft: Resolution | null;
 		preview: { result: DryRunResponse | null; error: string; current: boolean; busy: boolean };
 		onPreview: () => void;
 	}
 
-	let { flag, isAdmin, draft = $bindable(), preview, onPreview }: Props = $props();
-	let actions = $derived(allowedActions(flag, isAdmin));
+	let { flag, draft = $bindable(), preview, onPreview }: Props = $props();
+	let actions = $derived(allowedActions(flag));
 	let open = $derived(['OPEN', 'IN_PROGRESS', 'REOPENED'].includes(flag.status));
 	let gap = $derived(draft ? missing(draft) : null);
 
 	function choose(action: ResolutionAction | '') {
 		draft = action ? startDraft(action, flag) : null;
+	}
+	function pickUnit(unit: string, gaugeOrAbs: string) {
+		const next = draft?.action === 'set_unit' ? draft : startDraft('set_unit', flag);
+		if (next.action !== 'set_unit') return;
+		next.unit = unit;
+		next.gauge_or_abs = gaugeOrAbs as typeof next.gauge_or_abs;
+		next.expression = null;
+		draft = next;
 	}
 	const where = (a: FlagView['anchor']) =>
 		[a.page && `page ${a.page}`, a.sheet && `sheet ${a.sheet}`, a.channel && `channel ${a.channel}`, a.column && `column ${a.column}`, a.line && `line ${a.line}`]
@@ -38,7 +45,7 @@
 	{/if}
 
 	<div class="body">
-		<EvidencePane evidence={flag.evidence} suggestion={flag.suggested_resolution} />
+		<EvidencePane evidence={flag.evidence ?? null} suggestion={flag.suggested_resolution ?? null} onPickUnit={open ? pickUnit : undefined} />
 
 		<div class="console">
 			{#if open}

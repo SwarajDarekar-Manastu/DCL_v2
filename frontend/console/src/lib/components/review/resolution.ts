@@ -1,24 +1,7 @@
 // Resolution drafts for the case view (file 06 §6): which actions a flag offers, how a draft starts,
 // when it is complete, and the rule a scoped resolution becomes.
 
-import type { FlagType, FlagView, Resolution, ResolutionAction, RuleDraft, RuleScope, RuleType } from '$lib/api_endpoint';
-
-/**
- * TEMPORARY mirror of backend/review/api_models.py ALLOWED_ACTIONS (S1, 9fda653), because it is not in
- * the OpenAPI schema. Replace with FlagView.allowed_actions once S1 adds it (requested 2026-10-21).
- */
-export const ALLOWED_ACTIONS: Record<FlagType, ResolutionAction[]> = {
-	UNIT_AMBIGUITY: ['set_unit', 'set_fact_unit'],
-	SCHEMA_UNKNOWN: ['map_columns', 'map_json_keys', 'mark_junk'],
-	LOW_CONFIDENCE_EXTRACTION: ['set_value', 'choose_table'],
-	PARSE_FAILURE: ['use_replacement', 'skip', 'mark_junk'],
-	UNSUPPORTED_FORMAT: ['skip', 'mark_junk', 'watch'],
-	CONFLICT: ['choose_source', 'mark_superseded', 'accept_both', 'ignore'],
-	SENSITIVE_CONTENT: ['redact', 'approve_internal', 'exclude'],
-	HELD_LARGE_FILE: ['approve_download', 'skip'],
-	CLOUD_RESTRICTED: ['ignore']
-};
-export const ADMIN_ONLY_ACTIONS: ResolutionAction[] = ['approve_internal'];
+import type { CaseLocation, FlagView, Resolution, ResolutionAction, RuleDraft, RuleScope, RuleType } from '$lib/api_endpoint';
 
 export const ACTION_LABEL: Record<ResolutionAction, string> = {
 	set_unit: 'Set channel unit',
@@ -41,8 +24,9 @@ export const ACTION_LABEL: Record<ResolutionAction, string> = {
 	exclude: 'Exclude permanently'
 };
 
-export function allowedActions(flag: Pick<FlagView, 'flag_type'>, isAdmin: boolean): ResolutionAction[] {
-	return ALLOWED_ACTIONS[flag.flag_type].filter((action) => isAdmin || !ADMIN_ONLY_ACTIONS.includes(action));
+/** The server computes what this user may do with the flag (S1 allowed_actions_for). */
+export function allowedActions(flag: Pick<FlagView, 'allowed_actions'>): ResolutionAction[] {
+	return flag.allowed_actions.filter((action): action is ResolutionAction => action in ACTION_LABEL);
 }
 
 /** Pressure units offered for UNIT_AMBIGUITY on telemetry (file 06 §6), as unit + gauge/abs. */
@@ -57,40 +41,35 @@ export const PRESSURE_CHOICES = [
 	{ label: 'mV raw', unit: 'mV', gauge_or_abs: 'n/a' }
 ] as const;
 
-type Suggestion = Record<string, unknown> | null | undefined;
-
-const str = (v: unknown) => (typeof v === 'string' ? v : '');
-
-/** A fresh draft for an action, prefilled from the flag's suggestion and anchor where they fit. */
+/** A fresh draft for an action: the suggestion itself when it proposes this action, else blank fields. */
 export function startDraft(action: ResolutionAction, flag: Pick<FlagView, 'anchor' | 'suggested_resolution'>): Resolution {
-	const s: Suggestion = flag.suggested_resolution;
-	const fromSuggestion = s && s.action === action ? s : {};
+	const suggested = flag.suggested_resolution?.resolution;
+	// A JSON copy: the case may be a Svelte state proxy, which structuredClone refuses.
+	if (suggested && suggested.action === action) return JSON.parse(JSON.stringify(suggested)) as Resolution;
 	switch (action) {
 		case 'set_unit':
 			return {
 				action,
-				channel: str(fromSuggestion.channel) || flag.anchor.channel || flag.anchor.column || '',
-				unit: str(fromSuggestion.unit),
-				quantity: str(fromSuggestion.quantity) || 'pressure',
-				gauge_or_abs: (str(fromSuggestion.gauge_or_abs) || 'unknown') as 'unknown',
+				channel: flag.anchor.channel || flag.anchor.column || '',
+				unit: '',
+				quantity: 'pressure',
+				gauge_or_abs: 'unknown',
 				ambient_condition: null,
 				ambient_pressure_bar_abs: null,
 				expression: null
 			};
 		case 'set_fact_unit':
-			return { action, unit: str(fromSuggestion.unit) || null };
-		case 'map_columns': {
-			const columns = Array.isArray(fromSuggestion.columns) ? fromSuggestion.columns : [];
-			return { action, columns: columns.length ? (columns as never) : [{ index: 0, canonical_name: '', unit: null, quantity: null, is_time: true }] };
-		}
+			return { action, unit: null };
+		case 'map_columns':
+			return { action, columns: [{ index: 0, canonical_name: '', unit: null, quantity: null, is_time: true }] };
 		case 'map_json_keys':
-			return { action, key_to_section: (fromSuggestion.key_to_section as Record<string, string>) ?? {}, save_as_schema: null };
+			return { action, key_to_section: {}, save_as_schema: null };
 		case 'set_value':
-			return { action, value: str(fromSuggestion.value) || null, unit: str(fromSuggestion.unit) || null, illegible: false };
+			return { action, value: null, unit: null, illegible: false };
 		case 'choose_table':
 			return { action, choice: 'A', cells: null };
 		case 'choose_source':
-			return { action, choice: (str(fromSuggestion.choice) || 'A') as 'A' };
+			return { action, choice: 'A' };
 		case 'mark_superseded':
 			return { action, superseded_doc_id: '' };
 		case 'use_replacement':
@@ -143,13 +122,8 @@ export function needsPreview(action: ResolutionAction): boolean {
 
 export type ScopeChoice = 'file' | 'folder' | 'folder_pattern';
 
-/** Where a case lives, for rule scopes (S1 to add these to CaseDetail; until then folder scopes are unavailable). */
-export interface ScopeInfo {
-	scope_root?: string | null;
-	scope_folder_id?: string | null;
-	file_name?: string | null;
-	extension?: string | null;
-}
+/** Where the case's file lives (first OneDrive location), for rule scopes. */
+export type ScopeInfo = Pick<CaseLocation, 'root_name' | 'folder_id' | 'file_name' | 'extension'>;
 
 const RULE_TYPE: Partial<Record<ResolutionAction, RuleType>> = {
 	set_unit: 'unit_mapping',
@@ -164,8 +138,8 @@ export function canBecomeRule(action: ResolutionAction): boolean {
 export function ruleFor(r: Resolution, choice: ScopeChoice, where: ScopeInfo, pattern = ''): RuleDraft | null {
 	const ruleType = RULE_TYPE[r.action];
 	if (!ruleType || choice === 'file') return null;
-	if (!where.scope_folder_id) throw new Error('folder scope needs the folder id of the case');
-	const scope: RuleScope = { scope_root: where.scope_root ?? null, scope_folder_id: where.scope_folder_id };
+	if (!where.folder_id) throw new Error('folder scope needs the folder id of the case');
+	const scope: RuleScope = { scope_root: where.root_name, scope_folder_id: where.folder_id };
 	if (choice === 'folder_pattern') {
 		if (!pattern.trim()) throw new Error('enter a filename pattern');
 		scope.scope_filename_glob = pattern.trim();

@@ -19,7 +19,7 @@ Code:
 - `frontend/console/src/lib/api_endpoint.ts` (`ViewerPayload` types, `getViewer`)
 - `frontend/console/src/lib/components/viewer/` (`DocumentViewer`, `ImageWithRegions`, `TableView`, `CodeView`, `MetaPanel`)
 - `frontend/console/src/routes/docs/[id]/viewer/+page.svelte`
-- `backend/api/assets.py` (planned: `GET /assets/{id}/url`)
+- `backend/api/assets.py` (`GET /assets/url?uri=s3://dcl-assets/...`, built with the Review UI)
 
 Tests and fixtures:
 - `backend/tests/unit/api/test_viewer.py`
@@ -55,7 +55,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] Anchor link codec round-trips page, line, time and cells (sheet names with `:` and `!`); malformed anchors get 400
 - [x] bbox overlays follow normalized coordinates at any rendered size (component test; checked at 1280 px and 375 px)
 - [x] No node id in links, payloads or Console state (grep)
-- [ ] Endpoint body wired to real data; presigned asset route in `assets.py`
+- [ ] Endpoint body wired to real data (presign route exists; needs S2's `resolve_anchor` DB wrapper and S1's node model)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 Verify:

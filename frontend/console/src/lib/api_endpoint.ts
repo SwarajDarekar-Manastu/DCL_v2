@@ -17,7 +17,10 @@ export type ViewerView = ViewerPayload['view'];
 export type ViewerRegion = Schemas['Region'];
 export type ResolutionStatus = Schemas['ResolutionStatus'];
 
-/** backend/review/api_models.py (S1) */
+/** backend/api/assets.py */
+export type AssetUrl = Schemas['AssetUrl'];
+
+/** backend/review/api_models.py and backend/dispatcher/contract.py (S1) */
 export type FlagType = Schemas['FlagType'];
 export type FlagSeverity = Schemas['FlagSeverity'];
 export type CaseStatus = Schemas['CaseStatus'];
@@ -27,6 +30,9 @@ export type CaseSummary = Schemas['CaseSummary'];
 export type CaseList = Schemas['CaseList'];
 export type CaseDetail = Schemas['CaseDetail'];
 export type FlagView = Schemas['FlagView'];
+export type Evidence = NonNullable<FlagView['evidence']>;
+export type Suggestion = Schemas['Suggestion'];
+export type CaseLocation = Schemas['CaseLocation'];
 export type FlagResolution = Schemas['FlagResolution'];
 export type Resolution = FlagResolution['resolution'];
 export type ResolutionAction = Resolution['action'];
@@ -134,6 +140,11 @@ function query(params: Record<string, string | number | boolean | null | undefin
 	}
 	const text = q.toString();
 	return text ? `?${text}` : '';
+}
+
+/** GET /assets/url?uri=s3://dcl-assets/... (backend/api/assets.py): a 15-minute URL for an asset */
+export function presignAsset(uri: string): Promise<AssetUrl> {
+	return request<AssetUrl>('GET', `/assets/url${query({ uri })}`);
 }
 
 const casePath = (caseKey: string) => `/review/cases/${encodeURIComponent(caseKey)}`;

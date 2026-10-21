@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/assets/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Asset Url */
+        get: operations["asset_url_assets_url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -319,6 +336,13 @@ export interface components {
              * @default []
              */
             siblings: string[];
+        };
+        /** AssetUrl */
+        AssetUrl: {
+            /** Expires In S */
+            expires_in_s: number;
+            /** Url */
+            url: string;
         };
         /** AssignRequest */
         AssignRequest: {
@@ -1605,6 +1629,38 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    asset_url_assets_url_get: {
+        parameters: {
+            query: {
+                /** @description s3://dcl-assets/<key> */
+                uri: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetUrl"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     me_auth_me_get: {
         parameters: {
             query?: never;
