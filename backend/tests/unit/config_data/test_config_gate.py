@@ -21,6 +21,7 @@ SCHEMA = {
         "junk_names": STRINGS,
         "junk_name_prefixes": STRINGS,
         "junk_extensions_under": {"type": "object", "additionalProperties": STRINGS},
+        "kept_endings_by_parent_kind": {"type": "object", "additionalProperties": STRINGS},
         "shortcut_extensions": STRINGS,
         "max_download_bytes": {"type": "integer", "minimum": 1},
     },
@@ -35,7 +36,7 @@ MANUAL_TIER2 = (
     ".pyc .pyi .pyd .typed .dll .exe .lib .a .so .o .qml .qmltypes .qm .pak .metainfo .mesh .frag .bin "
     ".h .c .cpp .pxd .pyx .f90 .f .f95 .pyf .inc .f2py_f2cmap .afm .ttf .mplstyle .ico .icns .ani .cls "
     ".bas .xlam .applescript .asp .pys .vbs .sct .idl .rc .chm .pyw .tab .zi .tpl .tmpl .template .build "
-    ".cmake .toml .ini .pc .pth .spec .whl .rst .1 .apache .bsd .python .external .ps1 .fish .pem .lua "
+    ".cmake .toml .pc .pth .spec .whl .rst .apache .bsd .python .external .ps1 .fish .pem .lua "
     ".xrc .al .g4 .lark .gitignore .iml "
     ".aux .log .toc .lof .lot .out .fls .fdb_latexmk .synctex .synctex(busy) .synctex.gz .bbl .blg .nav "
     ".snm .vrb .bkp .tdms_index .tmp .crdownload .part"
@@ -47,10 +48,12 @@ def gate(load_config):
     return load_config("gate.yaml")
 
 
-def reference_decision(cfg, name, folders, size=1000):
+def reference_decision(cfg, name, folders, size=1000, parent_kind=None):
     """The matching rule documented in config/gate.yaml and backend/sync/gate.py."""
     fold = [f.casefold() for f in folders]
     low = name.casefold()
+    kept = {e.casefold() for k, endings in (cfg.get("kept_endings_by_parent_kind") or {}).items()
+            if k.casefold() == (parent_kind or "").casefold() for e in endings}
 
     def hit(globs):
         return any(fnmatchcase(f, g.casefold()) for f in fold for g in globs)
@@ -61,8 +64,9 @@ def reference_decision(cfg, name, folders, size=1000):
         return "QUARANTINED"
     if low in {n.casefold() for n in cfg["junk_names"]} \
             or any(low.startswith(p.casefold()) for p in cfg["junk_name_prefixes"]) \
-            or any(low.endswith(e.casefold()) for e in cfg["junk_extensions"]) \
-            or any(low.endswith(e.casefold()) and hit(g) for e, g in cfg["junk_extensions_under"].items()):
+            or any(low.endswith(e.casefold()) and e.casefold() not in kept for e in cfg["junk_extensions"]) \
+            or any(low.endswith(e.casefold()) and e.casefold() not in kept and hit(g)
+                   for e, g in cfg["junk_extensions_under"].items()):
         return "SKIPPED_JUNK"
     if any(low.endswith(e.casefold()) for e in cfg["shortcut_extensions"]):
         return "SKIPPED_SHORTCUT"
@@ -73,13 +77,14 @@ def reference_decision(cfg, name, folders, size=1000):
     return "ACCEPTED"
 
 
-def s1_decision(_cfg, name, folders, size=1000):
+def s1_decision(_cfg, name, folders, size=1000, parent_kind=None):
     from pathlib import Path
 
     from backend.sync.gate import GateConfig, GateInput, gate_item
 
     config = GateConfig.load(Path(__file__).resolve().parents[4] / "config" / "gate.yaml")
-    verdict = gate_item(GateInput(name=name, size_bytes=size, folder_names=folders), config)
+    verdict = gate_item(GateInput(name=name, size_bytes=size, folder_names=folders,
+                                  parent_kind=parent_kind), config)
     return "ACCEPTED" if verdict is None else str(verdict.status)
 
 
@@ -93,7 +98,9 @@ CASES = [
     ("11bar_10sec.dat.gz", ["APU Injector", "Pressure_Data_Files"], "ACCEPTED"),
     ("T01.dat_fail", ["APU", "Test Plan 07"], "ACCEPTED"),
     ("run.tdms_index", ["APU Heater", "Test Plan 30"], "SKIPPED_JUNK"),
-    ("numpy.1", ["APU", "tools"], "SKIPPED_JUNK"),
+    ("report_v1.1", ["APU", "Test Plan 37"], "ACCEPTED"),
+    ("LabJack_stream.ini", ["APU Injector", "Pressure_Data_Files"], "ACCEPTED"),
+    ("setup.ini", ["APU", "tools", ".venv", "Lib"], "SKIPPED_JUNK"),
     ("Thruster Config Rev C.drawio", ["APU", "Diagrams"], "ACCEPTED"),
     ("Thruster Config Rev C.drawio.bkp", ["APU", "Diagrams"], "SKIPPED_JUNK"),
     ("~$Test_Report_37.docx", ["APU", "Test Plan 37"], "SKIPPED_JUNK"),
@@ -128,6 +135,7 @@ def test_lists_equal_the_manual(gate):
     assert gate["junk_names"] == [".DS_Store", "Thumbs.db", "desktop.ini"]
     assert gate["junk_name_prefixes"] == ["~$"]
     assert list(gate["junk_extensions_under"]) == [".xlsm"]  # "(when under library)", judgment call 1
+    assert gate["kept_endings_by_parent_kind"] == {"wbpz": [".out"]}  # 02 §4, 03 §11
     assert gate["shortcut_extensions"] == [".url", ".lnk"]
     assert gate["max_download_bytes"] == 4 * 1024**3
 
@@ -149,3 +157,20 @@ def test_gate_decisions(gate, decide, name, folders, expected):
 def test_size_tier(gate, decide):
     assert decide(gate, "long_test.mp4", ["APU", "videos"], size=5 * 1024**3) == "HELD_LARGE_FILE"
     assert decide(gate, "empty.txt", ["APU"], size=0) == "SKIPPED_EMPTY"
+
+
+ARCHIVE_CASES = [  # (name, folders, parent_kind, expected): 03 §11 step 3 and 5
+    ("run.out", ["APU", "Simulations", "nozzle.wbpz", "dp0", "MECH"], "wbpz", "ACCEPTED"),
+    ("report.out", ["APU", "Test Plan 37", "report"], None, "SKIPPED_JUNK"),
+    ("run.out", ["APU", "Archives", "bundle.zip"], "zip", "SKIPPED_JUNK"),
+    # Tier 1 still applies inside a .wbpz
+    ("run.out", ["APU", "Simulations", "nozzle.wbpz", ".venv"], "wbpz", "SKIPPED_JUNK"),
+    ("solve.aux", ["APU", "Simulations", "nozzle.wbpz"], "WBPZ", "SKIPPED_JUNK"),  # only listed endings kept
+]
+
+
+@pytest.mark.parametrize("decide", DECIDERS)
+@pytest.mark.parametrize("name, folders, parent_kind, expected", ARCHIVE_CASES,
+                         ids=[f"{c[0]}@{c[2]}@{'/'.join(c[1])}" for c in ARCHIVE_CASES])
+def test_archive_member_exception(gate, decide, name, folders, parent_kind, expected):
+    assert decide(gate, name, folders, parent_kind=parent_kind) == expected

@@ -135,3 +135,42 @@ Merged / ready: viewer anchor codec delegated to `backend/dispatcher/contract.py
 Blocked on: Review UI waits for S1's `backend/review/api_models.py` (in progress); viewer body waits for S2's `resolve_anchor`; Pipe waits for S2's `/v1/answer` schema.
 Needs from others: S1 may drop the equivalence test in `test_contract.py`, after which S3 deletes the alias.
 Next: idle until one of the inputs above lands on main.
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: publish-first item 3: backend/review/api_models.py (queue, case detail, the file 06 §6 resolution actions as a union on `action` with ALLOWED_ACTIONS, resolve/assign/reject/undo, dry-run, rules) + backend/api/review.py with every file 08 §4.4 review route typed and role-gated (501 until the M2 tables); review enums. Gate: S5's findings fixed (patterns must be strings; .xlsm only under lib/lib64/library/*-packages). Contract test no longer depends on viewer.py. Test: `uv run pytest && uv run ruff check backend` (498 passed, 18 skipped)
+Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl
+Needs from others: nothing new
+Next: backend/storage/minio.py get/put for S2's vision cache; then documents/document_sources/document_nodes/assets models (M2)
+
+
+
+## 2026-10-21 21:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: unchanged since e109103 (gate.yaml merge requested)
+Blocked on: Lead decision on dropping ".1" from the 02 §4 Tier-2 list (raised by S1): end-of-name matching junks team files such as "report_v1.1"; man pages only occur under Tier-1 paths. S5 agrees with dropping it; config/gate.yaml keeps it until the manual changes
+Needs from others: Lead — the ".1" decision together with the open ".out"/".ini" question; S1 — the crawl folder listing
+Next: idle until one of these arrives
+
+## 2026-10-21 21:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` without `.ini` and `.1` (manual at be5ce14), new cases for `report_v1.1` and instrument `.ini` files; 48 gate tests through S1's gate. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend` (230 passed)
+Blocked on: S1 — `parent_kind` in GateConfig/GateInput (the `.wbpz` `.out` exception needs a key or a fixed rule) and the crawl folder listing
+Needs from others: S1 — tell S5 whether the `.wbpz` exception is configured in gate.yaml (proposed key below in the message) or fixed in code
+Next: idle until S1 answers or the listing arrives
+
+<<<<<<< HEAD
+## 2026-10-21 22:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: 31ed593 (gate.yaml header wording), not yet requested
+Blocked on: Lead — the `.wbpz` `.out` exception: Lead ruled "fixed rule in code, no gate.yaml key"; S1 implemented a gate.yaml key `kept_endings_by_parent_kind` (S1 c861d3a, merge requested). S5 adds the entry and three decision cases once the Lead confirms which one stands
+Needs from others: Lead — that confirmation; S1 — the crawl folder listing
+Next: idle
+=======
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: backend/storage/minio.py (BucketStore get/put for S2's vision cache, presign_get 15 min for S3, ensure_buckets, raw_key); 11 tests, the server tests green against S4's dcl-v2-minio:RELEASE.2025-10-15T17-29-55Z. Test: `DCL_TEST_MINIO_ENDPOINT=<disposable> uv run pytest && uv run ruff check backend`
+Blocked on: Lead answers of 100eae2 for the delta crawl
+Needs from others: S4 — CI service for a disposable MinIO with DCL_TEST_MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY, like the DB tests
+Next: provisional evidence/suggestion models per flag type (S3 asked), then the M2 documents/nodes/assets models
+>>>>>>> main
+
+## 2026-10-21 22:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/gate.yaml` with `kept_endings_by_parent_kind: {wbpz: [".out"]}` per the Lead's ruling; 5 archive-member decision cases through the documented rule and S1's gate (58 gate tests). Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend`
+Blocked on: S1 crawl folder listing (allowlist)
+Needs from others: nothing else
+Next: idle until the listing arrives

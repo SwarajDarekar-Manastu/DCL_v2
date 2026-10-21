@@ -7,7 +7,7 @@
 # endings and names are matched against the end of the file name, so ".synctex.gz" is junk
 # while a plain ".gz" is not. Tier 4 (magic bytes, secret scan) runs after download.
 #
-# Every value is quoted: YAML reads a bare .1 as the number 0.1.
+# Every value is quoted: YAML reads bare tokens such as .1 as numbers, and GateConfig refuses them.
 #
 # S5 judgment calls (02 §4 leaves them open):
 #   1. ".xlsm (when under library)" means environment library folders (Python/conda "Lib",
@@ -16,8 +16,12 @@
 #   2. Quarantine adds "* (old)" to the 02 §4 defaults, so a folder renamed "TP30 (old)"
 #      quarantines its subtree (02 §9 case 4).
 #
+# Manual decisions (Lead, 2026-10-21): ".ini" is data, not junk (02 §4; Tier-4 secret scan
+# still applies); ".1" is not junk (man pages only occur under Tier-1 paths); ".out" stays
+# junk except for members of an ANSYS .wbpz archive (kept_endings_by_parent_kind below, 03 §11).
+#
 # To verify against the real crawl (M1): rejection counts for the segments "build", "env",
-# "backup" and the endings ".log", ".bin", ".tab", ".out", ".1" in team folders.
+# "backup" and the endings ".log", ".bin", ".tab", ".out" in team folders.
 
 # Tier 1: a folder whose name matches stops traversal -> SKIPPED_JUNK (T1:<segment>)
 junk_path_segments: [".venv", "venv", "env", "site-packages", "__pycache__", ".git", ".idea",
@@ -34,8 +38,8 @@ junk_extensions: [
   ".qm", ".pak", ".metainfo", ".mesh", ".frag", ".bin", ".h", ".c", ".cpp", ".pxd", ".pyx", ".f90",
   ".f", ".f95", ".pyf", ".inc", ".f2py_f2cmap", ".afm", ".ttf", ".mplstyle", ".ico", ".icns", ".ani",
   ".cls", ".bas", ".xlam", ".applescript", ".asp", ".pys", ".vbs", ".sct", ".idl", ".rc", ".chm",
-  ".pyw", ".tab", ".zi", ".tpl", ".tmpl", ".template", ".build", ".cmake", ".toml", ".ini", ".pc",
-  ".pth", ".spec", ".whl", ".rst", ".1", ".apache", ".bsd", ".python", ".external", ".ps1", ".fish",
+  ".pyw", ".tab", ".zi", ".tpl", ".tmpl", ".template", ".build", ".cmake", ".toml", ".pc",
+  ".pth", ".spec", ".whl", ".rst", ".apache", ".bsd", ".python", ".external", ".ps1", ".fish",
   ".pem", ".lua", ".xrc", ".al", ".g4", ".lark", ".gitignore", ".iml",
   # LaTeX intermediates
   ".aux", ".log", ".toc", ".lof", ".lot", ".out", ".fls", ".fdb_latexmk", ".synctex",
@@ -55,6 +59,12 @@ junk_name_prefixes: ["~$"]
 # Tier 2: an ending that is junk only below a matching folder (judgment call 1 above)
 junk_extensions_under:
   ".xlsm": ["lib", "lib64", "library", "*-packages"]
+
+# Tier 2 exception for archive members (Route G passes parent_kind = the containing archive's
+# kind): these endings skip the Tier-2 ending checks; Tier 1 and Tier 3 still apply.
+# ANSYS solver .out logs inside a .wbpz are data (02 §4, 03 §11 step 5).
+kept_endings_by_parent_kind:
+  "wbpz": [".out"]
 
 # Tier 3: shortcuts -> SKIPPED_SHORTCUT
 shortcut_extensions: [".url", ".lnk"]

@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `backend/review-backend` |
-| Status | planned |
+| Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/06_review_flags_and_halt_policy.md; 05 §4.5 |
 | Last updated | 2026-10-21 |
@@ -15,20 +15,22 @@ Flag models with deterministic fingerprints and case keys, staged payloads for h
 ## Location
 
 Code:
-- `backend/review/models.py`
-- `backend/review/fingerprints.py`
-- `backend/review/rules.py`
-- `backend/review/resume.py`
-- `backend/review/api_models.py`
+- `backend/review/api_models.py` (published: queue, case detail, resolutions, rules, dry-run models)
+- `backend/api/review.py` (routes of file 08 §4.4 with their models and roles; 501 until the M2 tables)
+- `backend/review/models.py` (planned)
+- `backend/review/rules.py` (planned)
+- `backend/review/resume.py` (planned)
+- Flag fingerprints live on `Flag` in `backend/dispatcher/contract.py` (no separate fingerprints module)
 
 Tests and fixtures:
-- `backend/tests/unit/review/`
+- `backend/tests/unit/review/test_api_models.py`
 - `backend/tests/integration/review/`
 
 ## Interfaces
 
 Provides:
-- review API models
+- review API models (`backend.review.api_models`): `CaseFilters`, `CaseList`/`CaseSummary` (rows of `v_review_cases`), `CaseDetail`, `CaseLocation` (folder id, file name, extension for the scope selector), `FlagView` (typed evidence/suggestion/resolution, `allowed_actions`), `allowed_actions_for()`, `check_actions()`; the action models live in `backend/dispatcher/contract.py`, `ResolveRequest/Response`, `RejectRequest`, `UndoResponse`, `DryRunRequest/Response`, `RuleDraft`, `RuleView`, `RuleSimulation`
+- routes: `/review/cases[/{case_key}[/assign|resolve|reject|undo]]`, `/review/dry-run`, `/review/rules[/{id}/simulate|deactivate]`; reviewer role, deactivate needs admin
 - rules resolver
 - resume task
 
@@ -40,10 +42,10 @@ Consumes:
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
 - `backend/review/models.py`
-- `backend/review/fingerprints.py`
 - `backend/review/rules.py`
 - `backend/review/resume.py`
 - `backend/review/api_models.py`
+- `backend/api/review.py`
 - `backend/tests/unit/review/`
 - `backend/tests/integration/review/`
 
@@ -60,6 +62,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-21 | S1 | Published review API models and the review route signatures (501 until M2); 25 tests |
+| 2026-10-21 | S1 | FlagView typed evidence + allowed_actions; CaseLocation scope values; rule body interim shape |
 
 ## Related
 

@@ -8,36 +8,68 @@ import jsonschema
 import pytest
 
 # 04 §3.2: "the type list is closed; values are open".
-ENTITY_TYPES = {"subsystem", "component", "material", "propellant", "catalyst", "sensor_tag",
-                "part_number", "test_id", "standard_clause", "person_role", "organization",
-                "vendor", "product", "tool_software", "equation", "failure_mode"}
+ENTITY_TYPES = {
+    "subsystem",
+    "component",
+    "material",
+    "propellant",
+    "catalyst",
+    "sensor_tag",
+    "part_number",
+    "test_id",
+    "standard_clause",
+    "person_role",
+    "organization",
+    "vendor",
+    "product",
+    "tool_software",
+    "equation",
+    "failure_mode",
+}
 
 ALIAS = {
     "type": "object",
     "required": ["surface", "lang"],
     "additionalProperties": False,
-    "properties": {"surface": {"type": "string", "minLength": 1},
-                   "lang": {"type": "string", "pattern": "^([a-z]{2,3}|und)$"}},
+    "properties": {
+        "surface": {"type": "string", "minLength": 1},
+        "lang": {"type": "string", "pattern": "^([a-z]{2,3}|und)$"},
+    },
 }
-ENTRY_PROPS = {"canonical": {"type": "string", "minLength": 1},
-               "note": {"type": "string"},
-               "aliases": {"type": "array", "minItems": 1, "items": ALIAS},
-               "sme_confirmed": {"type": "boolean"}}
+ENTRY_PROPS = {
+    "canonical": {"type": "string", "minLength": 1},
+    "note": {"type": "string"},
+    "aliases": {"type": "array", "minItems": 1, "items": ALIAS},
+    "sme_confirmed": {"type": "boolean"},
+}
 SCHEMA = {
     "type": "object",
     "required": ["version", "entities", "quantity_terms"],
     "additionalProperties": False,
     "properties": {
         "version": {"const": 1},
-        "entities": {"type": "array", "minItems": 1, "items": {
-            "type": "object", "required": ["type", "canonical", "aliases", "sme_confirmed"],
-            "additionalProperties": False,
-            "properties": {"type": {"enum": sorted(ENTITY_TYPES)}, **ENTRY_PROPS}}},
-        "quantity_terms": {"type": "array", "items": {
-            "type": "object", "required": ["canonical", "aliases", "sme_confirmed"],
-            "additionalProperties": False, "properties": ENTRY_PROPS}},
+        "entities": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": ["type", "canonical", "aliases", "sme_confirmed"],
+                "additionalProperties": False,
+                "properties": {"type": {"enum": sorted(ENTITY_TYPES)}, **ENTRY_PROPS},
+            },
+        },
+        "quantity_terms": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["canonical", "aliases", "sme_confirmed"],
+                "additionalProperties": False,
+                "properties": ENTRY_PROPS,
+            },
+        },
     },
 }
+
 
 @pytest.fixture(scope="module")
 def data(load_config):
@@ -48,10 +80,14 @@ def data(load_config):
 def resolve(data, canonical_key):
     def lookup(group, type_, surface):
         key = canonical_key(surface)
-        hits = [e["canonical"] for e in data[group]
-                if e.get("type") == type_ and key in {canonical_key(a["surface"]) for a in e["aliases"]}]
+        hits = [
+            e["canonical"]
+            for e in data[group]
+            if e.get("type") == type_ and key in {canonical_key(a["surface"]) for a in e["aliases"]}
+        ]
         assert len(hits) <= 1
         return hits[0] if hits else None
+
     return lookup
 
 
@@ -109,10 +145,15 @@ def test_lang_tag_matches_script(data):
 
 @pytest.mark.parametrize(
     "type_, a, b",
-    [("propellant", "HTP", "H2O2"), ("propellant", "HTP", "hydrogen peroxide"),
-     ("propellant", "HTP", "Wasserstoffperoxid"), ("propellant", "ADN", "LMP-103S"),
-     ("propellant", "HAN", "AF-M315E"), ("material", "C103", "C-103 Niobium"),
-     ("material", "Niob C-103", "C-103")],
+    [
+        ("propellant", "HTP", "H2O2"),
+        ("propellant", "HTP", "hydrogen peroxide"),
+        ("propellant", "HTP", "Wasserstoffperoxid"),
+        ("propellant", "ADN", "LMP-103S"),
+        ("propellant", "HAN", "AF-M315E"),
+        ("material", "C103", "C-103 Niobium"),
+        ("material", "Niob C-103", "C-103"),
+    ],
 )
 def test_manual_seed_pairs_resolve_to_one_entity(resolve, type_, a, b):
     # 04 §3.3 step 4 and the 00 glossary list these pairs.
