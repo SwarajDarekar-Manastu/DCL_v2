@@ -62,9 +62,9 @@
 			/>
 			{#if view.caption}<p class="caption">{view.caption}</p>{/if}
 		{:else if view.kind === 'table'}
-			<TableView rows={view.rows} headerRows={view.header_rows} highlight={view.highlight} sheetName={view.sheet_name} />
+			<TableView rows={view.rows} headerRows={view.header_rows} highlight={view.highlight ?? null} sheetName={view.sheet_name ?? null} />
 		{:else if view.kind === 'code'}
-			<CodeView language={view.language} firstLine={view.first_line} lines={view.lines} highlight={view.highlight} />
+			<CodeView language={view.language} firstLine={view.first_line} lines={view.lines} highlight={view.highlight ?? null} />
 		{:else if view.kind === 'text'}
 			{#if view.breadcrumb}<p class="caption">{view.breadcrumb}</p>{/if}
 			<pre class="text">{view.text}</pre>

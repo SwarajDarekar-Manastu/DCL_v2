@@ -61,6 +61,7 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
+| [frontend__review-ui__mvp.md](plans/frontend__review-ui__mvp.md) | `frontend/review-ui` | S3 | 2026-10-21 |
 
 ## Maintenance
 

@@ -1,19 +1,50 @@
 // Every call from the Console to the backend lives in this file (file 08 §7, file 10 §2.1).
 // Shaped by src/lib/config.ts; tokens come from the auth client set in configureApi().
 
-import type { ConsoleRole } from '$lib/auth/roles';
+import type { components, operations } from './api_schema';
 
-// ---------------------------------------------------------------- types (mirror backend/api/*)
+// ---------------------------------------------------------------- types
+// Generated from the backend's OpenAPI schema (`npm run gen:api`); never copy a backend model by hand.
 
-/** backend/api/auth.py ConsoleUser */
-export interface ConsoleUser {
-	oid: string;
-	name: string;
-	email: string;
-	roles: ConsoleRole[];
-}
+type Schemas = components['schemas'];
 
-/** backend/api/ws.py Topic */
+/** backend/api/auth.py */
+export type ConsoleUser = Schemas['ConsoleUser'];
+
+/** backend/api/viewer.py */
+export type ViewerPayload = Schemas['ViewerPayload'];
+export type ViewerView = ViewerPayload['view'];
+export type ViewerRegion = Schemas['Region'];
+export type ResolutionStatus = Schemas['ResolutionStatus'];
+
+/** backend/review/api_models.py (S1) */
+export type FlagType = Schemas['FlagType'];
+export type FlagSeverity = Schemas['FlagSeverity'];
+export type CaseStatus = Schemas['CaseStatus'];
+export type ReviewRoute = Schemas['Route'];
+export type CaseFilters = NonNullable<operations['list_cases_review_cases_get']['parameters']['query']>;
+export type CaseSummary = Schemas['CaseSummary'];
+export type CaseList = Schemas['CaseList'];
+export type CaseDetail = Schemas['CaseDetail'];
+export type FlagView = Schemas['FlagView'];
+export type FlagResolution = Schemas['FlagResolution'];
+export type Resolution = FlagResolution['resolution'];
+export type ResolutionAction = Resolution['action'];
+export type RuleType = Schemas['RuleType'];
+export type RuleScope = Schemas['RuleScope'];
+export type RuleDraft = Schemas['RuleDraft'];
+export type RuleView = Schemas['RuleView'];
+export type RuleList = Schemas['RuleList'];
+export type RuleSimulation = Schemas['RuleSimulation'];
+export type ResolveRequest = Schemas['ResolveRequest'];
+export type ResolveResponse = Schemas['ResolveResponse'];
+export type RejectRequest = Schemas['RejectRequest'];
+export type UndoResponse = Schemas['UndoResponse'];
+export type DryRunRequest = Schemas['DryRunRequest'];
+export type DryRunResponse = Schemas['DryRunResponse'];
+export type ChannelPreview = Schemas['ChannelPreview'];
+
+/** backend/api/ws.py Topic (websocket frames are not in the OpenAPI schema) */
 export type LiveTopic = 'case' | 'run' | 'ops';
 
 /** backend/api/ws.py Event, as delivered in an "event" frame */
@@ -23,76 +54,6 @@ export interface LiveEvent {
 	event: string;
 	data: Record<string, unknown>;
 	at: string;
-}
-
-/** backend/api/viewer.py ViewerPayload and parts */
-export type ResolutionStatus = 'exact' | 'page_fallback' | 'document_only';
-
-export interface ViewerRegion {
-	bbox: [number, number, number, number]; // x0, y0, x1, y1 in 0..1 of the rendered image
-	kind: 'cited' | 'handwriting' | 'flag';
-	label: string;
-	confidence: number | null;
-}
-
-export type ViewerView =
-	| {
-			kind: 'page';
-			page_no: number;
-			page_count: number;
-			image_url: string;
-			width: number;
-			height: number;
-			regions: ViewerRegion[];
-			text: string;
-	  }
-	| {
-			kind: 'image';
-			image_kind: 'photo' | 'plot' | 'diagram' | 'figure';
-			image_url: string;
-			width: number;
-			height: number;
-			regions: ViewerRegion[];
-			caption: string;
-	  }
-	| {
-			kind: 'table';
-			sheet_name: string | null;
-			header_rows: number;
-			rows: string[][];
-			highlight: [number, number, number, number] | null;
-	  }
-	| { kind: 'code'; language: string; first_line: number; lines: string[]; highlight: [number, number] | null }
-	| { kind: 'text'; text: string; breadcrumb: string }
-	| { kind: 'video'; video_url: string; t_ms: number; poster_url: string | null };
-
-export interface ViewerPayload {
-	anchor: string;
-	document: {
-		doc_id: string;
-		title: string;
-		doc_kind: string;
-		source_origin: 'internal' | 'external_kept';
-		trust_tier: number;
-		language: string | null;
-		test_ids: string[];
-		doc_date: string | null;
-		status: string;
-		open_flags: number;
-	};
-	resolution: { status: ResolutionStatus; message: string };
-	view: ViewerView;
-	links: {
-		onedrive: { path: string; web_url: string }[];
-		download_url: string | null;
-		review_case_key: string | null;
-	};
-	translation: {
-		source_language: string | null;
-		available: boolean;
-		translated_text: string | null;
-		pending: boolean;
-	};
 }
 
 export class ApiError extends Error {
@@ -163,6 +124,73 @@ export function getViewer(docId: string, anchor: string, translate = false): Pro
 	const query = new URLSearchParams({ anchor });
 	if (translate) query.set('translate', 'true');
 	return request<ViewerPayload>('GET', `/docs/${encodeURIComponent(docId)}/viewer?${query}`);
+}
+
+/** Query string of defined, non-empty values. */
+function query(params: Record<string, string | number | boolean | null | undefined>): string {
+	const q = new URLSearchParams();
+	for (const [key, value] of Object.entries(params)) {
+		if (value !== undefined && value !== null && value !== '') q.set(key, String(value));
+	}
+	const text = q.toString();
+	return text ? `?${text}` : '';
+}
+
+const casePath = (caseKey: string) => `/review/cases/${encodeURIComponent(caseKey)}`;
+
+/** GET /review/cases (backend/api/review.py, S1) */
+export function listCases(filters: CaseFilters = {}): Promise<CaseList> {
+	return request<CaseList>('GET', `/review/cases${query(filters)}`);
+}
+
+/** GET /review/cases/{case_key} */
+export function getCase(caseKey: string): Promise<CaseDetail> {
+	return request<CaseDetail>('GET', casePath(caseKey));
+}
+
+/** POST /review/cases/{case_key}/assign (null unassigns) */
+export function assignCase(caseKey: string, assignee: string | null): Promise<CaseDetail> {
+	return request<CaseDetail>('POST', `${casePath(caseKey)}/assign`, { assignee });
+}
+
+/** POST /review/cases/{case_key}/resolve */
+export function resolveCase(caseKey: string, body: ResolveRequest): Promise<ResolveResponse> {
+	return request<ResolveResponse>('POST', `${casePath(caseKey)}/resolve`, body);
+}
+
+/** POST /review/cases/{case_key}/reject */
+export function rejectCase(caseKey: string, body: RejectRequest): Promise<CaseDetail> {
+	return request<CaseDetail>('POST', `${casePath(caseKey)}/reject`, body);
+}
+
+/** POST /review/cases/{case_key}/undo */
+export function undoCase(caseKey: string): Promise<UndoResponse> {
+	return request<UndoResponse>('POST', `${casePath(caseKey)}/undo`);
+}
+
+/** POST /review/dry-run */
+export function dryRun(body: DryRunRequest): Promise<DryRunResponse> {
+	return request<DryRunResponse>('POST', '/review/dry-run', body);
+}
+
+/** GET /review/rules */
+export function listRules(): Promise<RuleList> {
+	return request<RuleList>('GET', '/review/rules');
+}
+
+/** POST /review/rules */
+export function createRule(draft: RuleDraft): Promise<RuleView> {
+	return request<RuleView>('POST', '/review/rules', draft);
+}
+
+/** POST /review/rules/{rule_id}/simulate */
+export function simulateRule(ruleId: string): Promise<RuleSimulation> {
+	return request<RuleSimulation>('POST', `/review/rules/${encodeURIComponent(ruleId)}/simulate`);
+}
+
+/** POST /review/rules/{rule_id}/deactivate (admin) */
+export function deactivateRule(ruleId: string): Promise<RuleView> {
+	return request<RuleView>('POST', `/review/rules/${encodeURIComponent(ruleId)}/deactivate`);
 }
 
 // ---------------------------------------------------------------- live channel (backend/api/ws.py)

@@ -121,3 +121,53 @@ describe('getViewer', () => {
 		]);
 	});
 });
+
+describe('review calls', () => {
+	const CASE = '0b6f1d3e-2a4c-4e8f-9c1a-5d7e3f2b1a90:Sheet 1/A';
+
+	it('sends only the filters that are set', async () => {
+		const { listCases } = await import('../src/lib/api_endpoint');
+		const fetchMock = vi.fn(async () => new Response('{"items":[],"next_cursor":null,"open_hard":0,"open_soft":0}'));
+		wire(fetchMock as unknown as typeof fetch);
+		await listCases({ severity: 'HARD', flag_type: null, root_name: '', sort: 'impact', has_suggestion: false });
+		await listCases();
+		const urls = fetchMock.mock.calls.map((call) => (call as unknown[])[0]);
+		expect(urls).toEqual(['http://api/review/cases?severity=HARD&sort=impact&has_suggestion=false', 'http://api/review/cases']);
+	});
+
+	it('percent-encodes the case key in every case path', async () => {
+		const api = await import('../src/lib/api_endpoint');
+		const fetchMock = vi.fn(async () => new Response('{}'));
+		wire(fetchMock as unknown as typeof fetch);
+		await api.getCase(CASE);
+		await api.undoCase(CASE);
+		await api.assignCase(CASE, null);
+		const calls = fetchMock.mock.calls.map((call) => call as unknown as [string, RequestInit]);
+		const encoded = 'http://api/review/cases/0b6f1d3e-2a4c-4e8f-9c1a-5d7e3f2b1a90%3ASheet%201%2FA';
+		expect(calls.map(([url, init]) => [url, init.method])).toEqual([
+			[encoded, 'GET'],
+			[`${encoded}/undo`, 'POST'],
+			[`${encoded}/assign`, 'POST']
+		]);
+		expect(calls[2][1].body).toBe('{"assignee":null}');
+	});
+
+	it('posts one resolve with the per-flag resolutions and an optional rule', async () => {
+		const { resolveCase } = await import('../src/lib/api_endpoint');
+		const fetchMock = vi.fn(async () => new Response('{}'));
+		wire(fetchMock as unknown as typeof fetch);
+		const body = {
+			resolutions: [
+				{
+					flag_id: 'f1',
+					resolution: { action: 'set_unit' as const, channel: 'AIN0', unit: 'psi', quantity: 'pressure', gauge_or_abs: 'gauge' as const }
+				}
+			],
+			rule: { rule_type: 'unit_mapping' as const, scope: { scope_folder_id: 'folder-1' }, body: { AIN0: 'psig' }, precedence: 0 }
+		};
+		await resolveCase(CASE, body);
+		const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+		expect(init.headers).toMatchObject({ 'Content-Type': 'application/json' });
+		expect(JSON.parse(String(init.body))).toEqual(body);
+	});
+});
