@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.dispatcher.contract import (  # resolution actions live with the flags they resolve
     ADMIN_ONLY_ACTIONS,
@@ -29,6 +29,7 @@ from backend.postgres.enums import (
     RuleOrigin,
     RuleType,
 )
+from backend.review.rules import RuleScope, parse_body
 
 
 class _Model(BaseModel):
@@ -152,25 +153,24 @@ def check_actions(resolutions: list[FlagResolution], flag_types: dict[uuid.UUID,
 # ---------------------------------------------------------------- rules (file 06 §8)
 
 
-class RuleScope(_Model):
-    """The four scope columns; the most specific matching rule wins. All null = global."""
-
-    scope_root: str | None = None
-    scope_folder_id: str | None = None
-    scope_filename_glob: str | None = None
-    scope_extension: str | None = None
-
-
 class RuleDraft(_Model):
     """An operator rule to create (operator rules are immutable; a change supersedes)."""
 
     rule_type: RuleType
     scope: RuleScope
     body: dict[str, Any] = Field(
-        description="the mapping; schema per rule_type (channel_map: publish-first item 4)"
+        description="the mapping, validated by rule_type (backend/review/rules.py RULE_BODIES): "
+        "channel_map → ChannelMapBody, unit_mapping → UnitMappingBody (the set_unit resolution "
+        "without `action`), schema_mapping → SchemaMappingBody (map_columns without `action`), "
+        "supersession, ignore_pattern, origin_override"
     )
     precedence: int = 0
     supersedes_rule_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _body_matches_type(self) -> "RuleDraft":
+        parse_body(self.rule_type, self.body)
+        return self
 
 
 class RuleView(_Model):
