@@ -13,6 +13,8 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
 
+from backend.postgres.session import normalize_url
+
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "postgres" / "alembic.ini"
 
 
@@ -20,9 +22,7 @@ def _test_url() -> str:
     url = os.environ.get("DCL_TEST_DATABASE_URL")
     if not url:
         pytest.skip("DCL_TEST_DATABASE_URL is not set")
-    if url.startswith("postgresql://"):
-        url = "postgresql+psycopg://" + url.removeprefix("postgresql://")
-    return url
+    return normalize_url(url)
 
 
 @pytest.fixture(scope="session")

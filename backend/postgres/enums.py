@@ -259,3 +259,79 @@ class RuleOrigin(StrEnum):
     HEADER = "header"
     CONFIG_JSON = "config_json"
     TDMS_PROPS = "tdms_props"
+
+
+# ---------- entities and numbers (file 05 §4.3, file 04 §3.2) ----------
+
+
+class EntityType(StrEnum):
+    SUBSYSTEM = "subsystem"
+    COMPONENT = "component"
+    MATERIAL = "material"
+    PROPELLANT = "propellant"
+    CATALYST = "catalyst"
+    SENSOR_TAG = "sensor_tag"
+    PART_NUMBER = "part_number"
+    TEST_ID = "test_id"
+    STANDARD_CLAUSE = "standard_clause"
+    PERSON_ROLE = "person_role"
+    ORGANIZATION = "organization"
+    VENDOR = "vendor"
+    PRODUCT = "product"
+    TOOL_SOFTWARE = "tool_software"
+    EQUATION = "equation"
+    FAILURE_MODE = "failure_mode"
+
+
+class EntityCreatedBy(StrEnum):
+    SEED = "seed"
+    SYSTEM = "system"
+    OPERATOR = "operator"
+
+
+class AliasCreatedBy(StrEnum):
+    SEED = "seed"
+    SYSTEM_EXACT = "system_exact"
+    SYSTEM_FUZZY = "system_fuzzy"
+    OPERATOR = "operator"
+
+
+class NumericFactSource(StrEnum):
+    PRINTED = "printed"
+    OCR = "ocr"
+    VLM = "vlm"
+    TABLE = "table"
+    TELEMETRY_STAT = "telemetry_stat"
+    VENDOR_CLAIM = "vendor_claim"
+    LITERATURE = "literature"
+    HUMAN = "human"
+
+
+class Quantity(StrEnum):
+    """One vocabulary for numeric_facts.quantity, Route C's physical_quantity and the sanity ranges.
+    The expected pint dimension of each is ``backend.common.units.QUANTITY_DIMENSIONS``."""
+
+    PRESSURE = "pressure"
+    FORCE = "force"
+    TEMPERATURE = "temperature"
+    MASS_FLOW_RATE = "mass_flow_rate"
+    VOLUME_FLOW_RATE = "volume_flow_rate"
+    POWER = "power"
+    ENERGY = "energy"
+    VOLTAGE = "voltage"
+    CURRENT = "current"
+    RESISTANCE = "resistance"
+    LENGTH = "length"
+    AREA = "area"
+    VOLUME = "volume"
+    MASS = "mass"
+    DENSITY = "density"
+    TIME = "time"
+    FREQUENCY = "frequency"
+    VELOCITY = "velocity"
+    ACCELERATION = "acceleration"
+    SPECIFIC_IMPULSE = "specific_impulse"
+    ANGLE = "angle"
+    RATIO = "ratio"
+    VALVE_STATE = "valve_state"
+    OTHER = "other"

@@ -195,11 +195,22 @@ Merged / ready: `config/sanity_ranges.yaml` v2 for S1's channel_map body (a7cf42
 Blocked on: S1 crawl folder listing (allowlist); S1 CIR snapshot format (with the CIR writer)
 Needs from others: nothing else; `config/rules/` stays empty until operator rules exist (format now known from S1)
 Next: idle until the listing arrives
-=======
 
 ## 2026-10-21 22:45 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: `/v1/answer` SSE contract in `backend/api/engine.py` (request, seven event models, `to_sse`, HMAC identity, TraceView, example stream), 9 tests; endpoints 501 until M8.
 Blocked on: S1 for enrichment (EntityType/NumericFactSource/Quantity enums, M4 entity models, `backend/common/units.py`) and for `resolve_anchor` (`document_nodes` model)
 Needs from others: Lead: add `rapidfuzz` and `pint` to main dependencies and a `models` group (torch 2.14.1, torchvision 0.29.1, transformers 5.20.2, sentence-transformers 6.1.0)
 Next: enrichment extraction schema, prompt and grounding (no DB), then entity normalization once S1's enums land
->>>>>>> claude/infallible-swartz-58c96b
+=======
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: task 4 core: backend/sync/downloader.py land_item() (zero-download link, tokenless 302 fetch, one-pass SHA-256 + quickXorHash, verify, content-addressed copy, conflict-safe blob insert); backend/postgres/session.py; Job.key_for(); quickxorhash dep. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend` (627 passed, 3 skipped with both servers)
+Blocked on: Lead answers of 100eae2 for the crawl and for dispatch after landing (processing.scope)
+Needs from others: Lead — may the M4 entity tables (entities, entity_aliases, entity_mentions, numeric_facts) be created now? S2 is building enrichment in parallel and asked for the models
+Next: backend/common/units.py (pint + config/units.txt, S2 needs it), S2's entity enums
+
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: backend/common/units.py (pint + config/units.txt with S5's aliases, gauge/absolute from the spelling, canonical units bar/N/K/g/s/W, gauge→absolute, fits_quantity); enums EntityType, EntityCreatedBy, AliasCreatedBy, NumericFactSource, Quantity (one vocabulary for numeric facts, Route C and sanity ranges). Test: `uv run pytest && uv run ruff check backend` (640 passed, 28 skipped)
+Blocked on: Lead answers of 100eae2 (crawl) and on whether the M4 entity tables may be created now (S2 asked)
+Needs from others: nothing new
+Next: M2 models documents/document_sources/document_relations/document_nodes/assets once the Lead confirms the table timing; otherwise Tier 4 (magic bytes, secret scan)
+>>>>>>> claude/competent-brahmagupta-3a5541

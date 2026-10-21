@@ -355,6 +355,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "python-dotenv" },
+    { name = "quickxorhash" },
     { name = "rapidfuzz" },
     { name = "redis" },
     { name = "sqlalchemy" },
@@ -398,6 +399,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9" },
     { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "quickxorhash", specifier = ">=0.3" },
     { name = "rapidfuzz", specifier = ">=3.9" },
     { name = "redis", specifier = ">=5.0" },
     { name = "sqlalchemy", specifier = ">=2.0.40" },
@@ -1369,6 +1371,12 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/86/bf/899e81e4cce32febab4fb42bb97dcdf66bc135272882d1987881a4b519e9/pyyaml-6.0.3-cp312-cp312-win_amd64.whl", hash = "sha256:5fcd34e47f6e0b794d17de1b4ff496c00986e1c83f7ab2fb8fcfe9616ff7477b", size = 154003, upload-time = "2025-09-25T21:32:21.167Z" },
     { url = "https://files.pythonhosted.org/packages/1a/08/67bd04656199bbb51dbed1439b7f27601dfb576fb864099c7ef0c3e55531/pyyaml-6.0.3-cp312-cp312-win_arm64.whl", hash = "sha256:64386e5e707d03a7e172c0701abfb7e10f0fb753ee1d773128192742712a98fd", size = 140344, upload-time = "2025-09-25T21:32:22.617Z" },
 ]
+
+[[package]]
+name = "quickxorhash"
+version = "1.0.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8d/85/699be9823e7c0a617efdf576d5bd38d85e7dccaed7d8caad4f854be53f44/quickxorhash-1.0.5.tar.gz", hash = "sha256:4d0857357bfab95d701ed145beae1fc8d8ac9386aa7475932e82e2afd96a8bb0", size = 3254, upload-time = "2022-04-24T14:24:53.07Z" }
 
 [[package]]
 name = "rapidfuzz"
