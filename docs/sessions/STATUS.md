@@ -119,3 +119,9 @@ Merged / ready: VisionService (`backend/llm_engine/vision/{service,schemas}.py`)
 Blocked on: nothing for code; real vision calls wait for S4's probe to enable image input
 Needs from others: S1: `backend/storage/minio.py` get/put on dcl-cir (cache adapter), `document_nodes` model (resolve_anchor)
 Next: chunker against S1's contract (ProcessedNode), anchors (make_anchor, resolve_anchor), identifiers
+
+## 2026-10-21 21:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `backend/indexing/{chunker,anchors,identifiers}.py` (chunk_document, build_embed_texts, IndexNode, extract_identifiers, make_anchor, resolve_among), 47 tests; vision media resolution aligned with 03 §3.
+Blocked on: S1 `document_nodes` model for `resolve_anchor` (S3's viewer waits on it)
+Needs from others: S1: route node conventions in `.wiki/backend/chunker-and-anchors.md` (text as parent/child, every node needs a locator, run summaries t_start_ms 0); `IndexNode` is the commit input
+Next: enrichment (extract, entities, numeric facts), then index_document and retrieval
