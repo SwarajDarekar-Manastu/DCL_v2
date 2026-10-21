@@ -18,8 +18,8 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 node_modules/
-console_ui/.svelte-kit/
-console_ui/build/
+frontend/console/.svelte-kit/
+frontend/console/build/
 dist/
 build/
 

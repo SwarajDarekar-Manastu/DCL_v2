@@ -15,7 +15,7 @@ One real sample per format from the allowlisted folders plus synthetic edge case
 ## Location
 
 Code:
-- `tests/fixtures/`
+- `backend/tests/fixtures/`
 
 Tests and fixtures:
 - (none yet)
@@ -32,7 +32,7 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `tests/fixtures/`
+- `backend/tests/fixtures/`
 
 ## Rubric (what "done" means for this feature)
 

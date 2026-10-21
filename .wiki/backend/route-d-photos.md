@@ -15,11 +15,11 @@ HEIC conversion, EXIF without GPS, pHash clusters, classify-first routing, hardw
 ## Location
 
 Code:
-- `services/routes/d_photos/`
+- `backend/routes/d_photos/`
 
 Tests and fixtures:
-- `tests/unit/routes/d_photos/`
-- `tests/fixtures/route_d/`
+- `backend/tests/unit/routes/d_photos/`
+- `backend/tests/fixtures/route_d/`
 
 ## Interfaces
 
@@ -35,9 +35,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/routes/d_photos/`
-- `tests/unit/routes/d_photos/`
-- `tests/fixtures/route_d/`
+- `backend/routes/d_photos/`
+- `backend/tests/unit/routes/d_photos/`
+- `backend/tests/fixtures/route_d/`
 
 ## Rubric (what "done" means for this feature)
 

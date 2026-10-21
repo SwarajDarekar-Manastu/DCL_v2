@@ -15,10 +15,10 @@ The Pipe function that exposes the Answer Engine as a model, maps engine SSE eve
 ## Location
 
 Code:
-- `services/openwebui/pipe_manastu_engine.py`
+- `frontend/openwebui/pipe_manastu_engine.py`
 
 Tests and fixtures:
-- `tests/integration/openwebui/test_pipe.py`
+- `backend/tests/integration/openwebui/test_pipe.py`
 
 ## Interfaces
 
@@ -32,8 +32,8 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/openwebui/pipe_manastu_engine.py`
-- `tests/integration/openwebui/test_pipe.py`
+- `frontend/openwebui/pipe_manastu_engine.py`
+- `backend/tests/integration/openwebui/test_pipe.py`
 
 ## Rubric (what "done" means for this feature)
 

@@ -15,12 +15,12 @@ Actions 'Show trace', 'Add to benchmark', 'Report issue'; Filter attaching user 
 ## Location
 
 Code:
-- `services/openwebui/actions/`
-- `services/openwebui/filter_policy.py`
-- `services/openwebui/skills/`
+- `frontend/openwebui/actions/`
+- `frontend/openwebui/filter_policy.py`
+- `frontend/openwebui/skills/`
 
 Tests and fixtures:
-- `tests/integration/openwebui/`
+- `backend/tests/integration/openwebui/`
 
 ## Interfaces
 
@@ -35,10 +35,10 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/openwebui/actions/`
-- `services/openwebui/filter_policy.py`
-- `services/openwebui/skills/`
-- `tests/integration/openwebui/`
+- `frontend/openwebui/actions/`
+- `frontend/openwebui/filter_policy.py`
+- `frontend/openwebui/skills/`
+- `backend/tests/integration/openwebui/`
 
 ## Rubric (what "done" means for this feature)
 

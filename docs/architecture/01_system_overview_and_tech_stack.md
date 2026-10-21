@@ -157,11 +157,10 @@ flowchart TB
     end
     subgraph Host["Internal host(s) — Docker Compose"]
         OWU[Open WebUI :3000]
-        CON[DCL Console SPA + API :8100]
-        ANS[Answer Engine API :8200<br/>FastAPI + LlamaIndex]
-        WH[Graph webhook receiver :8300<br/>public HTTPS via reverse proxy]
-        RR[Reranker service :8400<br/>bge-reranker-v2-m3 · GPU]
-        EMB[Embedding service :8500<br/>EmbeddingGemma 2 text + vision · GPU]
+        CON[DCL Console SPA :8100<br/>frontend/console]
+        ANS[Backend API :8200<br/>backend/main.py ROLE=api<br/>console routes · /v1/answer · webhook]
+        WH[Reverse proxy<br/>public HTTPS for the Graph webhook path only]
+        MS[Model server :8500<br/>backend/main.py ROLE=models<br/>EmbeddingGemma 2 + bge-reranker · GPU]
         LO[LibreOffice headless]
         W1[Celery io_light]
         W2[Celery cpu_parse]
@@ -173,11 +172,11 @@ flowchart TB
         OTEL[OTel collector → Grafana]
     end
     MS <--> W1
-    MS --> WH --> RD
+    MS --> WH --> ANS
     W1 & W2 & W3 <--> PG & MO & RD
     W2 & W3 --> GW
-    ANS <--> PG & MO & RR & EMB
-    W2 --> EMB
+    ANS <--> PG & MO & MS
+    W2 --> MS
     ANS --> GW
     ANS --> WEB
     OWU --> ANS
@@ -192,7 +191,7 @@ Sizing for the current corpus (~5,200 files, ~2,000 photos, ~450 telemetry files
 
 Using Gemini means proprietary test data (pressure traces, failure photos, catalyst formulations) is sent to Google for processing. This is a deliberate decision; the design treats it as follows:
 
-1. **All Gemini traffic goes through Manastu's Gemini gateway on Google Cloud Run**, which calls Gemini in Manastu's own Vertex AI project: `pipeline → gateway (Cloud Run) → Gemini (Vertex AI)`. The pipeline never holds Vertex credentials and never calls the Gemini Developer API; enterprise data terms and regional processing are the gateway's and the Vertex project's. One Gemini client wrapper in `services/common/gemini.py` talks to the gateway; nothing else in the codebase imports a Google SDK.
+1. **All Gemini traffic goes through Manastu's Gemini gateway on Google Cloud Run**, which calls Gemini in Manastu's own Vertex AI project: `pipeline → gateway (Cloud Run) → Gemini (Vertex AI)`. The pipeline never holds Vertex credentials and never calls the Gemini Developer API; enterprise data terms and regional processing are the gateway's and the Vertex project's. One Gemini client wrapper in `backend/llm_engine/gemini_client.py` talks to the gateway; nothing else in the codebase imports a Google SDK.
 2. **The IP sanitizer applies to web search only.** Gemini is the processing engine and must see the real content; sanitizing it would destroy the pipeline's value.
 3. **Classify at the folder level.** `pipeline_config.cloud_allowed_roots` lists which of the four roots may be sent to Gemini. If a root is ever marked restricted, its files route to the offline fallback models or are halted with `CLOUD_RESTRICTED` (SOFT, informational) until policy allows.
 4. **Minimize payloads.** Send crops, not whole pages, for handwriting; send page thumbnails for triage; use Files API uploads for large PDFs instead of re-sending bytes; use context caching for repeat questions on the same document.
@@ -201,7 +200,7 @@ Using Gemini means proprietary test data (pressure traces, failure photos, catal
 
 ### 7.1 Environment contract (secrets and endpoints live in `.env`, never in the database)
 
-The shared `.env` beside `compose.yaml` is root-owned, mode 600, never copied into an image, and scanned in CI. The code reads these names (values are filled in by the operator; placeholders are refused at startup with a clear message):
+The shared `.env` beside `backend/devops/compose.yaml` is root-owned, mode 600, never copied into an image, and scanned in CI. The code reads these names (values are filled in by the operator; placeholders are refused at startup with a clear message):
 
 | Group | Variables | Used by |
 |-------|-----------|---------|

@@ -15,12 +15,12 @@ Renders page images with bbox overlays, tables, code, photos, plots, diagram ren
 ## Location
 
 Code:
-- `console_ui/src/routes/docs/[id]/viewer/`
-- `services/console_api/viewer.py`
-- `services/console_api/assets.py`
+- `frontend/console/src/routes/docs/[id]/viewer/`
+- `backend/api/viewer.py`
+- `backend/api/assets.py`
 
 Tests and fixtures:
-- `console_ui/tests/viewer/`
+- `frontend/console/tests/viewer/`
 
 ## Interfaces
 
@@ -36,10 +36,10 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `console_ui/src/routes/docs/[id]/viewer/`
-- `services/console_api/viewer.py`
-- `services/console_api/assets.py`
-- `console_ui/tests/viewer/`
+- `frontend/console/src/routes/docs/[id]/viewer/`
+- `backend/api/viewer.py`
+- `backend/api/assets.py`
+- `frontend/console/tests/viewer/`
 
 ## Rubric (what "done" means for this feature)
 

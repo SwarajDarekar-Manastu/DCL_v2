@@ -15,11 +15,11 @@ Parse mxGraphModel into a component/edge graph stored in documents.catalog, rend
 ## Location
 
 Code:
-- `services/routes/e_diagrams/`
+- `backend/routes/e_diagrams/`
 
 Tests and fixtures:
-- `tests/unit/routes/e_diagrams/`
-- `tests/fixtures/route_e/`
+- `backend/tests/unit/routes/e_diagrams/`
+- `backend/tests/fixtures/route_e/`
 
 ## Interfaces
 
@@ -35,9 +35,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/routes/e_diagrams/`
-- `tests/unit/routes/e_diagrams/`
-- `tests/fixtures/route_e/`
+- `backend/routes/e_diagrams/`
+- `backend/tests/unit/routes/e_diagrams/`
+- `backend/tests/fixtures/route_e/`
 
 ## Rubric (what "done" means for this feature)
 

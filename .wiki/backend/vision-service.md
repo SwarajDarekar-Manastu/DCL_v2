@@ -15,13 +15,13 @@ One component for every vision call through the gateway client: versioned prompt
 ## Location
 
 Code:
-- `services/vision/service.py`
-- `services/vision/schemas.py`
-- `config/prompts/vision/`
+- `backend/llm_engine/vision/service.py`
+- `backend/llm_engine/vision/schemas.py`
+- `backend/llm_engine/prompts/vision/`
 
 Tests and fixtures:
-- `tests/unit/vision/`
-- `tests/fixtures/vision/`
+- `backend/tests/unit/llm_engine/vision/`
+- `backend/tests/fixtures/vision/`
 
 ## Interfaces
 
@@ -35,11 +35,11 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/vision/service.py`
-- `services/vision/schemas.py`
-- `config/prompts/vision/`
-- `tests/unit/vision/`
-- `tests/fixtures/vision/`
+- `backend/llm_engine/vision/service.py`
+- `backend/llm_engine/vision/schemas.py`
+- `backend/llm_engine/prompts/vision/`
+- `backend/tests/unit/llm_engine/vision/`
+- `backend/tests/fixtures/vision/`
 
 ## Rubric (what "done" means for this feature)
 

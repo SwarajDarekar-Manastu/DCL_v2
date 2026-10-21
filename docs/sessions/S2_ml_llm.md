@@ -8,19 +8,19 @@
 
 ## You own
 
-`services/vision`, `services/routes/{a1_office,d_photos,f_video}`, `services/enrichment`, `services/embedding_service`, `services/reranker_service`, `services/indexing/{chunker,anchors,overlays,retrieval}.py`, `services/engine`, `config/prompts`.
+`backend/llm_engine/vision`, `backend/routes/{a1_office,d_photos,f_video}`, `backend/llm_engine/enrichment`, `backend/llm_engine/local_models.py`, `backend/llm_engine/local_models.py`, `backend/indexing/{chunker,anchors,overlays,retrieval}.py`, `backend/llm_engine/engine`, `backend/llm_engine/prompts`.
 
 ## Publish first
 
-1. `services/embedding_service` (FastAPI, EmbeddingGemma 2, text + image, bfloat16, 768-d) and `services/reranker_service` with their client classes; both containerized for the GPU with S4.
-2. `services/indexing/anchors.py`: `make_anchor(node)` and `resolve_anchor(anchor)` (page + content hash, fallback to page), used by S1's commit path, S3's viewer and S5's benchmark gold.
-3. `services/indexing/index_document.py`: the entry point S1 calls after a route finishes (chunk → enrich → overlays → embed → rows), and `extract_identifiers()` shared by indexer and query side.
-4. `services/engine/api.py`: the `/v1/answer` SSE event schema (`step`, `token`, `citation`, `embed`, `needs_confirmation`, `done`) and `/v1/traces/{id}`, so S3 can write the Open WebUI Pipe against it.
-5. `services/vision/schemas.py`: the structured-output schemas of file 03 §3 (triage, handwriting, table, plot, schematic, photo, slide, video, page transcription).
+1. `backend/llm_engine/local_models.py` (FastAPI, EmbeddingGemma 2, text + image, bfloat16, 768-d) and `backend/llm_engine/local_models.py` with their client classes; both containerized for the GPU with S4.
+2. `backend/indexing/anchors.py`: `make_anchor(node)` and `resolve_anchor(anchor)` (page + content hash, fallback to page), used by S1's commit path, S3's viewer and S5's benchmark gold.
+3. `backend/indexing/index_document.py`: the entry point S1 calls after a route finishes (chunk → enrich → overlays → embed → rows), and `extract_identifiers()` shared by indexer and query side.
+4. `backend/api/engine.py`: the `/v1/answer` SSE event schema (`step`, `token`, `citation`, `embed`, `needs_confirmation`, `done`) and `/v1/traces/{id}`, so S3 can write the Open WebUI Pipe against it.
+5. `backend/llm_engine/vision/schemas.py`: the structured-output schemas of file 03 §3 (triage, handwriting, table, plot, schematic, photo, slide, video, page transcription).
 
 ## Depends on
 
-S4: gateway client (`services/common/gemini.py`) and its capability flags, GPU containers. S1: `ProcessedDocument` contract, the commit path, the `rules`/flags models. S5: prompts' evaluation sets, retrieval query set, golden cases.
+S4: gateway client (`backend/llm_engine/gemini_client.py`) and its capability flags, GPU containers. S1: `ProcessedDocument` contract, the commit path, the `rules`/flags models. S5: prompts' evaluation sets, retrieval query set, golden cases.
 
 ## Milestones
 
@@ -29,7 +29,7 @@ M0 model services (supporting), M4 (primary), M5 (primary), M7 routes D and F, M
 ## First tasks
 
 1. Embedding and reranker services with health checks, dtype guard (never float16), batch endpoints, and a throughput measurement on the real GPU.
-2. Gemini VisionService over S4's gateway client: prompt files under `config/prompts` with versions, structured outputs, the MinIO cache, `llm_calls` logging; a capability probe test.
+2. Gemini VisionService over S4's gateway client: prompt files under `backend/llm_engine/prompts` with versions, structured outputs, the MinIO cache, `llm_calls` logging; a capability probe test.
 3. Chunker (parent/child/table/figure/code/slide/transcript/run-summary nodes), contextual headers, token counting with the embedding model's tokenizer, stable anchors.
 4. Enrichment call per parent (English outputs, grounding checks, `pint` validation), entity normalization against `entities`/`entity_aliases`, numeric facts with provenance.
 5. Hybrid retrieval: dense (exact path for selective filters, HNSW otherwise), BM25 with per-language fields and `content_codes`, RRF, reranker, parent expansion, near-duplicate collapse; the Retrieval lab endpoint for S3.

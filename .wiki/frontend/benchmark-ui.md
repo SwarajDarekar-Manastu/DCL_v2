@@ -15,11 +15,11 @@ Golden-suite management and regression dashboards with failure classes and trace
 ## Location
 
 Code:
-- `console_ui/src/routes/benchmark/`
-- `services/console_api/benchmark.py`
+- `frontend/console/src/routes/benchmark/`
+- `backend/api/benchmark.py`
 
 Tests and fixtures:
-- `console_ui/tests/benchmark/`
+- `frontend/console/tests/benchmark/`
 
 ## Interfaces
 
@@ -34,9 +34,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `console_ui/src/routes/benchmark/`
-- `services/console_api/benchmark.py`
-- `console_ui/tests/benchmark/`
+- `frontend/console/src/routes/benchmark/`
+- `backend/api/benchmark.py`
+- `frontend/console/tests/benchmark/`
 
 ## Rubric (what "done" means for this feature)
 

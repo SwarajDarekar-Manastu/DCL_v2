@@ -8,13 +8,13 @@
 
 ## You own
 
-`deploy/**`, `compose.yaml`, `compose.dev.yaml`, all Dockerfiles, `.github/**` (or the CI system in use), `services/common/config` (env loader), `services/common/gemini.py` (gateway client), `services/common/telemetry` (OpenTelemetry setup), `.env.example`, `.gitignore`, backup and retention jobs, runbooks under `deploy/runbooks`.
+`backend/devops/**`, `backend/devops/compose.yaml`, `backend/devops/compose.dev.yaml`, all Dockerfiles, `.github/**` (or the CI system in use), `backend/config.py` (env loader), `backend/llm_engine/gemini_client.py` (gateway client), `backend/common/telemetry.py` (OpenTelemetry setup), `.env.example`, `.gitignore`, backup and retention jobs, runbooks under `backend/devops/runbooks`.
 
 ## Publish first
 
-1. `services/common/config/settings.py`: typed settings read from `.env` per file 01 §7.1 (refuses placeholders, refuses `GOOGLE_API_KEY`, validates `DCL_PERMISSION_OPTION`), plus `.env.example` with names only.
-2. `services/common/gemini.py`: the gateway client (`GEMINI_BACKEND=gateway`): chat/generate with structured output, function calling, thinking level, image/PDF parts, streaming; capability flags discovered by a probe; retry/backoff; `llm_calls` logging hook; budget guard. S2 builds VisionService and the engine on it.
-3. `compose.yaml` with every service of file 01 §6 (PostgreSQL ParadeDB image, MinIO, Redis, Celery pools per file 10 §4, FastAPI services, embedding and reranker services on the GPU, LibreOffice, OTel collector, Grafana) and `compose.dev.yaml` overrides.
+1. `backend/config.py`: typed settings read from `.env` per file 01 §7.1 (refuses placeholders, refuses `GOOGLE_API_KEY`, validates `DCL_PERMISSION_OPTION`), plus `.env.example` with names only.
+2. `backend/llm_engine/gemini_client.py`: the gateway client (`GEMINI_BACKEND=gateway`): chat/generate with structured output, function calling, thinking level, image/PDF parts, streaming; capability flags discovered by a probe; retry/backoff; `llm_calls` logging hook; budget guard. S2 builds VisionService and the engine on it.
+3. `backend/devops/compose.yaml` with every service of file 01 §6 (PostgreSQL ParadeDB image, MinIO, Redis, Celery pools per file 10 §4, FastAPI services, embedding and reranker services on the GPU, LibreOffice, OTel collector, Grafana) and `backend/devops/compose.dev.yaml` overrides.
 4. CI pipeline: lint, unit tests, `alembic upgrade head` + `alembic check` on the pinned ParadeDB image, the FK-without-index query, image layer secret scan, later the benchmark gate.
 
 ## Depends on

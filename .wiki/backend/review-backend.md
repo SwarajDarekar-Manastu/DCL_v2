@@ -15,15 +15,15 @@ Flag models with deterministic fingerprints and case keys, staged payloads for h
 ## Location
 
 Code:
-- `services/review/models.py`
-- `services/review/fingerprints.py`
-- `services/review/rules.py`
-- `services/review/resume.py`
-- `services/review/api_models.py`
+- `backend/review/models.py`
+- `backend/review/fingerprints.py`
+- `backend/review/rules.py`
+- `backend/review/resume.py`
+- `backend/review/api_models.py`
 
 Tests and fixtures:
-- `tests/unit/review/`
-- `tests/integration/review/`
+- `backend/tests/unit/review/`
+- `backend/tests/integration/review/`
 
 ## Interfaces
 
@@ -39,13 +39,13 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/review/models.py`
-- `services/review/fingerprints.py`
-- `services/review/rules.py`
-- `services/review/resume.py`
-- `services/review/api_models.py`
-- `tests/unit/review/`
-- `tests/integration/review/`
+- `backend/review/models.py`
+- `backend/review/fingerprints.py`
+- `backend/review/rules.py`
+- `backend/review/resume.py`
+- `backend/review/api_models.py`
+- `backend/tests/unit/review/`
+- `backend/tests/integration/review/`
 
 ## Rubric (what "done" means for this feature)
 

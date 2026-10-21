@@ -15,11 +15,11 @@ Pre-flight, page triage with language/script, Docling by script group, tables QA
 ## Location
 
 Code:
-- `services/routes/a1_office/`
+- `backend/routes/a1_office/`
 
 Tests and fixtures:
-- `tests/unit/routes/a1_office/`
-- `tests/fixtures/route_a1/`
+- `backend/tests/unit/routes/a1_office/`
+- `backend/tests/fixtures/route_a1/`
 
 ## Interfaces
 
@@ -35,9 +35,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/routes/a1_office/`
-- `tests/unit/routes/a1_office/`
-- `tests/fixtures/route_a1/`
+- `backend/routes/a1_office/`
+- `backend/tests/unit/routes/a1_office/`
+- `backend/tests/fixtures/route_a1/`
 
 ## Rubric (what "done" means for this feature)
 

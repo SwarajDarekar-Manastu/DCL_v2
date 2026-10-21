@@ -37,7 +37,7 @@ Files explicitly out of scope (owned by another session → message them):
 ## Verification commands
 
 ```bash
-pytest tests/unit/<area>/… -q
+pytest backend/tests/unit/<area>/… -q
 ```
 
 ## Risks and open questions

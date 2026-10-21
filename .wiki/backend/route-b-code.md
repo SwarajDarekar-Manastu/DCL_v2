@@ -15,11 +15,11 @@ Tree-sitter AST nodes per function/class/method with context headers, module hea
 ## Location
 
 Code:
-- `services/routes/b_code/`
+- `backend/routes/b_code/`
 
 Tests and fixtures:
-- `tests/unit/routes/b_code/`
-- `tests/fixtures/route_b/`
+- `backend/tests/unit/routes/b_code/`
+- `backend/tests/fixtures/route_b/`
 
 ## Interfaces
 
@@ -33,9 +33,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/routes/b_code/`
-- `tests/unit/routes/b_code/`
-- `tests/fixtures/route_b/`
+- `backend/routes/b_code/`
+- `backend/tests/unit/routes/b_code/`
+- `backend/tests/fixtures/route_b/`
 
 ## Rubric (what "done" means for this feature)
 

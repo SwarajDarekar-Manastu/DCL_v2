@@ -15,10 +15,10 @@ FastAPI service wrapping EmbeddingGemma 2 at 768-d with the vision encoder loade
 ## Location
 
 Code:
-- `services/embedding_service/`
+- `backend/llm_engine/local_models.py`
 
 Tests and fixtures:
-- `tests/unit/embedding_service/`
+- `backend/tests/unit/llm_engine/local_models/`
 
 ## Interfaces
 
@@ -32,8 +32,8 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/embedding_service/`
-- `tests/unit/embedding_service/`
+- `backend/llm_engine/local_models.py`
+- `backend/tests/unit/llm_engine/local_models/`
 
 ## Rubric (what "done" means for this feature)
 

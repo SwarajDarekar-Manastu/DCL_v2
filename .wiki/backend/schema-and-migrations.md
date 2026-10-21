@@ -15,13 +15,13 @@ Own the 26-table schema in three tiers, the StrEnum→CHECK generation, naming c
 ## Location
 
 Code:
-- `services/common/db/base.py`
-- `services/common/db/enums.py`
-- `services/common/db/models/`
-- `migrations/`
+- `backend/postgres/base.py`
+- `backend/postgres/enums.py`
+- `backend/postgres/models/`
+- `backend/postgres/migrations/`
 
 Tests and fixtures:
-- `tests/schema/`
+- `backend/tests/schema/`
 
 ## Interfaces
 
@@ -37,11 +37,11 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/common/db/base.py`
-- `services/common/db/enums.py`
-- `services/common/db/models/`
-- `migrations/`
-- `tests/schema/`
+- `backend/postgres/base.py`
+- `backend/postgres/enums.py`
+- `backend/postgres/models/`
+- `backend/postgres/migrations/`
+- `backend/tests/schema/`
 
 ## Rubric (what "done" means for this feature)
 

@@ -15,11 +15,11 @@ Configuration screens over pipeline_config with validation, impact counts, cost 
 ## Location
 
 Code:
-- `console_ui/src/routes/settings/`
-- `services/console_api/settings.py`
+- `frontend/console/src/routes/settings/`
+- `backend/api/settings.py`
 
 Tests and fixtures:
-- `console_ui/tests/settings/`
+- `frontend/console/tests/settings/`
 
 ## Interfaces
 
@@ -33,9 +33,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `console_ui/src/routes/settings/`
-- `services/console_api/settings.py`
-- `console_ui/tests/settings/`
+- `frontend/console/src/routes/settings/`
+- `backend/api/settings.py`
+- `frontend/console/tests/settings/`
 
 ## Rubric (what "done" means for this feature)
 

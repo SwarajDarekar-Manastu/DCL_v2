@@ -8,13 +8,13 @@
 
 ## You own
 
-`services/sync`, `services/dispatcher`, `services/routes/{c_telemetry,a2_source,b_code,e_diagrams,g_archives}`, `services/common/db` (SQLAlchemy models, enum→CHECK generation, naming convention), `migrations`, `services/review` (flag models, fingerprints, staged payload, resume, rules engine), `services/indexing/commit.py`.
+`backend/sync`, `backend/dispatcher`, `backend/routes/{c_telemetry,a2_source,b_code,e_diagrams,g_archives}`, `backend/postgres` (SQLAlchemy models, enum→CHECK generation, naming convention), `migrations`, `backend/review` (flag models, fingerprints, staged payload, resume, rules engine), `backend/indexing/commit.py`.
 
 ## Publish first (others code against these)
 
-1. `services/common/db/models.py` for the M1 tables (`sync_roots`, `drive_folders`, `drive_items`, `blobs`, `blob_derivations`, `jobs`) and the `StrEnum` classes for every `status` column, with the Alembic migration.
-2. `services/dispatcher/contract.py`: the `ProcessedDocument` output contract of file 03 §1.4 (Pydantic), including `Flag` with `fingerprint` and the stable `Anchor` model (`doc_id`, `page_no`, `line_start`, `t_start_ms`, `sheet_name`, `cell_range`, `content_sha256`).
-3. `services/review/api_models.py`: request/response models for cases, resolutions, rules and dry-run (file 08 §4.4), so S3 can build the Review UI against them.
+1. `backend/postgres/models.py` for the M1 tables (`sync_roots`, `drive_folders`, `drive_items`, `blobs`, `blob_derivations`, `jobs`) and the `StrEnum` classes for every `status` column, with the Alembic migration.
+2. `backend/dispatcher/contract.py`: the `ProcessedDocument` output contract of file 03 §1.4 (Pydantic), including `Flag` with `fingerprint` and the stable `Anchor` model (`doc_id`, `page_no`, `line_start`, `t_start_ms`, `sheet_name`, `cell_range`, `content_sha256`).
+3. `backend/review/api_models.py`: request/response models for cases, resolutions, rules and dry-run (file 08 §4.4), so S3 can build the Review UI against them.
 4. The `rules` precedence resolver signature and the `channel_map` body schema (file 03 §C.0), so S5 can write rule YAML fixtures.
 
 ## Depends on

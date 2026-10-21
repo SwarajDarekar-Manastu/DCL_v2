@@ -10,44 +10,74 @@
 | Propulsion SME (part time) | golden benchmark cases, review rules, sanity ranges, propellant definitions, acceptance of answers, choice of the test folders for the allowlist | ~20% |
 | DevOps (part time) | Docker Compose (GPU runtime for the embedding and reranker containers), secrets and the `.env` contract, Gemini gateway client hardening, monitoring, backups, CI | ~20% |
 
-## 2. Repository layout
+## 2. Repository layout (simple monolith)
+
+One backend package with one FastAPI entry file, one frontend folder, one data-config folder. No microservices: every process (API, model server, Celery workers, beat) starts from the same `backend` package with a different role. Depth under `backend/` is at most three levels; a file's name says what it contains.
 
 ```
-dcl_v2/
-  docs/architecture/          this manual
-  config/
-    gate.yaml                 tier-1/2/3 patterns
-    report_json_schemas.yaml
-    aerospace_synonyms.yaml   entity alias seeds (multilingual)
-    vendors.yaml              vendor names for origin detection
-    sanity_ranges.yaml
-    units.txt                 pint registry extensions
-    propellants.yaml          RocketCEA definitions
-    rules/                    exported operator rules (YAML)
-    prompts/                  versioned prompt files
-  services/
-    sync/                     Graph client, delta runner, gate, scope, downloader, webhook receiver
-    dispatcher/               type resolution, folder context, assembler, adapter registry, route gating
-    routes/
-      a1_office/  a2_source/  b_code/  c_telemetry/  d_photos/  e_diagrams/  f_video/  g_archives/
-    vision/                   VisionService (Gemini), prompts, cache
-    enrichment/               L2 extraction, entity normalization, numeric facts, translation
-    embedding_service/        EmbeddingGemma 2 FastAPI service (text + image)
-    reranker_service/         bge-reranker-v2-m3
-    indexing/                 chunker, anchors, overlays, index commit, BM25 DDL
-    review/                   flag models, fingerprints, staged payload, resume, rules engine
-    engine/                   LlamaIndex workflow, tools, sanitizer, verifier, API
-    console_api/              FastAPI for the Console
-    openwebui/                Pipe, Actions, Filter, Skills (markdown)
-    common/                   db models (SQLAlchemy, enums → CHECK), MinIO client, units, config loader, telemetry
-  console_ui/                 SvelteKit SPA
-  migrations/                 Alembic (HNSW/BM25/CHECK in hand-written files)
-  tests/
-    fixtures/                 one real sample per format + synthetic edge cases (incl. non-English PDFs, brochures)
-    unit/  integration/  benchmark/
-  deploy/
-    docker-compose.yml  k8s/  grafana/
+DCL_v2/
+  backend/                        one Python package: `python -m backend.main`
+    main.py                       THE FastAPI app. Mounts the routers from api/ according to ROLE
+                                  (api | models | all); startup checks (env, DB, MinIO, GPU for models)
+    config.py                     env contract (file 01 §7.1) + typed access to pipeline_config
+    api/                          thin routers only, no business logic
+      health.py  sync.py (webhook, ops)  review.py  settings.py  benchmark.py  viewer.py  assets.py
+      entities.py  engine.py (/v1/answer SSE, traces)  models.py (/embed, /rerank; loaded when ROLE=models)
+    celery_redis/                 app.py (Celery + Redis), queues.py (pools of §4), beat.py (schedules),
+                                  tasks_sync.py  tasks_process.py  tasks_embed.py  tasks_review.py
+    postgres/                     base.py (naming convention), enums.py (StrEnum → CHECK), session.py,
+                                  models/ (registry.py documents.py nodes.py entities.py telemetry.py
+                                  review.py ops.py benchmark.py), views.sql, backend/postgres/migrations/ (Alembic)
+    storage/                      minio.py (buckets, keys, presign), parquet.py (conventions of file 05 §2)
+    sync/                         graph_client.py auth.py delta.py gate.py scope.py downloader.py resync.py
+                                  retention.py
+    dispatcher/                   type_resolution.py folder_context.py assembler.py contract.py routing.py
+    routes/                       a1_office/  a2_source.py  b_code.py  c_telemetry/  d_photos.py
+                                  e_diagrams.py  f_video.py  g_archives.py   (a folder only when > ~600 lines)
+    llm_engine/                   everything that touches a model
+      gemini_client.py            the only module that knows the gateway (S4)
+      gemini_probe.py             capability probe
+      local_models.py             EmbeddingGemma 2 + bge-reranker loaded once per process (GPU)
+      vision/                     service.py schemas.py
+      enrichment/                 extract.py entities.py numeric_facts.py translate.py
+      prompts/                    versioned prompt files
+      engine/                     workflow.py tools/ sanitizer.py verifier.py playbooks.py
+    indexing/                     chunker.py anchors.py identifiers.py retrieval.py index_document.py
+                                  commit.py bm25_ddl.sql
+    review/                       models.py fingerprints.py staged.py rules.py resume.py api_models.py
+    benchmark/                    runner.py metrics.py judge.py
+    common/                       units.py hashing.py telemetry.py (OTel) logging.py
+    devops/                       backend/devops/compose.yaml backend/devops/compose.dev.yaml docker/ grafana/ runbooks/ ci/ backup/
+    backend/tests/                        unit/ integration/ schema/ fixtures/ benchmark/ acceptance/
+  frontend/
+    console/                      SvelteKit + TypeScript (the DCL Console)
+      src/lib/config.ts           base URLs, feature flags, auth settings (from VITE_* env)
+      src/lib/api_endpoint.ts     every call to the backend, in one file, shaped by config.ts
+      src/lib/components/         modular components per screen area (review/ settings/ benchmark/ viewer/)
+      src/routes/                 pages
+      backend/tests/
+    openwebui/                    Open WebUI functions (Python by platform constraint; thin)
+      config.py  api_endpoint.py  pipe_manastu_engine.py  actions/  filter_policy.py  skills/
+  config/                         data the pipeline loads (not secrets)
+    gate.yaml  report_json_schemas.yaml  aerospace_synonyms.yaml  vendors.yaml  sanity_ranges.yaml
+    units.txt  propellants.yaml  rules/
+  docs/                           architecture manual, session briefs
+  .wiki/                          the repository map (feature pages, plan sheets)
+  .github/workflows/              CI (must live here for GitHub; scripts in backend/devops/ci)
+  .env.example                    names only; the real .env is git-ignored
 ```
+
+### 2.1 Coding principles (binding for every session)
+
+1. **One entry file per side.** The backend has exactly one FastAPI app in `backend/main.py`; routers in `backend/api/` are thin and call domain modules. The frontend has one `api_endpoint.ts` that holds every backend call and one `config.ts` that shapes it (base URL, auth, flags). Nothing else in the frontend fetches.
+2. **Roles, not services.** The same `backend` package runs as `ROLE=api` (routers), `ROLE=models` (loads the GPU models once and serves `/embed` and `/rerank`), Celery worker per queue, or beat. Workers that need vectors call the model role over HTTP on the internal network; the API role calls it for query embeddings and reranking. No separate codebases, no separate images beyond the GPU one.
+3. **Flat and literal.** Folders by concern (`sync`, `dispatcher`, `routes`, `llm_engine`, `postgres`, `celery_redis`, `review`, `indexing`, `devops`); files named for what they contain; depth ≤ 3; a folder only when a module would exceed ~600 lines. Anyone must be able to trace a request from `main.py` to the row it writes by opening at most three files.
+4. **One place per kind of thing.** Models in `postgres/models`, enums in `postgres/enums.py`, env in `config.py`, prompts in `llm_engine/prompts`, data files in `config/`, queue names in `celery_redis/queues.py`. Duplicates are bugs.
+5. **No abstraction before the second use.** No base classes, plugin registries or layers until two concrete cases exist; the adapter registry of the dispatcher is the only sanctioned registry.
+6. **Typed boundaries, plain insides.** Pydantic at the API and task boundaries, `StrEnum` for every status, SQLAlchemy models as the schema; inside a module, plain functions.
+7. **Tests next to the concern.** `backend/tests/<concern>/…` mirrors the package; fixtures in `backend/tests/fixtures`.
+8. **TypeScript for everything in `frontend/console`.** Open WebUI functions are Python because the platform executes Python; they stay thin and call the same backend endpoints through `frontend/openwebui/api_endpoint.py`, mirroring the TypeScript file.
+9. **The wiki is updated in the same change** that adds or moves a file (`.wiki/README.md` §3).
 
 ## 3. Environments and the ingestion scope
 

@@ -15,16 +15,16 @@ LlamaIndex Workflow under DBOS: query analysis, planner, tools T1–T6 and U1–
 ## Location
 
 Code:
-- `services/engine/workflow.py`
-- `services/engine/tools/`
-- `services/engine/sanitizer.py`
-- `services/engine/verifier.py`
-- `services/engine/api.py`
-- `services/openwebui/skills/`
+- `backend/llm_engine/engine/workflow.py`
+- `backend/llm_engine/engine/tools/`
+- `backend/llm_engine/engine/sanitizer.py`
+- `backend/llm_engine/engine/verifier.py`
+- `backend/api/engine.py`
+- `frontend/openwebui/skills/`
 
 Tests and fixtures:
-- `tests/integration/engine/`
-- `tests/benchmark/suites/`
+- `backend/tests/integration/llm_engine/engine/`
+- `backend/tests/benchmark/suites/`
 
 ## Interfaces
 
@@ -43,14 +43,14 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/engine/workflow.py`
-- `services/engine/tools/`
-- `services/engine/sanitizer.py`
-- `services/engine/verifier.py`
-- `services/engine/api.py`
-- `services/openwebui/skills/`
-- `tests/integration/engine/`
-- `tests/benchmark/suites/`
+- `backend/llm_engine/engine/workflow.py`
+- `backend/llm_engine/engine/tools/`
+- `backend/llm_engine/engine/sanitizer.py`
+- `backend/llm_engine/engine/verifier.py`
+- `backend/api/engine.py`
+- `frontend/openwebui/skills/`
+- `backend/tests/integration/llm_engine/engine/`
+- `backend/tests/benchmark/suites/`
 
 ## Rubric (what "done" means for this feature)
 

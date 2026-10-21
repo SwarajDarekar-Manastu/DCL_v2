@@ -15,13 +15,13 @@ Download accepted items into MinIO keyed by SHA-256, verify quickXorHash, dedupl
 ## Location
 
 Code:
-- `services/sync/downloader.py`
-- `services/common/db/models/registry.py`
-- `services/common/minio_client.py`
+- `backend/sync/downloader.py`
+- `backend/postgres/models/registry.py`
+- `backend/storage/minio.py`
 
 Tests and fixtures:
-- `tests/unit/sync/test_downloader.py`
-- `tests/integration/registry/`
+- `backend/tests/unit/sync/test_downloader.py`
+- `backend/tests/integration/registry/`
 
 ## Interfaces
 
@@ -37,11 +37,11 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/sync/downloader.py`
-- `services/common/db/models/registry.py`
-- `services/common/minio_client.py`
-- `tests/unit/sync/test_downloader.py`
-- `tests/integration/registry/`
+- `backend/sync/downloader.py`
+- `backend/postgres/models/registry.py`
+- `backend/storage/minio.py`
+- `backend/tests/unit/sync/test_downloader.py`
+- `backend/tests/integration/registry/`
 
 ## Rubric (what "done" means for this feature)
 

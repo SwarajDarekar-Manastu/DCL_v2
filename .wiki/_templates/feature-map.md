@@ -18,7 +18,7 @@ Code:
 - `path/to/module.py`
 
 Tests and fixtures:
-- `tests/.../`
+- `backend/tests/.../`
 
 ## Interfaces
 

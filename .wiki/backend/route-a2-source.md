@@ -15,11 +15,11 @@ Parse ground-truth report sources: JSON section schemas, LaTeX master/include re
 ## Location
 
 Code:
-- `services/routes/a2_source/`
+- `backend/routes/a2_source/`
 
 Tests and fixtures:
-- `tests/unit/routes/a2_source/`
-- `tests/fixtures/route_a2/`
+- `backend/tests/unit/routes/a2_source/`
+- `backend/tests/fixtures/route_a2/`
 
 ## Interfaces
 
@@ -34,9 +34,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/routes/a2_source/`
-- `tests/unit/routes/a2_source/`
-- `tests/fixtures/route_a2/`
+- `backend/routes/a2_source/`
+- `backend/tests/unit/routes/a2_source/`
+- `backend/tests/fixtures/route_a2/`
 
 ## Rubric (what "done" means for this feature)
 

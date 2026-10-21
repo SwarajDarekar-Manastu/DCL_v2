@@ -15,8 +15,8 @@ Traces across FastAPI/Celery/engine, Prometheus metrics of file 02 §10, Grafana
 ## Location
 
 Code:
-- `services/common/telemetry/`
-- `deploy/grafana/dashboards/`
+- `backend/common/telemetry.py`
+- `backend/devops/grafana/dashboards/`
 
 Tests and fixtures:
 - (none yet)
@@ -33,8 +33,8 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/common/telemetry/`
-- `deploy/grafana/dashboards/`
+- `backend/common/telemetry.py`
+- `backend/devops/grafana/dashboards/`
 
 ## Rubric (what "done" means for this feature)
 

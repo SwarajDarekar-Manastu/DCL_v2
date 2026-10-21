@@ -8,7 +8,7 @@
 
 ## You own
 
-`console_ui` (SvelteKit + TypeScript), `services/console_api` (FastAPI), `services/openwebui` (Pipe, Actions, Filter, Skills markdown).
+`frontend/console` (SvelteKit + TypeScript), `backend/api/` (FastAPI), `frontend/openwebui` (Pipe, Actions, Filter, Skills markdown).
 
 ## Publish first
 

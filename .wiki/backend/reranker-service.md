@@ -15,10 +15,10 @@ Cross-encoder scoring of top-50 candidates with margin reporting.
 ## Location
 
 Code:
-- `services/reranker_service/`
+- `backend/llm_engine/local_models.py`
 
 Tests and fixtures:
-- `tests/unit/reranker_service/`
+- `backend/tests/unit/llm_engine/local_models/`
 
 ## Interfaces
 
@@ -32,8 +32,8 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/reranker_service/`
-- `tests/unit/reranker_service/`
+- `backend/llm_engine/local_models.py`
+- `backend/tests/unit/llm_engine/local_models/`
 
 ## Rubric (what "done" means for this feature)
 

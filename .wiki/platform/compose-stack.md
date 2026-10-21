@@ -10,18 +10,18 @@
 
 ## Purpose
 
-All services of file 01 §6 in compose.yaml/compose.dev.yaml: ParadeDB, MinIO, Redis, Celery pools, FastAPI services, embedding and reranker on the GPU, LibreOffice, OTel, Grafana.
+All services of file 01 §6 in backend/devops/compose.yaml/compose.dev.yaml: ParadeDB, MinIO, Redis, Celery pools, FastAPI services, embedding and reranker on the GPU, LibreOffice, OTel, Grafana.
 
 ## Location
 
 Code:
-- `compose.yaml`
-- `compose.dev.yaml`
-- `deploy/docker/`
-- `deploy/grafana/`
+- `backend/devops/compose.yaml`
+- `backend/devops/compose.dev.yaml`
+- `backend/devops/docker/`
+- `backend/devops/grafana/`
 
 Tests and fixtures:
-- `tests/integration/stack/`
+- `backend/tests/integration/stack/`
 
 ## Interfaces
 
@@ -35,11 +35,11 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `compose.yaml`
-- `compose.dev.yaml`
-- `deploy/docker/`
-- `deploy/grafana/`
-- `tests/integration/stack/`
+- `backend/devops/compose.yaml`
+- `backend/devops/compose.dev.yaml`
+- `backend/devops/docker/`
+- `backend/devops/grafana/`
+- `backend/tests/integration/stack/`
 
 ## Rubric (what "done" means for this feature)
 

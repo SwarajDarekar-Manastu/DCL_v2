@@ -15,13 +15,13 @@ Impact-sorted queue, polymorphic evidence and resolution panes per flag type, dr
 ## Location
 
 Code:
-- `console_ui/src/routes/review/`
-- `console_ui/src/lib/components/review/`
-- `services/console_api/review.py`
+- `frontend/console/src/routes/review/`
+- `frontend/console/src/lib/components/review/`
+- `backend/api/review.py`
 
 Tests and fixtures:
-- `console_ui/tests/review/`
-- `tests/integration/console_api/test_review.py`
+- `frontend/console/tests/review/`
+- `backend/tests/integration/api/test_review.py`
 
 ## Interfaces
 
@@ -37,11 +37,11 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `console_ui/src/routes/review/`
-- `console_ui/src/lib/components/review/`
-- `services/console_api/review.py`
-- `console_ui/tests/review/`
-- `tests/integration/console_api/test_review.py`
+- `frontend/console/src/routes/review/`
+- `frontend/console/src/lib/components/review/`
+- `backend/api/review.py`
+- `frontend/console/tests/review/`
+- `backend/tests/integration/api/test_review.py`
 
 ## Rubric (what "done" means for this feature)
 

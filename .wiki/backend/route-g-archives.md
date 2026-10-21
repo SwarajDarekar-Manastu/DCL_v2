@@ -15,11 +15,11 @@ Bomb-guarded extraction, members as blobs with blob_derivations, re-dispatch thr
 ## Location
 
 Code:
-- `services/routes/g_archives/`
+- `backend/routes/g_archives/`
 
 Tests and fixtures:
-- `tests/unit/routes/g_archives/`
-- `tests/fixtures/route_g/`
+- `backend/tests/unit/routes/g_archives/`
+- `backend/tests/fixtures/route_g/`
 
 ## Interfaces
 
@@ -34,9 +34,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/routes/g_archives/`
-- `tests/unit/routes/g_archives/`
-- `tests/fixtures/route_g/`
+- `backend/routes/g_archives/`
+- `backend/tests/unit/routes/g_archives/`
+- `backend/tests/fixtures/route_g/`
 
 ## Rubric (what "done" means for this feature)
 

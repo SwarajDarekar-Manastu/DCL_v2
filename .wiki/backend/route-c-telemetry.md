@@ -15,12 +15,12 @@ Deterministic path from .dat/.tdms/.csv/.xlsx/.npy to normalized Parquet, teleme
 ## Location
 
 Code:
-- `services/routes/c_telemetry/`
-- `services/common/units.py`
+- `backend/routes/c_telemetry/`
+- `backend/common/units.py`
 
 Tests and fixtures:
-- `tests/unit/routes/c_telemetry/`
-- `tests/fixtures/route_c/`
+- `backend/tests/unit/routes/c_telemetry/`
+- `backend/tests/fixtures/route_c/`
 
 ## Interfaces
 
@@ -37,10 +37,10 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/routes/c_telemetry/`
-- `services/common/units.py`
-- `tests/unit/routes/c_telemetry/`
-- `tests/fixtures/route_c/`
+- `backend/routes/c_telemetry/`
+- `backend/common/units.py`
+- `backend/tests/unit/routes/c_telemetry/`
+- `backend/tests/fixtures/route_c/`
 
 ## Rubric (what "done" means for this feature)
 

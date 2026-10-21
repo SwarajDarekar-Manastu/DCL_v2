@@ -15,14 +15,14 @@ SvelteKit app shell with OIDC login, role mapping, navigation, websocket channel
 ## Location
 
 Code:
-- `console_ui/src/routes/+layout.svelte`
-- `console_ui/src/lib/auth/`
-- `services/console_api/auth.py`
-- `services/console_api/ws.py`
+- `frontend/console/src/routes/+layout.svelte`
+- `frontend/console/src/lib/auth/`
+- `backend/api/auth.py`
+- `backend/api/ws.py`
 
 Tests and fixtures:
-- `console_ui/tests/`
-- `tests/unit/console_api/`
+- `frontend/console/tests/`
+- `backend/tests/unit/api/`
 
 ## Interfaces
 
@@ -37,12 +37,12 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `console_ui/src/routes/+layout.svelte`
-- `console_ui/src/lib/auth/`
-- `services/console_api/auth.py`
-- `services/console_api/ws.py`
-- `console_ui/tests/`
-- `tests/unit/console_api/`
+- `frontend/console/src/routes/+layout.svelte`
+- `frontend/console/src/lib/auth/`
+- `backend/api/auth.py`
+- `backend/api/ws.py`
+- `frontend/console/tests/`
+- `backend/tests/unit/api/`
 
 ## Rubric (what "done" means for this feature)
 

@@ -226,7 +226,9 @@ Failure classification (automatic, from the metrics): `RETRIEVAL_MISS` (gold nod
 
 ## 7. UI technology
 
-- SvelteKit + TypeScript (same ecosystem as Open WebUI, which eases a future upstream contribution) or React — one SPA, served by the Console API container.
+- **SvelteKit + TypeScript** (decided), one SPA under `frontend/console`, modular by screen area (`src/lib/components/{review,settings,benchmark,viewer}`).
+- **One `src/lib/api_endpoint.ts`** holds every call to the backend (typed request/response per route of `backend/api/*`); **one `src/lib/config.ts`** shapes it (base URL, auth settings, feature flags from `VITE_*` variables). No other file fetches.
+- **Open WebUI functions are Python** because Open WebUI executes Python; they live in `frontend/openwebui`, stay thin, and reach the backend only through `frontend/openwebui/api_endpoint.py` shaped by `frontend/openwebui/config.py`, mirroring the TypeScript pair.
 - PDF/page rendering from pre-rendered PNG assets (no client PDF parsing), bbox overlays as absolutely positioned divs scaled to the image.
 - Plotly for sparklines/overlays; a thin video player with `#t=` seeking.
 - Websocket channel for case updates, run progress and ops counters.

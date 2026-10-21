@@ -15,9 +15,9 @@ PostgreSQL base+WAL, MinIO versioning, nightly retention deletes, runbooks for r
 ## Location
 
 Code:
-- `deploy/backup/`
-- `deploy/runbooks/`
-- `services/sync/retention.py`
+- `backend/devops/backup/`
+- `backend/devops/runbooks/`
+- `backend/sync/retention.py`
 
 Tests and fixtures:
 - (none yet)
@@ -34,9 +34,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `deploy/backup/`
-- `deploy/runbooks/`
-- `services/sync/retention.py`
+- `backend/devops/backup/`
+- `backend/devops/runbooks/`
+- `backend/sync/retention.py`
 
 ## Rubric (what "done" means for this feature)
 

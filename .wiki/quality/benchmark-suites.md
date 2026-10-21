@@ -15,9 +15,9 @@ The 60-case golden set across categories incl. MULTILINGUAL and LIBRARY_VS_INTER
 ## Location
 
 Code:
-- `tests/benchmark/suites/`
-- `tests/benchmark/retrieval_set.yaml`
-- `tests/benchmark/verification/`
+- `backend/tests/benchmark/suites/`
+- `backend/tests/benchmark/retrieval_set.yaml`
+- `backend/tests/benchmark/verification/`
 
 Tests and fixtures:
 - (none yet)
@@ -35,9 +35,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `tests/benchmark/suites/`
-- `tests/benchmark/retrieval_set.yaml`
-- `tests/benchmark/verification/`
+- `backend/tests/benchmark/suites/`
+- `backend/tests/benchmark/retrieval_set.yaml`
+- `backend/tests/benchmark/verification/`
 
 ## Rubric (what "done" means for this feature)
 

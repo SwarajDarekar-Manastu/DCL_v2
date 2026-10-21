@@ -15,11 +15,11 @@ Typed settings from .env per file 01 §7.1: refuses placeholders, refuses GOOGLE
 ## Location
 
 Code:
-- `services/common/config/settings.py`
+- `backend/config.py`
 - `.env.example`
 
 Tests and fixtures:
-- `tests/unit/config/test_settings.py`
+- `backend/tests/unit/config/test_settings.py`
 
 ## Interfaces
 
@@ -33,9 +33,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/common/config/settings.py`
+- `backend/config.py`
 - `.env.example`
-- `tests/unit/config/test_settings.py`
+- `backend/tests/unit/config/test_settings.py`
 
 ## Rubric (what "done" means for this feature)
 

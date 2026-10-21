@@ -8,12 +8,12 @@
 
 ## You own
 
-`tests/fixtures/**`, `tests/benchmark/**`, `config/aerospace_synonyms.yaml`, `config/vendors.yaml`, `config/sanity_ranges.yaml`, `config/propellants.yaml`, `config/report_json_schemas.yaml`, `config/units.txt`, `config/rules/**` (operator rules exported as YAML), acceptance checklists per milestone under `tests/acceptance`.
+`backend/tests/fixtures/**`, `backend/tests/benchmark/**`, `config/aerospace_synonyms.yaml`, `config/vendors.yaml`, `config/sanity_ranges.yaml`, `config/propellants.yaml`, `config/report_json_schemas.yaml`, `config/units.txt`, `config/rules/**` (operator rules exported as YAML), acceptance checklists per milestone under `backend/tests/acceptance`.
 
 ## Publish first
 
 1. The allowlist of real folders for `processing.scope` (one or two test-plan folders per root, the handwritten run sheets, a LaTeX project with its PDF, an FMEA workbook, HEIC photos, the Rev C diagram, one test video, one `.npy`, a library folder with two non-English brochures and a paper with a DOI), agreed with the SME, written to `docs/sessions/DECISIONS.md` via `DCL Lead`.
-2. One real sample per format under `tests/fixtures/<route>/` plus the synthetic edge cases listed in file 10 §7 (rotated scan, merged cells, headerless CSV, two LaTeX masters, zip bomb, malicious pickle, `.pdf` that is HTML, German datasheet, Japanese scanned page, DOI paper).
+2. One real sample per format under `backend/tests/fixtures/<route>/` plus the synthetic edge cases listed in file 10 §7 (rotated scan, merged cells, headerless CSV, two LaTeX masters, zip bomb, malicious pickle, `.pdf` that is HTML, German datasheet, Japanese scanned page, DOI paper).
 3. The first 15 telemetry benchmark cases with Excel-verified numbers and tolerances (file 08 §5.3 schema), then the rest of the 60.
 4. `sanity_ranges.yaml`, `units.txt` (aerospace and locale aliases), `aerospace_synonyms.yaml` (multilingual seeds), `vendors.yaml`, `propellants.yaml` for RocketCEA.
 
@@ -30,7 +30,7 @@ Supporting every milestone's acceptance; primary for M10 suites and for clearing
 1. Agree the allowlist folders with the SME; message `DCL Lead` to record them.
 2. Collect the fixture files (copies, not moves) and write the expected outcomes per fixture (route, flags, key numbers).
 3. Write the 40-query retrieval set with gold anchors (document, page, quote), including 5 cross-lingual queries.
-4. Write the first 15 telemetry cases; verify numbers independently in Excel or a short Python script kept in `tests/benchmark/verification/`.
+4. Write the first 15 telemetry cases; verify numbers independently in Excel or a short Python script kept in `backend/tests/benchmark/verification/`.
 5. Draft the configuration YAML files above with the SME; add unit tests that load them.
 6. Prepare the M1 and M2 acceptance checklists as executable scripts where possible.
 

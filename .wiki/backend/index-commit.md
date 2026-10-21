@@ -15,10 +15,10 @@ One transaction per document: delete all nodes by doc_id, apply resolved review 
 ## Location
 
 Code:
-- `services/indexing/commit.py`
+- `backend/indexing/commit.py`
 
 Tests and fixtures:
-- `tests/integration/indexing/test_commit.py`
+- `backend/tests/integration/indexing/test_commit.py`
 
 ## Interfaces
 
@@ -33,8 +33,8 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/indexing/commit.py`
-- `tests/integration/indexing/test_commit.py`
+- `backend/indexing/commit.py`
+- `backend/tests/integration/indexing/test_commit.py`
 
 ## Rubric (what "done" means for this feature)
 

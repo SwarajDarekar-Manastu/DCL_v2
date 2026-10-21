@@ -15,7 +15,7 @@ Executable acceptance checks per milestone mirroring file 10 §5.
 ## Location
 
 Code:
-- `tests/acceptance/`
+- `backend/tests/acceptance/`
 
 Tests and fixtures:
 - (none yet)
@@ -32,7 +32,7 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `tests/acceptance/`
+- `backend/tests/acceptance/`
 
 ## Rubric (what "done" means for this feature)
 

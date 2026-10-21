@@ -15,13 +15,13 @@ One Gemini call per parent producing English summary, entities, numeric facts, c
 ## Location
 
 Code:
-- `services/enrichment/extract.py`
-- `services/enrichment/entities.py`
-- `services/enrichment/numeric_facts.py`
-- `config/prompts/enrichment/`
+- `backend/llm_engine/enrichment/extract.py`
+- `backend/llm_engine/enrichment/entities.py`
+- `backend/llm_engine/enrichment/numeric_facts.py`
+- `backend/llm_engine/prompts/enrichment/`
 
 Tests and fixtures:
-- `tests/unit/enrichment/`
+- `backend/tests/unit/llm_engine/enrichment/`
 
 ## Interfaces
 
@@ -36,11 +36,11 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/enrichment/extract.py`
-- `services/enrichment/entities.py`
-- `services/enrichment/numeric_facts.py`
-- `config/prompts/enrichment/`
-- `tests/unit/enrichment/`
+- `backend/llm_engine/enrichment/extract.py`
+- `backend/llm_engine/enrichment/entities.py`
+- `backend/llm_engine/enrichment/numeric_facts.py`
+- `backend/llm_engine/prompts/enrichment/`
+- `backend/tests/unit/llm_engine/enrichment/`
 
 ## Rubric (what "done" means for this feature)
 

@@ -16,7 +16,7 @@ Lint, unit tests, alembic upgrade/check on the pinned ParadeDB image, FK-index q
 
 Code:
 - `.github/workflows/`
-- `deploy/ci/`
+- `backend/devops/ci/`
 
 Tests and fixtures:
 - (none yet)
@@ -35,7 +35,7 @@ Consumes:
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
 - `.github/workflows/`
-- `deploy/ci/`
+- `backend/devops/ci/`
 
 ## Rubric (what "done" means for this feature)
 

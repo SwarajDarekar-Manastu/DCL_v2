@@ -15,11 +15,11 @@ ffprobe triage, whisper transcripts with timestamps for workshops, ignition dete
 ## Location
 
 Code:
-- `services/routes/f_video/`
+- `backend/routes/f_video/`
 
 Tests and fixtures:
-- `tests/unit/routes/f_video/`
-- `tests/fixtures/route_f/`
+- `backend/tests/unit/routes/f_video/`
+- `backend/tests/fixtures/route_f/`
 
 ## Interfaces
 
@@ -36,9 +36,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/routes/f_video/`
-- `tests/unit/routes/f_video/`
-- `tests/fixtures/route_f/`
+- `backend/routes/f_video/`
+- `backend/tests/unit/routes/f_video/`
+- `backend/tests/fixtures/route_f/`
 
 ## Rubric (what "done" means for this feature)
 

@@ -15,13 +15,13 @@ Reject junk from Graph metadata (tiers 1–3), quarantine paths and secrets (tie
 ## Location
 
 Code:
-- `services/sync/gate.py`
-- `services/sync/scope.py`
+- `backend/sync/gate.py`
+- `backend/sync/scope.py`
 - `config/gate.yaml`
 
 Tests and fixtures:
-- `tests/unit/sync/test_gate.py`
-- `tests/fixtures/gate/`
+- `backend/tests/unit/sync/test_gate.py`
+- `backend/tests/fixtures/gate/`
 
 ## Interfaces
 
@@ -36,11 +36,11 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/sync/gate.py`
-- `services/sync/scope.py`
+- `backend/sync/gate.py`
+- `backend/sync/scope.py`
 - `config/gate.yaml`
-- `tests/unit/sync/test_gate.py`
-- `tests/fixtures/gate/`
+- `backend/tests/unit/sync/test_gate.py`
+- `backend/tests/fixtures/gate/`
 
 ## Rubric (what "done" means for this feature)
 

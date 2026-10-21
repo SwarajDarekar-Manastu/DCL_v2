@@ -15,11 +15,11 @@ The only module that talks to the Manastu Cloud Run gateway: structured output, 
 ## Location
 
 Code:
-- `services/common/gemini.py`
-- `services/common/gemini_probe.py`
+- `backend/llm_engine/gemini_client.py`
+- `backend/llm_engine/gemini_probe.py`
 
 Tests and fixtures:
-- tests/unit/gemini/ (recorded responses)
+- backend/tests/unit/llm_engine/gemini/ (recorded responses)
 
 ## Interfaces
 
@@ -34,9 +34,9 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/common/gemini.py`
-- `services/common/gemini_probe.py`
-- tests/unit/gemini/ (recorded responses)
+- `backend/llm_engine/gemini_client.py`
+- `backend/llm_engine/gemini_probe.py`
+- backend/tests/unit/llm_engine/gemini/ (recorded responses)
 
 ## Rubric (what "done" means for this feature)
 

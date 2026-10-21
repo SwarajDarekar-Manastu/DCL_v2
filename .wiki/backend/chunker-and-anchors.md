@@ -15,13 +15,13 @@ Parent/child/table/figure/code/slide/transcript/run-summary nodes, English conte
 ## Location
 
 Code:
-- `services/indexing/chunker.py`
-- `services/indexing/anchors.py`
-- `services/indexing/identifiers.py`
-- `services/indexing/index_document.py`
+- `backend/indexing/chunker.py`
+- `backend/indexing/anchors.py`
+- `backend/indexing/identifiers.py`
+- `backend/indexing/index_document.py`
 
 Tests and fixtures:
-- `tests/unit/indexing/`
+- `backend/tests/unit/indexing/`
 
 ## Interfaces
 
@@ -39,11 +39,11 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/indexing/chunker.py`
-- `services/indexing/anchors.py`
-- `services/indexing/identifiers.py`
-- `services/indexing/index_document.py`
-- `tests/unit/indexing/`
+- `backend/indexing/chunker.py`
+- `backend/indexing/anchors.py`
+- `backend/indexing/identifiers.py`
+- `backend/indexing/index_document.py`
+- `backend/tests/unit/indexing/`
 
 ## Rubric (what "done" means for this feature)
 

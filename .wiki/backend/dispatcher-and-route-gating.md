@@ -15,15 +15,15 @@ Resolve the real file type from magic bytes, build folder context (test ids, sib
 ## Location
 
 Code:
-- `services/dispatcher/type_resolution.py`
-- `services/dispatcher/folder_context.py`
-- `services/dispatcher/assembler.py`
-- `services/dispatcher/registry.py`
-- `services/dispatcher/contract.py`
+- `backend/dispatcher/type_resolution.py`
+- `backend/dispatcher/folder_context.py`
+- `backend/dispatcher/assembler.py`
+- `backend/dispatcher/registry.py`
+- `backend/dispatcher/contract.py`
 
 Tests and fixtures:
-- `tests/unit/dispatcher/`
-- `tests/fixtures/dispatcher/`
+- `backend/tests/unit/dispatcher/`
+- `backend/tests/fixtures/dispatcher/`
 
 ## Interfaces
 
@@ -40,13 +40,13 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/dispatcher/type_resolution.py`
-- `services/dispatcher/folder_context.py`
-- `services/dispatcher/assembler.py`
-- `services/dispatcher/registry.py`
-- `services/dispatcher/contract.py`
-- `tests/unit/dispatcher/`
-- `tests/fixtures/dispatcher/`
+- `backend/dispatcher/type_resolution.py`
+- `backend/dispatcher/folder_context.py`
+- `backend/dispatcher/assembler.py`
+- `backend/dispatcher/registry.py`
+- `backend/dispatcher/contract.py`
+- `backend/tests/unit/dispatcher/`
+- `backend/tests/fixtures/dispatcher/`
 
 ## Rubric (what "done" means for this feature)
 

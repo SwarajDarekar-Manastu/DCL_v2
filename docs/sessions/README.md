@@ -4,12 +4,14 @@ Six Claude Code sessions work on this repository at the same time: one **Lead** 
 
 | Session | Name to use in messages | Brief | Owns |
 |---------|-------------------------|-------|------|
-| Lead | `DCL Lead` | this file | `docs/architecture/**`, `docs/sessions/**`, repository skeleton, merges to `main`, cross-session decisions |
-| S1 | `DCL S1 Backend` | [S1_backend_data.md](S1_backend_data.md) | `services/sync`, `services/dispatcher`, `services/routes/c_telemetry`, `services/routes/a2_source`, `services/routes/b_code`, `services/routes/g_archives`, `services/routes/e_diagrams`, `services/common/db`, `migrations`, `services/review` (backend), `services/indexing` (commit path) |
-| S2 | `DCL S2 ML` | [S2_ml_llm.md](S2_ml_llm.md) | `services/vision`, `services/routes/a1_office`, `services/routes/d_photos`, `services/routes/f_video`, `services/enrichment`, `services/embedding_service`, `services/reranker_service`, `services/indexing` (chunker, anchors, retrieval SQL), `services/engine`, `config/prompts` |
-| S3 | `DCL S3 Frontend` | [S3_fullstack.md](S3_fullstack.md) | `console_ui`, `services/console_api`, `services/openwebui` |
-| S4 | `DCL S4 DevOps` | [S4_devops.md](S4_devops.md) | `deploy`, `compose*.yaml`, Dockerfiles, `.github`/CI, `services/common/config` (env contract), `services/common/gemini.py` (gateway client), observability, backups |
-| S5 | `DCL S5 Quality` | [S5_sme_quality.md](S5_sme_quality.md) | `tests/fixtures`, `tests/benchmark`, `config/*.yaml` (synonyms, vendors, sanity ranges, propellants, report schemas, units), `config/rules`, golden benchmark cases, acceptance checks |
+| Lead | `DCL Lead` | this file | `docs/architecture/**`, `docs/sessions/**`, `.wiki` indexes, `backend/main.py` skeleton, merges to `main`, cross-session decisions |
+| S1 | `DCL S1 Backend` | [S1_backend_data.md](S1_backend_data.md) | `backend/sync`, `backend/dispatcher`, `backend/routes/{c_telemetry,a2_source,b_code,e_diagrams,g_archives}`, `backend/postgres` (models, enums, migrations), `backend/storage`, `backend/celery_redis` (tasks_sync, tasks_process, tasks_review), `backend/review`, `backend/indexing/commit.py`, `backend/api/{sync,review,settings,entities}.py`, `backend/common/units.py` |
+| S2 | `DCL S2 ML` | [S2_ml_llm.md](S2_ml_llm.md) | `backend/llm_engine/{vision,enrichment,prompts,engine,local_models.py}`, `backend/routes/{a1_office,d_photos,f_video}`, `backend/indexing/{chunker,anchors,identifiers,retrieval,index_document}.py`, `backend/benchmark/{runner,metrics,judge}.py`, `backend/celery_redis/tasks_embed.py`, `backend/api/{engine,models}.py`, `frontend/openwebui/skills` |
+| S3 | `DCL S3 Frontend` | [S3_fullstack.md](S3_fullstack.md) | `frontend/console` (TypeScript), `frontend/openwebui` (Pipe, Actions, Filter, `api_endpoint.py`, `config.py`), `backend/api/{viewer,assets,benchmark,ws,auth}.py` |
+| S4 | `DCL S4 DevOps` | [S4_devops.md](S4_devops.md) | `backend/devops` (compose files, Dockerfiles, grafana, runbooks, ci, backup), `.github/workflows`, `backend/config.py` (env contract), `.env.example`, `backend/llm_engine/gemini_client.py` + `gemini_probe.py` (gateway client), `backend/common/{telemetry,logging}.py`, `backend/celery_redis/{app,queues,beat}.py`, `backend/api/health.py` |
+| S5 | `DCL S5 Quality` | [S5_sme_quality.md](S5_sme_quality.md) | `backend/tests/{fixtures,benchmark,acceptance}`, `config/*.yaml`, `config/units.txt`, `config/rules`, golden benchmark cases, acceptance checks |
+
+Layout and coding principles: `docs/architecture/10_development_plan.md` §2 and §2.1 (one `backend/main.py`, roles not services, flat folders, one `api_endpoint.ts` + `config.ts` in the Console).
 
 ## Repository
 
@@ -27,7 +29,7 @@ Six Claude Code sessions work on this repository at the same time: one **Lead** 
 ## How the sessions stay consistent
 
 1. **The manual is the contract.** `docs/architecture/` is normative. If a session needs to deviate, it messages `DCL Lead` with the proposed change; the Lead edits the manual and tells every affected session. Nobody edits the manual except the Lead.
-2. **Shared code has one owner.** `services/common/**` belongs to S1 (database models, units, MinIO client) and S4 (config loader, gateway client). Another session that needs a change there sends a message with the exact request instead of editing.
+2. **Shared code has one owner.** `backend/common/**` belongs to S1 (database models, units, MinIO client) and S4 (config loader, gateway client). Another session that needs a change there sends a message with the exact request instead of editing.
 3. **Interfaces are published before implementations.** Each brief lists what the session must publish first (Pydantic models, function signatures, table names, API routes) so dependents can code against stubs. Publish = merged to `main` with tests.
 4. **Status goes to one file.** Every session appends an entry to `STATUS.md` at the end of each work block (what merged, what is blocked, what it needs). The Lead reads it before each merge round.
 5. **Decisions go to one file.** Anything that affects more than one session is written to `DECISIONS.md` with a date, by the Lead only, after the message exchange that produced it.

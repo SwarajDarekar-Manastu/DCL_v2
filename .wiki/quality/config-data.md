@@ -24,7 +24,7 @@ Code:
 - `config/rules/`
 
 Tests and fixtures:
-- `tests/unit/config_data/`
+- `backend/tests/unit/config_data/`
 
 ## Interfaces
 
@@ -45,7 +45,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `config/propellants.yaml`
 - `config/report_json_schemas.yaml`
 - `config/rules/`
-- `tests/unit/config_data/`
+- `backend/tests/unit/config_data/`
 
 ## Rubric (what "done" means for this feature)
 

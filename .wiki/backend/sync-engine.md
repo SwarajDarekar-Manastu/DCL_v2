@@ -15,15 +15,15 @@ Enumerate the four shared OneDrive folders through Microsoft Graph delta, react 
 ## Location
 
 Code:
-- `services/sync/graph_client.py`
-- `services/sync/auth.py`
-- `services/sync/delta_runner.py`
-- `services/sync/webhooks.py`
-- `services/sync/resync.py`
+- `backend/sync/graph_client.py`
+- `backend/sync/auth.py`
+- `backend/sync/delta_runner.py`
+- `backend/sync/webhooks.py`
+- `backend/sync/resync.py`
 
 Tests and fixtures:
-- `tests/unit/sync/`
-- `tests/integration/sync/`
+- `backend/tests/unit/sync/`
+- `backend/tests/integration/sync/`
 
 ## Interfaces
 
@@ -41,13 +41,13 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/sync/graph_client.py`
-- `services/sync/auth.py`
-- `services/sync/delta_runner.py`
-- `services/sync/webhooks.py`
-- `services/sync/resync.py`
-- `tests/unit/sync/`
-- `tests/integration/sync/`
+- `backend/sync/graph_client.py`
+- `backend/sync/auth.py`
+- `backend/sync/delta_runner.py`
+- `backend/sync/webhooks.py`
+- `backend/sync/resync.py`
+- `backend/tests/unit/sync/`
+- `backend/tests/integration/sync/`
 
 ## Rubric (what "done" means for this feature)
 

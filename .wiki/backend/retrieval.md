@@ -15,12 +15,12 @@ search_documents implementation: alias expansion, exact-distance path for select
 ## Location
 
 Code:
-- `services/indexing/retrieval.py`
-- `services/indexing/bm25_ddl.sql`
+- `backend/indexing/retrieval.py`
+- `backend/indexing/bm25_ddl.sql`
 
 Tests and fixtures:
-- `tests/integration/retrieval/`
-- `tests/benchmark/retrieval_set.yaml`
+- `backend/tests/integration/retrieval/`
+- `backend/tests/benchmark/retrieval_set.yaml`
 
 ## Interfaces
 
@@ -37,10 +37,10 @@ Consumes:
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `services/indexing/retrieval.py`
-- `services/indexing/bm25_ddl.sql`
-- `tests/integration/retrieval/`
-- `tests/benchmark/retrieval_set.yaml`
+- `backend/indexing/retrieval.py`
+- `backend/indexing/bm25_ddl.sql`
+- `backend/tests/integration/retrieval/`
+- `backend/tests/benchmark/retrieval_set.yaml`
 
 ## Rubric (what "done" means for this feature)
 
