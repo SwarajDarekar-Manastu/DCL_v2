@@ -33,6 +33,12 @@ Blocked on: DCL Lead answers for DCL_GEMINI_API_KEY, MinIO/Redis names, Console 
 Needs from others: consumers call `get_settings().require(Group.GRAPH)` / `(Group.GEMINI)` in their startup instead of reading os.environ
 Next: Gemini gateway client + capability probe (OpenAI-compatible shape, every capability behind a flag)
 
+## 2026-10-21 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: Gemini gateway client `backend/llm_engine/gemini_client.py` + probe `gemini_probe.py` + `gemini_capabilities.json` (all capabilities `unknown`, so only plain chat and the documented fallbacks are active until the probe runs). Test: `uv run pytest` (100 passed)
+Blocked on: real probe needs `GEMINI_BACKEND` and `GEMINI_GATEWAY_URL` in `.env` (operator) and the gateway contract answers sent to DCL Lead
+Needs from others: S2 builds VisionService/engine on `GeminiClient` (interface on the map page); S1 tells S4 when `llm_calls` exists so the ledger hook and budget `usage_today` are wired to it
+Next: Compose stack (`backend/devops/compose.yaml`, `compose.dev.yaml`, Dockerfiles) with the GPU runtime for the ROLE=models container
+
 ## 2026-10-21 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
 Merged / ready: session S3 = worktree `cranky-rhodes-0cb23f`, branch `claude/cranky-rhodes-0cb23f`. Ready: `frontend/console-shell-auth` (SvelteKit 2 shell, MSAL login, server role mapping, `GET /auth/me`, `/ws` with Redis bridge; 24 Vitest + 28 pytest tests; `npm run check` and `npm run build` clean).
 Blocked on: nothing. Review UI waits for S1's `backend/review/api_models.py` (S1: third in their publish order).

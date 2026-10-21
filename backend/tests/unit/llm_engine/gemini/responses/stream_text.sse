@@ -1,0 +1,10 @@
+data: {"id": "chatcmpl-stream-1", "model": "gemini-3.8-flash", "choices": [{"index": 0, "delta": {"role": "assistant", "content": "1, 2, 3"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stream-1", "model": "gemini-3.8-flash", "choices": [{"index": 0, "delta": {"content": ", 4, 5"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stream-1", "model": "gemini-3.8-flash", "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+
+data: {"id": "chatcmpl-stream-1", "model": "gemini-3.8-flash", "choices": [], "usage": {"prompt_tokens": 120, "completion_tokens": 30, "total_tokens": 150, "prompt_tokens_details": {"cached_tokens": 20}, "completion_tokens_details": {"reasoning_tokens": 12}}}
+
+data: [DONE]
+
