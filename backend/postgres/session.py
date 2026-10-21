@@ -1,5 +1,8 @@
 """Engine and sessions. The URL comes from the env contract (``Settings.stack_database_url``)."""
 
+from collections.abc import Iterator
+from functools import lru_cache
+
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -19,3 +22,19 @@ def engine_from_settings(settings: Settings) -> Engine:
 
 def session_factory(engine: Engine) -> sessionmaker[Session]:
     return sessionmaker(engine, expire_on_commit=False)
+
+
+@lru_cache(maxsize=1)
+def default_session_factory() -> sessionmaker[Session]:
+    from backend.config import get_settings
+
+    return session_factory(engine_from_settings(get_settings()))
+
+
+def get_session() -> Iterator[Session]:
+    """FastAPI dependency: one session per request, closed afterwards; routers commit explicitly.
+
+    Use ``session: Annotated[Session, Depends(get_session)]``; tests override ``get_session``.
+    """
+    with default_session_factory()() as session:
+        yield session

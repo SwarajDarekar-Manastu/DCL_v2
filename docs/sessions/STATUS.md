@@ -294,3 +294,8 @@ Merged / ready: enrichment (`backend/llm_engine/enrichment/{extract,entities,num
 Blocked on: nothing
 Needs from others: S1: who seeds `config/aerospace_synonyms.yaml` into entities/entity_aliases, and whether `sanity_ranges` is seeded into pipeline_config; your commit consumes `EntityDecisions` and `FactDecision`s
 Next: index_document (chunk → enrich → normalize → facts → embed → hand to commit), then retrieval and the BM25 DDL for S1
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: sync Celery tasks (tasks_sync.py), host download CLI + read-only export, sanity_ranges seeding (seed-config), get_session dependency for routers. Live in the stack: crawl into 5435/dcl_v2 matches the first run (110,867 items, 5,073 accepted, 0 orphans); processing.scope = the 11 E1–E11 folder ids, sync.download_scope = []; gate.* and sanity_ranges seeded; the 247 accepted files of E1–E11 landed in MinIO. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend`
+Blocked on: nothing
+Needs from others: S4 — beat entries for the sync tasks (sent); S2 — BM25 DDL, entities.load_seed() on main for the seed-entities command
+Next: download the rest of the accepted items (H11), Tier 4 on landed blobs, dispatcher (folder context, assembler, route gating, CIR writer), then Route C

@@ -5,7 +5,10 @@ The ``gate.*`` keys are seeded from ``config/gate.yaml``: on first start only th
 are written; ``reseed`` appends a version wherever the YAML differs. The gate reads the table,
 never the YAML (file 02 §4).
 
-CLI: ``python -m backend.postgres.pipeline_config seed-gate [--reseed]`` (uses DCL_DATABASE_URL).
+``sanity_ranges`` is one key holding S5's ``config/sanity_ranges.yaml`` mapping, seeded the same way.
+
+CLI: ``python -m backend.postgres.pipeline_config seed-config [--reseed]`` (gate + sanity ranges;
+``seed-gate`` seeds the gate only). Uses DCL_DATABASE_URL.
 """
 
 import sys
@@ -20,11 +23,15 @@ from sqlalchemy.orm import Session
 from backend.postgres.models import PipelineConfig
 from backend.sync.gate import GateConfig
 
-GATE_YAML = Path(__file__).resolve().parents[2] / "config" / "gate.yaml"
+CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
+GATE_YAML = CONFIG_DIR / "gate.yaml"
+SANITY_RANGES_YAML = CONFIG_DIR / "sanity_ranges.yaml"
+SANITY_RANGES = "sanity_ranges"
 GATE_PREFIX = "gate."
 DOWNLOAD_SCOPE = "sync.download_scope"
 PROCESSING_SCOPE = "processing.scope"
 MISSING = object()
+_ABSENT = object()
 
 
 class ConfigMissing(LookupError):
@@ -93,6 +100,32 @@ def load_gate_yaml(path: Path = GATE_YAML) -> dict[str, Any]:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+def seed_key(
+    session: Session, key: str, value: Any, source: str, updated_by: str = "seed", reseed: bool = False
+) -> bool:
+    """First start: write ``key`` if missing; re-seed: append a version if the value differs."""
+    current = get(session, key, default=_ABSENT)
+    if current is not _ABSENT and (not reseed or current == value):
+        return False
+    set_value(session, key, value, updated_by, description=f"seeded from {source}")
+    return True
+
+
+def seed_sanity_ranges(session: Session, reseed: bool = False, path: Path = SANITY_RANGES_YAML) -> bool:
+    return seed_key(
+        session,
+        SANITY_RANGES,
+        yaml.safe_load(path.read_text(encoding="utf-8")),
+        "config/sanity_ranges.yaml",
+        reseed=reseed,
+    )
+
+
+def sanity_ranges(session: Session) -> dict[str, Any]:
+    """S5's sanity ranges mapping (``version``, ``ranges[]``) as seeded; raises if not seeded."""
+    return get(session, SANITY_RANGES)
+
+
 def gate_config(session: Session) -> GateConfig:
     values = get_prefix(session, GATE_PREFIX)
     if not values:
@@ -119,14 +152,20 @@ def main(argv: list[str]) -> int:
 
     from backend.postgres.session import normalize_url
 
-    if not argv or argv[0] != "seed-gate":
-        print("usage: python -m backend.postgres.pipeline_config seed-gate [--reseed]", file=sys.stderr)
+    if not argv or argv[0] not in ("seed-gate", "seed-config"):
+        print(
+            "usage: python -m backend.postgres.pipeline_config seed-gate | seed-config [--reseed]",
+            file=sys.stderr,
+        )
         return 2
+    reseed = "--reseed" in argv
     engine = create_engine(normalize_url(os.environ["DCL_DATABASE_URL"]))
     with Session(engine) as session:
-        written = seed_gate(session, load_gate_yaml(), reseed="--reseed" in argv)
+        written = seed_gate(session, load_gate_yaml(), reseed=reseed)
+        if argv[0] == "seed-config" and seed_sanity_ranges(session, reseed=reseed):
+            written.append(SANITY_RANGES)
         session.commit()
-    print(f"wrote {len(written)} gate keys" + (f": {', '.join(written)}" if written else ""))
+    print(f"wrote {len(written)} keys" + (f": {', '.join(written)}" if written else ""))
     return 0
 
 

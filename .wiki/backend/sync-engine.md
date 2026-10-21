@@ -19,11 +19,12 @@ Code:
 - `backend/sync/auth.py` (encrypted MSAL cache, `TokenProvider` silent-first + device-code sign-in, `check_access`, CLI)
 - `backend/sync/delta.py` (`seed_roots`, `run_root` crawl/delta with page checkpoints, `upsert_page`, `finalize_root` paths + gate + scope; CLI `crawl`)
 - `backend/sync/folder_listing.py` (S5's allowlist listing: folders.csv + library_pdfs.csv; CLI)
+- `backend/celery_redis/tasks_sync.py` (io_light: `dcl.sync.delta_root` time-budgeted + self re-enqueue + per-root Redis lock, `dcl.sync.delta_all`, `dcl.sync.download` (3 attempts → DOWNLOAD_FAILED), `dcl.sync.enqueue_downloads`, `dcl.sync.token_health` (first-root probe))
 - `backend/sync/webhooks.py` (planned)
 - `backend/sync/resync.py` (planned)
 
 Tests and fixtures:
-- `backend/tests/unit/sync/test_auth.py`, `backend/tests/unit/sync/test_graph_client.py`, `backend/tests/unit/sync/test_delta.py`
+- `backend/tests/unit/sync/test_auth.py`, `backend/tests/unit/sync/test_graph_client.py`, `backend/tests/unit/sync/test_delta.py`, `backend/tests/unit/sync/test_tasks_sync.py`, `backend/tests/unit/sync/conftest.py`
 - `backend/tests/integration/sync/` (planned)
 
 ## Interfaces
@@ -50,7 +51,10 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/sync/auth.py`
 - `backend/sync/delta.py`
 - `backend/sync/folder_listing.py`
+- `backend/celery_redis/tasks_sync.py`
 - `backend/tests/unit/sync/test_delta.py`
+- `backend/tests/unit/sync/test_tasks_sync.py`
+- `backend/tests/unit/sync/conftest.py`
 - `backend/sync/webhooks.py`
 - `backend/sync/resync.py`
 - `backend/tests/unit/sync/`
@@ -75,6 +79,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | MSAL auth with encrypted cache, GET-only Graph client, access check and CLI (28 unit tests); device flow verified live against the tenant with scope A |
 | 2026-10-22 | S1 | Metadata crawl/delta (`delta.py`) and S5's folder listing; 10 tests; live crawl of the four roots run against a disposable DB |
+| 2026-10-22 | S1 | Celery tasks (tasks_sync.py): budgeted delta with resume and lock, downloads, token health; 8 tests |
 
 ## Related
 
