@@ -82,6 +82,12 @@ class ThinkingLevel(StrEnum):
     HIGH = "high"
 
 
+class ApiStyle(StrEnum):
+    MANASTU = "manastu"
+    GEMINI = "gemini"
+    OPENAI = "openai"
+
+
 class Group(StrEnum):
     GRAPH = "graph"
     GEMINI = "gemini"
@@ -134,6 +140,7 @@ class Settings(BaseSettings):
     gemini_backend: Literal["gateway"] | None = _env("GEMINI_BACKEND", default=None)
     gemini_gateway_url: AnyHttpUrl | None = _env("GEMINI_GATEWAY_URL", default=None)
     gemini_gateway_key: SecretStr | None = _env(*GATEWAY_KEY_NAMES, default=None)
+    gemini_api_style: ApiStyle = _env("GEMINI_API_STYLE", default=ApiStyle.MANASTU)
     gemini_thinking_level: ThinkingLevel | None = _env("GEMINI_THINKING_LEVEL", default=None)
     gemini_include_thoughts: bool = _env("GEMINI_INCLUDE_THOUGHTS", default=False)
     gemini_context_cache: bool = _env("GEMINI_CONTEXT_CACHE", default=False)

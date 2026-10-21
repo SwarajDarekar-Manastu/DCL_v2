@@ -57,7 +57,7 @@ Fork policy (revised 2026-10-21): the default remains the extension points (Pipe
 ### 2.1 The Pipe (model) — behavior
 
 - Model id `manastu_engine.main`; display name "Manastu Propulsion Engine"; visible to the engineering groups.
-- `Valves` (admin): `ENGINE_URL`, `ENGINE_SHARED_SECRET`, `DEFAULT_THINKING_LEVEL`, `SHOW_STATUS_EVENTS`, `MAX_EMBEDS_PER_MESSAGE`, `EXTERNAL_SEARCH_GROUPS`, `CONSOLE_URL`.
+- `Valves` (admin): `ENGINE_URL`, `ENGINE_SHARED_SECRET`, `DEFAULT_THINKING_LEVEL`, `SHOW_STATUS_EVENTS`, `MAX_EMBEDS_PER_MESSAGE`, `CONSOLE_URL`. (No external-search valve: the engine receives the signed group list and decides with `answer.external_allowed_groups`; a second copy in the Pipe could only disagree.) Open WebUI stores one file per function, so `frontend/openwebui/build_functions.py` inlines `config.py` and `api_endpoint.py` into `frontend/openwebui/bundled/manastu_engine.py`, the file that is installed; a test fails when the bundle is stale.
 - `UserValves`: `strict_numbers` (never accept unverified values), `show_debug_trace`.
 - On each message: build the request (messages, `chat_id`, `message_id`, user id/email/groups, attachments as presigned uploads), POST to `/v1/answer` with SSE, and map events:
   - engine `step` → `status` (`done=false` while running);
@@ -152,7 +152,7 @@ Every change records actor/time/before/after; a "rollback to version" button exi
 - `GET /review/cases?filters…` · `GET /review/cases/{id}` · `POST /review/cases/{id}/assign` · `POST /review/cases/{id}/resolve` (array of per-flag resolutions, optional rule) · `POST /review/cases/{id}/reject` · `POST /review/cases/{id}/undo`
 - `POST /review/dry-run` (apply a candidate resolution to the staged payload and return converted stats/preview)
 - `GET /review/rules` · `POST /review/rules` · `POST /review/rules/{id}/simulate` · `POST /review/rules/{id}/deactivate`
-- `GET /assets/url?uri=s3://dcl-assets/…` (presign; viewer role; `dcl-assets` only, never `dcl-raw` or telemetry; path traversal refused) · `GET /docs/{id}/pages/{n}/render` · `GET /docs/{id}/viewer?anchor=…` (deep-link page used by chat citations; the anchor is `page` + `content_sha256`, resolved to the current node, falling back to the page)
+- `GET /assets/url?uri=s3://dcl-assets/…` (presign; viewer role; `dcl-assets` only, never `dcl-raw` or telemetry; path traversal refused) · `POST /assets/upload` (owner S3: returns a presigned PUT into the `dcl-exports/uploads/{user}/{uuid}` prefix with a 24-hour lifecycle, used by the Pipe for chat attachments; uploads are answer-time inputs and are never indexed) · `GET /docs/{id}/pages/{n}/render` · `GET /docs/{id}/viewer?anchor=…` (deep-link page used by chat citations; the anchor is `page` + `content_sha256`, resolved to the current node, falling back to the page)
 - `GET /entities?query…` · `POST /entities/merge` · `POST /entities/split`
 - `GET /audit?entity_type=&entity_id=&actor=&action=&since=&until=&cursor=&limit=` → `{items: [{event_id, at, actor, entity_type, entity_id, action, before, after}], next_cursor}`; reviewer role; read-only over `audit_events`; a case's history is `entity_type=case&entity_id=<case_key>` plus its flag ids (owner S3, `backend/api/audit.py`)
 - `GET /ops/*`

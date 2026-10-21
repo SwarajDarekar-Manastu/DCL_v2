@@ -3,21 +3,16 @@
 Needs DCL_TEST_DATABASE_URL. The gate is seeded from the real config/gate.yaml.
 """
 
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 import pytest
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import create_engine, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from backend.postgres import pipeline_config
 from backend.postgres.enums import DriveItemStatus as S
 from backend.postgres.models import Blob, DriveFolder, DriveItem, SyncRoot
-from backend.postgres.session import normalize_url
 from backend.sync.delta import GraphCallFailed, ResyncRequired, run_root
 from backend.sync.graph_client import GraphClient
 
@@ -83,34 +78,6 @@ def crawl_pages():
         "/v1.0/drives/D/items/ROOT/delta": [(200, {"value": PAGE1, "@odata.nextLink": NEXT}, None)],
         NEXT: [(200, {"value": PAGE2, "@odata.deltaLink": DELTA}, None)],
     }
-
-
-@pytest.fixture(scope="module")
-def engine():
-    url = os.environ.get("DCL_TEST_DATABASE_URL")
-    if not url:
-        pytest.skip("DCL_TEST_DATABASE_URL is not set")
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setenv("DCL_DATABASE_URL", url)
-        config = Config(str(ALEMBIC_INI))
-        command.upgrade(config, "head")
-        eng = create_engine(normalize_url(url))
-        yield eng
-        eng.dispose()
-        command.downgrade(config, "base")
-
-
-@pytest.fixture()
-def session(engine):
-    with Session(engine, expire_on_commit=False) as s:
-        pipeline_config.seed_gate(s, pipeline_config.load_gate_yaml())
-        s.add(SyncRoot(root_name="APU Injector", remote_drive_id="D", remote_item_id="ROOT"))
-        s.commit()
-        yield s
-        s.rollback()
-        for table in ("drive_items", "drive_folders", "blobs", "sync_roots", "pipeline_config"):
-            s.execute(text(f"DELETE FROM {table}"))
-        s.commit()
 
 
 def run(session, fake, sleeps=None):

@@ -227,3 +227,8 @@ def test_production_cache_is_the_cir_bucket():
         DCL_MINIO_SECRET_KEY="dcl-secret-value-0123456789",
     )
     assert vision_cache(settings).bucket == "dcl-cir"
+
+
+def test_no_capability_asks_for_minimal_thinking():
+    """The gateway rejects thinking level "minimal" on Gemini 3.x with a non-retryable 400 (S4 probe)."""
+    assert all(task.thinking is not ThinkingLevel.MINIMAL for task in TASKS.values())

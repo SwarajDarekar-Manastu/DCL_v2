@@ -5,49 +5,73 @@
 | Feature id | `platform/gemini-gateway-client` |
 | Status | in-progress |
 | Owner session | S4 |
-| Spec | docs/architecture/01_system_overview_and_tech_stack.md §5.4, §7, §7.1; 05 §4.6; 09 §H.1, §H.3 |
-| Last updated | 2026-10-21 |
+| Spec | docs/architecture/01 §5.4, §7, §7.1; 05 §4.6; 09 §H.1 (verified gateway contract), §H.3 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
-The only module that talks to the Manastu Cloud Run gateway: structured output, function calling, thinking level, image/PDF parts, streaming, retry/backoff, budget guard, llm_calls hook, capability flags from a probe.
+The only module that talks to the Manastu Cloud Run gateway. Adapters own the wire format; the client owns transport, resilience and accounting; the probe confirms which capabilities the gateway passes through.
 
 ## Location
 
 Code:
-- `backend/llm_engine/gemini_client.py` (request builder, parser, retry, client)
-- `backend/llm_engine/gemini_types.py` (capability flags, parts, messages, results, records, budget, errors)
+- `backend/llm_engine/gemini_client.py` (transport, retries, breaker, limits, budget, ledger, streaming)
+- `backend/llm_engine/gemini_adapters.py` (`ManastuGatewayAdapter` default, `GeminiNativeAdapter`, `OpenAICompatAdapter`)
+- `backend/llm_engine/gemini_types.py` (flags, parts, messages, results, records, budget, errors)
 - `backend/llm_engine/gemini_probe.py`
-- `backend/llm_engine/gemini_capabilities.json` (written by the probe; committed; all `unknown` until the first real probe)
+- `backend/llm_engine/gemini_capabilities.json` (written by a real probe run on 2026-10-22)
 
 Tests and fixtures:
-- `backend/tests/unit/llm_engine/gemini/test_gemini_client.py`
+- `backend/tests/unit/llm_engine/gemini/test_manastu_adapter.py` (recorded from the real gateway; ids and signatures redacted)
+- `backend/tests/unit/llm_engine/gemini/responses/manastu/` (recordings)
+- `backend/tests/unit/llm_engine/gemini/test_gemini_client.py` + `responses/*.json|sse` (OpenAI shape, client behavior)
 - `backend/tests/unit/llm_engine/gemini/test_gemini_probe.py`
-- `backend/tests/unit/llm_engine/gemini/responses/` (hand-written OpenAI-compatible fixtures; replace with real recordings once the gateway is reachable)
-- `backend/tests/unit/llm_engine/test_gateway_isolation.py` (no Google SDK import, no gateway URL/key outside the three allowed files)
+- `backend/tests/unit/llm_engine/test_gateway_isolation.py`
 
 ## Interfaces
 
 Provides:
-- `GeminiClient(settings=None, *, capabilities=None, ledger=None, budget=None, prices=None, …)`; refuses to start with `GOOGLE_API_KEY` set or the Gemini group incomplete
-- `await client.generate(model=, messages=, context=CallContext(purpose=…), schema=None, tools=, tool_choice=, thinking=, include_thoughts=, media_resolution=, temperature=, max_output_tokens=, cached_content=)` → `GenerateResult(text, parsed, tool_calls, usage, model, finish_reason, request_id, latency_ms, thoughts)`; `generate_sync(...)` for Celery prefork workers
-- `client.stream(...)` → `TextDelta`… then one `StreamDone(result)`
-- Types import from `backend.llm_engine.gemini_types`, the client from `backend.llm_engine.gemini_client`
-- `Message.system/user/assistant/tool_result`, parts `Text`, `Image(bytes, mime)`, `Pdf(bytes, filename)`, `ToolSpec`, `ToolCall`
-- Capability flags `Capability.*`, `Capabilities.load()`; disabled → fallback (structured output: schema in prompt + local validation; streaming: one chunk; thinking, thoughts, media resolution, cache: omitted) or `CapabilityUnavailable` (tools, image, PDF)
-- Errors: `GatewayError(status_code, retryable)`, `BudgetExhausted` (retry later so queues wait), `StructuredOutputError(raw_text)`, `CapabilityUnavailable`
-- `DailyTokenBudget(limit_tokens, usage_today=None)`; `LlmCallRecord` per call for the `llm_calls` ledger (status `ok` | `error`)
-- Probe CLI: `uv run python -m backend.llm_engine.gemini_probe [--write]` prints the file 09 §H.1 table
+- `GeminiClient(settings=None, *, capabilities, ledger, budget, prices, timeout, stream_idle_s=60, max_attempts=5, max_concurrency_per_model=8, breaker, …)`
+- `await generate(...)`, `generate_sync(...)`, `async for ev in stream(...)`; options: `tools`, `tool_choice`, `thinking`, `include_thoughts`, `media_resolution`, `temperature`, `max_output_tokens`, `cached_content`
+- Types from `backend.llm_engine.gemini_types`: `Message` (`tool_result(id, content, name=)`), `Text`, `Image`/`Pdf` (per-part `media_resolution`), `ToolSpec`, `ToolCall` (`thought_signature`), `GenerateResult` (`quota`), `Usage` (`estimated`), `LlmCallRecord` (`usage_estimated`)
+- Errors: `GatewayError(status_code, retryable)`, `GatewayUnavailable` (breaker open), `BudgetExhausted` (budget or gateway quota), `RequestTooLarge`, `StructuredOutputError`, `CapabilityUnavailable`
+- `GEMINI_API_STYLE`: `manastu` (default) | `gemini` | `openai`
+- Probe: `uv run python -m backend.llm_engine.gemini_probe [--write]`
 
 Consumes:
-- `platform/env-contract` (`Group.GEMINI`)
-- later: `llm_calls` table (S1) for the ledger and the budget's `usage_today`; `pipeline_config` `cloud.daily_token_budget`, `models.*`, prices
+- `platform/env-contract` (`Group.GEMINI`); later `llm_calls` (S1) for the ledger and the budget's `usage_today`
+
+## Production checklist (audit of 2026-10-22: Google Gemini API docs + client resilience)
+
+| # | Item | Where | State |
+|---|------|-------|-------|
+| 1 | Retry only transient failures: 408, 429, 500, 503, 504; never 400/401/403/404 | `adapters.retryable` | done, tested |
+| 2 | Upstream code inside the gateway's 502 decides (`ClientError: 400 …` no retry, `ServerError: 503 …` retry) | `ManastuGatewayAdapter.retryable` | done, tested against a recording |
+| 3 | Backoff ~1 s doubling to 60 s with jitter; honor `Retry-After` (seconds or HTTP date, capped 300 s); max 5 attempts | `backoff_delay` | done, tested |
+| 4 | Circuit breaker: 5 consecutive retryable failures open it for 30 s, then one trial call | `CircuitBreaker` | done, tested |
+| 5 | Bounded concurrency per model (default 8, sync and async) | `_ModelLimits` | done |
+| 6 | Idempotency key per call, stable across retries; recorded as request id when the gateway sends none | `Idempotency-Key` header | done, tested |
+| 7 | Timeouts: connect 10 s, read 180 s, write 60 s, stream idle 60 s | client | done |
+| 8 | Inline media size guard (20 MB, file 09 §H.1 item 5) before sending | `RequestTooLarge` | done, tested |
+| 9 | Thought signatures echoed on function-call parts (Gemini 3) | adapters | done, verified live |
+| 10 | Function responses carry the function name | `Message.tool_result(name=)` | done, verified live |
+| 11 | `temperature` not sent to Gemini 3.6+ / 4 (ignored now, rejected later per Google) | `drops_temperature` | done, tested |
+| 12 | Thinking level per model: 3.8 Flash accepts low/medium/high, not minimal (live 400) | caller choice | documented; the error is non-retryable |
+| 13 | Usage from `usage_metadata`; stream gives a total only, so the split is estimated and marked | `estimate_usage` | done, tested |
+| 14 | Gateway `quota.remaining` ≤ 0 stops new calls (BudgetExhausted) in addition to the daily token budget | client | done, tested |
+| 15 | Media resolution per part (images high, PDF pages medium per Google; low = about 1/4 of the tokens) | adapters | done, verified live |
+| 16 | Implicit caching: put large shared content first, ≥ 4,096 tokens on 3.8 Flash; no flag needed | caller guidance | documented |
+| 17 | Single-page documents: text prompt after the page (Google) | caller guidance | documented |
+| 18 | No secrets in logs, errors or records; key sent only as `X-API-Key`; `.env` parsed with dotenv | client, config | done, tested |
+| 19 | Blocked responses (no candidates) raise with the block reason; finish reasons are returned | adapters | done |
+| 20 | High thinking is expensive (one primality question used ~21k thinking tokens) | caller guidance | documented |
+| 21 | Batch API | — | not exposed by the gateway (probe: endpoint missing); flag off |
+| 22 | Explicit context caches (`POST /caches`) | — | endpoint present, not exercised; flag off until first use |
 
 ## Workspace (files to touch when modifying this feature)
 
-Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
-
 - `backend/llm_engine/gemini_client.py`
+- `backend/llm_engine/gemini_adapters.py`
 - `backend/llm_engine/gemini_types.py`
 - `backend/llm_engine/gemini_probe.py`
 - `backend/llm_engine/gemini_capabilities.json`
@@ -56,10 +80,10 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 ## Rubric (what "done" means for this feature)
 
-- [ ] Probe result recorded in docs/architecture/09 §H.1 (blocked: `GEMINI_BACKEND`, `GEMINI_GATEWAY_URL` not in `.env`)
-- [x] Budget cap stops new calls and queues wait (test: no request once the cap is reached; `BudgetExhausted` for Celery retry)
+- [x] Probe result recorded (real run 2026-10-22: style manastu detected; structured output, tools, thinking, thoughts, image, PDF, media resolution, streaming supported; stream usage total only; caches not exercised; batch missing). The Lead records it in docs/architecture/09 §H.1
+- [x] Budget cap and gateway quota stop new calls (tests)
 - [x] No other module imports a Google SDK or the gateway URL (test)
-- [ ] A Gemini structured call through the gateway is logged with tokens (M0 acceptance; needs the gateway and the `llm_calls` table)
+- [ ] A Gemini structured call through the gateway is logged with tokens in `llm_calls` (needs S1's table; the ledger record exists)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log
@@ -67,8 +91,9 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
-| 2026-10-21 | S4 | Types, flags and errors moved to `gemini_types.py` (no behavior change); client under 600 lines |
-| 2026-10-21 | S4 | Client and probe against the OpenAI-compatible shape; every capability behind a flag; retry with Retry-After; budget guard; ledger hook; 45 tests on fixture responses; real probe blocked on missing gateway env names |
+| 2026-10-21 | S4 | Client and probe against the OpenAI-compatible shape; every capability behind a flag |
+| 2026-10-21 | S4 | Types, flags and errors moved to `gemini_types.py` |
+| 2026-10-22 | S4 | Provider adapters (Manastu default, native, OpenAI); production checklist implemented; tests on recordings from the real gateway; probe with discovery and style detection; capabilities file from a real run |
 
 ## Related
 
