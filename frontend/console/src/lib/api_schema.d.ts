@@ -243,6 +243,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Answer */
+        post: operations["answer_v1_answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/answer/{trace_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm */
+        post: operations["confirm_v1_answer__trace_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/traces/{trace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trace */
+        get: operations["trace_v1_traces__trace_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -274,6 +325,50 @@ export interface components {
          * @enum {string}
          */
         AmbientCondition: "VACUUM_CHAMBER" | "SEA_LEVEL" | "AMBIENT_RECORDED" | "UNKNOWN";
+        /** AnswerOptions */
+        AnswerOptions: {
+            benchmark?: components["schemas"]["BenchmarkMode"] | null;
+            /**
+             * Max Embeds
+             * @default 6
+             */
+            max_embeds: number;
+            /**
+             * Show Debug Trace
+             * @default false
+             */
+            show_debug_trace: boolean;
+            /**
+             * Strict Numbers
+             * @description UserValve: never accept unverified values
+             * @default false
+             */
+            strict_numbers: boolean;
+            /** Thinking Level */
+            thinking_level?: ("minimal" | "low" | "medium" | "high") | null;
+        };
+        /** AnswerRequest */
+        AnswerRequest: {
+            /**
+             * Attachments
+             * @default []
+             */
+            attachments: components["schemas"]["Attachment"][];
+            /** Chat Id */
+            chat_id: string;
+            /** Message Id */
+            message_id: string;
+            /** Messages */
+            messages: components["schemas"]["ChatMessage"][];
+            /**
+             * @default {
+             *       "max_embeds": 6,
+             *       "show_debug_trace": false,
+             *       "strict_numbers": false
+             *     }
+             */
+            options: components["schemas"]["AnswerOptions"];
+        };
         /**
          * ApproveDownload
          * @description HELD_LARGE_FILE.
@@ -353,6 +448,21 @@ export interface components {
             assignee: string | null;
         };
         /**
+         * Attachment
+         * @description A file the user attached in chat, uploaded by the Pipe; answer-time only, never indexed.
+         */
+        Attachment: {
+            /** Mime Type */
+            mime_type: string;
+            /** Name */
+            name: string;
+            /**
+             * Url
+             * @description presigned GET URL the engine can fetch once
+             */
+            url: string;
+        };
+        /**
          * BBox
          * @description A box in 0..1 page coordinates, origin top-left.
          */
@@ -365,6 +475,24 @@ export interface components {
             y0: number;
             /** Y1 */
             y1: number;
+        };
+        /**
+         * BenchmarkMode
+         * @description Set by the Console benchmark runner (file 08 §5.6); same code path as chat.
+         */
+        BenchmarkMode: {
+            /** Case Id */
+            case_id: string;
+            /** Case Version */
+            case_version: number;
+            /** Clarification Answer */
+            clarification_answer?: string | null;
+            /**
+             * External Search
+             * @default mock
+             * @enum {string}
+             */
+            external_search: "mock" | "allow";
         };
         /** CandidateUnit */
         CandidateUnit: {
@@ -515,6 +643,16 @@ export interface components {
             /** Std */
             std?: number | null;
         };
+        /** ChatMessage */
+        ChatMessage: {
+            /** Content */
+            content: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant" | "system";
+        };
         /**
          * ChooseSource
          * @description CONFLICT: pick the authoritative value or document.
@@ -609,6 +747,13 @@ export interface components {
             sparkline_uri?: string | null;
             /** Std */
             std?: number | null;
+        };
+        /** ConfirmationReply */
+        ConfirmationReply: {
+            /** Accepted */
+            accepted: boolean;
+            /** Confirmation Id */
+            confirmation_id: string;
         };
         /**
          * ConflictEvidence
@@ -1134,7 +1279,7 @@ export interface components {
         RuleDraft: {
             /**
              * Body
-             * @description the mapping; schema per rule_type (channel_map: publish-first item 4)
+             * @description the mapping, validated by rule_type (backend/review/rules.py RULE_BODIES): channel_map → ChannelMapBody, unit_mapping → UnitMappingBody (the set_unit resolution without `action`), schema_mapping → SchemaMappingBody (map_columns without `action`), supersession, ignore_pattern, origin_override
              */
             body: {
                 [key: string]: unknown;
@@ -1161,7 +1306,7 @@ export interface components {
         RuleOrigin: "operator" | "cfg" | "header" | "config_json" | "tdms_props";
         /**
          * RuleScope
-         * @description The four scope columns; the most specific matching rule wins. All null = global.
+         * @description The four scope columns; all null means global.
          */
         RuleScope: {
             /** Scope Extension */
@@ -1412,6 +1557,60 @@ export interface components {
             kind: "text";
             /** Text */
             text: string;
+        };
+        /**
+         * TraceView
+         * @description `GET /v1/traces/{trace_id}`: what the Show-trace action renders (file 08 §2.2, file 05 §4.7).
+         */
+        TraceView: {
+            /** Answer Markdown */
+            answer_markdown: string;
+            /** Chat Id */
+            chat_id: string | null;
+            /** Citations */
+            citations: {
+                [key: string]: unknown;
+            }[];
+            /** Claims */
+            claims: {
+                [key: string]: unknown;
+            }[];
+            /** Created At */
+            created_at: string;
+            /** External Queries */
+            external_queries: {
+                [key: string]: unknown;
+            }[];
+            /** Latency Ms */
+            latency_ms: number | null;
+            /** Message Id */
+            message_id: string | null;
+            /** Query Analysis */
+            query_analysis: {
+                [key: string]: unknown;
+            };
+            /** Question */
+            question: string;
+            /**
+             * Retrieved
+             * @description stable anchors with ranks and scores
+             */
+            retrieved: {
+                [key: string]: unknown;
+            }[];
+            /** Tool Calls */
+            tool_calls: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Trace Id
+             * Format: uuid
+             */
+            trace_id: string;
+            /** Verifier Result */
+            verifier_result: {
+                [key: string]: unknown;
+            } | null;
         };
         /** UndoResponse */
         UndoResponse: {
@@ -2092,6 +2291,124 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleSimulation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_v1_answer_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-dcl-user-id": string;
+                "x-dcl-user-email": string;
+                "x-dcl-user-groups": string;
+                "x-dcl-timestamp": string;
+                "x-dcl-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description stream of AnswerEvent frames */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_v1_answer__trace_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-dcl-user-id": string;
+                "x-dcl-user-email": string;
+                "x-dcl-user-groups": string;
+                "x-dcl-timestamp": string;
+                "x-dcl-signature": string;
+            };
+            path: {
+                trace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmationReply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trace_v1_traces__trace_id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-dcl-user-id": string;
+                "x-dcl-user-email": string;
+                "x-dcl-user-groups": string;
+                "x-dcl-timestamp": string;
+                "x-dcl-signature": string;
+            };
+            path: {
+                trace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceView"];
                 };
             };
             /** @description Validation Error */
