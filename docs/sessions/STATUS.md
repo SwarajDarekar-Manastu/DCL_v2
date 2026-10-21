@@ -160,3 +160,9 @@ Merged / ready: backend/storage/minio.py (BucketStore get/put for S2's vision ca
 Blocked on: Lead answers of 100eae2 for the delta crawl
 Needs from others: S4 — CI service for a disposable MinIO with DCL_TEST_MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY, like the DB tests
 Next: provisional evidence/suggestion models per flag type (S3 asked), then the M2 documents/nodes/assets models
+
+## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: publish-first item 4: backend/review/rules.py (precedence resolver, typed bodies per rule_type incl. channel_map, config/rules YAML format); RuleDraft.body validated; also typed flag evidence (3db8ffa), MinIO store (e75440c), gate parent_kind (c861d3a). Test: `uv run pytest && uv run ruff check backend` (600 passed, 24 skipped)
+Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl and the downloader's dispatch step
+Needs from others: nothing new
+Next: downloader core (streamed SHA-256 + local quickXorHash, conflict-safe blob insert), job_key builder; then the M2 documents/nodes/assets models
