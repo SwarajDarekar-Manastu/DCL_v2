@@ -178,7 +178,6 @@ Blocked on: S1 crawl folder listing (allowlist)
 Needs from others: nothing else
 Next: idle until the listing arrives
 
-<<<<<<< HEAD
 ## 2026-10-21 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready: publish-first item 4: backend/review/rules.py (precedence resolver, typed bodies per rule_type incl. channel_map, config/rules YAML format); RuleDraft.body validated; also typed flag evidence (3db8ffa), MinIO store (e75440c), gate parent_kind (c861d3a). Test: `uv run pytest && uv run ruff check backend` (600 passed, 24 skipped)
 Blocked on: Lead answers of 100eae2 (permission option, pipeline_config in M1, gate source) for the delta crawl and the downloader's dispatch step
@@ -190,10 +189,17 @@ Merged / ready: 31ed593 (gate.yaml header wording), not yet requested
 Blocked on: Lead — the `.wbpz` `.out` exception: Lead ruled "fixed rule in code, no gate.yaml key"; S1 implemented a gate.yaml key `kept_endings_by_parent_kind` (S1 c861d3a, merge requested). S5 adds the entry and three decision cases once the Lead confirms which one stands
 Needs from others: Lead — that confirmation; S1 — the crawl folder listing
 Next: idle
-=======
+<<<<<<< HEAD
 ## 2026-10-22 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: `config/sanity_ranges.yaml` v2 for S1's channel_map body (a7cf42d): ordered ranges keyed by `physical_quantity` + `canonical_name_glob`, first match wins, same four manual values; selection cases on S1-style names. Test: `uv run pytest backend/tests/unit/config_data backend/tests/fixtures && uv run ruff check backend` (246 passed)
 Blocked on: S1 crawl folder listing (allowlist); S1 CIR snapshot format (with the CIR writer)
 Needs from others: nothing else; `config/rules/` stays empty until operator rules exist (format now known from S1)
 Next: idle until the listing arrives
->>>>>>> claude/strange-bhaskara-1dd439
+=======
+
+## 2026-10-21 22:45 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: `/v1/answer` SSE contract in `backend/api/engine.py` (request, seven event models, `to_sse`, HMAC identity, TraceView, example stream), 9 tests; endpoints 501 until M8.
+Blocked on: S1 for enrichment (EntityType/NumericFactSource/Quantity enums, M4 entity models, `backend/common/units.py`) and for `resolve_anchor` (`document_nodes` model)
+Needs from others: Lead: add `rapidfuzz` and `pint` to main dependencies and a `models` group (torch 2.14.1, torchvision 0.29.1, transformers 5.20.2, sentence-transformers 6.1.0)
+Next: enrichment extraction schema, prompt and grounding (no DB), then entity normalization once S1's enums land
+>>>>>>> claude/infallible-swartz-58c96b
