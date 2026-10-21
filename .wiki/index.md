@@ -41,7 +41,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `frontend/review-ui` | in-progress | S3 | [Review UI (queue, case view, resolution consoles, rules, audit)](frontend/review-ui.md) |
 | `frontend/viewer` | in-progress | S3 | [Shared document viewer with anchor resolution and translate toggle](frontend/viewer.md) |
 | `frontend/settings-ui` | in-progress | S3 | [Settings UI (sources, scopes, gate, routes, models, translation, flags, prompts)](frontend/settings-ui.md) |
-| `frontend/benchmark-ui` | planned | S3 | [Benchmark UI (suites, cases, runs, results, drilldown, compare, retrieval lab)](frontend/benchmark-ui.md) |
+| `frontend/benchmark-ui` | in-progress | S3 | [Benchmark UI (suites, cases, runs, results, drilldown, compare, retrieval lab)](frontend/benchmark-ui.md) |
 | `frontend/openwebui-pipe` | in-progress | S3 | [Open WebUI Pipe (engine model, event mapping)](frontend/openwebui-pipe.md) |
 | `frontend/openwebui-actions-skills` | in-progress | S3 | [Open WebUI Actions, Filter and Skills publication](frontend/openwebui-actions-skills.md) |
 | `platform/compose-stack` | in-progress | S4 | [Docker Compose stack with GPU model services](platform/compose-stack.md) |
