@@ -1,235 +1,70 @@
 """The only module that talks to the Manastu Gemini gateway (docs/architecture/01 §7, §7.1; 09 §H.1).
 
-Wire shape: OpenAI-compatible chat completions at `{GEMINI_GATEWAY_URL}/chat/completions`. Plain text chat is
-the baseline. Every other capability is enabled only when the probe recorded it as supported in
-gemini_capabilities.json; a disabled capability falls back to a plain call or raises CapabilityUnavailable.
+The wire format comes from an adapter chosen by GEMINI_API_STYLE (gemini_adapters.py); this module owns
+transport and production behavior: retries with jittered backoff and Retry-After, upstream-error
+classification, a circuit breaker, bounded concurrency per model, an idempotency key per call, timeouts,
+an inline-size guard, the daily budget and gateway quota, and one llm_calls record per call. Capabilities the
+probe has not confirmed (gemini_capabilities.json) fall back to a plain call or raise CapabilityUnavailable.
 """
 
 import asyncio
-import base64
-import inspect
+import contextlib
 import json
 import logging
 import os
 import random
-import re
+import threading
 import time
+import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Any, Literal
+from typing import Any
 
 import httpx
-from pydantic import ValidationError
 
-from backend.config import FORBIDDEN_NAMES, ConfigError, Group, Settings, ThinkingLevel, get_settings
+from backend.config import FORBIDDEN_NAMES, ConfigError, Group, Settings, get_settings
+from backend.llm_engine.gemini_adapters import (
+    ADAPTERS,
+    Adapter,
+    Parsed,
+    StreamState,
+    drops_temperature,
+    error_message,
+    parse_structured,
+)
 from backend.llm_engine.gemini_types import (
+    BudgetExhausted,
     CallContext,
     Capabilities,
     Capability,
-    CapabilityUnavailable,
     DailyTokenBudget,
     GatewayError,
+    GatewayUnavailable,
     GeminiError,
+    GenerateRequest,
     GenerateResult,
     Image,
     LlmCallRecord,
     Message,
     ModelPrice,
-    Part,
+    Pdf,
+    RequestTooLarge,
     SchemaArg,
     StreamDone,
     StreamEvent,
-    StructuredOutputError,
     Text,
     TextDelta,
-    ToolCall,
-    ToolSpec,
     Usage,
 )
 
 log = logging.getLogger(__name__)
 
-RETRYABLE_STATUS = frozenset({408, 409, 429, 500, 502, 503, 504})
 MAX_RETRY_AFTER_S = 300.0
-ERROR_BODY_LIMIT = 300
-
-
-def _data_uri(mime_type: str, data: bytes) -> str:
-    return f"data:{mime_type};base64,{base64.b64encode(data).decode('ascii')}"
-
-
-def _content(parts: tuple[Part, ...], caps: Capabilities, media_resolution: str | None) -> str | list:
-    if all(isinstance(p, Text) for p in parts):
-        return "".join(p.text for p in parts)
-    content: list[dict[str, Any]] = []
-    for part in parts:
-        if isinstance(part, Text):
-            content.append({"type": "text", "text": part.text})
-        elif isinstance(part, Image):
-            if not caps.has(Capability.IMAGE_INPUT):
-                raise CapabilityUnavailable(Capability.IMAGE_INPUT)
-            image_url: dict[str, Any] = {"url": _data_uri(part.mime_type, part.data)}
-            if media_resolution and caps.has(Capability.MEDIA_RESOLUTION):
-                image_url["detail"] = media_resolution
-            content.append({"type": "image_url", "image_url": image_url})
-        else:
-            if not caps.has(Capability.PDF_INPUT):
-                raise CapabilityUnavailable(Capability.PDF_INPUT)
-            content.append(
-                {
-                    "type": "file",
-                    "file": {"filename": part.filename, "file_data": _data_uri("application/pdf", part.data)},
-                }
-            )
-    return content
-
-
-def _wire_message(message: Message, caps: Capabilities, media_resolution: str | None) -> dict[str, Any]:
-    wire: dict[str, Any] = {"role": message.role, "content": _content(message.parts, caps, media_resolution)}
-    if message.tool_calls:
-        wire["tool_calls"] = [
-            {
-                "id": call.id,
-                "type": "function",
-                "function": {"name": call.name, "arguments": json.dumps(call.arguments)},
-            }
-            for call in message.tool_calls
-        ]
-    if message.tool_call_id:
-        wire["tool_call_id"] = message.tool_call_id
-    return wire
-
-
-def _json_schema(schema: SchemaArg) -> tuple[str, dict[str, Any]]:
-    if isinstance(schema, dict):
-        return str(schema.get("title", "response")), schema
-    return schema.__name__, schema.model_json_schema()
-
-
-def build_request(
-    *,
-    model: str,
-    messages: list[Message],
-    caps: Capabilities,
-    schema: SchemaArg = None,
-    tools: list[ToolSpec] | None = None,
-    tool_choice: Literal["auto", "required", "none"] | None = None,
-    thinking: ThinkingLevel | None = None,
-    include_thoughts: bool = False,
-    media_resolution: Literal["low", "medium", "high"] | None = None,
-    temperature: float | None = None,
-    max_output_tokens: int | None = None,
-    cached_content: str | None = None,
-    stream: bool = False,
-) -> dict[str, Any]:
-    messages = list(messages)
-    body: dict[str, Any] = {"model": model}
-    if schema is not None:
-        name, json_schema = _json_schema(schema)
-        if caps.has(Capability.STRUCTURED_OUTPUT):
-            body["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {"name": name, "schema": json_schema},
-            }
-        else:
-            instruction = (
-                "Respond with one JSON object only, no prose and no code fences, that validates against this "
-                f"JSON Schema:\n{json.dumps(json_schema)}"
-            )
-            messages.insert(0, Message.system(instruction))
-    body["messages"] = [_wire_message(m, caps, media_resolution) for m in messages]
-    if tools:
-        if not caps.has(Capability.FUNCTION_CALLING):
-            raise CapabilityUnavailable(Capability.FUNCTION_CALLING)
-        body["tools"] = [
-            {
-                "type": "function",
-                "function": {"name": t.name, "description": t.description, "parameters": t.parameters},
-            }
-            for t in tools
-        ]
-        if tool_choice:
-            body["tool_choice"] = tool_choice
-    if thinking is not None and caps.has(Capability.THINKING_LEVEL):
-        body["reasoning_effort"] = str(thinking)
-    google: dict[str, Any] = {}
-    if include_thoughts and caps.has(Capability.INCLUDE_THOUGHTS):
-        google["thinking_config"] = {"include_thoughts": True}
-    if cached_content and caps.has(Capability.CONTEXT_CACHE):
-        google["cached_content"] = cached_content
-    if google:
-        body["extra_body"] = {"google": google}
-    if temperature is not None:
-        body["temperature"] = temperature
-    if max_output_tokens is not None:
-        body["max_tokens"] = max_output_tokens
-    if stream:
-        body["stream"] = True
-        if caps.has(Capability.STREAM_USAGE):
-            body["stream_options"] = {"include_usage": True}
-    return body
-
-
-THOUGHT_TAG = re.compile(r"<thought>(.*?)</thought>", re.DOTALL)
-CODE_FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
-
-
-def _text_of(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return "".join(item.get("text", "") for item in content if isinstance(item, dict))
-    return ""
-
-
-def _split_thoughts(text: str, reasoning: str | None) -> tuple[str, str | None]:
-    found = THOUGHT_TAG.findall(text)
-    thoughts = "\n".join([*([reasoning] if reasoning else []), *found]) or None
-    return THOUGHT_TAG.sub("", text).strip() if found else text, thoughts
-
-
-def _usage(raw: dict[str, Any] | None) -> Usage:
-    raw = raw or {}
-    return Usage(
-        input_tokens=int(raw.get("prompt_tokens") or 0),
-        output_tokens=int(raw.get("completion_tokens") or 0),
-        cached_tokens=int((raw.get("prompt_tokens_details") or {}).get("cached_tokens") or 0),
-        thinking_tokens=int((raw.get("completion_tokens_details") or {}).get("reasoning_tokens") or 0),
-    )
-
-
-def _tool_calls(raw: list[dict[str, Any]] | None) -> tuple[ToolCall, ...]:
-    calls = []
-    for item in raw or []:
-        function = item.get("function") or {}
-        arguments = function.get("arguments") or "{}"
-        try:
-            parsed = json.loads(arguments) if isinstance(arguments, str) else dict(arguments)
-        except json.JSONDecodeError as exc:
-            raise GeminiError(
-                f"tool call '{function.get('name')}' returned arguments that are not JSON"
-            ) from exc
-        calls.append(
-            ToolCall(id=str(item.get("id") or ""), name=str(function.get("name") or ""), arguments=parsed)
-        )
-    return tuple(calls)
-
-
-def parse_structured(text: str, schema: SchemaArg) -> Any:
-    if schema is None:
-        return None
-    match = CODE_FENCE.match(text)
-    payload = match.group(1) if match else text
-    try:
-        if isinstance(schema, dict):
-            return json.loads(payload)
-        return schema.model_validate_json(payload)
-    except (json.JSONDecodeError, ValidationError) as exc:
-        raise StructuredOutputError(
-            f"response does not match the schema: {type(exc).__name__}", raw_text=text
-        ) from None
+MAX_INLINE_BYTES = 20 * 1024 * 1024
+ESTIMATED_TOKENS = {"char": 0.25, "image": 1120, "pdf": 560}
+IDEMPOTENCY_HEADER = "Idempotency-Key"
 
 
 def _retry_after_seconds(value: str | None) -> float | None:
@@ -248,41 +83,92 @@ def _retry_after_seconds(value: str | None) -> float | None:
 def backoff_delay(
     attempt: int, retry_after: str | None, *, base_s: float = 1.0, cap_s: float = 60.0
 ) -> float:
+    """Retry-After when the gateway sends one, else ~1 s doubling to 60 s with jitter (Google's guidance)."""
     honored = _retry_after_seconds(retry_after)
     if honored is not None:
         return min(honored, MAX_RETRY_AFTER_S)
     return min(cap_s, base_s * 2**attempt) * random.uniform(0.5, 1.0)  # noqa: S311
 
 
-def _gateway_error(response: httpx.Response) -> GatewayError:
-    try:
-        detail = response.json().get("error", {})
-        message = detail.get("message") if isinstance(detail, dict) else str(detail)
-    except (ValueError, AttributeError):
-        message = response.text
-    message = (message or "").strip()[:ERROR_BODY_LIMIT]
-    return GatewayError(
-        f"gateway returned HTTP {response.status_code}: {message}",
-        status_code=response.status_code,
-        retryable=response.status_code in RETRYABLE_STATUS,
+def estimate_usage(req: GenerateRequest, output_text: str, total: int | None = None) -> Usage:
+    """Rough token counts when the gateway reports none (or only a total); marked estimated."""
+    chars = sum(len(p.text) for m in req.messages for p in m.parts if isinstance(p, Text))
+    media = sum(
+        ESTIMATED_TOKENS["image"] if isinstance(p, Image) else ESTIMATED_TOKENS["pdf"]
+        for m in req.messages
+        for p in m.parts
+        if isinstance(p, Image | Pdf)
     )
+    input_tokens = int(chars * ESTIMATED_TOKENS["char"]) + media
+    output_tokens = int(len(output_text) * ESTIMATED_TOKENS["char"])
+    if total is not None:
+        output_tokens = max(total - input_tokens, output_tokens)
+    return Usage(input_tokens=input_tokens, output_tokens=output_tokens, estimated=True)
 
 
-def _transport_error(exc: httpx.TransportError) -> GatewayError:
-    return GatewayError(f"gateway unreachable: {type(exc).__name__}", retryable=True)
+class CircuitBreaker:
+    """Opens after `threshold` consecutive retryable failures and fails fast for `reset_after_s`; then one
+    trial call goes through. Callers treat GatewayUnavailable as an outage (file 07 §12: extractive mode)."""
+
+    def __init__(
+        self, threshold: int = 5, reset_after_s: float = 30.0, clock: Callable[[], float] = time.monotonic
+    ):
+        self.threshold, self.reset_after_s, self._clock = threshold, reset_after_s, clock
+        self._failures = 0
+        self._opened_at: float | None = None
+        self._lock = threading.Lock()
+
+    @property
+    def is_open(self) -> bool:
+        return self._opened_at is not None
+
+    def before_call(self) -> None:
+        with self._lock:
+            if self._opened_at is None:
+                return
+            if self._clock() - self._opened_at < self.reset_after_s:
+                raise GatewayUnavailable("gateway circuit open after repeated failures; retry later")
+            self._opened_at = self._clock()
+
+    def success(self) -> None:
+        with self._lock:
+            self._failures, self._opened_at = 0, None
+
+    def failure(self) -> None:
+        with self._lock:
+            self._failures += 1
+            if self._failures >= self.threshold:
+                self._opened_at = self._clock()
+
+
+class _ModelLimits:
+    def __init__(self, limit: int):
+        self.limit = limit
+        self._sync: dict[str, threading.BoundedSemaphore] = {}
+        self._async: dict[str, asyncio.Semaphore] = {}
+        self._lock = threading.Lock()
+
+    def sync(self, model: str) -> threading.BoundedSemaphore:
+        with self._lock:
+            return self._sync.setdefault(model, threading.BoundedSemaphore(self.limit))
+
+    def async_(self, model: str) -> asyncio.Semaphore:
+        with self._lock:
+            return self._async.setdefault(model, asyncio.Semaphore(self.limit))
 
 
 @dataclass
 class _Call:
+    req: GenerateRequest
     body: dict[str, Any]
-    model: str
-    schema: SchemaArg
+    path: str
     context: CallContext
     started: float
+    idempotency_key: str
 
 
 class GeminiClient:
-    """Async and sync access to Gemini through the gateway. One instance per process is enough."""
+    """Async and sync access to Gemini through the gateway. One instance per process."""
 
     def __init__(
         self,
@@ -293,7 +179,10 @@ class GeminiClient:
         budget: DailyTokenBudget | None = None,
         prices: dict[str, ModelPrice] | None = None,
         timeout: httpx.Timeout | None = None,
+        stream_idle_s: float = 60.0,
         max_attempts: int = 5,
+        max_concurrency_per_model: int = 8,
+        breaker: CircuitBreaker | None = None,
         transport: httpx.AsyncBaseTransport | httpx.BaseTransport | None = None,
         sleep: Callable[[float], Any] | None = None,
     ):
@@ -303,47 +192,47 @@ class GeminiClient:
                     f"{name} is set; the Gemini client refuses to start (docs/architecture/09 §H.1)"
                 )
         settings = (settings or get_settings()).require(Group.GEMINI)
+        self.adapter: Adapter = ADAPTERS[settings.gemini_api_style]
         self._base_url = str(settings.gemini_gateway_url).rstrip("/")
-        self._headers = {"Authorization": f"Bearer {settings.gemini_gateway_key.get_secret_value()}"}
+        self._headers = self.adapter.headers(settings.gemini_gateway_key.get_secret_value())
         self._default_thinking = settings.gemini_thinking_level
         self._default_include_thoughts = settings.gemini_include_thoughts
         self.capabilities = capabilities or Capabilities.load()
-        self._ledger = ledger
-        self._budget = budget
-        self._prices = prices or {}
+        self._ledger, self._budget, self._prices = ledger, budget, prices or {}
         self._timeout = timeout or httpx.Timeout(connect=10.0, read=180.0, write=60.0, pool=10.0)
+        self._stream_timeout = httpx.Timeout(connect=10.0, read=stream_idle_s, write=60.0, pool=10.0)
         self._max_attempts = max_attempts
-        self._transport = transport
-        self._sleep = sleep
+        self._limits = _ModelLimits(max_concurrency_per_model)
+        self.breaker = breaker or CircuitBreaker()
+        self._transport, self._sleep = transport, sleep
         self._async_http: httpx.AsyncClient | None = None
         self._sync_http: httpx.Client | None = None
+        self.quota_remaining: int | None = None
 
     def __repr__(self) -> str:
-        return f"GeminiClient(capabilities={sorted(self.capabilities.enabled)})"
+        return f"GeminiClient(style={self.adapter.style}, capabilities={sorted(self.capabilities.enabled)})"
+
+    def _client_kwargs(self, sync: bool) -> dict[str, Any]:
+        wanted = httpx.BaseTransport if sync else httpx.AsyncBaseTransport
+        transport = self._transport if isinstance(self._transport, wanted) else None
+        return {
+            "base_url": self._base_url,
+            "headers": self._headers,
+            "timeout": self._timeout,
+            "transport": transport,
+        }
 
     @property
     def _async(self) -> httpx.AsyncClient:
         if self._async_http is None:
-            transport = self._transport if isinstance(self._transport, httpx.AsyncBaseTransport) else None
-            self._async_http = httpx.AsyncClient(
-                base_url=self._base_url, headers=self._headers, timeout=self._timeout, transport=transport
-            )
+            self._async_http = httpx.AsyncClient(**self._client_kwargs(sync=False))
         return self._async_http
 
     @property
     def _sync(self) -> httpx.Client:
         if self._sync_http is None:
-            transport = self._transport if isinstance(self._transport, httpx.BaseTransport) else None
-            self._sync_http = httpx.Client(
-                base_url=self._base_url, headers=self._headers, timeout=self._timeout, transport=transport
-            )
+            self._sync_http = httpx.Client(**self._client_kwargs(sync=True))
         return self._sync_http
-
-    async def _async_sleep(self, delay: float) -> None:
-        if self._sleep is None:
-            await asyncio.sleep(delay)
-        elif inspect.isawaitable(pending := self._sleep(delay)):
-            await pending
 
     async def aclose(self) -> None:
         if self._async_http is not None:
@@ -355,34 +244,55 @@ class GeminiClient:
             self._sync_http.close()
             self._sync_http = None
 
+    async def _async_sleep(self, delay: float) -> None:
+        if self._sleep is None:
+            await asyncio.sleep(delay)
+        elif asyncio.iscoroutine(pending := self._sleep(delay)):
+            await pending
+
     def _prepare(
-        self, model: str, messages: list[Message], context: CallContext, schema: SchemaArg, **options
-    ):
+        self,
+        model: str,
+        messages: list[Message],
+        context: CallContext,
+        schema: SchemaArg,
+        stream: bool,
+        **options,
+    ) -> _Call:
         if self._budget is not None:
             self._budget.check()
-        thinking = options.pop("thinking", None) or self._default_thinking
+        if self.quota_remaining is not None and self.quota_remaining <= 0:
+            raise BudgetExhausted("the gateway reports its daily quota as used up")
         include_thoughts = options.pop("include_thoughts", None)
-        if include_thoughts is None:
-            include_thoughts = self._default_include_thoughts
-        body = build_request(
+        req = GenerateRequest(
             model=model,
-            messages=messages,
-            caps=self.capabilities,
+            messages=tuple(messages),
             schema=schema,
-            thinking=thinking,
-            include_thoughts=include_thoughts,
+            tools=tuple(options.pop("tools", None) or ()),
+            thinking=options.pop("thinking", None) or self._default_thinking,
+            include_thoughts=self._default_include_thoughts if include_thoughts is None else include_thoughts,
             **options,
         )
-        return _Call(body=body, model=model, schema=schema, context=context, started=time.monotonic())
+        inline = sum(len(p.data) for m in req.messages for p in m.parts if isinstance(p, Image | Pdf))
+        if inline > MAX_INLINE_BYTES:
+            raise RequestTooLarge(
+                f"{inline} bytes of inline media exceed {MAX_INLINE_BYTES}; send page windows"
+            )
+        if req.temperature is not None and drops_temperature(model):
+            log.info("temperature not sent to %s (ignored by Gemini 3.6+)", model)
+        body = self.adapter.build(req, self.capabilities, stream)
+        return _Call(
+            req, body, self.adapter.path(model, stream), context, time.monotonic(), str(uuid.uuid4())
+        )
 
     def _record(self, call: _Call, usage: Usage, request_id: str | None, error: GeminiError | None) -> int:
         latency_ms = int((time.monotonic() - call.started) * 1000)
         if self._budget is not None:
             self._budget.record(usage.total_tokens)
-        price = self._prices.get(call.model)
+        price = self._prices.get(call.req.model)
         record = LlmCallRecord(
             at=datetime.now(UTC),
-            model=call.model,
+            model=call.req.model,
             purpose=call.context.purpose,
             prompt_version=call.context.prompt_version,
             doc_id=call.context.doc_id,
@@ -395,7 +305,8 @@ class GeminiClient:
             cost_estimate=price.cost(usage) if price else None,
             status="error" if error else "ok",
             error=str(error) if error else None,
-            request_id=request_id,
+            request_id=request_id or call.idempotency_key,
+            usage_estimated=usage.estimated,
         )
         if self._ledger is not None:
             try:
@@ -404,72 +315,139 @@ class GeminiClient:
                 log.exception("llm_calls ledger hook failed for purpose=%s", call.context.purpose)
         return latency_ms
 
-    def _finish(self, call: _Call, payload: dict[str, Any], header_request_id: str | None) -> GenerateResult:
-        request_id = payload.get("id") or header_request_id
-        usage = _usage(payload.get("usage"))
+    def _error(self, response: httpx.Response) -> GatewayError:
         try:
-            choices = payload.get("choices") or []
-            if not choices:
-                raise GeminiError("gateway response has no choices")
-            message = choices[0].get("message") or {}
-            text, thoughts = _split_thoughts(
-                _text_of(message.get("content")), message.get("reasoning_content")
-            )
-            tool_calls = _tool_calls(message.get("tool_calls"))
-            parsed = (
-                parse_structured(text, call.schema) if call.schema is not None and not tool_calls else None
-            )
-        except GeminiError as exc:
-            self._record(call, usage, request_id, exc)
-            raise
-        latency_ms = self._record(call, usage, request_id, None)
-        return GenerateResult(
-            text=text,
-            parsed=parsed,
-            tool_calls=tool_calls,
-            usage=usage,
-            model=str(payload.get("model") or call.model),
-            finish_reason=choices[0].get("finish_reason"),
-            request_id=request_id,
-            latency_ms=latency_ms,
-            thoughts=thoughts,
+            body: Any = response.json()
+        except ValueError:
+            body = None
+        message = error_message(body, response.text)
+        if response.status_code in (401, 403) and "key" in message.lower():
+            message = f"key rejected: {message}"
+        return GatewayError(
+            f"gateway returned HTTP {response.status_code}: {message}",
+            status_code=response.status_code,
+            retryable=self.adapter.retryable(response.status_code, body),
         )
 
-    def _retry_delay_or_raise(
+    def _after_failure(
         self, call: _Call, attempt: int, error: GatewayError, retry_after: str | None
     ) -> float:
-        if not error.retryable or attempt == self._max_attempts - 1:
+        if error.retryable:
+            self.breaker.failure()
+        if not error.retryable or attempt == self._max_attempts - 1 or self.breaker.is_open:
             self._record(call, Usage(), None, error)
             raise error
         delay = backoff_delay(attempt, retry_after)
         log.warning("gateway call failed (%s); retry %d in %.1fs", error.status_code, attempt + 1, delay)
         return delay
 
+    def _start(self, call: _Call) -> None:
+        try:
+            self.breaker.before_call()
+        except GatewayUnavailable as exc:
+            self._record(call, Usage(), None, exc)
+            raise
+
+    def _outcome(
+        self, response: httpx.Response | Exception
+    ) -> tuple[httpx.Response | None, GatewayError | None, str | None]:
+        if isinstance(response, Exception):
+            return None, GatewayError(f"gateway unreachable: {type(response).__name__}", retryable=True), None
+        if response.is_success:
+            self.breaker.success()
+            return response, None, None
+        return None, self._error(response), response.headers.get("retry-after")
+
     async def _apost(self, call: _Call) -> httpx.Response:
         for attempt in range(self._max_attempts):
+            self._start(call)
             try:
-                response = await self._async.post("/chat/completions", json=call.body)
+                raw: httpx.Response | Exception = await self._async.post(
+                    call.path, json=call.body, headers={IDEMPOTENCY_HEADER: call.idempotency_key}
+                )
             except httpx.TransportError as exc:
-                error, retry_after = _transport_error(exc), None
-            else:
-                if response.is_success:
-                    return response
-                error, retry_after = _gateway_error(response), response.headers.get("retry-after")
-            await self._async_sleep(self._retry_delay_or_raise(call, attempt, error, retry_after))
+                raw = exc
+            response, error, retry_after = self._outcome(raw)
+            if response is not None:
+                return response
+            await self._async_sleep(self._after_failure(call, attempt, error, retry_after))
         raise AssertionError("unreachable")
 
     def _post(self, call: _Call) -> httpx.Response:
         for attempt in range(self._max_attempts):
+            self._start(call)
             try:
-                response = self._sync.post("/chat/completions", json=call.body)
+                raw: httpx.Response | Exception = self._sync.post(
+                    call.path, json=call.body, headers={IDEMPOTENCY_HEADER: call.idempotency_key}
+                )
             except httpx.TransportError as exc:
-                error, retry_after = _transport_error(exc), None
-            else:
-                if response.is_success:
-                    return response
-                error, retry_after = _gateway_error(response), response.headers.get("retry-after")
-            (self._sleep or time.sleep)(self._retry_delay_or_raise(call, attempt, error, retry_after))
+                raw = exc
+            response, error, retry_after = self._outcome(raw)
+            if response is not None:
+                return response
+            (self._sleep or time.sleep)(self._after_failure(call, attempt, error, retry_after))
         raise AssertionError("unreachable")
+
+    async def _open_stream(self, call: _Call) -> httpx.Response:
+        for attempt in range(self._max_attempts):
+            self._start(call)
+            request = self._async.build_request(
+                "POST",
+                call.path,
+                json=call.body,
+                headers={IDEMPOTENCY_HEADER: call.idempotency_key},
+                timeout=self._stream_timeout,
+            )
+            try:
+                raw: httpx.Response | Exception = await self._async.send(request, stream=True)
+                if not raw.is_success:
+                    with contextlib.suppress(httpx.HTTPError):
+                        await raw.aread()
+                    await raw.aclose()
+            except httpx.TransportError as exc:
+                raw = exc
+            response, error, retry_after = self._outcome(raw)
+            if response is not None:
+                return response
+            await self._async_sleep(self._after_failure(call, attempt, error, retry_after))
+        raise AssertionError("unreachable")
+
+    def _result(self, call: _Call, parsed: Parsed, header_request_id: str | None) -> GenerateResult:
+        request_id = parsed.request_id or header_request_id
+        usage = parsed.usage or estimate_usage(call.req, parsed.text)
+        if parsed.quota and parsed.quota.get("remaining") is not None:
+            self.quota_remaining = int(parsed.quota["remaining"])
+        try:
+            structured = None
+            if call.req.schema is not None and not parsed.tool_calls:
+                structured = parse_structured(parsed.text, call.req.schema, parsed.structured)
+        except GeminiError as exc:
+            self._record(call, usage, request_id, exc)
+            raise
+        latency_ms = self._record(call, usage, request_id, None)
+        return GenerateResult(
+            text=parsed.text,
+            parsed=structured,
+            tool_calls=parsed.tool_calls,
+            usage=usage,
+            model=parsed.model or call.req.model,
+            finish_reason=parsed.finish_reason,
+            request_id=request_id or call.idempotency_key,
+            latency_ms=latency_ms,
+            thoughts=parsed.thoughts,
+            quota=parsed.quota,
+        )
+
+    def _finish(self, call: _Call, response: httpx.Response) -> GenerateResult:
+        try:
+            parsed = self.adapter.parse(response.json())
+        except (GeminiError, ValueError) as exc:
+            error = (
+                exc if isinstance(exc, GeminiError) else GeminiError(f"unreadable gateway response: {exc}")
+            )
+            self._record(call, Usage(), response.headers.get("x-request-id"), error)
+            raise error from None
+        return self._result(call, parsed, response.headers.get("x-request-id"))
 
     async def generate(
         self,
@@ -481,10 +459,11 @@ class GeminiClient:
         **options: Any,
     ) -> GenerateResult:
         """Options: tools, tool_choice, thinking, include_thoughts, media_resolution, temperature,
-        max_output_tokens, cached_content (see build_request)."""
-        call = self._prepare(model, messages, context, schema, **options)
-        response = await self._apost(call)
-        return self._finish(call, response.json(), response.headers.get("x-request-id"))
+        max_output_tokens, cached_content."""
+        call = self._prepare(model, messages, context, schema, False, **options)
+        async with self._limits.async_(model):
+            response = await self._apost(call)
+        return self._finish(call, response)
 
     def generate_sync(
         self,
@@ -495,17 +474,13 @@ class GeminiClient:
         schema: SchemaArg = None,
         **options: Any,
     ) -> GenerateResult:
-        call = self._prepare(model, messages, context, schema, **options)
-        response = self._post(call)
-        return self._finish(call, response.json(), response.headers.get("x-request-id"))
+        call = self._prepare(model, messages, context, schema, False, **options)
+        with self._limits.sync(model):
+            response = self._post(call)
+        return self._finish(call, response)
 
     async def stream(
-        self,
-        *,
-        model: str,
-        messages: list[Message],
-        context: CallContext,
-        **options: Any,
+        self, *, model: str, messages: list[Message], context: CallContext, **options: Any
     ) -> AsyncIterator[StreamEvent]:
         """Text deltas, then one StreamDone. Without the streaming capability: one delta from a plain call."""
         if not self.capabilities.has(Capability.STREAMING):
@@ -513,78 +488,39 @@ class GeminiClient:
             yield TextDelta(result.text)
             yield StreamDone(result)
             return
-        call = self._prepare(model, messages, context, None, stream=True, **options)
-        payload = await self._astream_payload(call)
-        async for event in payload:
-            yield event
-
-    async def _astream_payload(self, call: _Call) -> AsyncIterator[StreamEvent]:
-        for attempt in range(self._max_attempts):
-            request = self._async.build_request("POST", "/chat/completions", json=call.body)
+        call = self._prepare(model, messages, context, None, True, **options)
+        state = StreamState.new()
+        async with self._limits.async_(model):
+            response = await self._open_stream(call)
             try:
-                response = await self._async.send(request, stream=True)
-            except httpx.TransportError as exc:
-                error, retry_after = _transport_error(exc), None
-            else:
-                if response.is_success:
-                    return self._read_stream(call, response)
-                await response.aread()
-                await response.aclose()
-                error, retry_after = _gateway_error(response), response.headers.get("retry-after")
-            await self._async_sleep(self._retry_delay_or_raise(call, attempt, error, retry_after))
-        raise AssertionError("unreachable")
-
-    async def _read_stream(self, call: _Call, response: httpx.Response) -> AsyncIterator[StreamEvent]:
-        text: list[str] = []
-        tool_parts: dict[int, dict[str, Any]] = {}
-        usage_raw: dict[str, Any] | None = None
-        request_id = response.headers.get("x-request-id")
-        model = call.model
-        finish_reason = None
-        try:
-            async for line in response.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                data = line[len("data:") :].strip()
-                if data == "[DONE]":
-                    break
-                chunk = json.loads(data)
-                request_id = chunk.get("id") or request_id
-                model = chunk.get("model") or model
-                usage_raw = chunk.get("usage") or usage_raw
-                for choice in chunk.get("choices") or []:
-                    finish_reason = choice.get("finish_reason") or finish_reason
-                    delta = choice.get("delta") or {}
-                    piece = _text_of(delta.get("content"))
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[len("data:") :].strip()
+                    if data == "[DONE]":
+                        break
+                    piece = self.adapter.chunk(json.loads(data), state)
                     if piece:
-                        text.append(piece)
                         yield TextDelta(piece)
-                    for tool_delta in delta.get("tool_calls") or []:
-                        slot = tool_parts.setdefault(
-                            tool_delta.get("index", 0), {"id": "", "function": {"name": "", "arguments": ""}}
-                        )
-                        slot["id"] = tool_delta.get("id") or slot["id"]
-                        function = tool_delta.get("function") or {}
-                        slot["function"]["name"] += function.get("name") or ""
-                        slot["function"]["arguments"] += function.get("arguments") or ""
-        except (httpx.TransportError, json.JSONDecodeError) as exc:
-            error = GatewayError(f"stream interrupted: {type(exc).__name__}", retryable=True)
-            self._record(call, _usage(usage_raw), request_id, error)
-            raise error from None
-        finally:
-            await response.aclose()
-        payload = {
-            "id": request_id,
-            "model": model,
-            "usage": usage_raw,
-            "choices": [
-                {
-                    "finish_reason": finish_reason,
-                    "message": {
-                        "content": "".join(text),
-                        "tool_calls": [tool_parts[i] for i in sorted(tool_parts)],
-                    },
-                }
-            ],
-        }
-        yield StreamDone(self._finish(call, payload, request_id))
+                    if state.done:
+                        break
+            except (httpx.TransportError, json.JSONDecodeError) as exc:
+                error = GatewayError(f"stream interrupted: {type(exc).__name__}", retryable=True)
+                self._record(call, state.usage or Usage(), state.request_id, error)
+                raise error from None
+            finally:
+                await response.aclose()
+        text = "".join(state.text)
+        usage = state.usage
+        if usage is None or usage.estimated:
+            usage = estimate_usage(call.req, text, usage.output_tokens if usage else None)
+        parsed = Parsed(
+            text=text,
+            tool_calls=self.adapter.finish_stream(state),
+            usage=usage,
+            finish_reason=state.finish_reason,
+            request_id=state.request_id,
+            model=state.model,
+            quota=state.quota,
+        )
+        yield StreamDone(self._result(call, parsed, response.headers.get("x-request-id")))
