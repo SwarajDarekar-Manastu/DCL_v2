@@ -289,6 +289,22 @@ Merged / ready: `frontend/openwebui-pipe`. The Pipe against S2's /v1/answer cont
 Blocked on: nothing for the Pipe; a live run waits for the engine (M8). Confirmations use trace_id once S2's c1641d5 lands (declined until then).
 Needs from others: the Lead to decide the owner of a chat-attachment upload endpoint (the Pipe sends attachments=[]).
 Next: GET /audit (approved, owner S3, 501 until S1's audit_events model) and the Audit page; then Actions (Show trace, Add to benchmark, Report issue) and the Filter.
+## 2026-10-22 01:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: enrichment (`backend/llm_engine/enrichment/{extract,entities,numeric_facts}.py`, prompt `enrichment/parent.v1.md`), 37 tests; `resolve_anchor` over document_nodes; trace_id on ConfirmationEvent; torch-free local-model tests; vision cache on BucketStore; `indexing/tables.py`.
+Blocked on: nothing
+Needs from others: S1: who seeds `config/aerospace_synonyms.yaml` into entities/entity_aliases, and whether `sanity_ranges` is seeded into pipeline_config; your commit consumes `EntityDecisions` and `FactDecision`s
+Next: index_document (chunk → enrich → normalize → facts → embed → hand to commit), then retrieval and the BM25 DDL for S1
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: sync Celery tasks (tasks_sync.py), host download CLI + read-only export, sanity_ranges seeding (seed-config), get_session dependency for routers. Live in the stack: crawl into 5435/dcl_v2 matches the first run (110,867 items, 5,073 accepted, 0 orphans); processing.scope = the 11 E1–E11 folder ids, sync.download_scope = []; gate.* and sanity_ranges seeded; the 247 accepted files of E1–E11 landed in MinIO. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest && uv run ruff check backend`
+Blocked on: nothing
+Needs from others: S4 — beat entries for the sync tasks (sent); S2 — BM25 DDL, entities.load_seed() on main for the seed-entities command
+Next: download the rest of the accepted items (H11), Tier 4 on landed blobs, dispatcher (folder context, assembler, route gating, CIR writer), then Route C
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: gateway client rework to the verified contract (ManastuGatewayAdapter default with X-API-Key, /generate, /stream; native and OpenAI adapters kept); production checklist on `.wiki/platform/gemini-gateway-client.md` implemented (retry classification incl. upstream codes in 502, jittered backoff, Retry-After, circuit breaker, per-model concurrency, idempotency key, timeouts, 20 MB inline guard, thought-signature echo, temperature dropped for 3.6+, estimated usage, quota stop); tests on recordings from the real gateway; real probe run wrote `gemini_capabilities.json`; beat schedule for S1's sync tasks. Test: `uv run pytest` green except S2's vision tests until S2 lands a one-line conftest fix (sent)
+Blocked on: S2 conftest change (`GEMINI_API_STYLE="openai"` in their vision test settings) before this can merge green
+Needs from others: operator — `.env` has `GEMINI_API_STYLE=gemini`; it must be `manastu` (or removed, the default) for the real gateway
+Next: CI pipeline (incl. disposable MinIO for S1's tests), observability, MinIO replacement comparison by end of M4
+
 
 ## 2026-10-22 03:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: nothing new; real-sample list (Tier A 12 files to git, ~570 KB incl. two trimmed .dat; Tier B local-only working copies) sent to DCL Lead for the user

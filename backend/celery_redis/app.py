@@ -11,7 +11,7 @@ from celery import Celery
 from kombu import Exchange
 from kombu import Queue as KombuQueue
 
-from backend.celery_redis.beat import BEAT_SCHEDULE
+from backend.celery_redis.beat import BEAT_SCHEDULE, BEAT_TIMEZONE
 from backend.celery_redis.queues import VISIBILITY_TIMEOUT_S, Queue
 from backend.config import Group, get_settings
 
@@ -46,7 +46,7 @@ def create_celery() -> Celery:
         result_serializer="json",
         accept_content=["json"],
         result_expires=24 * 3600,
-        timezone="UTC",
+        timezone=BEAT_TIMEZONE,
         enable_utc=True,
         broker_connection_retry_on_startup=True,
         broker_transport_options={"visibility_timeout": VISIBILITY_TIMEOUT_S},

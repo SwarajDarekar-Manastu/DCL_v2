@@ -6,15 +6,10 @@ import pytest
 from backend import config
 from backend.config import Settings
 from backend.llm_engine import gemini_probe
-from backend.llm_engine.gemini_types import (
-    Capabilities,
-    Capability,
-    CapabilityStatus,
-)
+from backend.llm_engine.gemini_types import Capabilities, Capability, CapabilityStatus
 
 KEY = "probe-key-never-printed-987"
-URL = "https://gateway.manastu.test/v1"
-USAGE = {"prompt_tokens": 40, "completion_tokens": 5}
+URL = "https://gateway.manastu.test"
 
 
 @pytest.fixture(autouse=True)
@@ -23,48 +18,81 @@ def no_google_key(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
-def reply(content=None, tool_calls=None, reasoning_tokens=0):
-    message = {"role": "assistant", "content": content}
-    if tool_calls:
-        message["tool_calls"] = tool_calls
-    usage = {**USAGE, "completion_tokens_details": {"reasoning_tokens": reasoning_tokens}}
-    return httpx.Response(
-        200, json={"id": "p", "choices": [{"message": message, "finish_reason": "stop"}], "usage": usage}
+def usage(prompt=40, out=5, thoughts=0):
+    return {"prompt_token_count": prompt, "candidates_token_count": out, "thoughts_token_count": thoughts}
+
+
+def reply(parts, prompt=40, thoughts=0, parsed=None):
+    body = {
+        "candidates": [{"content": {"role": "model", "parts": parts}, "finish_reason": "STOP"}],
+        "response_id": "resp-123",
+        "model_version": "gemini-3.8-flash",
+        "usage_metadata": usage(prompt=prompt, thoughts=thoughts),
+        "quota": {"limit": 100, "remaining": 90, "used_today": 10},
+    }
+    if parsed is not None:
+        body["parsed"] = parsed
+    return httpx.Response(200, json=body)
+
+
+def manastu_gateway(request: httpx.Request) -> httpx.Response:
+    path = request.url.path
+    if path == "/health":
+        return httpx.Response(200, json={"status": "ok"})
+    known = {"/models", "/usage", "/caches", "/generate", "/stream"}
+    if path not in known:
+        return httpx.Response(404, text="<html><title>404 Not Found</title></html>")
+    if request.headers.get("x-api-key") != KEY:
+        return httpx.Response(401, json={"error": "invalid or missing X-API-Key"})
+    if request.method == "GET":
+        return {
+            "/models": httpx.Response(200, json={"default": "x", "generation": ["gemini-3.8-flash"]}),
+            "/usage": httpx.Response(200, json={"limit": 100}),
+            "/caches": httpx.Response(200, json={"caches": []}),
+        }.get(path, httpx.Response(404, text="<html><title>404 Not Found</title></html>"))
+    body = json.loads(request.content)
+    config_sent = body.get("config", {})
+    if path == "/stream":
+        chunks = [{"candidates": [{"content": {"parts": [{"text": f"{i}, "}]}}]} for i in range(1, 4)]
+        chunks.append({"done": True, "usage": {"total": 60}, "quota": {"remaining": 90}})
+        return httpx.Response(200, text="".join(f"data: {json.dumps(c)}\n\n" for c in chunks))
+    if "response_json_schema" in config_sent:
+        return reply(
+            [{"text": '{"city":"Tokyo","population_millions":37.1}'}],
+            parsed={"city": "Tokyo", "population_millions": 37.1},
+        )
+    last = body["contents"][-1]["parts"]
+    if "tools" in config_sent and "function_response" not in last[0]:
+        call = {
+            "function_call": {"name": "get_run_peak", "args": {"run_id": "HT-042"}, "id": "c1"},
+            "thought_signature": "s",
+        }
+        return reply([call])
+    if "function_response" in last[0]:
+        return reply([{"text": "Peak was 31.2 bar."}])
+    inline = [p for p in last if "inline_data" in p]
+    if inline:
+        level = inline[0].get("media_resolution", {}).get("level", "")
+        if inline[0]["inline_data"]["mime_type"] == "application/pdf":
+            return reply([{"text": "4217"}])
+        return reply([{"text": "Red"}], prompt=260 if level.endswith("low") else 1100)
+    thinking = config_sent.get("thinking_config", {})
+    if thinking.get("thinking_level") == "high":
+        return reply([{"text": "check divisors", "thought": True}, {"text": "no"}], thoughts=400)
+    return reply([{"text": "OK"}], thoughts=10)
+
+
+def settings(style="manastu") -> Settings:
+    return Settings(
+        _env_file=None,
+        GEMINI_BACKEND="gateway",
+        GEMINI_GATEWAY_URL=URL,
+        GEMINI_GATEWAY_KEY=KEY,
+        GEMINI_API_STYLE=style,
     )
 
 
-def full_gateway(request: httpx.Request) -> httpx.Response:
-    body = json.loads(request.content)
-    if body.get("stream"):
-        chunks = [{"choices": [{"delta": {"content": f"{i}, "}}]} for i in range(1, 4)]
-        chunks.append({"choices": [], "usage": USAGE})
-        text = "".join(f"data: {json.dumps(c)}\n\n" for c in chunks) + "data: [DONE]\n\n"
-        return httpx.Response(200, text=text, headers={"content-type": "text/event-stream"})
-    if "response_format" in body:
-        return reply('{"city": "Tokyo", "population_millions": 37.1}')
-    if "tools" in body:
-        call = {
-            "id": "c1",
-            "type": "function",
-            "function": {"name": "get_run_peak", "arguments": '{"run_id": "HT-042"}'},
-        }
-        return reply(tool_calls=[call])
-    content = body["messages"][-1]["content"]
-    if isinstance(content, list):
-        kinds = {part["type"] for part in content}
-        return reply("4217" if "file" in kinds else "Red")
-    if body.get("extra_body", {}).get("google", {}).get("thinking_config"):
-        return reply("<thought>check divisors</thought>yes", reasoning_tokens=50)
-    if body.get("reasoning_effort") == "high":
-        return reply("yes", reasoning_tokens=50)
-    return reply("OK")
-
-
-def settings() -> Settings:
-    return Settings(_env_file=None, GEMINI_BACKEND="gateway", GEMINI_GATEWAY_URL=URL, GEMINI_GATEWAY_KEY=KEY)
-
-
-async def test_probe_against_full_gateway_writes_capabilities(tmp_path):
+async def test_probe_against_manastu_gateway_detects_style_and_writes_capabilities(tmp_path):
     path = tmp_path / "caps.json"
     document = await gemini_probe.run(
         True,
@@ -72,8 +100,14 @@ async def test_probe_against_full_gateway_writes_capabilities(tmp_path):
         "gemini-3.5-flash-lite",
         path=path,
         settings=settings(),
-        transport=httpx.MockTransport(full_gateway),
+        transport=httpx.MockTransport(manastu_gateway),
     )
+    assert document["api_style"] == {"configured": "manastu", "detected": "manastu"}
+    discovery = document["discovery"]
+    assert discovery["health"]["status"] == "supported"
+    assert discovery["models_list_manastu"]["status"] == "supported"
+    assert discovery["models_list_gemini"]["evidence"] == "GET /v1beta/models: endpoint missing"
+    assert discovery["models_list_openai"]["evidence"] == "GET /models: key rejected"
     caps = document["capabilities"]
     supported = {name for name, entry in caps.items() if entry["status"] == CapabilityStatus.SUPPORTED}
     assert supported == {
@@ -82,50 +116,45 @@ async def test_probe_against_full_gateway_writes_capabilities(tmp_path):
         "thinking_level",
         "include_thoughts",
         "image_input",
+        "media_resolution",
         "pdf_input",
         "streaming",
-        "stream_usage",
     }
-    assert caps["media_resolution"]["status"] == "inconclusive"
-    assert caps["context_cache"]["status"] == "unknown"
-    assert caps["batch"]["status"] == "unknown"
-    assert document["baseline"]["plain_chat"]["status"] == "supported"
+    assert caps["stream_usage"]["status"] == "inconclusive"
+    assert caps["batch"]["status"] == "unsupported"
+    assert caps["context_cache"]["status"] == "inconclusive"
+    assert document["baseline"]["request_id"]["status"] == "supported"
     written = path.read_text()
     assert KEY not in written and URL not in written
     loaded = Capabilities.load(path)
-    assert Capability.STRUCTURED_OUTPUT in loaded.enabled
-    assert Capability.CONTEXT_CACHE not in loaded.enabled
+    assert Capability.STRUCTURED_OUTPUT in loaded.enabled and Capability.BATCH not in loaded.enabled
     table = gemini_probe.to_markdown(document)
-    assert "| structured_output | supported |" in table
-    assert KEY not in table
+    assert "| structured_output | supported |" in table and KEY not in table
 
 
-async def test_probe_records_rejected_capabilities_as_unsupported(tmp_path):
-    def strict_gateway(request: httpx.Request) -> httpx.Response:
-        body = json.loads(request.content)
-        if "response_format" in body or "tools" in body:
-            return httpx.Response(400, json={"error": {"message": "Unknown field"}})
-        if isinstance(body["messages"][-1]["content"], list):
-            return httpx.Response(422, json={"error": {"message": "multimodal input not allowed"}})
-        return full_gateway(request)
-
-    path = tmp_path / "caps.json"
+async def test_probe_reports_a_style_mismatch(tmp_path):
     document = await gemini_probe.run(
-        True, "m", "lite", path=path, settings=settings(), transport=httpx.MockTransport(strict_gateway)
+        False,
+        "m",
+        "lite",
+        path=tmp_path / "c.json",
+        settings=settings("gemini"),
+        transport=httpx.MockTransport(manastu_gateway),
     )
-    caps = document["capabilities"]
-    for name in ("structured_output", "function_calling", "image_input", "pdf_input"):
-        assert caps[name]["status"] == "unsupported", name
-    assert "HTTP 400" in caps["structured_output"]["evidence"]
-    assert Capabilities.load(path).enabled.isdisjoint({Capability.STRUCTURED_OUTPUT, Capability.IMAGE_INPUT})
+    assert document["api_style"]["detected"] == "manastu"
+    assert document["discovery"]["api_style"]["status"] == "unsupported"
+    assert "set it to manastu" in document["discovery"]["api_style"]["evidence"]
+    assert "HTML page: 404 Not Found" in document["capabilities"]["structured_output"]["evidence"]
 
 
 async def test_probe_does_not_write_when_plain_chat_fails(tmp_path):
     path = tmp_path / "caps.json"
     path.write_text("{}")
-    down = httpx.MockTransport(lambda request: httpx.Response(401, json={"error": {"message": "bad key"}}))
+    rejected = httpx.MockTransport(
+        lambda request: httpx.Response(401, json={"error": "invalid or missing X-API-Key"})
+    )
     with pytest.raises(SystemExit, match="plain chat failed"):
-        await gemini_probe.run(True, "m", "lite", path=path, settings=settings(), transport=down)
+        await gemini_probe.run(True, "m", "lite", path=path, settings=settings(), transport=rejected)
     assert path.read_text() == "{}"
 
 

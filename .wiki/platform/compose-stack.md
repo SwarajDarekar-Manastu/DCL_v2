@@ -68,6 +68,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | Beat schedule for S1's sync tasks (delta 02:00 Asia/Kolkata, token health 15 min, downloads 10 min) |
 | 2026-10-22 | S4 | M0 stack: images, MinIO from source, LibreOffice, models on the GPU, API, beat, six queue workers, `minio-init`, `migrate`; host ports and in-network URLs per the Lead's allocation; verified live on the dev host with the real `.env` |
 
 ## Related
