@@ -163,6 +163,7 @@ class Settings(BaseSettings):
     portainer_password: SecretStr | None = _env("DCL_PORTAINER_PASSWORD", default=None)
     grafana_admin_password: SecretStr | None = _env("DCL_GRAFANA_ADMIN_PASSWORD", default=None)
     grafana_port: Port = _env("DCL_GRAFANA_PORT", default=3300)
+    openwebui_port: Port = _env("DCL_OPENWEBUI_PORT", default=8300)
 
     redis_url: str | None = _env("DCL_REDIS_URL", default=None)
     minio_endpoint: AnyHttpUrl | None = _env("DCL_MINIO_ENDPOINT", default=None)

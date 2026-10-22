@@ -86,3 +86,75 @@ def test_built_suite_validates(path):
             assert set(case["spec"]) - {"expected_behavior", "expected_tools", "expected_numeric"}, case[
                 "case_id"
             ]
+
+
+SAMPLES = bs.REPO / "data" / "samples"
+
+
+def _number_forms(value: float) -> set[str]:
+    forms = {f"{value:.2f}", f"{value:.1f}"}
+    if float(value).is_integer():
+        forms.add(str(int(value)))
+    else:
+        forms.add(repr(float(value)))
+    return forms | {f.replace(".", ",") for f in forms}  # decimal-comma documents (ECSS)
+
+
+def _cited_cases():
+    for path in TEMPLATES:
+        template = load(path)
+        built = bs.LOCAL / f"{template['suite']}.json"
+        if not built.is_file():
+            continue
+        for case in json.loads(built.read_text(encoding="utf-8"))["cases"]:
+            if case["spec"].get("expected_citations"):
+                yield case
+
+
+def _local_file(file_name: str) -> Path:
+    """The local copy a citation means; data/benchmark/verify_paths.yaml settles shared names."""
+    overrides_path = bs.LOCAL / "verify_paths.yaml"
+    overrides = yaml.safe_load(overrides_path.read_text(encoding="utf-8")) if overrides_path.is_file() else {}
+    if file_name in (overrides or {}):
+        return SAMPLES / overrides[file_name]
+    matches = [p for p in SAMPLES.rglob(file_name) if p.is_file()]
+    if not matches:
+        pytest.skip(f"{file_name} not exported locally")
+    assert len({p.stat().st_size for p in matches}) == 1, (
+        f"ambiguous local file {file_name}; add it to verify_paths"
+    )
+    return matches[0]
+
+
+def _cited_text(citation: dict) -> str:
+    path = _local_file(citation["file_name"])
+    if path.suffix.lower() == ".pdf":
+        from pypdf import PdfReader
+
+        reader = PdfReader(path)
+        pages = [reader.pages[citation["page"] - 1]] if citation.get("page") else reader.pages
+        return " ".join(" ".join((p.extract_text() or "").split()) for p in pages)
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+@pytest.mark.parametrize("case", list(_cited_cases()), ids=lambda c: c["case_id"])
+def test_cited_pages_contain_the_answer(case):
+    """Golden answers are verified outside the pipeline: every expected number and entity must
+    appear in the cited page (PDF text layer) or the cited source file of the local copy."""
+    if not SAMPLES.is_dir():
+        pytest.skip("data/samples/ not exported locally")
+    joined = " ".join(_cited_text(c) for c in case["spec"]["expected_citations"]).casefold()
+    if not joined.strip():
+        # Image-only pages: no text layer to search; S5's visual reading must be on record.
+        readings_path = bs.LOCAL / "visual_readings.yaml"
+        readings = (
+            yaml.safe_load(readings_path.read_text(encoding="utf-8")) if readings_path.is_file() else {}
+        )
+        assert (readings or {}).get(case["case_id"]), (
+            f"{case['case_id']}: image-only citation without a recorded reading"
+        )
+        return
+    for numeric in case["spec"].get("expected_numeric", []):
+        assert any(f in joined for f in _number_forms(numeric["value"])), (case["case_id"], numeric["value"])
+    for entity in case["spec"].get("expected_entities", []):
+        assert entity.casefold() in joined, (case["case_id"], entity)

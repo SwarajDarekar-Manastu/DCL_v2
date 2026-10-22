@@ -561,6 +561,24 @@ Blocked on: nothing
 Needs from others: nothing new
 Next: as in the entry above
 
+## 2026-10-22 12:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: documents suite (12 FACT_LOOKUP + 3 FAILURE_ANALYSIS, page-cited, from the TP-23 and TP12 reports) and code suite (8 CODE cases on the TP7 test-plan creator); questions committed without facts or file names, answers and citations local; a test finds every expected number/entity in the cited PDF page or source file. E12 chosen: 8 ECSS standards as path globs (sent to S1). Golden set now 44 cases (15 telemetry incl. 2 halt-behaviour… see map). Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: indexing of E12 standards (STANDARDS cases); indexed corpus for CONFLICT and the retrieval set
+Needs from others: S1 — E12 globs into processing.scope
+Next: visual/handwriting cases from the exported TP7 sheets and E7 photos; multilingual cases (none in the allowlist: synthetic German/Japanese fixtures only)
+
+## 2026-10-22 13:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: visual suite (5 VISUAL handwriting reads, 2 FAILURE_ANALYSIS, 1 CONFLICT_BEHAVIOR from the TP7 preheat and de-integration sheets); image-only citations must have a recorded visual reading (local); proposals carry `status: proposed` per rule. Golden set: 54 local cases (telemetry 17, behaviour 6, documents 15, code 8, visual 8). Test: `uv run pytest backend/tests/benchmark backend/tests/unit/config_data && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: E12 standards indexed (5 STANDARDS cases); a non-English library document (MULTILINGUAL); indexed corpus (retrieval set)
+Needs from others: S1/S2 — note: the TP7 preheat sheet's printed footer says Test Plan 6 (image-only page), so the plan-id CONFLICT can only come from OCR of the footer, not from folder context
+Next: STANDARDS cases once the 8 ECSS documents are indexed; retrieval set with gold anchors
+
+## 2026-10-22 14:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: standards suite (5 STANDARDS cases from the E12 ECSS standards: E-ST-32-02C pressure-vessel and heat-pipe factors, E-ST-35-06C NVR A/10, E-ST-35-10C elevated corrosion-test conditions, Q-ST-70C tin finish), each answer found on its cited page; number check accepts decimal commas. Golden set: 59 local cases. Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: S1's library language/DOI check (MULTILINGUAL), indexed corpus (retrieval set with gold anchors)
+Needs from others: nothing new
+Next: idle on MULTILINGUAL and the retrieval set until their inputs exist (Lead ruling)
+
 ## 2026-10-22 19:00 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: T6 `external_search` (`backend/llm_engine/engine/tools/external.py`, prompts `external_intent.v1`, `external_search.v1`): generic needs from the question alone, sanitized, isolated grounded Gemini call (only the sanitized query; rule confirmed by the Lead), arXiv for literature, ≤ 3 queries, `external_queries` in the trace, benchmark mock; planner goes external on request or for a design-synthesis gap; policy from `pipeline_config` (`answer.external_search_enabled`, `answer.external_allowed_groups`, `answer.proprietary_terms`). Live check: grounding returned 6 sources, all redirect links resolved.
 Blocked on: nothing

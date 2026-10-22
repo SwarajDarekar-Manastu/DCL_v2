@@ -1,0 +1,55 @@
+# Golden code suite: TEMPLATE (DECISIONS.md 2026-10-22, option b). Owner: S5.
+# CODE cases about the team's report-generator script in the allowlisted TP7 folder. Questions
+# describe the script without naming files; answers and citations are in the git-ignored
+# data/benchmark/code.local.yaml. Built by the build_suites module (verification folder).
+version: 1
+suite: code
+cases:
+  - case_id: code-tpc-aux-extensions
+    category: CODE
+    question: Which LaTeX auxiliary file types does the team's test-plan creator script delete after compiling a report?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  - case_id: code-tpc-max-latex-passes
+    category: CODE
+    question: At most how many pdflatex passes does the test-plan creator script run?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  - case_id: code-tpc-rerun-trigger
+    category: CODE
+    question: What makes the test-plan creator script run pdflatex again?
+    expected_tools: [search_documents]
+    difficulty: 3
+    local: true
+  - case_id: code-tpc-name-protect
+    category: CODE
+    question: Which characters does the name_protect function of the test-plan creator escape for LaTeX?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  - case_id: code-tpc-portrait-rotation
+    category: CODE
+    question: Which images does the test-plan creator rotate, and by how many degrees?
+    expected_tools: [search_documents]
+    difficulty: 3
+    local: true
+  - case_id: code-tpc-excel-close
+    category: CODE
+    question: How does the test-plan creator close a workbook that is open in Excel?
+    expected_tools: [search_documents]
+    difficulty: 3
+    local: true
+  - case_id: code-tpc-expectation-sheet
+    category: CODE
+    question: From which Excel sheet does the test-plan creator read the expected performance values?
+    expected_tools: [search_documents]
+    difficulty: 1
+    local: true
+  - case_id: code-tpc-main-output
+    category: CODE
+    question: What main LaTeX file does the test-plan creator write, and which compiled PDF does it then move?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true

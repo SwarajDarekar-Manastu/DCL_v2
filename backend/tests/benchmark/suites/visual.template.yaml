@@ -1,0 +1,59 @@
+# Golden visual suite: TEMPLATE (DECISIONS.md 2026-10-22, option b). Owner: S5.
+# Handwritten and photographed sheets of the TP7 folder (scans without a text layer), the failure
+# observations recorded on them, and a conflict between a sheet's folder and its own footer.
+# Answers and citations are in the git-ignored data/benchmark/visual.local.yaml; S5's visual
+# readings (no text layer to check) are recorded in data/benchmark/visual_readings.yaml.
+# Built by the build_suites module (verification folder).
+version: 1
+suite: visual
+cases:
+  - case_id: tp07-preheat-test2-temperature
+    category: VISUAL
+    question: What preheat temperature is written by hand for Test 2 on the preheat sheet in the Test Plan 7 (Test Campaign 2) folder?
+    expected_tools: [search_documents, inspect_visuals]
+    difficulty: 3
+    local: true
+  - case_id: tp07-preheat-test2-start-time
+    category: VISUAL
+    question: At what time did the Test 2 preheat start, according to the handwritten preheat sheet in the Test Plan 7 (Test Campaign 2) folder?
+    expected_tools: [search_documents, inspect_visuals]
+    difficulty: 3
+    local: true
+  - case_id: tp07-preheat-test1-status
+    category: VISUAL
+    question: What does the handwritten preheat sheet in the Test Plan 7 (Test Campaign 2) folder record for the Test 1 preheat temperature?
+    expected_tools: [search_documents, inspect_visuals]
+    difficulty: 3
+    local: true
+  - case_id: tp07-deint-injector
+    category: VISUAL
+    question: Which injector does the handwritten de-integration sheet of Test Campaign 2, Test Plan 7 record?
+    expected_tools: [search_documents, inspect_visuals]
+    difficulty: 2
+    local: true
+  - case_id: tp07-deint-chamber-length
+    category: VISUAL
+    question: What chamber length was measured by hand on the de-integration sheet of Test Campaign 2, Test Plan 7?
+    expected_tools: [search_documents, inspect_visuals]
+    difficulty: 4
+    local: true
+  - case_id: tp07-deint-mesh-status
+    category: FAILURE_ANALYSIS
+    question: What condition was the injector mesh in after the Test Campaign 2, Test Plan 7 firing, according to the de-integration sheet?
+    expected_tools: [search_documents, inspect_visuals]
+    difficulty: 2
+    local: true
+  - case_id: tp07-deint-heater-condition
+    category: FAILURE_ANALYSIS
+    question: What damage to the heater does the de-integration sheet of Test Campaign 2, Test Plan 7 record?
+    expected_tools: [search_documents, inspect_visuals]
+    difficulty: 2
+    local: true
+  - case_id: tp07-preheat-sheet-test-plan-conflict
+    category: CONFLICT_BEHAVIOR
+    question: Which test plan does the preheat sheet stored in the Test Plan 7 (Test Campaign 2) folder belong to?
+    expected_behavior: [must_present_both_conflicting_values]
+    expected_tools: [search_documents, inspect_visuals]
+    difficulty: 4
+    local: true
+    notes: The file name and folder say Test Plan 7, while the printed footer of the scanned sheet says Test Campaign 2 - Test Plan 6 (the folder's setup workbook carries a Test Plan 6 header too). The engine must present both rather than pick one; the folder-context builder should raise CONFLICT SOFT (two plan ids, file 03 §1.2).
