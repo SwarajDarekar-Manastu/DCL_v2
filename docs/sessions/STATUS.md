@@ -626,3 +626,14 @@ Merged / ready: A1 page furniture and the test-plan CONFLICT (file 03 §A1.3 as 
 Blocked on: nothing
 Needs from others: S5: the real TP7 sheet through A1 once the samples are local, to confirm the footer reaches furniture on that scan
 Next: T3 inspect_visuals, T2 query_telemetry (S1's telemetry tables), Skills
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: object-store evaluation `backend/devops/object_store_evaluation.md` + reusable `backend/devops/ci/s3_compat_check.py`: RustFS 1.0.3 passes every data-plane check and enforces lifecycle (recommended, pending a RustFS-native way to create the app user/policy); SeaweedFS 4.48 does not enforce lifecycle and has no admin API; Garage v2.4.1 has no versioning. Stack redeployed from main 72ae92f at migration 0009. Backups map marked deprecated (user decision)
+Blocked on: nothing
+Needs from others: Lead — decision on the object store before M6
+Next: Open WebUI service (DCL_OPENWEBUI_PORT 8300), Portainer in compose.dev.yaml, Console service with S3
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: dev-only Console sign-in settings (`console_dev_auth`, `console_dev_token`, `console_dev_roles` default viewer,reviewer,admin; refused unless DCL_ENV=dev and the token has 32+ chars); Portainer service in compose.dev.yaml (reuses volume dcl-v2-portainer-data, password from DCL_PORTAINER_PASSWORD as a compose secret); object-store evaluation + `s3_compat_check.py`. Open WebUI container dropped (stays in M9). Test: `uv run pytest` green; real `.env` loads
+Blocked on: nothing
+Needs from others: Lead — merge; S3 — Console Dockerfile on main (a9b26db) for the compose wiring
+Next: redeploy workers from main b9cf8f2 for S1; switch the running Portainer to the compose service; Console service wiring

@@ -99,7 +99,7 @@ def test_backend_containers_get_in_network_urls_never_host_ones(name):
     base = compose("compose.yaml")["services"]
     services = compose(name)["services"]
     for service, svc in services.items():
-        image = base[service].get("image", "")
+        image = base.get(service, {}).get("image", "")
         if not image.startswith(("dcl-v2-backend", "dcl-v2-models")) or service == "minio-init":
             continue
         env = svc["environment"]

@@ -3,12 +3,15 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `platform/backups-retention` |
-| Status | planned |
+| Status | deprecated |
 | Owner session | S4 |
 | Spec | docs/architecture/05 §6; 10 M11 |
 | Last updated | 2026-10-21 |
 
 ## Purpose
+
+**Dropped by user decision on 2026-10-22 (DECISIONS.md): no backups for now.** PostgreSQL and the single MinIO instance stay on local disk, with no off-host target, no WAL archiving and no bucket mirror. Retention code stays S1's (`backend/sync/retention.py`); S4 schedules it in beat when it exists.
+
 
 PostgreSQL base+WAL, MinIO versioning, nightly retention deletes, runbooks for re-auth, 410 resync, worker OOM, Gemini outage, model-service restart.
 
@@ -49,6 +52,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | Marked deprecated after the user decided against backups for now |
 
 ## Related
 
