@@ -735,3 +735,9 @@ Merged / ready: T2 plot embed. With `plot=true`, T2 renders one PNG per run (Mat
 Blocked on: nothing
 Needs from others: Lead: the `plots/{run_uuid}/…png` key prefix for file 05's dcl-assets layout (answer-time only, no `assets` row). S1, through the Lead: `office_run.default_build()` should pass `extraction_safety=extraction_safety_from(session)` to VisionService. Observation for S1: on the stack's committed thermocouple run, t0 lands at the temperature peak (detection at 2 Hz); the rise starts about 11 s earlier.
 Next: Skills for Open WebUI
+
+## 2026-10-23 01:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Open WebUI Skills. `frontend/openwebui/skills/` holds 13 playbook `SKILL.md` files, one per file 07 §5 row except chit-chat. Each has front matter (`name`, `description`, `intents`, `tools`). `test_skills.py` builds the planner's plan for each skill and fails when the tools drift; I broke one skill on purpose to check it fails. `publish_skills.py` is idempotent: it creates or updates `dcl-<folder>`, active and readable by every user, with a dry run, and never prints the key. Live on a disposable Open WebUI v0.12.3 container (since removed): 13 created, a second run made 13 updates, and the public read grant reads back.
+Blocked on: a Lead ruling (question sent)
+Needs from others: Lead: should the skills be attached to `manastu_engine.main` (file 08 §1 says attached), and should a toggled skill steer the planner? Details in the message.
+Next: idle until the ruling
