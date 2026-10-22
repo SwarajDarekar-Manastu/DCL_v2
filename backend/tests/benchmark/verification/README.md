@@ -30,6 +30,10 @@ Verification notes for the first 15 cases (2026-10-22):
   decimals. The thermocouple log is a separate 2 Hz device; it is aligned by wall-clock time
   (stream header date and time + t; logger timestamps), which reproduces all 32 temperature
   values of the workbook.
+- "While the valve was open" means the full valve-open window, in Route C terms
+  `WHERE valve_signal = 1` in normalized.parquet (the proposed channel maps set
+  `open_threshold: 2.5`). It is not Route C's steady window (valve open and t > t0 + 1 s), which
+  is shorter by design; an engine that answers from the steady window gets different means.
 - The team's "Through put" is the mass-flow integral over the whole record; the case asks for
   the valve-open integral, which differs by about 9%.
 - Injector 10 and Injector 14 runs have no matching team workbook; their values rest on the

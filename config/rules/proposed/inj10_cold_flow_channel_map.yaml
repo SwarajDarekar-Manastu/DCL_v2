@@ -55,5 +55,6 @@ rules:
         physical_quantity: valve_state
         unit: dimensionless
         gauge_or_abs: n/a
+        open_threshold: 2.5
     ambient_condition: UNKNOWN
   created_by: S5 proposal 2026-10-22 (SME confirmation pending)

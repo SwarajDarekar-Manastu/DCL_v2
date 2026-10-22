@@ -19,6 +19,9 @@ values. The `y*` columns of LabJack LJStreamM files are already scaled by the lo
 
 Points for the SME:
 - Ambient condition is `UNKNOWN`: gauge-to-absolute conversion needs the test-cell ambient.
+- The valve signal (`y7`) is about 5.3 when open and ramps through 0.5-2.5 at each edge;
+  `open_threshold: 2.5` (S1's field, ab00628) reproduces the team's valve-open window exactly,
+  whereas the 0.5 default would add about 1.5 s to TP7 Test 01.
 - TP7 `y4` has a broken logger scaling (`y=e*`, constant 0); it is left unmapped, so Route C keeps
   a UNIT_AMBIGUITY case open until the SME decides (for example mark the channel unused).
 - TP7 `y6` (thrust) reads a constant offset near -28 N and fails the 0-200 N bound; the
