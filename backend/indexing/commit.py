@@ -411,8 +411,9 @@ def commit_document(
 
 
 def default_indexer(models_url: str, minio) -> Indexer:
-    """S2's ``index_document`` with the models role, the alias index and this session's vector reuse.
-    The Gemini client is created only for a root with ``sync_roots.cloud_allowed``."""
+    """S2's ``index_document`` with the models role (vectors and token counts), the alias index and this
+    session's vector reuse. The Gemini client is created only for a root with ``sync_roots.cloud_allowed``.
+    An unreachable models role raises ``ModelServerUnavailable``; the Route C pipeline then parks the run."""
     from backend.indexing.index_document import existing_vectors, index_document
     from backend.llm_engine.enrichment.entities import index_from_db
     from backend.llm_engine.local_models import ModelsClient
@@ -446,6 +447,7 @@ def default_indexer(models_url: str, minio) -> Indexer:
             reuse_vectors=lambda hashes: existing_vectors(session, doc_id, hashes),
             sanity_ranges=ranges.get("ranges", []),
             cloud_allowed=cloud_allowed,
+            count_tokens=models.count_tokens,  # POST /tokenize/count; workers never import transformers
         )
 
     return index
