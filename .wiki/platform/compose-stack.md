@@ -80,6 +80,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | RustFS step 3: M6-scale load test (`backend/devops/ci/object_store_load.py`), 20,800 objects, 0 errors on RustFS and MinIO, RustFS writes about 2× slower at p50, reads equal; step 2 lifecycle watch seeded (`lifecycle_watch.py`, container `dcl-s4-rustfs-watch`), due 2026-10-24 00:00Z |
 | 2026-10-22 | S4 | RustFS adoption step 1: `minio-init` sets the app policy with `policy_set` (RustFS answers `attach_policy` with AEAD id 2); full init twice + policy scope verified on RustFS 1.0.3 and MinIO |
 | 2026-10-22 | S4 | Console container on 8601 from S3's Dockerfile (msal build; args `DCL_API_BASE_URL`, `DCL_TENANT_ID`, `DCL_CONSOLE_SPA_CLIENT_ID`, `DCL_CONSOLE_API_SCOPE`) |
 | 2026-10-22 | S4 | Network exposure split: Postgres, Redis, MinIO S3 on `DCL_DATA_BIND_HOST` (default loopback); Redis `requirepass` from `DCL_REDIS_PASSWORD`, verified live on a throwaway project (NOAUTH without, PONG with, healthy) |

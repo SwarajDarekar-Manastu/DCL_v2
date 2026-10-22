@@ -10,6 +10,8 @@
 | Tests, including the DB and MinIO suites | `uv run pytest -q` with the `DCL_TEST_*` exports from `test_services.sh` |
 | Image secret scan | `uv run python backend/devops/ci/scan_image_secrets.py <image> [--forbid-values-from .env]` |
 
+Object-store evaluation tools (not CI gates; see `backend/devops/object_store_evaluation.md`): `s3_compat_check.py` (data-plane compatibility), `lifecycle_watch.py seed|check` (one-day lifecycle enforcement with `minio-init`'s rules), `object_store_load.py` (M6-scale write/read/list load).
+
 On the dev host, add `--forbid-values-from .env` to the scan. It then also fails when any file in the image contains one of the real secret values, and it reports the variable name only. CI has no `.env`, so it scans by pattern.
 
 The benchmark gate (a merge that drops telemetry exactness is blocked) joins in M10.
