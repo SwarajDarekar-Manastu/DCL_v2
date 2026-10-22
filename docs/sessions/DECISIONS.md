@@ -35,4 +35,8 @@ Written by `DCL Lead` only. Newest at the bottom. Each entry names the sessions 
 | 2026-10-22 | `DCL_OFFICE_URL` approved; `backend/common/office.py` (S4) is the one office-conversion client that S1 and S2 call; unoserver dropped, one soffice per request | S1, S2, S4 | file 01 §7.1 |
 | 2026-10-22 | `media` dependency group (pillow-heif 1.8.1, imagehash 4.3.2, faster-whisper 1.2.1) for the media worker image | S2, S4 | Lead |
 | 2026-10-22 | Route C: `telemetry_runs` and `telemetry_channels` migration approved per file 05 §4.4; `channel_map` rules may be derived from each folder's "Data format.xlsx" with `origin=header`, scoped to that folder subtree, provenance = source blob + sheet/cell; a human rule (`operator`) always wins; nearest folder wins between derived rules | S1, S5 | file 06 §8 |
+| 2026-10-22 | **User:** no backups for now. Postgres and the one MinIO instance stay on the local disk; no off-host target, no WAL archiving, no bucket mirror. S4's backup task (brief task 6) is deferred; a second S3 container may be added later. Retention stays as decided | S4, S1 | user |
+| 2026-10-22 | **User:** Docker build cache pruned by the Lead (73.6 GB reclaimed; 103 GB free). Unused images and volumes untouched | S4 | user |
+| 2026-10-22 | **User:** Flash-Lite tier uses `gemini-3.1-flash-lite` (available on the gateway); `gemini-3.8-flash-lite` is not enabled and will not be; `gemini-3.8-flash` stays the main model. S2 and S4 switch the Flash-Lite model id in config | S2, S4, S5 | user |
+| 2026-10-22 | Sample fixtures: real files stay local only (Tier B); only synthetic fixtures go to the public repo. Lead's recommendation applied until the user says otherwise | S5 | Lead |
 
