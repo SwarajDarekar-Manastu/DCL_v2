@@ -2,6 +2,7 @@
 name: Code walkthrough
 description: How one of our scripts computes or validates something, with line citations.
 intents: [code_walkthrough]
+dcl-playbook: code_walkthrough
 tools: [inspect_code_and_diagrams, search_documents]
 ---
 

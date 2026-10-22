@@ -2,6 +2,7 @@
 name: Library lookup
 description: A value or statement from a vendor datasheet or a paper in the kept library, labelled as such.
 intents: [fact_lookup]
+dcl-playbook: fact_lookup
 tools: [search_documents]
 ---
 

@@ -2,6 +2,7 @@
 name: Design synthesis and trade study
 description: Candidate designs against requirements, with a provenance label on every value.
 intents: [design_synthesis]
+dcl-playbook: design_synthesis
 tools: [external_search, physics_calculator, search_documents]
 ---
 

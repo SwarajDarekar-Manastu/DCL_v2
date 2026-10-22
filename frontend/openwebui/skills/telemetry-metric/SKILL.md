@@ -2,6 +2,7 @@
 name: Telemetry metric
 description: Peak, steady-state, mean or duration of a measured channel in a test run, computed from the run data.
 intents: [telemetry_metric]
+dcl-playbook: telemetry_metric
 tools: [catalog_lookup, query_telemetry, search_documents]
 ---
 

@@ -1,7 +1,9 @@
 """Publish the Answer Engine playbooks (file 07 §5) as Open WebUI Skills (admin API of Open WebUI v0.12.3).
 
-Each folder here holds one `SKILL.md`: YAML front matter (`name`, `description`, `intents`, `tools`) and the
-playbook text. The front matter's `tools` are checked against the engine's planner by
+Each folder here holds one `SKILL.md`: YAML front matter (`name`, `description`, `intents`, `dcl-playbook`,
+`tools`) and the playbook text. `dcl-playbook` is the intent the engine adds when a user $-mentions the skill
+(`AnswerOptions.playbook_hint`, DECISIONS 2026-10-23); it is also published as the tag
+`dcl-playbook:<intent>`. The front matter's `tools` are checked against the engine's planner by
 backend/tests/unit/llm_engine/engine/test_skills.py, so the published text says what the engine really does.
 
 Run by a person once Open WebUI is up, with an admin API key (Settings › Account › API keys), from the
@@ -37,6 +39,7 @@ class Skill:
     content: str
     intents: tuple[str, ...]
     tools: tuple[str, ...]
+    playbook: str
 
     def form(self) -> dict:
         return {
@@ -44,7 +47,7 @@ class Skill:
             "name": self.name,
             "description": self.description,
             "content": self.content,
-            "meta": {"tags": ["dcl", "playbook"]},
+            "meta": {"tags": ["dcl", "playbook", f"dcl-playbook:{self.playbook}"]},
             "is_active": True,
             "access_grants": PUBLIC_READ,
         }
@@ -63,6 +66,7 @@ def parse(path: Path) -> Skill:
         content=body.lstrip("\n"),
         intents=tuple(meta["intents"]),
         tools=tuple(meta["tools"]),
+        playbook=meta["dcl-playbook"],
     )
 
 

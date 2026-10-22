@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from backend.llm_engine.engine.analysis import Intent, QueryAnalysis, resolve
-from backend.llm_engine.engine.playbooks import build_plan
+from backend.llm_engine.engine.playbooks import apply_hint, build_plan
 from backend.llm_engine.enrichment.entities import AliasIndex
 
 SKILLS_DIR = Path(__file__).resolve().parents[5] / "frontend" / "openwebui" / "skills"
@@ -44,6 +44,18 @@ def test_one_skill_per_playbook_row_and_every_intent_covered():
     assert len({s.id for s in SKILLS}) == len({s.name for s in SKILLS}) == 13
     covered = {i for s in SKILLS for i in s.intents}
     assert covered == {str(i) for i in Intent} - {Intent.CHITCHAT}
+    assert all(s.playbook in s.intents for s in SKILLS)
+
+
+@pytest.mark.parametrize("skill", SKILLS, ids=lambda s: s.id)
+def test_the_hint_of_a_mentioned_skill_runs_its_playbook_on_a_chitchat_reading(skill):
+    raw = QueryAnalysis(
+        intents=["chitchat_or_out_of_scope"], test_plan_ids=["TP7"], hardware_items=["Injector 14"]
+    )
+    analysis = apply_hint(
+        resolve(raw, AliasIndex(), user_groups=[], external_allowed_groups=[]), skill.playbook
+    )
+    assert analysis.raw.intents == [Intent(skill.playbook)] and not analysis.chitchat
 
 
 @pytest.mark.parametrize("skill", SKILLS, ids=lambda s: s.id)
@@ -96,6 +108,7 @@ def test_publish_creates_then_updates_and_activates():
     body = dict(server.writes)["/api/v1/skills/create"]
     assert body["access_grants"] == [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
     assert not body["content"].startswith("---") and body["name"].startswith("DCL playbook: ")
+    assert "dcl-playbook:" in body["meta"]["tags"][-1]
     server.writes.clear()
     run(server)
     assert [p for p, _ in server.writes if p.endswith("/create")] == []  # second run only updates

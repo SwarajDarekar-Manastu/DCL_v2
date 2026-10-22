@@ -2,6 +2,7 @@
 name: Failure investigation
 description: What went wrong in a test and what damage was seen, from run data, failure reports, photos and the P&ID.
 intents: [failure_investigation]
+dcl-playbook: failure_investigation
 tools: [inspect_code_and_diagrams, inspect_visuals, query_telemetry, search_documents]
 ---
 

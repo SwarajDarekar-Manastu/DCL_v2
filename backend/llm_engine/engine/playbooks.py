@@ -98,6 +98,18 @@ def _tags(analysis: Analysis) -> list[str]:
     return [e.surface for e in analysis.raw.entities if e.type in tag_types] + analysis.hardware_items
 
 
+def apply_hint(analysis: Analysis, hint: str | None) -> Analysis:
+    """An explicitly mentioned playbook (DECISIONS 2026-10-23, option c): its intent joins the analysed ones,
+    and a question read as chit-chat is answered with the playbook instead."""
+    if not hint:
+        return analysis
+    intents = [i for i in analysis.raw.intents if i != Intent.CHITCHAT]
+    if Intent(hint) not in intents and Intent(hint) != Intent.CHITCHAT:
+        intents.append(Intent(hint))
+    analysis.raw.intents = intents or [Intent.CHITCHAT]
+    return analysis
+
+
 def build_plan(question: str, analysis: Analysis) -> Plan:
     plan = Plan()
     intents = set(analysis.raw.intents)

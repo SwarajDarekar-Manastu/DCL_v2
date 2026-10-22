@@ -2,6 +2,7 @@
 name: Document summary
 description: A summary of one document, with its key numbers cited.
 intents: [document_summary]
+dcl-playbook: document_summary
 tools: [get_document, search_documents]
 ---
 

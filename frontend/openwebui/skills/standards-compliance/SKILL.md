@@ -2,6 +2,7 @@
 name: Standards compliance
 description: Whether our data meets a requirement of a standard, with both the clause and our value cited.
 intents: [standards_compliance]
+dcl-playbook: standards_compliance
 tools: [search_documents]
 ---
 

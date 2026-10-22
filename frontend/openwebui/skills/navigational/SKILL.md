@@ -2,6 +2,7 @@
 name: Navigational
 description: Which documents, runs or tests exist for something, with links.
 intents: [navigational]
+dcl-playbook: navigational
 tools: [catalog_lookup, search_documents]
 ---
 
