@@ -50,6 +50,10 @@ export type SearchHit = Schemas['Hit'];
 /** backend/api/assets.py */
 export type AssetUrl = Schemas['AssetUrl'];
 
+// ops (backend/api/ops.py)
+export type FailedTask = Schemas['FailedTask'];
+export type FailedTasks = Schemas['FailedTasks'];
+
 /** backend/review/api_models.py and backend/dispatcher/contract.py (S1) */
 export type FlagType = Schemas['FlagType'];
 export type FlagSeverity = Schemas['FlagSeverity'];
@@ -185,6 +189,11 @@ export function listAudit(filters: AuditFilters = {}): Promise<AuditPage> {
 	const text = q.toString();
 	return request<AuditPage>('GET', `/audit${text ? `?${text}` : ''}`);
 }
+
+// ---------------------------------------------------------------- ops (backend/api/ops.py)
+
+/** GET /ops/failed-tasks (admin): the Celery dead-letter list, newest first */
+export const listFailedTasks = (limit = 100) => request<FailedTasks>('GET', `/ops/failed-tasks${query({ limit })}`);
 
 // ---------------------------------------------------------------- benchmark (backend/api/benchmark.py)
 

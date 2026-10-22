@@ -32,8 +32,9 @@ Tests and fixtures:
 
 Provides:
 - `GeminiClient(settings=None, *, capabilities, ledger, budget, prices, timeout, stream_idle_s=60, max_attempts=5, max_concurrency_per_model=8, breaker, …)`
-- `await generate(...)`, `generate_sync(...)`, `async for ev in stream(...)`; options: `tools`, `tool_choice`, `thinking`, `include_thoughts`, `media_resolution`, `temperature`, `max_output_tokens`, `cached_content`
+- `await generate(...)`, `generate_sync(...)`, `async for ev in stream(...)`; options: `tools`, `tool_choice`, `thinking`, `include_thoughts`, `media_resolution`, `temperature`, `max_output_tokens`, `cached_content`, `safety_settings` (default none sent)
 - Types from `backend.llm_engine.gemini_types`: `Message` (`tool_result(id, content, name=)`), `Text`, `Image`/`Pdf` (per-part `media_resolution`), `ToolSpec`, `ToolCall` (`thought_signature`), `GenerateResult` (`quota`), `Usage` (`estimated`), `LlmCallRecord` (`usage_estimated`)
+- Safety: `SafetySetting(HarmCategory, HarmBlockThreshold)`, `EXTRACTION_SAFETY` = DANGEROUS_CONTENT at BLOCK_ONLY_HIGH for extraction capabilities (S2 turns it on per capability from config); BLOCK_NONE/OFF not representable; manastu sends `config.safety_settings`, native top-level `safetySettings`, openai style refuses
 - Errors: `GatewayError(status_code, retryable)`, `GatewayUnavailable` (breaker open), `BudgetExhausted` (budget or gateway quota), `RequestTooLarge`, `StructuredOutputError`, `CapabilityUnavailable`
 - `GEMINI_API_STYLE`: `manastu` (default) | `gemini` | `openai`
 - Probe: `uv run python -m backend.llm_engine.gemini_probe [--write]`
@@ -67,6 +68,7 @@ Consumes:
 | 20 | High thinking is expensive (one primality question used ~21k thinking tokens) | caller guidance | documented |
 | 21 | Batch API | — | not exposed by the gateway (probe: endpoint missing); flag off |
 | 22 | Explicit context caches (`POST /caches`) | — | endpoint present, not exercised; flag off until first use |
+| 24 | Safety settings pass-through, default off; filters can be relaxed for extraction, never switched off | `safety_settings=` | done, tested, verified live 2026-10-22 |
 | 23 | Google Search grounding: the model writes the Google queries from the whole prompt, so send only an already-sanitized query in a grounded call; queries and sources come back in `result.grounding` for the trace; source URIs are Vertex AI Search redirect links | `google_search=True` | done, verified live |
 
 ## Workspace (files to touch when modifying this feature)
@@ -94,6 +96,7 @@ Consumes:
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S4 | Client and probe against the OpenAI-compatible shape; every capability behind a flag |
 | 2026-10-21 | S4 | Types, flags and errors moved to `gemini_types.py` |
+| 2026-10-22 | S4 | Optional `safety_settings` pass-through (`EXTRACTION_SAFETY`), default off; live gateway call accepted |
 | 2026-10-22 | S4 | Google Search grounding behind `Capability.GOOGLE_SEARCH` (`google_search=True`, `result.grounding`); probe re-run with the real `.env` |
 | 2026-10-22 | S4 | Provider adapters (Manastu default, native, OpenAI); production checklist implemented; tests on recordings from the real gateway; probe with discovery and style detection; capabilities file from a real run |
 

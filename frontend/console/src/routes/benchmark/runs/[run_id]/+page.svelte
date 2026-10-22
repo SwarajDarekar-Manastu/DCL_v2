@@ -16,7 +16,7 @@
 	import { session } from '$lib/auth/session.svelte';
 	import ResultDrilldown from '$lib/components/benchmark/ResultDrilldown.svelte';
 	import { compareHref, runHref, suiteHref } from '$lib/components/benchmark/links';
-	import { byCategory, failureCounts, ribbon } from '$lib/components/benchmark/run_view';
+	import { byCategory, failureCounts, isActive, POLL_MS, ribbon, runProgress } from '$lib/components/benchmark/run_view';
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
 	import { live } from '$lib/live.svelte';
 
@@ -28,12 +28,14 @@
 	let comparison = $state<RunComparison | null>(null);
 	let open = $state<string | null>(null);
 	let error = $state('');
+	let tick = $state(0);
 	let canRun = $derived(hasRole(session.user?.roles ?? [], 'reviewer'));
 
 	const describe = (e: unknown) => (e instanceof ApiError ? e.detail : String(e));
 
 	$effect(() => {
 		const id = runId;
+		void tick;
 		const event = live.lastRunEvent;
 		if (event && event.key !== id && data) return;
 		getRun(id)
@@ -57,6 +59,13 @@
 			.catch(() => (comparison = null));
 	});
 
+	$effect(() => {
+		if (!data || !isActive(data.run.status)) return;
+		const timer = setTimeout(() => (tick += 1), POLL_MS);
+		return () => clearTimeout(timer);
+	});
+
+	let progress = $derived(data && isActive(data.run.status) ? runProgress(data.run, data.results) : null);
 	let caseMap = $derived(new Map(cases.map((c) => [c.case_id, c])));
 	let items = $derived(data ? ribbon(data.run.aggregate, comparison?.base.aggregate ?? null) : []);
 	let failures = $derived(data ? failureCounts(data.results) : []);
@@ -85,6 +94,7 @@
 			{#if canRun && (run.status === 'queued' || run.status === 'running')}<button type="button" onclick={cancel}>Cancel run</button>{/if}
 		</p>
 		{#if run.status === 'queued'}<p class="muted">Waiting for the benchmark runner.</p>{/if}
+		{#if progress}<p class="progress"><progress value={progress.done} max={progress.total || 1} aria-label="Run progress"></progress> {progress.label}</p>{/if}
 
 		{#if others.length}
 			<label class="baseline"
@@ -166,6 +176,9 @@
 		font-size: 0.8rem;
 		padding: 0.15rem 0.6rem;
 		cursor: pointer;
+	}
+	.progress {
+		font-size: 0.84rem;
 	}
 	.baseline {
 		display: flex;

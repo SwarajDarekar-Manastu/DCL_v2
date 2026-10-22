@@ -10,7 +10,7 @@ name: dcl-v2
 x-stack-env: &stack-env
   DCL_ENV: ${DCL_ENV:-dev}
   DCL_DATABASE_URL: postgresql+psycopg://${DCL_DB_USER}:${DCL_DB_PASSWORD}@postgres:5432/dcl_v2
-  DCL_REDIS_URL: redis://redis:6379/0
+  DCL_REDIS_URL: redis://${DCL_REDIS_PASSWORD:+:}${DCL_REDIS_PASSWORD:-}${DCL_REDIS_PASSWORD:+@}redis:6379/0
   DCL_MINIO_ENDPOINT: http://minio:9000
   DCL_MODELS_URL: http://models:8500
   DCL_OFFICE_URL: http://libreoffice:2003
@@ -49,7 +49,7 @@ services:
       POSTGRES_PASSWORD: ${DCL_DB_PASSWORD:-}
       POSTGRES_DB: dcl_v2
     ports:
-      - "${DCL_BIND_HOST:-127.0.0.1}:${DCL_DB_PORT:-5435}:5432"
+      - "${DCL_DATA_BIND_HOST:-127.0.0.1}:${DCL_DB_PORT:-5435}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -62,13 +62,18 @@ services:
 
   redis:
     image: redis:8.6.7
-    command: ["redis-server", "--appendonly", "yes", "--save", "300", "100"]
+    environment:
+      REDIS_PASSWORD: ${DCL_REDIS_PASSWORD:-}
+    command:
+      - sh
+      - -c
+      - 'exec redis-server --appendonly yes --save 300 100 $${REDIS_PASSWORD:+--requirepass "$$REDIS_PASSWORD"}'
     ports:
-      - "${DCL_BIND_HOST:-127.0.0.1}:6381:6379"
+      - "${DCL_DATA_BIND_HOST:-127.0.0.1}:6381:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", 'redis-cli --no-auth-warning $${REDIS_PASSWORD:+-a "$$REDIS_PASSWORD"} ping | grep -q PONG']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -83,7 +88,7 @@ services:
       MINIO_ROOT_USER: ${DCL_MINIO_ROOT_USER:-}
       MINIO_ROOT_PASSWORD: ${DCL_MINIO_ROOT_PASSWORD:-}
     ports:
-      - "${DCL_BIND_HOST:-127.0.0.1}:9100:9000"
+      - "${DCL_DATA_BIND_HOST:-127.0.0.1}:9100:9000"
       - "${DCL_BIND_HOST:-127.0.0.1}:${DCL_MINIO_CONSOLE_PORT:-9101}:9001"
     volumes:
       - minio-data:/data
@@ -214,6 +219,20 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    restart: unless-stopped
+
+  console:
+    image: dcl-v2-console:local
+    build:
+      context: ../../frontend/console
+      args:
+        VITE_API_BASE_URL: ${DCL_API_BASE_URL:-}
+        VITE_AUTH_MODE: msal
+        VITE_ENTRA_TENANT_ID: ${DCL_TENANT_ID:-}
+        VITE_ENTRA_CLIENT_ID: ${DCL_CONSOLE_SPA_CLIENT_ID:-}
+        VITE_ENTRA_API_SCOPE: ${DCL_CONSOLE_API_SCOPE:-}
+    ports:
+      - "${DCL_BIND_HOST:-127.0.0.1}:8601:80"
     restart: unless-stopped
 
   models:

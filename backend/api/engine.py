@@ -358,6 +358,28 @@ def _external_policy(session) -> Any:
     )
 
 
+def _asset_access(settings) -> tuple[Any, Any]:
+    """(presign, fetch) over MinIO for T3; (None, None) when the stack has no MinIO configured."""
+    from backend.storage.minio import client_from_settings, parse_uri, presign_get
+
+    try:
+        client = client_from_settings(settings)
+    except ConfigError as exc:
+        log.warning("T3 runs without image links: %s", exc)
+        return None, None
+
+    def fetch(uri: str) -> bytes:
+        bucket, key = parse_uri(uri)
+        response = client.get_object(bucket, key)
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+
+    return (lambda uri: presign_get(client, uri)), fetch
+
+
 async def start_engine() -> None:
     """Build the workflow with its process-level clients and launch DBOS (decision H8). Idempotent."""
     async with _ENGINE_LOCK:
@@ -372,6 +394,7 @@ async def start_engine() -> None:
         from backend.llm_engine.local_models import ModelsClient
 
         models = ModelsClient(base_url=str(settings.models_url))
+        presign, fetch_asset = _asset_access(settings)
         deps = EngineDeps(
             gemini=GeminiClient(settings),
             session_factory=_session_factory(),
@@ -381,6 +404,8 @@ async def start_engine() -> None:
             viewer_url=_viewer_url,
             save_trace=_log_trace,
             external_policy=_external_policy,
+            presign=presign,
+            fetch_asset=fetch_asset,
         )
         database_url = settings.stack_database_url().get_secret_value().replace("+psycopg", "")
         runtime = build_runtime(database_url)

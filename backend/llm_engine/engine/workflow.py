@@ -14,6 +14,7 @@ produces a trace record (`answer_traces` columns) handed to `save_trace`.
 
 import asyncio
 import dataclasses
+import html
 import itertools
 import time
 import uuid
@@ -30,6 +31,7 @@ from backend.llm_engine.engine.analysis import Analysis, QueryAnalysis, analyze
 from backend.llm_engine.engine.playbooks import PlannedCall
 from backend.llm_engine.engine.tools import Source, ToolResult
 from backend.llm_engine.engine.tools import external as external_tools
+from backend.llm_engine.engine.tools import visuals as visual_tools
 from backend.llm_engine.engine.tools.code_diagrams import inspect_code_and_diagrams
 from backend.llm_engine.engine.tools.documents import (
     catalog_lookup,
@@ -56,6 +58,8 @@ class EngineDeps:
     external_policy: Callable[[Any], ExternalPolicy] = lambda session: ExternalPolicy(enabled=False)
     viewer_url: Callable[[uuid.UUID, str | None], str | None] = lambda doc_id, anchor: None
     save_trace: Callable[[dict], None] = lambda trace: None
+    presign: Callable[[str], str] | None = None  # MinIO URI → presigned GET (15 min)
+    fetch_asset: Callable[[str], bytes] | None = None  # MinIO URI → bytes (T3 relook)
 
 
 class Emit(Event):
@@ -289,6 +293,19 @@ class AnswerWorkflow(Workflow):
         _step(ctx, trace_id, step_id, "tool", call.reason, False, tool=call.tool)
         started = time.monotonic()
         result = await asyncio.to_thread(self._run_tool, call)
+        if call.tool == visual_tools.NAME and call.args.relook_question and self.deps.fetch_asset:
+            try:
+                result = await visual_tools.relook(
+                    self.deps.gemini,
+                    result,
+                    call.args.relook_question,
+                    fetch=self.deps.fetch_asset,
+                    trace_id=trace_id,
+                )
+            except GeminiError as exc:
+                result = result.model_copy(
+                    update={"warnings": [*result.warnings, f"relook failed: {exc}"[:240]]}
+                )
         _step(
             ctx,
             trace_id,
@@ -313,6 +330,14 @@ class AnswerWorkflow(Workflow):
                 return get_document(session, call.args)
             if call.tool == "catalog_lookup":
                 return catalog_lookup(session, call.args)
+            if call.tool == visual_tools.NAME:
+                return visual_tools.inspect_visuals(
+                    session,
+                    call.args,
+                    embed_query=self.deps.embed_query,
+                    rerank=self.deps.rerank,
+                    presign=self.deps.presign,
+                )
             if call.tool == "inspect_code_and_diagrams":
 
                 def code_search(query, node_types):
@@ -420,6 +445,8 @@ class AnswerWorkflow(Workflow):
         caveats: list[str] | None = None,
         citations: list[Source] | None = None,
     ) -> StopEvent:
+        for embed in photo_strips(results):
+            _emit(ctx, trace_id, embed)
         _tokens(ctx, trace_id, markdown)
         for n, source in enumerate(citations or [], start=1):
             _emit(
@@ -490,6 +517,44 @@ class AnswerWorkflow(Workflow):
         }
         self.deps.save_trace(trace)
         return StopEvent(result=done)
+
+
+IMG_STYLE = "width:160px;height:120px;object-fit:cover"
+
+
+def _photo_cell(visual: dict) -> str:
+    full = html.escape(visual.get("url_web") or visual["url_thumb"])
+    thumb = html.escape(visual.get("url_thumb") or visual["url_web"])
+    alt = html.escape(visual["breadcrumb"][:120])
+    caption = html.escape((visual["title"] or "")[:60])
+    return (
+        f'<figure style="margin:0;width:160px"><a href="{full}" target="_blank">'
+        f'<img src="{thumb}" alt="{alt}" style="{IMG_STYLE}"></a>'
+        f'<figcaption style="font:12px sans-serif">{caption}</figcaption></figure>'
+    )
+
+
+def photo_strips(results: list[ToolResult]) -> list[dict]:
+    """One `photo_strip` embed per T3 result that has image links (self-contained HTML, escaped)."""
+    embeds = []
+    for result in results:
+        if result.tool != visual_tools.NAME or not isinstance(result.result, dict):
+            continue
+        shown = [v for v in result.result.get("visuals", []) if v.get("url_thumb") or v.get("url_web")][:6]
+        if not shown:
+            continue
+        cells = "".join(_photo_cell(v) for v in shown)
+        embeds.append(
+            {
+                "type": "embed",
+                "embed_id": f"photos-{result.call_id}",
+                "kind": "photo_strip",
+                "html": f'<div style="display:flex;gap:8px;flex-wrap:wrap">{cells}</div>',
+                "alt": f"{len(shown)} images: " + "; ".join(v["breadcrumb"][:60] for v in shown),
+                "height": 170,
+            }
+        )
+    return embeds
 
 
 def build_runtime(database_url: str, *, app_name: str = "dcl-answer-engine"):

@@ -183,3 +183,15 @@ describe('listAudit', () => {
 		expect(urls).toEqual(['http://api/audit?entity_type=case&entity_id=doc%3A1&entity_id=flag-1', 'http://api/audit']);
 	});
 });
+
+describe('listFailedTasks', () => {
+	it('asks for the latest 100 unless told otherwise', async () => {
+		const { listFailedTasks } = await import('../src/lib/api_endpoint');
+		const fetchMock = vi.fn(async () => new Response('{"items":[]}'));
+		wire(fetchMock as unknown as typeof fetch);
+		expect(await listFailedTasks()).toEqual({ items: [] });
+		await listFailedTasks(20);
+		const urls = fetchMock.mock.calls.map((call) => (call as unknown[])[0]);
+		expect(urls).toEqual(['http://api/ops/failed-tasks?limit=100', 'http://api/ops/failed-tasks?limit=20']);
+	});
+});

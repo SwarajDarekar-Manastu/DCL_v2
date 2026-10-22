@@ -332,6 +332,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ops/failed-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Failed Tasks */
+        get: operations["failed_tasks_ops_failed_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/review/cases": {
         parameters: {
             query?: never;
@@ -512,7 +529,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Answer */
+        /**
+         * Answer
+         * @description Run the Answer Engine workflow and stream its frames; a failure ends the stream with `error`.
+         */
         post: operations["answer_v1_answer_post"];
         delete?: never;
         options?: never;
@@ -1457,6 +1477,33 @@ export interface components {
             model_value?: string | null;
             /** Printed Label */
             printed_label?: string | null;
+        };
+        /** FailedTask */
+        FailedTask: {
+            /** Args */
+            args: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Error */
+            error: string;
+            /** Kwargs */
+            kwargs: string;
+            /** Queue */
+            queue: string | null;
+            /** Retries */
+            retries: number;
+            /** Task */
+            task: string;
+            /** Task Id */
+            task_id: string;
+        };
+        /** FailedTasks */
+        FailedTasks: {
+            /** Items */
+            items: components["schemas"]["FailedTask"][];
         };
         /**
          * FailureClass
@@ -2586,11 +2633,27 @@ export interface components {
              * @enum {string}
              */
             kind: "unit_telemetry";
+            /**
+             * Note
+             * @description why the channel cannot be used as mapped, when it is mapped
+             * @default
+             */
+            note: string;
             /** Quantity Guess */
             quantity_guess?: string | null;
             /** Raw Unit */
             raw_unit?: string | null;
             sanity?: components["schemas"]["SanityBounds"] | null;
+            /**
+             * Scaling Equation
+             * @description the channel's equation in the folder .cfg
+             */
+            scaling_equation?: string | null;
+            /**
+             * Scaling Source
+             * @description file the scaling equation came from
+             */
+            scaling_source?: string | null;
             /**
              * Sibling Units
              * @default []
@@ -3433,6 +3496,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    failed_tasks_ops_failed_tasks_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FailedTasks"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
