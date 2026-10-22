@@ -28,14 +28,10 @@ describe('buildConfig', () => {
 		);
 	});
 
-	it('allows dev auth only under the Vite dev server', () => {
-		expect(() => buildConfig({ VITE_AUTH_MODE: 'dev', DEV: false }, 'http://x')).toThrow(ConfigError);
-		expect(() => buildConfig({ VITE_AUTH_MODE: 'dev', DEV: true }, 'http://x')).toThrow(
-			new ConfigError('VITE_AUTH_MODE=dev needs DCL_CONSOLE_DEV_TOKEN in the repository .env (dev sign-in)')
+	it('has no dev sign-in mode any more', () => {
+		expect(() => buildConfig({ VITE_AUTH_MODE: 'dev', DEV: true, VITE_DEV_TOKEN: 't'.repeat(40) }, 'http://x')).toThrow(
+			new ConfigError('VITE_AUTH_MODE must be "local" or "msal", got "dev"')
 		);
-		const config = buildConfig({ VITE_AUTH_MODE: 'dev', DEV: true, VITE_DEV_TOKEN: 't'.repeat(40) }, 'http://x');
-		expect(config.auth.mode).toBe('dev');
-		expect(config.auth.devToken).toBe('t'.repeat(40));
 	});
 
 	it('uses local password sign-in unless another mode is asked for', () => {

@@ -8,18 +8,12 @@ first login creates the admin from DCL_BOOTSTRAP_ADMIN_EMAIL / DCL_BOOTSTRAP_ADM
 manage accounts at /auth/users. Entra ID verification (RS256, group → role mapping) stays below for
 the future and is used only for non-HS256 tokens.
 
-Dev-only sign-in (user-approved exception, DECISIONS 2026-10-22): with DCL_ENV=dev and
-DCL_CONSOLE_DEV_AUTH=true, a request whose bearer token equals DCL_CONSOLE_DEV_TOKEN signs in as a
-fixed dev identity with the roles in DCL_CONSOLE_DEV_ROLES. Every use is logged as a warning; the
-flag outside dev is refused (503 here, and at start-up by the settings loader).
-
 Roles: any authenticated user of the tenant is `viewer`; members of `dcl-reviewers` are
 `reviewer`; members of `dcl-admins` are `admin` (admin implies reviewer). Other routers
 protect themselves with `user: Annotated[ConsoleUser, Depends(require_role(ConsoleRole.REVIEWER))]`
 or, for any signed-in user, `user: CurrentUser`.
 """
 
-import hmac
 import logging
 import threading
 import time
@@ -42,8 +36,6 @@ from pydantic import BaseModel, ConfigDict, Field
 log = logging.getLogger(__name__)
 
 ENTRA_AUTHORITY = "https://login.microsoftonline.com"
-DEV_SESSION_S = 8 * 3600  # websocket lifetime of a dev sign-in
-DEV_TOKEN_MIN_LENGTH = 32
 CLOCK_LEEWAY_S = 60
 
 
@@ -107,41 +99,9 @@ def get_auth_config() -> AuthConfig:
 
 
 def auth_config_from(**values: str | None) -> AuthConfig:
-    """A partial configuration is kept, not raised: the dev sign-in must work before Entra exists."""
+    """A partial configuration is kept, not raised: local sign-in works while Entra ID is not registered."""
     missing = tuple(name for name, value in values.items() if not value)
     return AuthConfig(**{name: value or "" for name, value in values.items()}, missing=missing)  # type: ignore[arg-type]
-
-
-@dataclass(frozen=True)
-class DevAuth:
-    token: str
-    roles: list[ConsoleRole]
-
-
-def get_dev_auth() -> DevAuth | None:
-    """The dev sign-in, when enabled and allowed; None otherwise. Misconfiguration answers 503."""
-    from backend.config import Environment, get_settings
-
-    s = get_settings()
-    if not getattr(s, "console_dev_auth", False):
-        return None
-    if s.env != Environment.DEV:
-        log.critical("DCL_CONSOLE_DEV_AUTH is set with DCL_ENV=%s; dev sign-in refused", s.env)
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE, "dev sign-in is only allowed with DCL_ENV=dev"
-        )
-    secret = getattr(s, "console_dev_token", None)
-    token = secret.get_secret_value() if secret is not None else ""
-    if len(token) < DEV_TOKEN_MIN_LENGTH:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            f"DCL_CONSOLE_DEV_TOKEN must be at least {DEV_TOKEN_MIN_LENGTH} characters",
-        )
-    try:
-        roles = [ConsoleRole(r.strip()) for r in getattr(s, "console_dev_roles", None) or ["viewer"]]
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"DCL_CONSOLE_DEV_ROLES: {exc}") from exc
-    return DevAuth(token=token, roles=roles)
 
 
 @lru_cache(maxsize=4)
@@ -541,17 +501,9 @@ def ensure_bootstrap_admin(local: LocalAuth) -> None:
 
 
 def authenticate(
-    token: str,
-    config: AuthConfig,
-    resolve_key: KeyResolver,
-    dev: DevAuth | None,
-    local: LocalAuth | None = None,
+    token: str, config: AuthConfig, resolve_key: KeyResolver, local: LocalAuth | None = None
 ) -> tuple[ConsoleUser, int]:
-    """The dev identity for the dev token (when enabled), a local account for HS256, else Entra ID."""
-    if dev is not None and hmac.compare_digest(token.encode(), dev.token.encode()):
-        log.warning("DEV SIGN-IN: Console request accepted as the dev identity (DCL_CONSOLE_DEV_AUTH=true)")
-        user = ConsoleUser(oid="dev-sign-in", name="Dev sign-in", email="dev@localhost", roles=dev.roles)
-        return user, int(time.time()) + DEV_SESSION_S
+    """A local account for an HS256 token, otherwise an Entra ID token (future scope)."""
     if _is_local_token(token):
         if local is None:
             raise AuthError(
@@ -568,7 +520,6 @@ def current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     config: Annotated[AuthConfig, Depends(get_auth_config)],
     resolve_key: Annotated[KeyResolver, Depends(get_key_resolver)],
-    dev: Annotated[DevAuth | None, Depends(get_dev_auth)],
     local: Annotated[LocalAuth | None, Depends(get_local_auth)],
 ) -> ConsoleUser:
     if credentials is None:
@@ -576,7 +527,7 @@ def current_user(
             status.HTTP_401_UNAUTHORIZED, "missing bearer token", {"WWW-Authenticate": "Bearer"}
         )
     try:
-        user, _ = authenticate(credentials.credentials, config, resolve_key, dev, local)
+        user, _ = authenticate(credentials.credentials, config, resolve_key, local)
     except AuthError as exc:
         headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
         raise HTTPException(exc.status_code, exc.detail, headers) from exc

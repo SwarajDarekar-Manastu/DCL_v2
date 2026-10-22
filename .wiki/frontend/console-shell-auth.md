@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `frontend/console-shell-auth` |
-| Status | in-progress (local accounts built and tested; end-to-end login waits for S1's `users` model and migration 0010; then the dev-token sign-in is removed) |
+| Status | in-progress (local accounts live on the stack; Entra ID is future scope) |
 | Owner session | S3 |
 | Spec | docs/architecture/08_frontend_openwebui.md §2.3, §4.1, §4.3, §7 |
 | Last updated | 2026-10-22 |
@@ -39,14 +39,14 @@ Provides:
 - Console: `api_endpoint.ts` (`configureApi` with `onUnauthorized`, `login`, `getMe`, `listAccounts`/`createAccount`/`updateAccount`, `openLiveChannel`, `ApiError`), `session` (`signInWithPassword`, `signOut`, `end`), `hasRole`, `RoleGate`; `src/lib/auth/local.ts` (token in memory + `sessionStorage["dcl-session"]`, expiry checked before each call; a 401 returns to the sign-in form with a notice); `LoginForm.svelte`; Users page `/settings/users` (`UsersAdmin.svelte`, admin)
 
 Consumes:
-- `backend.config.get_settings()` attributes `auth_secret`, `auth_token_ttl_hours`, `bootstrap_admin_email`, `bootstrap_admin_password`, `tenant_id`, `console_api_audience`, `console_group_reviewers`, `console_group_admins`, `console_allowed_origins`, `redis_url`, `env`, and `console_dev_auth`, `console_dev_token`, `console_dev_roles` (S4; read with a safe default until S4's loader has them)
+- `backend.config.get_settings()` attributes `auth_secret`, `auth_token_ttl_hours`, `bootstrap_admin_email`, `bootstrap_admin_password`, `tenant_id`, `console_api_audience`, `console_group_reviewers`, `console_group_admins`, `console_allowed_origins`, `redis_url`, `env`
 - Entra ID: one SPA app registration (redirect URI = Console origin) and one API registration exposing `access_as_user`, `accessTokenAcceptedVersion = 2`, groups claim limited to groups assigned to the application
 
 Role rule: any authenticated user of the tenant is `viewer`; `dcl-reviewers` adds `reviewer`; `dcl-admins` adds `reviewer` and `admin`. Roles always come from the server (`/auth/me`), never from the client token. Tokens with group overage are refused with 403. Nav visibility: Review and Audit need reviewer, Settings needs admin, the rest viewer.
 
 After a redirect sign-in MSAL returns to the page that asked for it (`navigateToLoginRequestUrl`, `redirectStartPage`), so a citation opened while signed out lands on that citation.
 
-Dev-only sign-in (user-approved exception, DECISIONS 2026-10-22): the backend accepts `Authorization: Bearer <DCL_CONSOLE_DEV_TOKEN>` as a fixed dev identity (`dev-sign-in`, roles from `DCL_CONSOLE_DEV_ROLES`) only when `DCL_ENV=dev` and `DCL_CONSOLE_DEV_AUTH=true`; constant-time comparison; every use logged as a warning; the flag outside dev answers 503 with a critical log (S4's loader also refuses to start); a token shorter than 32 characters or an unknown role answers 503. The Entra path is unchanged and still answers 503 naming missing settings. `VITE_AUTH_MODE=dev` works only under the Vite dev server: `vite.config.ts` defines `VITE_DEV_TOKEN` from the repository `.env` when serving in development only, so builds never contain it (checked by grepping the build). The user and roles come from `GET /auth/me`; there is no client-side fake user. The websocket accepts the dev token the same way.
+The dev-token sign-in (DECISIONS 2026-10-22) was removed on 2026-10-22 once local login was proven on the stack; the Vite dev server is only a dev server (no token, `VITE_AUTH_MODE=local`).
 
 ## Workspace (files to touch when modifying this feature)
 
@@ -60,7 +60,6 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `frontend/console/src/lib/components/shell/`
 - `frontend/console/src/routes/{+layout.svelte,+layout.ts,+page.svelte}`, `frontend/console/src/routes/settings/users/`, `frontend/console/src/lib/components/settings/{UsersAdmin.svelte,SectionMenu.svelte}`
 - `frontend/console/{Dockerfile,nginx.conf,.dockerignore}`
-- `frontend/console/vite.config.ts` (dev sign-in token, dev server only)
 - `backend/api/auth.py`
 - `backend/api/ws.py`
 - `frontend/console/tests/`
@@ -73,10 +72,9 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] Websocket refuses unauthenticated sockets (4401) and delivers only subscribed topics
 - [x] Only `api_endpoint.ts` fetches or opens a websocket (grep)
 - [x] `auth.py` runs against the real settings object
-- [x] Dev-only sign-in: guards tested (env, flag, token length, roles, wrong token), end to end with the real API app and the Vite dev server, no token in builds
 - [x] Local accounts: login, same 401 for wrong/unknown/inactive, 429 on the 6th failure in a minute, tampered/expired tokens refused, deactivation and role changes apply to existing tokens, admin-only user routes, last active admin kept, bootstrap only while empty (`test_local_auth.py`)
 - [x] Console local sign-in: form, token survives reload, sign out clears it, 401 returns to the form; Users page creates, changes roles, deactivates, resets passwords (vitest)
-- [ ] Local login end to end against the stack (needs S1's `users` model and migration 0010); then the dev-token sign-in is removed
+- [x] Local login end to end against the stack (2026-10-22): first login bootstrapped the admin; a reviewer created on the Users page signed in, opened the real queue (176 HARD / 84 SOFT) and a halted case; live channel on; reviewer token got 403 on /auth/users and 401 right after deactivation; audit rows written. Dev-token sign-in removed
 - [ ] A login against the real tenant is demonstrated (Entra ID, future scope)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
@@ -93,6 +91,7 @@ Known: `npm audit` reports a low-severity advisory in `cookie` (pulled in by Sve
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-22 | S3 | Local login proven on the stack; dev-token sign-in removed (auth.py, ws.py, vite.config.ts, config.py and .env.example names) |
 | 2026-10-22 | S3 | Local password accounts (user decision): login, users admin, rate limit, bootstrap admin, Console sign-in form and Users page; MSAL dormant behind VITE_AUTH_MODE=msal |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | Redesign merged (Geist + shadcn-svelte, user decision): NavBar replaced by Sidebar + TopBar, theme toggle, page frame; reviewed by S3 |

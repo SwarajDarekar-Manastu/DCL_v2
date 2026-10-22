@@ -37,26 +37,11 @@ describe('startSession', () => {
 	});
 });
 
-describe('dev sign-in', () => {
-	it('sends the dev token and takes the user from the server', async () => {
-		const dev = buildConfig({ VITE_AUTH_MODE: 'dev', DEV: true, VITE_DEV_TOKEN: 'd'.repeat(40), VITE_API_BASE_URL: 'http://api' }, 'http://console');
-		const user = { oid: 'dev-sign-in', name: 'Dev sign-in', email: 'dev@localhost', roles: ['viewer', 'reviewer'] };
-		const fetchMock = vi.fn(async () => new Response(JSON.stringify(user)));
-		vi.stubGlobal('fetch', fetchMock);
-		await startSession(dev);
-		expect(session.status).toBe('signed_in');
-		expect(session.user).toEqual(user);
-		const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-		expect(init.headers).toMatchObject({ Authorization: `Bearer ${'d'.repeat(40)}` });
-		vi.unstubAllGlobals();
-	});
-});
-
 describe('startSession with a broken build configuration', () => {
 	it('shows the configuration error instead of throwing', async () => {
 		// Hermetic: every value config.ts reads is stubbed, whatever a local .env contains,
 		// and fresh modules drop the cached config.
-		for (const name of ['VITE_API_BASE_URL', 'VITE_ENTRA_TENANT_ID', 'VITE_ENTRA_CLIENT_ID', 'VITE_ENTRA_API_SCOPE', 'VITE_DEV_TOKEN']) {
+		for (const name of ['VITE_API_BASE_URL', 'VITE_ENTRA_TENANT_ID', 'VITE_ENTRA_CLIENT_ID', 'VITE_ENTRA_API_SCOPE']) {
 			vi.stubEnv(name, '');
 		}
 		vi.stubEnv('VITE_AUTH_MODE', 'msal');

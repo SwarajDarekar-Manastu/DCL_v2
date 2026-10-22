@@ -63,7 +63,7 @@ describe('UsersAdmin', () => {
 		vi.mocked(api.createAccount).mockResolvedValue({ ...asha, user_id: 'u-new', email: 'new@manastuspace.com' });
 		render(UsersAdmin, { me: 'admin@manastuspace.com' });
 		const form = await screen.findByRole('form', { name: 'New account' });
-		await fireEvent.input(within(form).getByLabelText('Email'), { target: { value: ' new@manastuspace.com ' } });
+		await fireEvent.input(within(form).getByLabelText('Email'), { target: { value: ' New@ManastuSpace.com ' } });
 		await fireEvent.input(within(form).getByLabelText('Name'), { target: { value: 'New Engineer' } });
 		await fireEvent.input(within(form).getByLabelText(/Initial password/), { target: { value: 'a long password' } });
 		await fireEvent.click(within(form).getByLabelText('reviewer'));

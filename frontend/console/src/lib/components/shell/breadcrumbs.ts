@@ -30,7 +30,7 @@ export function breadcrumbs(pathname: string): Crumb[] {
 	if (parts.length === 1) return [{ label: root.label }];
 
 	if (section === 'review' && second === 'rules') return [root, { label: 'Rules' }];
-	if (section === 'settings') return [root, { label: findSection(second)?.title ?? second }];
+	if (section === 'settings') return [root, { label: second === 'users' ? 'Users' : (findSection(second)?.title ?? second) }];
 	if (section === 'benchmark') {
 		if (second === 'suites') return [root, { label: 'Suites' }, { label: third ?? '' }];
 		if (second === 'cases') return [root, { label: 'Cases' }, { label: third === 'new' ? 'New case' : (third ?? '') }];
