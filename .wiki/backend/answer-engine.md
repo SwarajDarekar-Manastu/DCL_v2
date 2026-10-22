@@ -29,7 +29,7 @@ Code:
 Tests and fixtures:
 - `backend/tests/integration/llm_engine/engine/`
 - `backend/tests/unit/llm_engine/engine/`
-- `backend/tests/integration/llm_engine/engine/` (DCL_TEST_DATABASE_URL: tools on rows, `test_workflow_dbos.py` under DBOSRuntime)
+- `backend/tests/integration/llm_engine/engine/` (DCL_TEST_DATABASE_URL: tools on rows, `test_workflow_dbos.py` under DBOSRuntime, `test_workflow_restart.py` + `_restart_worker.py` kill-and-resume in subprocesses)
 - `backend/tests/benchmark/suites/`
 
 ## Interfaces
@@ -42,6 +42,7 @@ Provides:
 - `check_numeric_claims(claims, tool_outputs) -> list[NumericMismatch]`: value and unit strings of a claim must appear in a tool result (`engine/verifier.py`)
 - Tools (each `(session?, args) -> ToolResult{tool, call_id, result, provenance[Source], warnings, display}`; `display` is what synthesis quotes and the numeric verifier checks): `search_documents` (T1: alias expansion from `entity_aliases`, widening doc_kinds → test plan → parent scope), `get_document` (U1: ordered parents, page range, section, 40k-char budget with `start_ordinal`), `catalog_lookup` (U2: documents, halted with case keys, standards with revisions), `inspect_code_and_diagrams` (T4: qualname lookup, callers/callees, diagram neighbors/upstream/downstream/path over `documents.catalog {nodes[{id,tag,label,type}], edges[{source,target,medium,label,directed}]}`), `physics_calculator` (T5: unit_convert, mass_flow_from_thrust, isentropic_sizing, cea_performance with `config/propellants.yaml`, scale_thruster); planned: T2 telemetry (Route C tables), T3 visuals, T6 external
 - Engine lifecycle for `backend/main.py`: `start_engine()` (idempotent; builds Gemini, models and session clients and launches DBOS in the DCL database, schema `dbos`) and `stop_engine()`; the endpoint starts it on first use if the lifespan did not
+- Durability: a run is a DBOS workflow; after a crash the next `start_engine()` recovers pending runs. Completed steps are replayed from the journal; the step that was running is executed again, so tools must tolerate a rerun (they are read-only). The client's SSE connection does not survive; the finished run's trace is saved and readable by trace id
 - Frames: `Emit{seq, payload}` stream events; under DBOS each stream write is its own task, so frames can arrive out of order and consumers read them through `ordered(handler.stream_events())`
 - Trace record handed to `EngineDeps.save_trace`: `trace_id, query_analysis, tool_calls, retrieved, claims, citations, verifier_result, answer_markdown, mode, latency_ms` (logged until S1's `answer_traces` table exists)
 - `Provenance` (measured, internal_report, standard, vendor_claim, literature, calculation, web) is the one enum, also used by the SSE citation event
@@ -79,7 +80,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] Fact question streams steps, tokens, citations and done; chit-chat without tools; clarification mode; insufficient-evidence template; extractive fallback on Gemini outage (`test_workflow.py`, 6 tests)
 - [x] Workflow runs under DBOSRuntime against PostgreSQL with frame order restored (`test_workflow_dbos.py`)
 - [ ] External queries pass the sanitizer and are logged in the trace (sanitizer built and tested on a leak fixture; trace logging with M8)
-- [ ] Engine restart mid-answer resumes the run
+- [x] Engine restart mid-answer resumes the run (`test_workflow_restart.py`: the worker process dies inside the tool step; a new process recovers the run by id; query analysis is replayed from the journal, not asked again; the tool reruns; the trace is saved by the new process)
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log
@@ -87,6 +88,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | Restart-resume test: killed engine resumes the answer in a new process (completed steps replayed, interrupted step rerun) |
 | 2026-10-22 | S2 | Workflow increment: playbooks, `AnswerWorkflow` (DBOS), `/v1/answer` streaming, frame ordering; 6 workflow + 4 planner + 4 API tests, 1 DBOS test |
 | 2026-10-22 | S2 | Query analysis, synthesis contract and verifier (numeric + entailment, repair pass); 8 tests |
 | 2026-10-22 | S2 | Tools increment 1: T1, U1, U2, T4, T5 with `ToolResult`/`Source`; 10 unit + 7 DB tests |

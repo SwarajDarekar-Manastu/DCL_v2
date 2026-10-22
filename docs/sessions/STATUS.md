@@ -531,3 +531,9 @@ Merged / ready: `open_threshold: 2.5` on the valve channel of the three proposed
 Blocked on: S1's ab00628 reaching main
 Needs from others: Lead — merge order S1 ab00628, then this branch
 Next: idle until indexed documents and S2's engine mode exist
+
+## 2026-10-22 16:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: restart-resume test (`backend/tests/integration/llm_engine/engine/test_workflow_restart.py` + `_restart_worker.py`): an engine process killed inside the tool step is recovered by a new process; query analysis is replayed from the DBOS journal (asked once), the tool reruns, the run ends SUCCESS with the same trace id and the trace is saved. Engine map rubric item checked; durability note on the map.
+Blocked on: nothing
+Needs from others: S4's 07965fd (GEMINI_MODEL / GEMINI_LITE_MODEL) on main, then I switch vision, analysis, synthesis, enrichment to the settings
+Next: T6 external_search (grounding, sanitized query only, external_queries in the trace), T2 when S1's telemetry tables land, T3, Skills
