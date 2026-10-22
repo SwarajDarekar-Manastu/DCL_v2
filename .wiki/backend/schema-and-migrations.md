@@ -24,6 +24,7 @@ Code:
 - `backend/postgres/pipeline_config.py` settings layer: `KEYS`/`FAMILIES` registry (file 05 key list; `gate.*` validated through `GateConfig`, `telemetry.*` through `NormalizeConfig`, `sanity_ranges` through Route C's parser), `validate_changes`, `current_entries`, `history`, `apply_changes` (append-only versions + `audit_events` config rows, atomic batch, `expected_version` → `VersionConflict`), `rollback_changes`
 - `backend/postgres/config_impact.py` (`preview`: held items to download, landed files entering/leaving `processing.scope`, parked documents per route, landed files a new gate would reject; `apply_effects`: download-scope release/hold, dispatch needed; no cost estimate until an `llm_calls` ledger and prices exist)
 - `backend/api/settings.py` (admin only: `GET /settings?prefix=`, `GET /settings/{key}/history`, `POST /settings/preview`, `PUT /settings`, `POST /settings/rollback`; 422 `{errors: {key: reason}}`, 409 stale version; starts `dcl.process.dispatch` / `dcl.sync.enqueue_downloads` after a commit)
+- `backend/postgres/models/users.py` (`User`: local password RBAC, migration `0010_users.py`; `roles` text[] CHECK ⊆ `UserRole`, lower-case unique email); the first-admin bootstrap lives in S3's `backend/api/auth.py`; `AuditEntityType.USER` for account changes
 - `backend/postgres/session.py` (`engine_from_settings`, `session_factory`, `normalize_url`, FastAPI dependency `get_session`)
 - `backend/postgres/views.sql` (planned, M2–M3)
 
@@ -89,6 +90,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | Migrations 0005 (rules, review_flags with location-level fingerprint uniqueness) and 0006 (benchmark tables; run statuses chosen by S1) |
 | 2026-10-22 | S1 | Migration 0004: BM25 indexes from S2's verified pg_search 0.26.2 DDL |
 | 2026-10-22 | S1 | `get_session` dependency; `sanity_ranges` key seeded from config/sanity_ranges.yaml |
+| 2026-10-22 | S1 | Migration 0010 `users` + `User`, `UserRole`, `roles_check()`; `audit_events.entity_type` gains `user`; `backend/tests/schema/test_users.py` |
 | 2026-10-22 | S1 | Settings API for S3 (file 08 §3.2): registry, validation, history, atomic batches, rollback, audit, previews and apply semantics; 15 tests (`backend/tests/schema/test_settings_changes.py`, `backend/tests/unit/api/test_settings_route.py`) |
 | 2026-10-22 | S1 | Migration 0003: M2 document tables, M4 entity/fact tables, audit_events (Lead decision); HNSW indexes; pgvector dep |
 

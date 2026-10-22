@@ -1,7 +1,7 @@
 """Console users for local password RBAC (DECISIONS 2026-10-22; Entra ID is future scope).
 
-S1 owns the table and the first-admin bootstrap (``backend/postgres/bootstrap.py``); S3 owns
-``backend/api/auth.py`` (login, JWT, user management) on top of it. ``password_hash`` is an argon2id
+S1 owns the table; S3 owns ``backend/api/auth.py`` (login, JWT, user management, first-admin
+bootstrap) on top of it. ``password_hash`` is an argon2id
 encoded string, never a plain password. ``email`` is stored lower-case (CHECK), so uniqueness is
 case-insensitive.
 """

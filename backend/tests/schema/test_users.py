@@ -1,12 +1,10 @@
-"""users (migration 0010): role CHECK per array element, lower-case unique email, admin bootstrap."""
+"""users (migration 0010): role CHECK per array element, lower-case unique email."""
 
 import pytest
-from argon2 import PasswordHasher
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.postgres.bootstrap import bootstrap_admin
 from backend.postgres.models import User
 
 
@@ -44,23 +42,3 @@ def test_email_is_lower_case_and_unique(session):
     session.add(_user())
     with pytest.raises(IntegrityError, match="uq_users_email"):
         session.commit()
-
-
-def test_bootstrap_creates_one_admin_once(session):
-    admin = bootstrap_admin(session, " Admin@Manastu.Space ", "correct horse battery")
-    session.commit()
-    assert (admin.email, admin.roles, admin.is_active) == (
-        "admin@manastu.space",
-        ["viewer", "reviewer", "admin"],
-        True,
-    )
-    assert admin.password_hash.startswith("$argon2id$")
-    assert PasswordHasher().verify(admin.password_hash, "correct horse battery")
-    assert bootstrap_admin(session, "other@manastu.space", "another long password") is None
-    assert session.scalars(select(User.email)).all() == ["admin@manastu.space"]
-
-
-def test_bootstrap_without_settings_or_with_a_short_password(session):
-    assert bootstrap_admin(session, None, None) is None
-    with pytest.raises(ValueError, match="at least 12"):
-        bootstrap_admin(session, "a@b.c", "short")

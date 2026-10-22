@@ -391,6 +391,7 @@ class AuditEntityType(StrEnum):
     CONFIG = "config"
     BENCHMARK_CASE = "benchmark_case"
     DOCUMENT = "document"
+    USER = "user"  # account changes (local password RBAC, migration 0010)
 
 
 # ---------- benchmarks (file 05 §4.7, file 08 §5) ----------
