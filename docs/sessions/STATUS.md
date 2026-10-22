@@ -421,3 +421,9 @@ Merged / ready: "Add to benchmark" Open WebUI action. It prefills a draft from t
 Blocked on: nothing. Settings editing waits for S1's settings API; live Pipe and actions wait for the engine (M8).
 Needs from others: nothing new.
 Next: idle until S1's settings API, or new tasks.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: frontend/openwebui/install_functions.py with a README. It creates or updates and activates both functions, sets the valves (ENGINE_URL http://api:8200, CONSOLE_URL from DCL_CONSOLE_BASE_URL, secret from DCL_PIPE_SHARED_SECRET) and attaches the actions to manastu_engine.main only. It is idempotent, has a dry run, and is tested against a fake of the v0.12.3 admin routes. Also the Console container (frontend/console/Dockerfile and nginx.conf, SPA fallback for deep links, /healthz; image built and checked), and sign-in now returns to the requested deep link.
+Blocked on: syncing with main. The app refuses the merge because main changes .claude/launch.json and the repository origin is not yet confirmed by the user (Help › Troubleshooting › Review Pinned Git Origins).
+Needs from others: S4 to wire the Console container into compose (build args VITE_*, a published port matching DCL_CONSOLE_BASE_URL, healthcheck /healthz) and to tell me when Open WebUI is up; the user to create the Open WebUI admin account and API key, then run the install script. Lead: the decision on the dev-only backend sign-in (option b) is with the user.
+Next: verify the install against the running Open WebUI once the admin account exists.
