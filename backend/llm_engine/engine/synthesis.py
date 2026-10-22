@@ -19,9 +19,9 @@ from backend.config import ThinkingLevel
 from backend.llm_engine.engine.tools import Source, ToolResult
 from backend.llm_engine.engine.verifier import check_numeric_claim
 from backend.llm_engine.gemini_types import CallContext, Message
+from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
 
-MODEL = "gemini-3.8-flash"
 SYNTHESIS_PROMPT = "synthesis.v1"
 VERIFY_PROMPT = "verify.v1"
 EVIDENCE_CHARS = 9000
@@ -144,7 +144,7 @@ async def _synthesize(
             f"\n\nThe verifier rejected these claims of your previous answer; fix or remove them:\n{notes}"
         )
     result = await client.generate(
-        model=MODEL,
+        model=model_id(),
         messages=[Message.system(prompt.system), Message.user(user)],
         context=CallContext(purpose="engine.synthesis", prompt_version=SYNTHESIS_PROMPT, trace_id=trace_id),
         schema=SynthesisOutput,
@@ -165,7 +165,7 @@ async def verify(client, claims: list[Claim], items: list[Evidence], trace_id: s
         blocks.append(f"Claim {i}: {claim.text}\nEvidence:\n<<<\n{cited}\n>>>")
     prompt = load_prompt("engine", VERIFY_PROMPT)
     result = await client.generate(
-        model=MODEL,
+        model=model_id(),
         messages=[
             Message.system(prompt.system),
             Message.user(prompt.render_user(claims="\n\n".join(blocks))),

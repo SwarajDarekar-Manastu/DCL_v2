@@ -37,6 +37,7 @@ from backend.llm_engine.engine.tools.documents import (
 from backend.llm_engine.engine.tools.physics import PhysicsArgs, physics_calculator
 from backend.llm_engine.engine.tools.search import SearchDocumentsArgs, search_documents
 from backend.llm_engine.gemini_types import CallContext, GeminiError, Message
+from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
 
 TOKEN_CHUNK = 160
@@ -170,7 +171,7 @@ class AnswerWorkflow(Workflow):
     async def _chitchat(self, ctx, ev, analysis: Analysis, started: float) -> StopEvent:
         prompt = load_prompt("engine", "chitchat.v1")
         result = await self.deps.gemini.generate(
-            model=synthesis.MODEL,
+            model=model_id(),
             messages=[
                 Message.system(prompt.system),
                 Message.user(prompt.render_user(question=ev.question, language=analysis.raw.language)),
@@ -215,7 +216,7 @@ class AnswerWorkflow(Workflow):
         prompt = load_prompt("engine", "physics_args.v1")
         try:
             result = await self.deps.gemini.generate(
-                model=synthesis.MODEL,
+                model=model_id(),
                 messages=[
                     Message.system(prompt.system),
                     Message.user(prompt.render_user(question=request["question"])),
