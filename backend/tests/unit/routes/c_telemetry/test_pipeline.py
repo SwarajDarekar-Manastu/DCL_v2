@@ -321,3 +321,21 @@ def test_a_rule_resumes_the_halted_run_from_its_raw_parquet(session, minio):
     (run,) = session.scalars(select(TelemetryRun)).all()
     assert run.n_rows == 400 and run.normalized_parquet_uri is not None
     assert halted_documents_for_rule(session, rule_id) == []
+
+
+def test_a_clean_run_is_parked_when_the_models_role_is_unreachable(session, minio):
+    from backend.llm_engine.local_models import ModelServerUnavailable
+
+    def unreachable(*_):
+        raise ModelServerUnavailable("models role unreachable on /tokenize/count: ConnectError")
+
+    _seed(session, minio, {"TP12_T01.dat": labjack_bytes(rows=200)[0]})
+    pipeline_config.set_value(session, "routes.C.enabled", True, "test")
+    _all_mapped_rule(session)
+    session.commit()
+    (release,) = dispatch(session, minio, section_file_sets=()).to_process
+    outcome = process_document(session, minio, release.doc_id, indexer=unreachable)
+    session.commit()
+    document = session.get(Document, release.doc_id)
+    assert (outcome.status, document.status) == ("WAITING_FOR_ROUTE", "WAITING_FOR_ROUTE")
+    assert document.metadata_sources[PROCESSED_MARK]["uri"].endswith("/C/v1/processed.json")

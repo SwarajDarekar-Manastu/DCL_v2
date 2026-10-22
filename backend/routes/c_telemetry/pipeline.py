@@ -20,6 +20,7 @@ from backend.dispatcher.folder_context import FolderContext
 from backend.dispatcher.routing import PROCESSED_MARK
 from backend.dispatcher.type_resolution import HEAD_BYTES
 from backend.indexing.commit import Indexer, commit_document
+from backend.llm_engine.local_models import ModelServerUnavailable
 from backend.postgres import pipeline_config
 from backend.postgres.enums import DocumentSourceRole, DocumentStatus, DriveItemStatus, RuleOrigin, RuleType
 from backend.postgres.models import Blob, Document, DocumentSource, DriveFolder, DriveItem, Rule, SyncRoot
@@ -185,8 +186,13 @@ def process_document(
     )
     _apply_fields(document, processed)
     result: GateResult = gate(session, cir, document, processed, stale=_route_c_flag)
+    plan = None
     if not result.halted and indexer is not None:
-        plan = indexer(session, result.document, document.doc_id, cloud_allowed)
+        try:
+            plan = indexer(session, result.document, document.doc_id, cloud_allowed)
+        except ModelServerUnavailable:
+            plan = None  # models role unreachable: park the clean run (Lead 2026-10-22); a re-run commits it
+    if plan is not None:
         committed = commit_document(session, document, result.document, plan, PIPELINE_VERSION)
         run = processed.telemetry_runs[0]
         return RouteCOutcome(doc_id, committed.status, run.n_rows, committed.channels, 0, result.soft)
@@ -196,7 +202,7 @@ def process_document(
             processed.model_dump_json().encode(),
             "application/json",
         )
-        document.status = DocumentStatus.WAITING_FOR_ROUTE  # the commit path is Route C step 2
+        document.status = DocumentStatus.WAITING_FOR_ROUTE  # parked until an indexer is available
         document.staged_payload_uri = None
         document.metadata_sources = {
             **(document.metadata_sources or {}),
