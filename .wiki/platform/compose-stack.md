@@ -81,6 +81,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | Console build uses local password sign-in (`VITE_AUTH_MODE=local`); login form verified on 8601 from main 4924253 |
 | 2026-10-22 | S4 | DuckDB httpfs baked into the backend image (`~/.duckdb` of user `app`, +26 MB); `LOAD httpfs` verified in a `--network none` container, the pre-change image fails the same test |
 | 2026-10-22 | S4 | RustFS step 3: M6-scale load test (`backend/devops/ci/object_store_load.py`), 20,800 objects, 0 errors on RustFS and MinIO, RustFS writes about 2× slower at p50, reads equal; step 2 lifecycle watch seeded (`lifecycle_watch.py`, container `dcl-s4-rustfs-watch`), due 2026-10-24 00:00Z |
 | 2026-10-22 | S4 | RustFS adoption step 1: `minio-init` sets the app policy with `policy_set` (RustFS answers `attach_policy` with AEAD id 2); full init twice + policy scope verified on RustFS 1.0.3 and MinIO |
