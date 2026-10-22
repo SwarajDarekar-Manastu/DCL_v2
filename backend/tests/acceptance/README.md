@@ -12,6 +12,8 @@ verification command; `M<n>.md` maps every criterion to one of the two.
   DCL_ACCEPTANCE=1 DCL_DATABASE_URL=<stack db> uv run pytest backend/tests/acceptance
   ```
 
-  The session sets `default_transaction_read_only`; a check can never write.
+  The session sets `default_transaction_read_only`; a check can never write. Checks that read
+  MinIO (M2 Parquet) take `DCL_MINIO_ENDPOINT`, `DCL_MINIO_ACCESS_KEY`, `DCL_MINIO_SECRET_KEY` and
+  only GET; without them those checks are skipped.
 - `test_m<n>_checks_on_seeded_db.py`: proves each check passes on a good state and fails on a
   bad one, on a disposable database (`DCL_TEST_DATABASE_URL`, like the schema tests).
