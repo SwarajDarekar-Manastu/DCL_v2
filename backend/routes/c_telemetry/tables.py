@@ -63,11 +63,12 @@ def is_number(value: Any) -> bool:
 def header_unit(header: str) -> str | None:
     """The unit a header states in its last brackets, when pint reads it (``Pressure (Bar) [Gauge]``)."""
     for candidate in reversed(HEADER_UNIT.findall(header)):
-        try:
-            parse_unit(candidate)
-        except UnitError:
-            continue
-        return candidate
+        for spelling in dict.fromkeys((candidate, candidate.lower())):
+            try:
+                parse_unit(spelling)
+            except UnitError:
+                continue
+            return spelling
     return None
 
 
@@ -208,3 +209,63 @@ def unit_flags(table: Table, extra_dimensionless: Sequence[str] = ()) -> list[Fl
             )
         )
     return flags
+
+
+def table_document(
+    blob_sha256: str,
+    name: str,
+    context,
+    tables: Sequence[Table],
+    flags: Sequence[Flag],
+    doc_kind,
+    cir_put,
+    parser_version: int,
+    catalog: dict[str, Any] | None = None,
+):
+    """A Route C document made of tables (CSV below the series threshold, workbook islands)."""
+    import json
+    from pathlib import PurePosixPath
+
+    from backend.dispatcher.contract import DocumentFields, ProcessedDocument
+    from backend.postgres.enums import Route
+
+    prefix = f"{blob_sha256}/{Route.C}/v{parser_version}"
+    breadcrumb = " › ".join(context.breadcrumb)
+    nodes: list[ProcessedNode] = []
+    for i, table in enumerate(tables):
+        nodes += table_nodes(table, f"t{i + 1}", len(nodes), breadcrumb)
+    cir_put(
+        f"{prefix}/tables.json",
+        json.dumps(
+            [
+                {
+                    "sheet": t.sheet,
+                    "range": t.cell_range,
+                    "caption": t.caption,
+                    "hidden": t.hidden,
+                    "rows": [[cell_text(v) for v in row] for row in t.rows],
+                }  # fmt: skip
+                for t in tables
+            ],
+            indent=1,
+        ).encode(),
+    )
+    return ProcessedDocument(
+        blob_sha256=blob_sha256,
+        route=Route.C,
+        parser_version=parser_version,
+        cir_uri=f"s3://dcl-cir/{prefix}/",
+        document=DocumentFields(
+            title=PurePosixPath(name).stem,
+            doc_kind=doc_kind,
+            source_origin=context.source_origin,
+            trust_tier=context.trust_tier,
+            test_plan_id=context.test_plan_id,
+            test_run_id=context.test_run_id,
+            hardware_item=context.hardware_item,
+            unit_count=len({t.sheet for t in tables if t.sheet}) or len(tables),
+            catalog=catalog,
+        ),
+        nodes=nodes,
+        flags=list(flags),
+    )

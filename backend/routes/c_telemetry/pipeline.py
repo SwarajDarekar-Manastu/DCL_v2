@@ -10,25 +10,51 @@ import json
 import tempfile
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from minio import Minio
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.dispatcher.adapters import adapter_for
+from backend.dispatcher.contract import (
+    ConflictEvidence,
+    ConflictSide,
+    Flag,
+    FlagAnchor,
+    ProcessedDocument,
+    SiblingUnit,
+)
 from backend.dispatcher.folder_context import FolderContext
 from backend.dispatcher.routing import PROCESSED_MARK
 from backend.dispatcher.type_resolution import HEAD_BYTES
 from backend.indexing.commit import Indexer, commit_document
 from backend.llm_engine.local_models import ModelServerUnavailable
 from backend.postgres import pipeline_config
-from backend.postgres.enums import DocumentSourceRole, DocumentStatus, DriveItemStatus, RuleOrigin, RuleType
+from backend.postgres.enums import (
+    DocKind,
+    DocumentSourceRole,
+    DocumentStatus,
+    DriveItemStatus,
+    FlagSeverity,
+    FlagType,
+    NodeType,
+    Route,
+    RuleOrigin,
+    RuleType,
+)
 from backend.postgres.models import Blob, Document, DocumentSource, DriveFolder, DriveItem, Rule, SyncRoot
 from backend.review.rules import RuleRecord, RuleScope, RuleTarget
 from backend.review.staged import GateResult, gate, load_staged
+from backend.routes.c_telemetry.config_file import process_config
+from backend.routes.c_telemetry.delimited import as_table, delimited_source, read_delimited, series_plan
 from backend.routes.c_telemetry.ljstream_cfg import parse_ljstream_cfg
 from backend.routes.c_telemetry.normalize import NormalizeConfig, sanity_ranges_from
-from backend.routes.c_telemetry.run import PARSER_VERSION, FolderConfig, RunInputs, process_labjack
+from backend.routes.c_telemetry.run import PARSER_VERSION, FolderConfig, RunInputs, labjack_source
+from backend.routes.c_telemetry.series import SeriesSource, process_series, slug, source_from_schema
+from backend.routes.c_telemetry.tables import header_unit, table_document, unit_flags
+from backend.routes.c_telemetry.tdms import tdms_source
+from backend.routes.c_telemetry.workbook import island_source, read_workbook
 from backend.storage.minio import CIR, TELEMETRY, BucketStore, parse_uri
 
 
@@ -114,11 +140,13 @@ def process_document(
     minio: Minio,
     doc_id: uuid.UUID,
     indexer: Indexer | None = None,
-    raw_parquet: Path | None = None,
-    header_text: str | None = None,
+    resume_from: tuple[SeriesSource, Path] | None = None,
 ) -> RouteCOutcome:
-    """Run Route C for a PROCESSING document. A clean result is indexed and committed through ``indexer``;
-    without one (tests, or no models role) it is kept as ``processed.json`` and parked."""
+    """Run Route C for a PROCESSING document: the adapter that accepts its primary file builds the
+    ``ProcessedDocument`` (a series run, a table document, a workbook with tables and runs, or a config
+    document); the gate halts on HARD; a clean result is indexed and committed through ``indexer``, or,
+    without one (tests, models role unreachable), kept as ``processed.json`` and parked.
+    ``resume_from`` rebuilds a halted series run from its schema and ``raw.parquet``."""
     document = session.get(Document, doc_id)
     if document is None:
         raise LookupError(f"document {doc_id} does not exist")
@@ -147,43 +175,37 @@ def process_document(
     cloud_allowed = bool(
         session.scalar(select(SyncRoot.cloud_allowed).where(SyncRoot.root_name == item.root_name))
     )
-    rules, bodies = channel_map_rules(session)
-    bucket, key = parse_uri(blob.minio_uri)
-    folder_config = folder_ljstream_config(session, minio, item.parent_item_id)
-
-    def head() -> bytes:
-        length = min(HEAD_BYTES, blob.size_bytes or HEAD_BYTES)
-        response = minio.get_object(bucket, key, offset=0, length=length)
-        try:
-            return response.read()
-        finally:
-            response.close()
-            response.release_conn()
-
+    store = _BlobReader(minio, blob)
     cir = BucketStore(minio, CIR)
-    processed = process_labjack(
-        lambda: minio.get_object(bucket, key),
-        RunInputs(
-            blob_sha256=blob.sha256,
-            name=item.name,
-            context=context,
-            target=target,
-            folder_config=folder_config,
-        ),
-        rules,
-        bodies,
-        BucketStore(minio, TELEMETRY),
-        cir,
-        header_text.encode() if header_text is not None else head(),
-        normalize_config=NormalizeConfig.from_mapping(
+    series_args = _SeriesArgs(
+        rules=channel_map_rules(session),
+        telemetry=BucketStore(minio, TELEMETRY),
+        cir=cir,
+        config=NormalizeConfig.from_mapping(
             {
                 key.removeprefix(TELEMETRY_PREFIX): value
                 for key, value in pipeline_config.get_prefix(session, TELEMETRY_PREFIX).items()
             }
         ),
         sanity=sanity_ranges_from(pipeline_config.get(session, pipeline_config.SANITY_RANGES, default=None)),
-        raw_parquet=raw_parquet,
     )
+    inputs = RunInputs(
+        blob_sha256=blob.sha256,
+        name=item.name,
+        context=context,
+        target=target,
+        folder_config=folder_ljstream_config(session, minio, item.parent_item_id),
+    )
+    if resume_from is not None:
+        adapter_name = "resume"
+        source, raw_path = resume_from
+        processed = series_args.run(source, inputs, raw_path)
+    else:
+        adapter = adapter_for(Route.C, store.head(), item.name)
+        if adapter is None:
+            raise ValueError(f"no Route C adapter accepts {item.name}")
+        adapter_name = adapter.name
+        processed = _build(adapter_name, session, minio, store, item, inputs, series_args)
     _apply_fields(document, processed)
     result: GateResult = gate(session, cir, document, processed, stale=_route_c_flag)
     plan = None
@@ -192,10 +214,11 @@ def process_document(
             plan = indexer(session, result.document, document.doc_id, cloud_allowed)
         except ModelServerUnavailable:
             plan = None  # models role unreachable: park the clean run (Lead 2026-10-22); a re-run commits it
+    runs = processed.telemetry_runs
+    rows = sum(r.n_rows or 0 for r in runs) if runs else None
     if plan is not None:
         committed = commit_document(session, document, result.document, plan, PIPELINE_VERSION)
-        run = processed.telemetry_runs[0]
-        return RouteCOutcome(doc_id, committed.status, run.n_rows, committed.channels, 0, result.soft)
+        return RouteCOutcome(doc_id, committed.status, rows, committed.channels, 0, result.soft)
     if not result.halted:
         uri_ = cir.put(
             f"{blob.sha256}/C/v{PARSER_VERSION}/processed.json",
@@ -206,11 +229,243 @@ def process_document(
         document.staged_payload_uri = None
         document.metadata_sources = {
             **(document.metadata_sources or {}),
-            PROCESSED_MARK: {"adapter": "labjack_dat", "parser_version": PARSER_VERSION, "uri": uri_},
+            PROCESSED_MARK: {"adapter": adapter_name, "parser_version": PARSER_VERSION, "uri": uri_},
         }
     session.flush()
-    run = processed.telemetry_runs[0]
-    return RouteCOutcome(doc_id, document.status, run.n_rows, len(run.channels), result.hard, result.soft)
+    channels = sum(len(r.channels) for r in runs)
+    return RouteCOutcome(doc_id, document.status, rows, channels, result.hard, result.soft)
+
+
+class _BlobReader:
+    def __init__(self, minio: Minio, blob: Blob) -> None:
+        self.minio, self.blob = minio, blob
+        self.bucket, self.key = parse_uri(blob.minio_uri)
+
+    def head(self) -> bytes:
+        length = min(HEAD_BYTES, self.blob.size_bytes or HEAD_BYTES)
+        response = self.minio.get_object(self.bucket, self.key, offset=0, length=length)
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+
+    def stream(self):
+        return self.minio.get_object(self.bucket, self.key)
+
+    def read(self) -> bytes:
+        response = self.stream()
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+
+    def download(self, path: Path) -> Path:
+        self.minio.fget_object(self.bucket, self.key, str(path))
+        return path
+
+
+@dataclass
+class _SeriesArgs:
+    rules: tuple[list[RuleRecord], dict[uuid.UUID, dict]]
+    telemetry: BucketStore
+    cir: BucketStore
+    config: NormalizeConfig
+    sanity: list
+
+    def run(
+        self, source: SeriesSource, inputs: RunInputs, raw_parquet: Path | None = None
+    ) -> ProcessedDocument:
+        records, bodies = self.rules
+        return process_series(
+            source, inputs, records, bodies, self.telemetry, self.cir, self.config, self.sanity, raw_parquet
+        )
+
+
+def _build(
+    adapter: str,
+    session: Session,
+    minio: Minio,
+    store: _BlobReader,
+    item: DriveItem,
+    inputs: RunInputs,
+    series: _SeriesArgs,
+) -> ProcessedDocument:
+    def cir_put(key: str, data: bytes) -> str:
+        return series.cir.put(key, data, "application/json")
+
+    if adapter == "labjack_dat":
+        return series.run(labjack_source(store.stream, store.head(), item.name), inputs)
+    if adapter == "config_file":
+        return process_config(store.read(), inputs.blob_sha256, item.name, inputs.context, cir_put)
+    if adapter == "tdms":
+        with tempfile.TemporaryDirectory(prefix="dcl-tdms-") as workdir:
+            path = store.download(Path(workdir) / "run.tdms")
+            siblings = sibling_units(session, minio, item)
+            return series.run(tdms_source(path, item.name, siblings), inputs)
+    if adapter == "delimited":
+        table = read_delimited(store.read())
+        plan = series_plan(table)
+        if plan is not None:
+            return series.run(delimited_source(table, plan, item.name), inputs)
+        as_tab = as_table(table, item.name)
+        return table_document(
+            inputs.blob_sha256,
+            item.name,
+            inputs.context,
+            [as_tab],
+            unit_flags(as_tab),
+            DocKind.ENGINEERING_TABLE,
+            cir_put,
+            PARSER_VERSION,
+            catalog={"preamble": table.preamble, "footer": table.footer}
+            if table.preamble or table.footer
+            else None,
+        )
+    if adapter == "workbook":
+        return _workbook_document(store.read(), item, inputs, series, cir_put)
+    raise ValueError(f"unknown Route C adapter {adapter}")
+
+
+def _doc_kind_for_workbook(name: str, sheets: list[str]) -> DocKind:
+    text = " ".join([name, *sheets]).casefold()
+    if any(word in text for word in ("fmea", "risk")):
+        return DocKind.RISK_ASSESSMENT
+    if any(word in text for word in ("setup", "test plan", "input param", "checklist")):
+        return DocKind.TEST_PLAN
+    if "calibrat" in text:
+        return DocKind.CALIBRATION
+    return DocKind.ENGINEERING_TABLE
+
+
+def _workbook_document(
+    data: bytes, item: DriveItem, inputs: RunInputs, series: _SeriesArgs, cir_put
+) -> ProcessedDocument:
+    from backend.common.office import convert
+
+    if item.name.casefold().endswith(".xls"):
+        data = convert(data, "xls", "xlsx")
+    book = read_workbook(data, recalc=lambda raw: convert(raw, "xlsx", "xlsx", recalc=True))
+    flags: list[Flag] = []
+    for table in book.tables:
+        flags += unit_flags(table)
+    for sheet, cells in book.error_sheets.items():
+        flags.append(_formula_conflict(sheet, cells, book.recalc_note))
+    doc = table_document(
+        inputs.blob_sha256,
+        item.name,
+        inputs.context,
+        book.tables,
+        flags,
+        _doc_kind_for_workbook(item.name, book.sheets)
+        if book.tables or not book.series
+        else DocKind.TELEMETRY_RUN,
+        cir_put,
+        PARSER_VERSION,
+        catalog={"sheets": book.sheets, "recalculated": book.recalculated}
+        | ({"recalc_note": book.recalc_note} if book.recalc_note else {}),
+    )
+    for island in book.series:
+        key = f"{island.sheet}!{island.cell_range}"
+        run_doc = series.run(
+            island_source(island, item.name),
+            RunInputs(
+                blob_sha256=inputs.blob_sha256,
+                name=item.name,
+                context=inputs.context,
+                target=inputs.target,
+                run_key=key,
+                label_suffix=f"_{slug(island.sheet)}",
+            ),
+        )
+        prefix = slug(key)
+        doc = doc.model_copy(
+            update={
+                "nodes": [
+                    *doc.nodes,
+                    *[
+                        n.model_copy(
+                            update={
+                                "ref": f"{prefix}.{n.ref}",
+                                "parent_ref": f"{prefix}.{n.parent_ref}" if n.parent_ref else None,
+                                "ordinal": len(doc.nodes) + n.ordinal,
+                                "sheet_name": island.sheet,
+                            }
+                        )
+                        for n in run_doc.nodes
+                    ],
+                ],
+                "telemetry_runs": [*doc.telemetry_runs, *run_doc.telemetry_runs],
+                "flags": [
+                    *doc.flags,
+                    *[
+                        f.model_copy(update={"anchor": f.anchor.model_copy(update={"sheet": island.sheet})})
+                        for f in run_doc.flags
+                    ],
+                ],
+            }
+        )
+    return ProcessedDocument.model_validate(doc.model_dump())
+
+
+def _formula_conflict(sheet: str, cells: list[str], note: str | None) -> Flag:
+    return Flag(
+        flag_type=FlagType.CONFLICT,
+        severity=FlagSeverity.SOFT,
+        anchor=FlagAnchor(sheet=sheet),
+        evidence=ConflictEvidence(
+            subject=f"formula errors in sheet {sheet}",
+            a=ConflictSide(
+                label="cells", value=", ".join(cells[:50]), provenance="cached values after recalculation"
+            ),
+            b=ConflictSide(
+                label="expected", value="computed values", provenance=note or "LibreOffice recalculation"
+            ),
+        ),
+    )
+
+
+SIBLING_MAX_BYTES = 5 * 1024 * 1024
+
+
+def sibling_units(session: Session, minio: Minio, item: DriveItem) -> list[SiblingUnit]:
+    """Units stated by sibling exports of the same run (C.2 evidence): ``.csv`` files in the same folder
+    or in a sub-folder named like the file (``Temperature.tdms`` ↔ ``Temperature/Analog … .csv``)."""
+    stem = PurePosixPath(item.name).stem.casefold()
+    folder_ids = [item.parent_item_id]
+    for folder in session.scalars(
+        select(DriveFolder).where(DriveFolder.parent_item_id == item.parent_item_id)
+    ):
+        if folder.name.casefold() == stem:
+            folder_ids.append(folder.item_id)
+    rows = session.execute(
+        select(DriveItem.name, Blob)
+        .join(Blob, Blob.sha256 == DriveItem.blob_sha256)
+        .where(
+            DriveItem.parent_item_id.in_(folder_ids),
+            DriveItem.extension.in_([".csv", ".tsv"]),
+            DriveItem.status == DriveItemStatus.LANDED,
+            Blob.restricted.is_(False),
+            Blob.size_bytes <= SIBLING_MAX_BYTES,
+        )
+        .order_by(DriveItem.name)
+        .limit(5)
+    ).all()
+    found: list[SiblingUnit] = []
+    for name, sibling in rows:
+        bucket, key = parse_uri(sibling.minio_uri)
+        response = minio.get_object(bucket, key)
+        try:
+            table = read_delimited(response.read())
+        finally:
+            response.close()
+            response.release_conn()
+        for cell in table.header:
+            unit = header_unit(cell)
+            if unit:
+                found.append(SiblingUnit(file_name=name, channel=cell, unit=unit, source="header"))
+    return found
 
 
 def _route_c_flag(flag) -> bool:
@@ -221,30 +476,38 @@ def _route_c_flag(flag) -> bool:
 def resume_document(
     session: Session, minio: Minio, doc_id: uuid.UUID, indexer: Indexer | None = None
 ) -> RouteCOutcome:
-    """``resume_from_staged`` for Route C (file 06 §7): a HALTED run is rebuilt from its own
-    ``raw.parquet`` with the rules as they are now; the ``.dat`` is not parsed again."""
+    """``resume_from_staged`` for Route C (file 06 §7). A HALTED single-run document is rebuilt from its own
+    ``schema.json`` and ``raw.parquet`` with the rules as they are now; the original file is not read again.
+    A workbook (tables and several runs) is processed again from its file, which is small by nature."""
     document = session.get(Document, doc_id)
     if document is None or document.status != DocumentStatus.HALTED or document.route != "C":
         raise ValueError(f"document {doc_id} is not a HALTED Route C document")
     staged = load_staged(BucketStore(minio, CIR), document)
-    if not staged.telemetry_runs or staged.telemetry_runs[0].raw_parquet_uri is None:
-        raise ValueError(f"the staged payload of {doc_id} has no raw Parquet; dispatch it again instead")
+    document.status = DocumentStatus.PROCESSING
+    document.staged_payload_uri = None
+    session.flush()
+    single_run = len(staged.telemetry_runs) == 1 and all(
+        n.node_type == NodeType.RUN_SUMMARY for n in staged.nodes
+    )
+    if not single_run or staged.telemetry_runs[0].raw_parquet_uri is None:
+        return process_document(session, minio, doc_id, indexer=indexer)
     run = staged.telemetry_runs[0]
     schema_bucket, schema_key = parse_uri(run.schema_uri)
     schema = json.loads(BucketStore(minio, schema_bucket).get(schema_key) or b"{}")
-    if not schema.get("header_lines"):
-        raise ValueError(f"the schema of {doc_id} has no header lines; dispatch it again instead")
-    header_text = "\n".join(schema["header_lines"]) + "\n"
+    if not schema.get("columns"):
+        return process_document(session, minio, doc_id, indexer=indexer)
+    name = session.scalar(
+        select(DriveItem.name)
+        .join(DocumentSource, DocumentSource.blob_sha256 == DriveItem.blob_sha256)
+        .where(DocumentSource.doc_id == doc_id, DocumentSource.role == DocumentSourceRole.PRIMARY)
+        .limit(1)
+    )
     bucket, key = parse_uri(run.raw_parquet_uri)
     with tempfile.TemporaryDirectory(prefix="dcl-resume-") as workdir:
         path = Path(workdir) / "raw.parquet"
         minio.fget_object(bucket, key, str(path))
-        document.status = DocumentStatus.PROCESSING
-        document.staged_payload_uri = None
-        session.flush()
-        return process_document(
-            session, minio, doc_id, indexer=indexer, raw_parquet=path, header_text=header_text
-        )
+        source = source_from_schema(schema, name or "")
+        return process_document(session, minio, doc_id, indexer=indexer, resume_from=(source, path))
 
 
 def halted_documents_for_rule(session: Session, rule_id: uuid.UUID) -> list[uuid.UUID]:

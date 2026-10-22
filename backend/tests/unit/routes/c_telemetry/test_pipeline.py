@@ -181,7 +181,9 @@ def test_the_folder_cfg_reaches_the_flag_evidence(session, minio):
     _seed(session, minio, {"TP12_T01.dat": labjack_bytes(rows=200)[0], "LJStreamM.cfg": cfg})
     pipeline_config.set_value(session, "routes.C.enabled", True, "test")
     session.commit()
-    (release,) = dispatch(session, minio, section_file_sets=()).to_process  # the .cfg itself stays parked
+    releases = dispatch(session, minio, section_file_sets=()).to_process  # the .dat and the .cfg itself
+    assert len(releases) == 2
+    release = next(r for r in releases if session.get(Document, r.doc_id).title == "TP12_T01")
     process_document(session, minio, release.doc_id)
     session.commit()
     evidence = {

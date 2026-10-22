@@ -71,3 +71,14 @@ def test_sanity_ranges_seed_once_and_reseed_only_on_change(session):
     assert seeded["version"] == 2 and seeded["ranges"]
     assert pc.seed_sanity_ranges(session) is False
     assert pc.seed_sanity_ranges(session, reseed=True) is False
+
+
+def test_answer_defaults_are_seeded_once_and_never_reseeded(session):
+    assert sorted(pc.seed_answer_defaults(session)) == [
+        "answer.external_allowed_groups",
+        "answer.external_search_enabled",
+    ]
+    assert pc.get(session, "answer.external_allowed_groups") == ["dcl-external-search"]
+    pc.set_value(session, "answer.external_search_enabled", False, "admin@manastuspace.com")
+    assert pc.seed_answer_defaults(session) == []
+    assert pc.get(session, "answer.external_search_enabled") is False  # the kill switch stays off

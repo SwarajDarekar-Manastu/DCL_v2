@@ -86,9 +86,9 @@ RUN_NAMESPACE = uuid.UUID("8f0b5c3e-2a64-4f4e-9d2b-6b8d1a1d7c01")
 GAP_FACTOR = 1.5
 
 
-def run_uuid_for(blob_sha256: str) -> uuid.UUID:
-    """Stable per content: re-processing the same bytes writes the same run directory."""
-    return uuid.uuid5(RUN_NAMESPACE, blob_sha256)
+def run_uuid_for(blob_sha256: str, run_key: str = "") -> uuid.UUID:
+    """Stable per content (and per island of a workbook): re-processing writes the same run directory."""
+    return uuid.uuid5(RUN_NAMESPACE, f"{blob_sha256}#{run_key}" if run_key else blob_sha256)
 
 
 @dataclass
@@ -173,6 +173,8 @@ class RunInputs:
     context: FolderContext
     target: RuleTarget
     folder_config: FolderConfig | None = None
+    run_key: str = ""  # several runs in one file (workbook islands): part of the run uuid and CIR path
+    label_suffix: str = ""
 
 
 @dataclass(frozen=True)
@@ -326,8 +328,8 @@ def process_series(
     raw_parquet: Path | None = None,
 ) -> ProcessedDocument:
     header = source
-    run_id = run_uuid_for(inputs.blob_sha256)
-    label = _run_label(inputs.context, inputs.name)
+    run_id = run_uuid_for(inputs.blob_sha256, inputs.run_key)
+    label = _run_label(inputs.context, inputs.name) + inputs.label_suffix
     failed = source.failed
     resolution = resolve_channels(
         header.channels, rules, rule_bodies, inputs.target, source.units, source.voltage
@@ -382,11 +384,16 @@ def process_series(
             )
 
     stats = {c: running[c].stats(*quantiles[c]) for c in header.channels}
-    prefix = f"{inputs.blob_sha256}/{Route.C}/v{PARSER_VERSION}"
+    base = f"{inputs.blob_sha256}/{Route.C}/v{PARSER_VERSION}"
+    prefix = f"{base}/{slug(inputs.run_key)}" if inputs.run_key else base
     schema_doc = {
         "header_lines": header.header_lines,
         "columns": header.columns,
         "source_format": str(source.source_format),
+        "unit_source": source.unit_source,
+        "date_source": source.date_source,
+        "failed": source.failed,
+        "title": source.title,
         "time_column": {"name": header.time_column, "unit": "s"},
         "started_at": header.started_at.isoformat() if header.started_at else None,
         "started_at_note": source.started_at_note,
@@ -491,7 +498,7 @@ def process_series(
         blob_sha256=inputs.blob_sha256,
         route=Route.C,
         parser_version=PARSER_VERSION,
-        cir_uri=f"s3://dcl-cir/{prefix}/",
+        cir_uri=f"s3://dcl-cir/{base}/",
         document=DocumentFields(
             title=source.title or PurePosixPath(inputs.name).stem,
             doc_kind=DocKind.TELEMETRY_RUN,
@@ -774,4 +781,40 @@ def _channel_record(
         stat_p50=stats.p50,
         stat_p99=stats.p99,
         stat_std=stats.std,
+    )
+
+
+def source_from_schema(schema: Mapping, name: str) -> SeriesSource:
+    """The ``SeriesSource`` of a processed run, rebuilt from its ``schema.json`` (resume: the rows come from
+    the run's own ``raw.parquet``, the original file is not read). Schemas written before the generic path
+    (LabJack, step 1) have no ``source_format``; they are LabJack runs."""
+    columns = list(schema["columns"])
+    channels = schema.get("channels", {})
+    fmt = schema.get("source_format")
+    if fmt is None:
+        voltage = frozenset(c for c in columns[1:] if re.fullmatch(r"v\d+", c))
+        failed = name.casefold().endswith(".dat_fail")
+        fmt = TelemetrySourceFormat.LABJACK_DAT
+    else:
+        voltage = frozenset(c for c, v in channels.items() if v.get("source") == "voltage column")
+        failed = bool(schema.get("failed"))
+    started = schema.get("started_at")
+
+    def no_batches() -> Iterator[pa.RecordBatch]:
+        raise RuntimeError("a resumed run reads its raw.parquet")
+
+    return SeriesSource(
+        source_format=TelemetrySourceFormat(fmt),
+        header_lines=list(schema.get("header_lines") or []),
+        columns=columns,
+        open_batches=no_batches,
+        started_at=datetime.fromisoformat(started) if started else None,
+        started_at_note=schema.get("started_at_note") or schema.get("started_at_zone"),
+        date_source=schema.get("date_source")
+        or ("labjack header" if fmt == TelemetrySourceFormat.LABJACK_DAT else None),
+        units=dict(schema.get("stated_units") or {}),
+        unit_source=schema.get("unit_source") or "header",
+        voltage=voltage,
+        failed=failed,
+        title=schema.get("title"),
     )
