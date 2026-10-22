@@ -67,7 +67,7 @@ class FakeBuild:
     def __init__(self, severity):
         self.severity, self.calls = severity, []
 
-    def __call__(self, pdf_bytes, **kwargs):
+    def __call__(self, pdf_bytes, *, session, **kwargs):
         self.calls.append((pdf_bytes, kwargs))
         uri = kwargs["stores"].put_cir("pages/1.txt", b"Datenblatt")
         asset = kwargs["stores"].put_asset(f"pages/{kwargs['blob_sha256']}/0001.png", b"\x89PNG")

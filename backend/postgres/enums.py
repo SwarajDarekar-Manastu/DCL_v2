@@ -17,6 +17,20 @@ def enum_check(column: str, enum: type[StrEnum]) -> CheckConstraint:
     return CheckConstraint(f"{column} IN ({values})", name=column)
 
 
+class UserRole(StrEnum):
+    """Console roles (local password RBAC, DECISIONS 2026-10-22); admin implies reviewer implies viewer."""
+
+    VIEWER = "viewer"
+    REVIEWER = "reviewer"
+    ADMIN = "admin"
+
+
+def roles_check(column: str, enum: type[StrEnum]) -> CheckConstraint:
+    """Named CHECK ``ck_<table>_<column>``: every element of a text[] column is one of the enum's values."""
+    values = ", ".join(f"'{member.value}'" for member in enum)
+    return CheckConstraint(f"{column} <@ ARRAY[{values}]::text[]", name=column)
+
+
 class SyncRootStatus(StrEnum):
     ACTIVE = "ACTIVE"
     CRAWLING = "CRAWLING"
@@ -377,6 +391,7 @@ class AuditEntityType(StrEnum):
     CONFIG = "config"
     BENCHMARK_CASE = "benchmark_case"
     DOCUMENT = "document"
+    USER = "user"  # account changes (local password RBAC, migration 0010)
 
 
 # ---------- benchmarks (file 05 §4.7, file 08 §5) ----------
