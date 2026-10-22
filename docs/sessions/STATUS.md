@@ -560,3 +560,18 @@ Merged / ready: E12 on the stack, per the Lead's revised ruling. processing.scop
 Blocked on: nothing
 Needs from others: nothing new
 Next: as in the entry above
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready (merge requested, 029d022, merges clean into main):
+- Route C adapters for .tdms, .csv, workbooks and .cfg, so the remaining 20 parked C documents can move. All use a shared series path: channels resolve by operator rule, then by the unit the file itself states (header cell, TDMS unit_string), else HARD UNIT_AMBIGUITY.
+- TDMS: when units are missing, the units of the sibling DAQ CSV export are attached as evidence.
+- CSV: 100 rows or more becomes a series, otherwise a table.
+- Workbooks: LibreOffice recalculation when needed, blocks becoming tables with row nodes, a SOFT CONFLICT for formula errors, and time-series blocks becoming runs.
+- Configuration files become config documents.
+- Resume now works for any single series run, rebuilt from schema.json and raw.parquet.
+- Commit: token counts come from the models role (POST /tokenize/count); a clean run is parked when the role is unreachable. A test-plan id read from the content that differs from the folder keeps both ids and raises a CONFLICT SOFT.
+- seed-config writes answer.external_allowed_groups and answer.external_search_enabled, on first start only.
+Test: `uv run pytest` (1,376 passed).
+Blocked on: the app refuses to sync this worktree with main because main changes a protected file (.claude/launch.json) and the repository origin is not confirmed. The branch still merges clean.
+Needs from others: Lead: merge; S4: redeploy, then I re-dispatch on the stack and report the counts; S5: a "Deg C" alias in config/units.txt (NI's spelling; the TDMS adapter maps it locally meanwhile)
+Next: live run of the 20 parked C documents; A1/D/F adapter wiring for S2's routes

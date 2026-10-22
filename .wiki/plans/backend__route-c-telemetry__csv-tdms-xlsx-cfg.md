@@ -16,6 +16,7 @@ The remaining Route C kinds (file 03 §C.2–C.4, §C.0), so the 20 parked C doc
 
 Files to change (exact):
 - `backend/routes/c_telemetry/{run,series,tdms,delimited,workbook,tables,config_file,pipeline}.py`
+- `backend/indexing/commit.py` (test-plan id conflict; token counts via the models role), `backend/postgres/pipeline_config.py` (answer defaults seed), `backend/tests/schema/test_pipeline_config.py`
 - `backend/dispatcher/adapters.py`, `backend/dispatcher/contract.py` (only if an evidence field is missing)
 - `backend/celery_redis/tasks_process.py`
 - `backend/tests/unit/routes/c_telemetry/`
@@ -25,10 +26,10 @@ Out of scope: `backend/common/office.py` (S4: LibreOffice recalculation is calle
 
 ## Rubric for this task
 
-- [ ] (task) generic series path: LabJack behaviour and tests unchanged
-- [ ] (task) TDMS: groups/channels, time from a time channel, `wf_increment` or the group scan rate; `unit_string` resolves a channel; none → HARD with sibling CSV units as evidence
-- [ ] (task) CSV: preamble kept as header lines, delimiter/decimal sniffed, units from header cells, time column parsed; ≥ 100 rows → series, else table
-- [ ] (task) xlsx: cached values, recalculation when formulas lack cached values or hold errors, islands, hidden sheets, merged cells, dimensionless headers, table + row nodes; time-series islands → series
-- [ ] (task) `.cfg`: INI, JSON or key=value parsed into a config document
+- [x] (task) generic series path: LabJack behaviour and tests unchanged
+- [x] (task) TDMS: groups/channels, time from a time channel, `wf_increment` or the group scan rate; `unit_string` resolves a channel; none → HARD with sibling CSV units as evidence
+- [x] (task) CSV: preamble kept as header lines, delimiter/decimal sniffed, units from header cells, time column parsed; ≥ 100 rows → series, else table
+- [x] (task) xlsx: cached values, recalculation when formulas lack cached values or hold errors, islands, hidden sheets, merged cells, dimensionless headers, table + row nodes; time-series islands → series
+- [x] (task) `.cfg`: INI, JSON or key=value parsed into a config document
 - [ ] live: the 20 parked C documents processed on the stack after the redeploy; counts reported
-- [ ] `uv run pytest`, ruff check and format check pass
+- [x] `uv run pytest`, ruff check and format check pass
