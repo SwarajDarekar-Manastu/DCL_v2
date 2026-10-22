@@ -3,7 +3,8 @@
 # unmapped (logger scaling 'y=e*' is broken, constant 0).
 version: 1
 rules:
-- rule_type: channel_map
+- status: proposed
+  rule_type: channel_map
   scope:
     scope_root: APU
     scope_folder_id: 01RDWVU47SDGRHEBHJIFE3334CSLOVPSL4

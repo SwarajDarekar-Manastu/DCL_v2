@@ -2,7 +2,8 @@
 # Source: no LJStreamM.cfg in this folder; same 8-channel layout as the Injector 10 cold-flow runs.
 version: 1
 rules:
-- rule_type: channel_map
+- status: proposed
+  rule_type: channel_map
   scope:
     scope_root: APU Injector
     scope_folder_id: 01RDWVU42EH7Y5QREJ4JG2L4QNOWGWUFOJ

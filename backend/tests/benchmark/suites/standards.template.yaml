@@ -1,0 +1,36 @@
+# Golden standards suite: TEMPLATE (DECISIONS.md 2026-10-22, option b; E12 = 8 ECSS standards).
+# Owner: S5. Answers and page citations (standard id + file) are in the git-ignored
+# data/benchmark/standards.local.yaml. Built by the build_suites module (verification folder).
+version: 1
+suite: standards
+cases:
+  - case_id: ecss-e-st-32-02c-pressure-vessel-factors
+    category: STANDARDS
+    question: Under ECSS-E-ST-32-02C Rev.1, which proof factor and burst factor apply to a pressure vessel loaded by internal pressure?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  - case_id: ecss-e-st-32-02c-heat-pipe-factors
+    category: STANDARDS
+    question: Which proof and burst factors does ECSS-E-ST-32-02C Rev.1 require for heat pipes?
+    expected_tools: [search_documents]
+    difficulty: 3
+    local: true
+  - case_id: ecss-e-st-35-06c-nvr-a10
+    category: STANDARDS
+    question: What non-volatile residue limit on critical surfaces corresponds to NVR level A/10 in ECSS-E-ST-35-06C Rev.2?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  - case_id: ecss-e-st-35-10c-elevated-corrosion-testing
+    category: STANDARDS
+    question: Above which pressure and temperature does ECSS-E-ST-35-10C require a different immersion corrosion test practice, and which one?
+    expected_tools: [search_documents]
+    difficulty: 3
+    local: true
+  - case_id: ecss-q-st-70c-tin-finish
+    category: STANDARDS
+    question: What constraint does ECSS-Q-ST-70C Rev.2 place on pure tin finishes?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true

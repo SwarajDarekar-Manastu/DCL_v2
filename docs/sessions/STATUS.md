@@ -532,6 +532,18 @@ Blocked on: S1's ab00628 reaching main
 Needs from others: Lead — merge order S1 ab00628, then this branch
 Next: idle until indexed documents and S2's engine mode exist
 
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: Route C step 2 (merge requested). It adds:
+- migration 0009 for telemetry_runs and telemetry_channels;
+- the folder .cfg scaling as flag evidence;
+- normalized.parquet (SI units, t_rel_ms, t_from_ignition_ms, a separate *_bar_abs column, valve state 0/1 at open_threshold);
+- t0 per §C.6, the three-tier metrics, S5's sanity bounds, and the first commit path (backend/indexing/commit.py with S2's index_document);
+- resume of a HALTED run from its own raw.parquet, a retroactive pass per rule, and ExportedRule.status (only operator rules load).
+Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest` (1,353 passed).
+Live Route C step 1 on the stack: routes.C enabled after S4's rebuild, then re-dispatched. 20 LabJack runs processed, 0 FAILED, all 20 HALTED with 160 UNIT_AMBIGUITY HARD (8 y* channels each). That is 4,936,500 rows, 4,852.8 s of data, 256 MB of raw Parquet, 1017.3 Hz everywhere, no gaps or duplicate timestamps, and 2 FAILED_RUN (.dat_fail). The other 20 C documents (12 xlsx, 4 cfg, 2 csv, 2 tdms) stay parked for their adapters. Four TP7 phase files (Test 01 priming, main, priming_i, purging) share the label TP07_T01; the commit renames them with a CONFLICT SOFT.
+Blocked on: nothing
+Needs from others: S4: apply 0009 on the stack DB after the merge and redeploy; an SME confirmation of S5's proposed channel maps (each confirmed rule resumes its runs through dcl.process.resume_for_rule); the telemetry workers need EmbeddingGemma's tokenizer (transformers) for index_document's token counts, or the models role exposes a token count
+Next: the review API resolve endpoint (rule creation → resume_for_rule), then the xlsx/csv/tdms adapters; A1/D/F adapter wiring for S2's routes
 ## 2026-10-22 10:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: behaviour suite (6 cases: Isp with a dead thrust channel and a non-existent test plan → insufficient evidence; out of scope; clarification of "Test 01"; Moog thrust range and TP7-vs-vendor → external labelling) and `build_suites.py` (committed template + git-ignored fragments; `numeric_from` reuses telemetry values); tool names checked against the engine's ToolName. Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
 Blocked on: indexed allowlist documents (doc lookups, code, failure/visual, multilingual, the retrieval set's gold anchors) and standards in the processing scope (STANDARDS cases)
@@ -542,6 +554,36 @@ Merged / ready: restart-resume test (`backend/tests/integration/llm_engine/engin
 Blocked on: nothing
 Needs from others: S4's 07965fd (GEMINI_MODEL / GEMINI_LITE_MODEL) on main, then I switch vision, analysis, synthesis, enrichment to the settings
 Next: T6 external_search (grounding, sanitized query only, external_queries in the trace), T2 when S1's telemetry tables land, T3, Skills
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: E12 on the stack, per the Lead's revised ruling. processing.scope now holds the 11 folder ids plus 8 ECSS path globs, one file each. The first, whole-folder E12 dispatch (141 WAITING A1 documents, before the correction arrived) was undone: 133 untouched documents were removed, with no flags and nothing derived, and the 8 standards stay. A re-dispatch creates nothing. Stack documents: A1 33, A2 23, B 4, C 40 (20 HALTED, 20 waiting for adapters), D 84, E 2, F 4.
+Blocked on: nothing
+Needs from others: nothing new
+Next: as in the entry above
+
+## 2026-10-22 12:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: documents suite (12 FACT_LOOKUP + 3 FAILURE_ANALYSIS, page-cited, from the TP-23 and TP12 reports) and code suite (8 CODE cases on the TP7 test-plan creator); questions committed without facts or file names, answers and citations local; a test finds every expected number/entity in the cited PDF page or source file. E12 chosen: 8 ECSS standards as path globs (sent to S1). Golden set now 44 cases (15 telemetry incl. 2 halt-behaviour… see map). Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: indexing of E12 standards (STANDARDS cases); indexed corpus for CONFLICT and the retrieval set
+Needs from others: S1 — E12 globs into processing.scope
+Next: visual/handwriting cases from the exported TP7 sheets and E7 photos; multilingual cases (none in the allowlist: synthetic German/Japanese fixtures only)
+
+## 2026-10-22 13:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: visual suite (5 VISUAL handwriting reads, 2 FAILURE_ANALYSIS, 1 CONFLICT_BEHAVIOR from the TP7 preheat and de-integration sheets); image-only citations must have a recorded visual reading (local); proposals carry `status: proposed` per rule. Golden set: 54 local cases (telemetry 17, behaviour 6, documents 15, code 8, visual 8). Test: `uv run pytest backend/tests/benchmark backend/tests/unit/config_data && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: E12 standards indexed (5 STANDARDS cases); a non-English library document (MULTILINGUAL); indexed corpus (retrieval set)
+Needs from others: S1/S2 — note: the TP7 preheat sheet's printed footer says Test Plan 6 (image-only page), so the plan-id CONFLICT can only come from OCR of the footer, not from folder context
+Next: STANDARDS cases once the 8 ECSS documents are indexed; retrieval set with gold anchors
+
+## 2026-10-22 14:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: standards suite (5 STANDARDS cases from the E12 ECSS standards: E-ST-32-02C pressure-vessel and heat-pipe factors, E-ST-35-06C NVR A/10, E-ST-35-10C elevated corrosion-test conditions, Q-ST-70C tin finish), each answer found on its cited page; number check accepts decimal commas. Golden set: 59 local cases. Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: S1's library language/DOI check (MULTILINGUAL), indexed corpus (retrieval set with gold anchors)
+Needs from others: nothing new
+Next: idle on MULTILINGUAL and the retrieval set until their inputs exist (Lead ruling)
+
+## 2026-10-22 19:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: T6 `external_search` (`backend/llm_engine/engine/tools/external.py`, prompts `external_intent.v1`, `external_search.v1`): generic needs from the question alone, sanitized, isolated grounded Gemini call (only the sanitized query; rule confirmed by the Lead), arXiv for literature, ≤ 3 queries, `external_queries` in the trace, benchmark mock; planner goes external on request or for a design-synthesis gap; policy from `pipeline_config` (`answer.external_search_enabled`, `answer.external_allowed_groups`, `answer.proprietary_terms`). Live check: grounding returned 6 sources, all redirect links resolved.
+Blocked on: nothing
+Needs from others: S1 / Lead: seed `answer.external_allowed_groups` (e.g. the `dcl-external-search` group name the Pipe sends) and `answer.proprietary_terms`; until then nobody goes external. New key `answer.external_search_enabled` (kill switch, default on) for file 05's key list.
+Next: A1 transcribe_page v2 with furniture + test-plan CONFLICT (Lead confirmed), then T3, T2, Skills
 
 ## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
 Merged / ready: object-store evaluation `backend/devops/object_store_evaluation.md` + reusable `backend/devops/ci/s3_compat_check.py`: RustFS 1.0.3 passes every data-plane check and enforces lifecycle (recommended, pending a RustFS-native way to create the app user/policy); SeaweedFS 4.48 does not enforce lifecycle and has no admin API; Garage v2.4.1 has no versioning. Stack redeployed from main 72ae92f at migration 0009. Backups map marked deprecated (user decision)

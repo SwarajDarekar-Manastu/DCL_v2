@@ -43,6 +43,11 @@ def session(engine):
         yield s
         s.rollback()
         tables = (
+            "telemetry_channels",
+            "telemetry_runs",
+            "entity_mentions",
+            "numeric_facts",
+            "document_nodes",
             "review_flags",
             "rules",
             "document_relations",

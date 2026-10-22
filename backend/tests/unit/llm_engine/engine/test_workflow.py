@@ -13,9 +13,11 @@ pytest.importorskip("workflows", reason="llama-index-workflows is not installed"
 from backend.api.engine import AnswerEvent
 from backend.llm_engine.engine import workflow as wf
 from backend.llm_engine.engine.tools import Provenance, Source, ToolResult
+from backend.llm_engine.engine.tools import external as external_tools
+from backend.llm_engine.engine.tools.external import ExternalPolicy
 from backend.llm_engine.engine.verifier import check_numeric_claim
 from backend.llm_engine.enrichment.entities import AliasIndex
-from backend.llm_engine.gemini_types import GatewayError, GenerateResult, Usage
+from backend.llm_engine.gemini_types import GatewayError, GenerateResult, Grounding, GroundingSource, Usage
 
 REPORT = uuid.UUID("00000000-0000-4000-8000-000000000037")
 PASSAGE = "In TP07 run T04 the chamber pressure reached 12.4 bar at 3.2 s after ignition."
@@ -35,6 +37,8 @@ class Client:
         reply = self.replies[purpose].pop(0)
         if isinstance(reply, Exception):
             raise reply
+        if isinstance(reply, GenerateResult):
+            return reply
         return GenerateResult(
             text=reply if isinstance(reply, str) else "",
             parsed=schema.model_validate(reply) if schema is not None else None,
@@ -83,8 +87,9 @@ def searches(monkeypatch):
     return install
 
 
-def deps(client, traces):
+def deps(client, traces, policy=None):
     return wf.EngineDeps(
+        external_policy=lambda session: policy or ExternalPolicy(enabled=False),
         gemini=client,
         session_factory=contextlib.nullcontext,
         embed_query=lambda q: [0.0],
@@ -95,12 +100,12 @@ def deps(client, traces):
     )
 
 
-def run(client, question, traces=None):
+def run(client, question, traces=None, *, groups=("dcl-engineers",), policy=None, **start):
     traces = [] if traces is None else traces
 
     async def go():
-        workflow = wf.AnswerWorkflow(deps(client, traces), timeout=30)
-        handler = workflow.run(question=question, trace_id=str(uuid.uuid4()), groups=["dcl-engineers"])
+        workflow = wf.AnswerWorkflow(deps(client, traces, policy), timeout=30)
+        handler = workflow.run(question=question, trace_id=str(uuid.uuid4()), groups=list(groups), **start)
         events = [payload async for payload in wf.ordered(handler.stream_events())]
         return events, await handler
 
@@ -225,3 +230,148 @@ def test_physics_question_runs_the_calculator_with_extracted_arguments(searches)
     assert [c["tool"] for c in traces[0]["tool_calls"]] == ["physics_calculator"]
     assert done["mode"] == "answered", done
     assert of(events, "citation")[0]["provenance"] == "calculation"
+
+
+# ------------------------------------------------------------------ T6 external search under the policy
+
+ALLOWED = ExternalPolicy(enabled=True, allowed_groups=("dcl-external",), proprietary_terms=("BlueFlame",))
+WEB_TEXT = "Monolithic catalyst beds typically need 2 to 5 W of preheat."
+
+
+def grounded_reply() -> GenerateResult:
+    sources = (
+        GroundingSource("nasa.gov", "https://vertexaisearch.cloud.google.com/grounding-api-redirect/x"),
+    )
+    return GenerateResult(
+        WEB_TEXT,
+        None,
+        (),
+        Usage(1, 1),
+        "m",
+        "stop",
+        "r",
+        1,
+        grounding=Grounding(("catalyst preheat power",), sources),
+    )
+
+
+@pytest.fixture
+def offline(monkeypatch):
+    async def resolve(url):
+        return "https://ntrs.nasa.gov/x"
+
+    async def no_arxiv(query):
+        return []
+
+    monkeypatch.setattr(external_tools, "resolve_redirect", resolve)
+    monkeypatch.setattr(external_tools, "arxiv", no_arxiv)
+
+
+def external_client(intents, synthesis=None, needs=None):
+    needs = (
+        needs
+        if needs is not None
+        else [{"purpose": "general_physics", "query_intent": "BlueFlame catalyst preheat power"}]
+    )
+    return Client(
+        query_analysis=[{"intents": intents, "external_requested": "fact_lookup" in intents}],
+        external_intent=[{"needs": needs}],
+        external_search=[grounded_reply()] * 3,
+        physics_args=[{"operation": "unit_convert", "parameters": {}}],
+        synthesis=[
+            synthesis
+            or {
+                "answer_markdown": "Monolith beds need 2 to 5 W of preheat (web) [E2].",
+                "claims": [
+                    {
+                        "text": "Monolith beds need 2 to 5 W of preheat",
+                        "kind": "numeric",
+                        "evidence_ids": ["E2"],
+                    }
+                ],
+            }
+        ],
+        verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]}],
+    )
+
+
+def test_an_explicit_request_goes_external_with_only_the_sanitized_need(searches, offline):
+    searches(report_hit)
+    client = external_client(["fact_lookup"])
+    events, done, traces = run(
+        client,
+        "Search the web: how much preheat does a BlueFlame monolith need?",
+        groups=["dcl-external"],
+        policy=ALLOWED,
+    )
+    assert done["mode"] == "answered"
+    assert client.purposes.count("external_search") == 1
+    [query] = traces[0]["external_queries"]
+    assert query["provider"] == "google_search" and "BlueFlame" not in query["sanitized"]
+    assert query["google_queries"] == ["catalyst preheat power"]
+    web = [c for c in of(events, "citation") if c["provenance"] == "web"]
+    assert web and web[0]["doc_id"] is None
+    assert any(s.get("tool") == "external_search" for s in of(events, "step"))
+
+
+def test_a_user_outside_the_allowed_groups_never_goes_external(searches, offline):
+    searches(report_hit)
+    client = external_client(["fact_lookup"], synthesis=SYNTH)
+    _, done, traces = run(
+        client, "Search the web for catalyst preheat", groups=["dcl-engineers"], policy=ALLOWED
+    )
+    assert "external_intent" not in client.purposes and "external_search" not in client.purposes
+    assert traces[0]["external_queries"] == []
+    assert any("not enabled for your groups" in c for c in done["caveats"])
+
+
+def test_benchmark_mock_and_the_kill_switch(searches, offline):
+    searches(report_hit)
+    client = external_client(["fact_lookup"], synthesis=SYNTH)
+    _, _, traces = run(
+        client,
+        "Search the web for catalyst preheat",
+        groups=["dcl-external"],
+        policy=ALLOWED,
+        external_mode="mock",
+    )
+    assert "external_search" not in client.purposes
+    assert traces[0]["external_queries"][0]["provider"] == "mock"
+    off = ExternalPolicy(enabled=False, allowed_groups=("dcl-external",))
+    client = external_client(["fact_lookup"], synthesis=SYNTH)
+    run(client, "Search the web for catalyst preheat", groups=["dcl-external"], policy=off)
+    assert "external_intent" not in client.purposes
+
+
+def test_design_synthesis_goes_external_only_for_a_gap(searches, offline):
+    calls = searches(report_hit)  # internal evidence exists: no web
+    client = external_client(["design_synthesis"], synthesis=SYNTH)
+    run(client, "Design a 5 N thruster", groups=["dcl-external"], policy=ALLOWED)
+    assert calls and "external_intent" not in client.purposes
+    searches(no_hits)  # nothing internal or in the library: the gap goes to the web
+    client = external_client(
+        ["design_synthesis"],
+        synthesis={
+            # E1, E2: the two empty internal searches; E3: the calculator's note; E4: the web result
+            "answer_markdown": "Published monolith beds need 2 to 5 W of preheat (web) [E4].",
+            "claims": [
+                {
+                    "text": "Published monolith beds need 2 to 5 W of preheat",
+                    "kind": "numeric",
+                    "evidence_ids": ["E4"],
+                }
+            ],
+        },
+    )
+    _, done, traces = run(client, "Design a 5 N thruster", groups=["dcl-external"], policy=ALLOWED)
+    assert client.purposes.count("external_search") == 1 and done["mode"] == "answered"
+
+
+def test_at_most_three_external_queries(searches, offline):
+    searches(report_hit)
+    needs = [
+        {"purpose": "general_physics", "query_intent": f"catalyst preheat power class {n}"} for n in range(5)
+    ]
+    client = external_client(["fact_lookup"], needs=needs)  # five needs: three are searched
+    _, _, traces = run(client, "Search the web for catalyst preheat", groups=["dcl-external"], policy=ALLOWED)
+    assert len(traces[0]["external_queries"]) == 3

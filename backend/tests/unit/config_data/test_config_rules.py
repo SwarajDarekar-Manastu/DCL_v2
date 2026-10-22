@@ -26,6 +26,7 @@ def test_proposal_loads_with_s1_loader_and_is_marked(path):
     rules = load_yaml(text).rules
     assert rules and all(r.rule_type == RuleType.CHANNEL_MAP for r in rules)
     assert all("proposal" in (r.created_by or "") for r in rules)
+    assert all(r.status == "proposed" for r in rules)  # explicit; only status: operator ever loads
     assert all(r.scope.scope_folder_id and r.scope.scope_root for r in rules)
 
 

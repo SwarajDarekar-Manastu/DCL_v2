@@ -219,9 +219,12 @@ def parse_body(rule_type: RuleType, body: Mapping[str, Any]) -> _Model:
 
 
 class ExportedRule(_Model):
-    """One operator rule in ``config/rules/*.yaml``; a new environment loads it as an operator rule
-    (``load_rules_dir``: top-level confirmed files only, never ``config/rules/proposed/``)."""
+    """One rule in ``config/rules/*.yaml``. Only ``status: operator`` loads, as an operator rule
+    (``load_rules_dir``: top level only, never ``config/rules/proposed/``). A rule without a status is a
+    proposal: drafted for an SME and never applied until confirmed in the Review UI or in writing
+    (Lead ruling 2026-10-22). ``export_yaml`` writes ``status: operator``."""
 
+    status: Literal["operator", "proposed"] = "proposed"
     rule_type: RuleType
     scope: RuleScope = RuleScope()
     precedence: int = 0
@@ -235,17 +238,17 @@ class ExportedRule(_Model):
 
 
 class RulesFile(_Model):
-    """``status = proposed``: drafted (for example by S5 for an SME), never applied until confirmed; a
-    confirmation in the Review UI or in writing turns it into an operator rule (Lead ruling 2026-10-22)."""
-
     version: int = EXPORT_VERSION
-    status: Literal["confirmed", "proposed"] = "confirmed"
     rules: list[ExportedRule]
 
 
 def export_yaml(rules: Iterable[tuple[RuleOrigin, ExportedRule]]) -> str:
     """YAML of the operator rules only; derived rules are rebuilt from their source files."""
-    kept = [rule for origin, rule in rules if origin == RuleOrigin.OPERATOR]
+    kept = [
+        rule.model_copy(update={"status": "operator"})
+        for origin, rule in rules
+        if origin == RuleOrigin.OPERATOR
+    ]
     data = RulesFile(rules=kept).model_dump(mode="json", exclude_none=True)
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
@@ -256,10 +259,9 @@ def load_yaml(text: str) -> RulesFile:
 
 def load_rules_dir(directory: Path) -> list[tuple[Path, ExportedRule]]:
     """The operator rules to load: ``*.yaml`` directly in ``directory`` (never subfolders such as
-    ``proposed/``), skipping any file whose ``status`` is ``proposed``."""
+    ``proposed/``), and of those only the rules whose ``status`` is ``operator``."""
     loaded: list[tuple[Path, ExportedRule]] = []
     for path in sorted(p for p in directory.glob("*.yaml") if p.is_file()):
         rules_file = load_yaml(path.read_text(encoding="utf-8"))
-        if rules_file.status == "confirmed":
-            loaded.extend((path, rule) for rule in rules_file.rules)
+        loaded.extend((path, rule) for rule in rules_file.rules if rule.status == "operator")
     return loaded

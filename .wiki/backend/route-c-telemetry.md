@@ -17,24 +17,29 @@ Deterministic path from .dat/.tdms/.csv/.xlsx/.npy to normalized Parquet, teleme
 Code:
 - `backend/routes/c_telemetry/labjack.py` (LJStreamM layout: `parse_header`, `can_handle`, `is_voltage`, `read_batches` in Arrow batches)
 - `backend/routes/c_telemetry/run.py` (`process_labjack`: raw Parquet, streaming stats + quantiles, time base (actual rate, gaps, duplicates), channel resolution through `channel_map` rules, `UNIT_AMBIGUITY` HARD per unresolved channel, `schema.json` + `stats.json` in `dcl-cir/{sha}/C/v1/`, run summary node; `run_uuid_for(sha)` = uuid5)
-- `backend/routes/c_telemetry/pipeline.py` (`process_document(session, minio, doc_id)`: primary blob, folder context, rule target, rules, gate; a clean run is kept as `processed.json` and parked until the commit path)
+- `backend/routes/c_telemetry/ljstream_cfg.py` (folder LJStreamM `.cfg`: scan rate, per-channel scaling equations, `linear()`; evidence only, it states no unit)
+- `backend/routes/c_telemetry/normalize.py` (`plan_channel` → SI affine conversion, scaling/expression (arithmetic over `val` only), gauge kept + `*_bar_abs` when the ambient is known, valve `open_threshold` → 0/1; `normalize_run` → `normalized.parquet` with `t_rel_ms`, `t_from_ignition_ms`; `detect_t0` (pressure slope 20 ms, valve edge, temperature slope; confidence); `three_tier_metrics` (peak, 50 ms rolling peak, steady mean + window); saturation; S5's sanity ranges (first match))
+- `backend/routes/c_telemetry/pipeline.py` (`process_document(session, minio, doc_id, indexer)`: primary blob, folder context, folder `.cfg`, rule target, rules, sanity ranges and `telemetry.*` config, gate (stale channel flags AUTO_RESOLVED), index + commit; `resume_document` from `raw.parquet` + `schema.json` header; `halted_documents_for_rule`)
+- `backend/indexing/commit.py` (the commit for every route: entities, assets, nodes, mentions, facts, telemetry catalog, documents row; run-label collisions renamed with CONFLICT SOFT; `default_indexer` = S2's `index_document` via the models role)
+- `backend/postgres/models/telemetry.py` + migration `0009_telemetry_catalog` (`telemetry_runs`, `telemetry_channels`)
 - `backend/storage/parquet.py` (`write_batches`: 100k-row groups, ZSTD; `schema_with_metadata`; `telemetry_key`)
 - `backend/review/staged.py` (validation gate, staged payload) and `backend/dispatcher/adapters.py` (registry entry `labjack_dat`)
-- `backend/celery_redis/tasks_process.py` (`dcl.process.route_c` on `telemetry_stream`)
+- `backend/celery_redis/tasks_process.py` (`dcl.process.route_c`, `dcl.process.resume_route_c` on `telemetry_stream`; `dcl.process.resume_for_rule` on io_light; transient model/gateway errors retry, others leave the document FAILED)
 - `backend/common/units.py` (pint registry + `config/units.txt`, S5 aliases, gauge/absolute from the spelling, canonical units, gauge → absolute)
 
 Tests and fixtures:
 - `backend/tests/unit/common/test_units.py`
-- `backend/tests/unit/routes/c_telemetry/` (`test_labjack.py`; `test_run.py` with MinIO; `test_pipeline.py` with PostgreSQL + MinIO; synthetic LJStreamM in `conftest.py`)
+- `backend/tests/unit/routes/c_telemetry/` (`test_labjack.py`, `test_ljstream_cfg.py`, `test_normalize.py` (synthetic firing); `test_run.py` with MinIO; `test_pipeline.py` with PostgreSQL + MinIO incl. commit and resume; synthetic LJStreamM in `conftest.py`)
 - `backend/tests/fixtures/route_c/`
 
 ## Interfaces
 
 Provides:
 - `parse_unit(text) -> ParsedUnit{unit, dimension, gauge_or_abs, canonical}` (raises `UnitError`), `to_canonical(value, unit) -> (value, unit)` in bar / N / K / g/s / W or base SI, `ambient_bar_abs(condition, recorded)`, `gauge_to_absolute()`, `has_dimension()`, `fits_quantity(unit, Quantity)` with `QUANTITY_DIMENSIONS` (used by S2's numeric-fact check); the `Quantity` vocabulary is in `backend/postgres/enums.py`
-- `ProcessedDocument` with one `TelemetryRunRecord` (raw Parquet URI, schema URI, rates, gaps, per-channel stats) and the run summary node; `telemetry_runs`/`telemetry_channels` rows come with the step 2 migration
+- `ProcessedDocument` with one `TelemetryRunRecord` (raw Parquet URI, schema URI, rates, gaps, per-channel stats) and the run summary node; `telemetry_runs`/`telemetry_channels` rows written by the commit
 - `dcl-telemetry/{run_uuid}/raw.parquet` (original names, field metadata `raw_name`/`raw_unit`, file metadata `run_uuid`, `run_label`, `source_blob_sha256`, `parser_version`)
-- `normalized.parquet` (step 2)
+- `dcl-telemetry/{run_uuid}/normalized.parquet`: `t_rel_ms`, `t_from_ignition_ms` (null without t0), canonical SI columns, `*_bar_abs`, valve state 0/1; field metadata `raw_name`, `unit`, `quantity`, `gauge_or_abs`
+- `telemetry_runs` / `telemetry_channels` (file 05 §4.4): t0 and method/confidence, ambient, three-tier metrics with `steady_window_ms`, `saturated`, `null_fraction`, `conversion`
 - run summary node
 
 Consumes:
@@ -47,6 +52,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 - `backend/routes/c_telemetry/`
 - `backend/storage/parquet.py`
+- `backend/indexing/commit.py`
+- `backend/postgres/models/telemetry.py`
 - `backend/common/units.py`
 - `backend/tests/unit/common/test_units.py`
 - `backend/tests/unit/routes/c_telemetry/`
@@ -69,6 +76,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | S1 | backend/common/units.py (registry, aliases, references, canonical units); 29 tests |
 | 2026-10-21 | S1 | Quantity vocabulary + fits_quantity(); entity/alias/fact enums for S2 |
 | 2026-10-22 | S1 | Step 1, LabJack .dat/.dat_fail: raw Parquet, stats, channel_map lookup, UNIT_AMBIGUITY HARD, halt with staged payload, `dcl.process.route_c`; 11 tests |
+| 2026-10-22 | S1 | Live on the stack: 20 LabJack runs (4.94 M rows, 4,853 s, 256 MB raw Parquet, 1017.3 Hz, no gaps) HALTED with 160 UNIT_AMBIGUITY HARD; 0 FAILED |
+| 2026-10-22 | S1 | Step 2: migration 0009, .cfg evidence, normalization, t0, metrics, bounds, commit, resume from raw.parquet, retroactive pass; 39 Route C tests |
 
 ## Related
 

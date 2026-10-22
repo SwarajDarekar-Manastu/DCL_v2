@@ -20,7 +20,16 @@ def app(make_models):
     app = FastAPI()
     app.include_router(models_router.router)
     app.dependency_overrides[models_router.models_dependency] = lambda: make_models()
+    app.dependency_overrides[models_router.tokenizer_dependency] = lambda: whitespace_counts
     return app
+
+
+def whitespace_counts(texts: list[str]) -> list[int]:
+    whitespace_counts.batches.append(len(texts))
+    return [len(t.split()) for t in texts]
+
+
+whitespace_counts.batches = []
 
 
 @pytest.fixture
@@ -105,3 +114,21 @@ def test_importing_the_router_imports_no_model_library():
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
     assert out.strip() == "[]"
+
+
+def test_token_counts_come_back_in_order_and_batched(client):
+    whitespace_counts.batches.clear()
+    texts = [" ".join(["w"] * (i % 7)) for i in range(1500)]  # 1500 > one request: the client splits
+    assert client.count_tokens(texts) == [i % 7 for i in range(1500)]
+    assert sum(whitespace_counts.batches) == 1500 and max(whitespace_counts.batches) <= 128
+
+
+def test_token_count_validates_and_never_loads_the_models(app):
+    app.dependency_overrides[models_router.models_dependency] = lambda: pytest.fail("weights loaded")
+    http = TestClient(app)
+    assert http.post("/tokenize/count", json={"texts": ["a b c", ""]}).json() == {
+        "model": "embeddinggemma-2@768",
+        "counts": [3, 0],
+    }
+    assert http.post("/tokenize/count", json={"texts": []}).status_code == 422
+    assert http.post("/tokenize/count", json={"texts": ["x"] * 1025}).status_code == 422

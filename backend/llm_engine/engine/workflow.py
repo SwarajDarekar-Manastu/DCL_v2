@@ -18,7 +18,7 @@ import itertools
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from workflows import Context, Workflow, step
@@ -29,14 +29,17 @@ from backend.llm_engine.engine import playbooks, synthesis
 from backend.llm_engine.engine.analysis import Analysis, QueryAnalysis, analyze
 from backend.llm_engine.engine.playbooks import PlannedCall
 from backend.llm_engine.engine.tools import Source, ToolResult
+from backend.llm_engine.engine.tools import external as external_tools
 from backend.llm_engine.engine.tools.code_diagrams import inspect_code_and_diagrams
 from backend.llm_engine.engine.tools.documents import (
     catalog_lookup,
     get_document,
 )
+from backend.llm_engine.engine.tools.external import ExternalPolicy
 from backend.llm_engine.engine.tools.physics import PhysicsArgs, physics_calculator
 from backend.llm_engine.engine.tools.search import SearchDocumentsArgs, search_documents
 from backend.llm_engine.gemini_types import CallContext, GeminiError, Message
+from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
 
 TOKEN_CHUNK = 160
@@ -50,7 +53,7 @@ class EngineDeps:
     embed_query: Callable[[str], list[float]]
     rerank: Callable | None
     alias_index: Callable[[Any], Any]
-    external_allowed_groups: list[str] = field(default_factory=list)
+    external_policy: Callable[[Any], ExternalPolicy] = lambda session: ExternalPolicy(enabled=False)
     viewer_url: Callable[[uuid.UUID, str | None], str | None] = lambda doc_id, anchor: None
     save_trace: Callable[[dict], None] = lambda trace: None
 
@@ -140,21 +143,29 @@ class AnswerWorkflow(Workflow):
     @step
     async def analyze_question(self, ctx: Context, ev: StartEvent) -> QueryAnalyzed | StopEvent:
         started = time.monotonic()
-        await ctx.store.set(
-            "request",
-            {"question": ev.question, "trace_id": ev.trace_id, "language": ev.get("language", "en")},
-        )
         _step(ctx, ev.trace_id, "analysis", "query_analysis", "Understanding the question", False)
         with self.deps.session_factory() as session:
             index = self.deps.alias_index(session)
+            policy = self.deps.external_policy(session)
+        policy = dataclasses.replace(policy, mode=ev.get("external_mode") or policy.mode)
+        groups = ev.get("groups", [])
+        await ctx.store.set(
+            "request",
+            {
+                "question": ev.question,
+                "trace_id": ev.trace_id,
+                "language": ev.get("language", "en"),
+                "external": dataclasses.asdict(policy),
+            },
+        )
         analysis = await analyze(
             self.deps.gemini,
             ev.question,
             history=ev.get("history", ""),
             state=ev.get("state", {}),
             index=index,
-            user_groups=ev.get("groups", []),
-            external_allowed_groups=self.deps.external_allowed_groups,
+            user_groups=groups,
+            external_allowed_groups=list(policy.allowed_groups) if policy.allows(groups) else [],
             trace_id=ev.trace_id,
         )
         _step(ctx, ev.trace_id, "analysis", "query_analysis", "Understanding the question", True)
@@ -170,7 +181,7 @@ class AnswerWorkflow(Workflow):
     async def _chitchat(self, ctx, ev, analysis: Analysis, started: float) -> StopEvent:
         prompt = load_prompt("engine", "chitchat.v1")
         result = await self.deps.gemini.generate(
-            model=synthesis.MODEL,
+            model=model_id(),
             messages=[
                 Message.system(prompt.system),
                 Message.user(prompt.render_user(question=ev.question, language=analysis.raw.language)),
@@ -204,6 +215,10 @@ class AnswerWorkflow(Workflow):
                         ctx, trace_id, len(calls), playbooks.read_document_call(top.provenance[0].doc_id)
                     )
                 )
+        if plan.external == "yes" or (
+            plan.external == "if_gap" and not any(r.provenance and r.result for r in results)
+        ):
+            results.extend(await self._external(ctx, request))
         return ToolsDone(
             analysis=ev.analysis,
             results=[r.model_dump(mode="json") for r in results],
@@ -211,11 +226,48 @@ class AnswerWorkflow(Workflow):
             started=ev.started,
         )
 
+    async def _external(self, ctx: Context, request: dict) -> list[ToolResult]:
+        """T6 under file 07 §6: generic needs from the question alone, each sanitized, at most three."""
+        trace_id = request["trace_id"]
+        policy = ExternalPolicy(**request["external"])
+        _step(ctx, trace_id, "external", "planning", "Choosing what to look up outside", False)
+        try:
+            needs = await external_tools.needs_for(self.deps.gemini, request["question"], trace_id=trace_id)
+        except GeminiError as exc:
+            needs, note = [], f"external search unavailable: {str(exc)[:200]}"
+        else:
+            note = "the question has no need public sources could answer"
+        _step(ctx, trace_id, "external", "planning", "Choosing what to look up outside", True)
+        if not needs:
+            return [
+                ToolResult(
+                    tool=external_tools.NAME,
+                    result=None,
+                    warnings=[note],
+                    display=f"No external search: {note}.",
+                )
+            ]
+        results = []
+        for i, need in enumerate(needs[: external_tools.MAX_QUERIES]):
+            step_id, description = f"external{i}", f"Searching outside sources ({need.purpose})"
+            _step(ctx, trace_id, step_id, "tool", description, False, tool=external_tools.NAME)
+            result = await external_tools.external_search(
+                self.deps.gemini,
+                need,
+                policy=policy,
+                trace_id=trace_id,
+                resolve=external_tools.resolve_redirect,
+                search_arxiv=external_tools.arxiv,
+            )
+            _step(ctx, trace_id, step_id, "tool", description, True, tool=external_tools.NAME)
+            results.append(result)
+        return results
+
     async def _physics_args(self, request: dict) -> PhysicsArgs | None:
         prompt = load_prompt("engine", "physics_args.v1")
         try:
             result = await self.deps.gemini.generate(
-                model=synthesis.MODEL,
+                model=model_id(),
                 messages=[
                     Message.system(prompt.system),
                     Message.user(prompt.render_user(question=request["question"])),
@@ -426,6 +478,12 @@ class AnswerWorkflow(Workflow):
             }
             if draft
             else None,
+            "external_queries": [
+                q
+                for r in results
+                if r.tool == external_tools.NAME and isinstance(r.result, dict)
+                for q in r.result.get("external_queries", [])
+            ],
             "answer_markdown": markdown,
             "mode": mode,
             "latency_ms": latency,

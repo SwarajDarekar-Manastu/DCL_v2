@@ -20,10 +20,10 @@ from backend.config import ThinkingLevel
 from backend.dispatcher.folder_context import HARDWARE_PATTERNS, PLAN_PATTERNS, RUN_PATTERNS
 from backend.llm_engine.enrichment.entities import AliasIndex
 from backend.llm_engine.gemini_types import CallContext, Message
+from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
 from backend.postgres.enums import EntityType
 
-MODEL = "gemini-3.8-flash"
 PROMPT_VERSION = "query_analysis.v1"
 PURPOSE = "engine.query_analysis"
 
@@ -200,7 +200,7 @@ async def analyze(
         history=history or "none", state=json.dumps(state, default=str), question=question
     )
     result = await client.generate(
-        model=MODEL,
+        model=model_id(),
         messages=[Message.system(prompt.system), Message.user(user)],
         context=CallContext(purpose=PURPOSE, prompt_version=PROMPT_VERSION, trace_id=trace_id),
         schema=QueryAnalysis,
