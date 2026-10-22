@@ -49,9 +49,119 @@ BODY = json.dumps(
 ).encode()
 
 
-def test_signed_request_passes_identity_and_reaches_the_workflow_stub(client):
+class FakeHandler:
+    """Stands in for a WorkflowHandler: streams the given events, then resolves (or raises)."""
+
+    def __init__(self, events, error=None):
+        self.events, self.error = events, error
+
+    async def stream_events(self):
+        for event in self.events:
+            yield event
+        if self.error:
+            raise self.error
+
+    def __await__(self):
+        async def result():
+            return None
+
+        return result().__await__()
+
+
+class FakeEngine:
+    def __init__(self, handler):
+        self.handler, self.kwargs = handler, None
+
+    def run(self, **kwargs):
+        self.kwargs = kwargs
+        return self.handler
+
+
+def frames_of(text: str) -> list[dict]:
+    out = []
+    for block in text.strip().split("\n\n"):
+        event, data = block.split("\n")
+        out.append({"type": event.removeprefix("event: "), **json.loads(data.removeprefix("data: "))})
+    return out
+
+
+def with_engine(client, engine_obj):
+    client.app.dependency_overrides[engine.answer_engine] = lambda: engine_obj
+    return client
+
+
+def test_signed_request_streams_the_workflow_frames_in_order(client):
+    wf = pytest.importorskip("backend.llm_engine.engine.workflow")
+    trace_id = "6f0c1d1e-9d55-4c55-9a43-6d1f7b1f0001"
+    done = {
+        "type": "done",
+        "trace_id": trace_id,
+        "mode": "answered",
+        "answer_markdown": "Pc was 12.4 bar.",
+        "usage": {"tokens_in": 0, "tokens_out": 0},
+        "latency_ms": 5,
+    }
+    events = [  # DBOS may deliver out of order; the API restores seq order
+        wf.Emit(seq=2, payload={"type": "token", "text": "12.4 bar."}),
+        wf.Emit(
+            seq=0,
+            payload={
+                "type": "step",
+                "step_id": "a",
+                "name": "query_analysis",
+                "description": "Understanding",
+                "done": True,
+            },
+        ),
+        wf.Emit(seq=3, payload=done),
+        wf.Emit(seq=1, payload={"type": "token", "text": "Pc was "}),
+    ]
+    fake = FakeEngine(FakeHandler(events))
+    body = json.dumps(
+        {
+            "messages": [
+                {"role": "user", "content": "Which plan?"},
+                {"role": "assistant", "content": "TP07."},
+                {"role": "user", "content": "peak Pc in TP07?"},
+            ],
+            "chat_id": "c1",
+            "message_id": "m1",
+        }
+    ).encode()
+    response = with_engine(client, fake).post("/v1/answer", content=body, headers=signed_headers(body))
+    assert response.status_code == 200 and response.headers["content-type"].startswith("text/event-stream")
+    frames = frames_of(response.text)
+    assert [f["type"] for f in frames] == ["step", "token", "token", "done"]
+    assert "".join(f["text"] for f in frames if f["type"] == "token") == "Pc was 12.4 bar."
+    assert fake.kwargs["question"] == "peak Pc in TP07?" and "assistant: TP07." in fake.kwargs["history"]
+    assert fake.kwargs["groups"] == ["dcl-engineers", "dcl-reviewers"] and fake.kwargs["user_id"] == "u-17"
+
+
+def test_a_gemini_failure_ends_the_stream_with_a_retryable_error(client):
+    pytest.importorskip("backend.llm_engine.engine.workflow")
+    from backend.llm_engine.gemini_types import GatewayError
+
+    fake = FakeEngine(FakeHandler([], error=GatewayError("gateway down", status_code=503)))
+    response = with_engine(client, fake).post("/v1/answer", content=BODY, headers=signed_headers(BODY))
+    [frame] = frames_of(response.text)
+    assert frame["type"] == "error" and frame["code"] == "gemini_unavailable" and frame["retryable"] is True
+
+
+def test_an_unconfigured_engine_answers_503(client, monkeypatch):
+    monkeypatch.delenv("DCL_MODELS_URL", raising=False)
+    config.get_settings.cache_clear()
     response = client.post("/v1/answer", content=BODY, headers=signed_headers(BODY))
-    assert response.status_code == 501
+    assert response.status_code == 503
+    assert "not configured" in response.json()["detail"] or "not installed" in response.json()["detail"]
+
+
+def test_split_conversation_takes_the_last_user_turn_and_bounded_history():
+    messages = [engine.ChatMessage(role="system", content="sys")] + [
+        engine.ChatMessage(role="user" if i % 2 == 0 else "assistant", content=f"turn {i}") for i in range(10)
+    ]
+    question, history = engine.split_conversation(messages)
+    assert question == "turn 8"  # turn 9 is the assistant's
+    assert "sys" not in history and "turn 7" in history and "turn 1" not in history
 
 
 @pytest.mark.parametrize(
