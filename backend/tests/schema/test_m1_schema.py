@@ -38,6 +38,8 @@ M2_M4_TABLES = {
     "benchmark_cases",
     "benchmark_runs",
     "benchmark_results",
+    "telemetry_runs",
+    "telemetry_channels",
 }
 EXPECTED_TABLES = M1_TABLES | M2_M4_TABLES
 
@@ -81,6 +83,11 @@ CHECKED_COLUMNS: dict[tuple[str, str], type[StrEnum]] = {
     ("benchmark_cases", "category"): enums.BenchmarkCategory,
     ("benchmark_runs", "status"): enums.BenchmarkRunStatus,
     ("benchmark_results", "failure_class"): enums.FailureClass,
+    ("telemetry_runs", "source_format"): enums.TelemetrySourceFormat,
+    ("telemetry_runs", "run_status"): enums.RunStatus,
+    ("telemetry_runs", "ambient_condition"): enums.AmbientCondition,
+    ("telemetry_channels", "quantity"): enums.Quantity,
+    ("telemetry_channels", "gauge_or_abs"): enums.GaugeOrAbs,
 }
 # Hand-written CHECKs that are not enum lists.
 OTHER_CHECKS = {
@@ -156,6 +163,7 @@ NODE = "00000000-0000-4000-8000-0000000000a6"
 ENTITY = "00000000-0000-4000-8000-0000000000e1"
 RULE = "00000000-0000-4000-8000-0000000000c1"
 RUN = "00000000-0000-4000-8000-0000000000b1"
+TRUN = "00000000-0000-4000-8000-0000000000d1"
 
 
 def _insert(conn, table: str, **values):
@@ -250,6 +258,26 @@ def _seed(conn) -> None:
     _insert(conn, "benchmark_runs", run_id=RUN, suite="telemetry")
     _insert(
         conn, "benchmark_results", run_id=RUN, case_id="TM-001", case_version=1, failure_class="UNIT_ERROR"
+    )
+    _insert(
+        conn,
+        "telemetry_runs",
+        run_uuid=TRUN,
+        run_label="TP07_T01",
+        doc_id=DOC_A,
+        blob_sha256=SHA_A,
+        source_format="labjack_dat",
+        channel_map_rule_id=RULE,
+    )
+    _insert(
+        conn,
+        "telemetry_channels",
+        run_uuid=TRUN,
+        canonical_name="pt_101_bar_g",
+        raw_name="y0",
+        quantity="pressure",
+        gauge_or_abs="gauge",
+        sparkline_asset_id=ASSET,
     )
 
 
@@ -456,3 +484,26 @@ def test_a_flag_needs_a_document_or_a_location_and_location_flags_are_unique_per
         with pytest.raises(IntegrityError, match="uq_review_flags_location_fingerprint"):
             with conn.begin():
                 _insert(conn, "review_flags", **row)
+
+
+def test_run_labels_are_unique_and_a_document_delete_removes_its_runs_and_channels(migrated):
+    with migrated.connect() as conn:
+        with conn.begin():
+            _seed(conn)
+        with pytest.raises(IntegrityError, match="uq_telemetry_runs_run_label"):
+            with conn.begin():
+                _insert(
+                    conn,
+                    "telemetry_runs",
+                    run_uuid="00000000-0000-4000-8000-0000000000d2",
+                    run_label="TP07_T01",
+                    doc_id=DOC_B,
+                    blob_sha256=SHA_B,
+                    source_format="csv",
+                )
+        with conn.begin():
+            conn.execute(text("DELETE FROM documents WHERE doc_id = :d"), {"d": DOC_A})
+        counts = conn.execute(
+            text("SELECT (SELECT count(*) FROM telemetry_runs), (SELECT count(*) FROM telemetry_channels)")
+        ).one()
+        assert tuple(counts) == (0, 0)

@@ -15,11 +15,14 @@ from sqlalchemy.orm import Session
 from backend.dispatcher.folder_context import FolderContext
 from backend.dispatcher.routing import PROCESSED_MARK
 from backend.dispatcher.type_resolution import HEAD_BYTES
+from backend.postgres import pipeline_config
 from backend.postgres.enums import DocumentSourceRole, DocumentStatus, DriveItemStatus, RuleOrigin, RuleType
 from backend.postgres.models import Blob, Document, DocumentSource, DriveFolder, DriveItem, Rule
 from backend.review.rules import RuleRecord, RuleScope, RuleTarget
 from backend.review.staged import GateResult, gate
-from backend.routes.c_telemetry.run import PARSER_VERSION, RunInputs, process_labjack
+from backend.routes.c_telemetry.ljstream_cfg import parse_ljstream_cfg
+from backend.routes.c_telemetry.normalize import NormalizeConfig, sanity_ranges_from
+from backend.routes.c_telemetry.run import PARSER_VERSION, FolderConfig, RunInputs, process_labjack
 from backend.storage.minio import CIR, TELEMETRY, BucketStore, parse_uri
 
 
@@ -41,6 +44,39 @@ def _folder_ids(session: Session, parent_item_id: str | None) -> list[str]:
         chain.append(current)
         current = session.scalar(select(DriveFolder.parent_item_id).where(DriveFolder.item_id == current))
     return chain
+
+
+CFG_MAX_BYTES = 1024 * 1024
+TELEMETRY_PREFIX = "telemetry."  # t0_pressure_slope_bar_s, t0_temperature_slope_k_s, … (NormalizeConfig)
+
+
+def folder_ljstream_config(session: Session, minio: Minio, parent_item_id: str | None) -> FolderConfig | None:
+    """The LJStreamM ``.cfg`` next to the run (``LJStreamM*.cfg`` first, then any ``.cfg`` that parses)."""
+    if parent_item_id is None:
+        return None
+    rows = session.execute(
+        select(DriveItem.name, Blob)
+        .join(Blob, Blob.sha256 == DriveItem.blob_sha256)
+        .where(
+            DriveItem.parent_item_id == parent_item_id,
+            DriveItem.extension == ".cfg",
+            DriveItem.status == DriveItemStatus.LANDED,
+            Blob.restricted.is_(False),
+            Blob.size_bytes <= CFG_MAX_BYTES,
+        )
+    ).all()
+    rows.sort(key=lambda row: (not row[0].casefold().startswith("ljstreamm"), row[0]))
+    for name, cfg_blob in rows:
+        bucket, key = parse_uri(cfg_blob.minio_uri)
+        response = minio.get_object(bucket, key)
+        try:
+            config = parse_ljstream_cfg(response.read().decode("utf-8", "replace"))
+        finally:
+            response.close()
+            response.release_conn()
+        if config is not None and not config.scaling_disabled:
+            return FolderConfig(file_name=name, config=config)
+    return None
 
 
 def channel_map_rules(session: Session) -> tuple[list[RuleRecord], dict[uuid.UUID, dict]]:
@@ -94,6 +130,7 @@ def process_document(session: Session, minio: Minio, doc_id: uuid.UUID) -> Route
     )
     rules, bodies = channel_map_rules(session)
     bucket, key = parse_uri(blob.minio_uri)
+    folder_config = folder_ljstream_config(session, minio, item.parent_item_id)
 
     def head() -> bytes:
         length = min(HEAD_BYTES, blob.size_bytes or HEAD_BYTES)
@@ -107,12 +144,25 @@ def process_document(session: Session, minio: Minio, doc_id: uuid.UUID) -> Route
     cir = BucketStore(minio, CIR)
     processed = process_labjack(
         lambda: minio.get_object(bucket, key),
-        RunInputs(blob_sha256=blob.sha256, name=item.name, context=context, target=target),
+        RunInputs(
+            blob_sha256=blob.sha256,
+            name=item.name,
+            context=context,
+            target=target,
+            folder_config=folder_config,
+        ),
         rules,
         bodies,
         BucketStore(minio, TELEMETRY),
         cir,
         head(),
+        normalize_config=NormalizeConfig.from_mapping(
+            {
+                key.removeprefix(TELEMETRY_PREFIX): value
+                for key, value in pipeline_config.get_prefix(session, TELEMETRY_PREFIX).items()
+            }
+        ),
+        sanity=sanity_ranges_from(pipeline_config.get(session, pipeline_config.SANITY_RANGES, default=None)),
     )
     _apply_fields(document, processed)
     result: GateResult = gate(session, cir, document, processed)

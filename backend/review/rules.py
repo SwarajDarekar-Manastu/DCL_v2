@@ -23,7 +23,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.dispatcher.contract import ColumnMapping
-from backend.postgres.enums import AmbientCondition, GaugeOrAbs, RuleOrigin, RuleType, SourceOrigin
+from backend.postgres.enums import AmbientCondition, GaugeOrAbs, Quantity, RuleOrigin, RuleType, SourceOrigin
 
 EXPORT_VERSION = 1
 
@@ -140,7 +140,7 @@ class ChannelMapEntry(_Model):
     """One raw channel's mapping: canonical name, quantity, unit, scaling or expression, tag, range."""
 
     canonical_name: str = Field(min_length=1)
-    physical_quantity: str = Field(min_length=1)
+    physical_quantity: Quantity
     unit: str = Field(min_length=1, description="unit of the value after scaling, pint-parsable")
     gauge_or_abs: GaugeOrAbs = GaugeOrAbs.NOT_APPLICABLE
     scaling: ChannelScaling | None = None
