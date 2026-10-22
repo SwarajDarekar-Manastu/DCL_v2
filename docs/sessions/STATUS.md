@@ -848,3 +848,14 @@ Merged / ready: owner-password PDFs. A1 pre-flight now decrypts in memory a PDF 
 Blocked on: S1's re-dispatch of the A1 documents with cloud_allowed true (206e1884 and the 8 ECSS standards after this merge)
 Needs from others: S1: re-run; `llm_calls` with the client's ledger hook
 Next: OCR engine per script and cost report, then the M5 handwriting calibration on the TP7 sheets
+
+## 2026-10-23 07:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Committed, not mergeable yet: failure classes after the first scored run (56 cases, 1 passed).
+- The 38 failed results without a class were all engine errors, not unscored misses:
+  - 24 asyncio errors ("Event loop is closed", "bound to a different event loop"). This was my bug: each io_light thread called `asyncio.run` on the shared gateway client. Fixed: one process-wide loop, `tasks.run_async`.
+  - 14 workflow timeouts at 300 s.
+- New classes: MISSING_DOCUMENT (expected document not indexed), INSUFFICIENT_EVIDENCE, ENGINE_ERROR (raised or timed out), and RETRIEVAL_MISS also when no tool returned an expected document. Every failed result now has a class.
+- The DB test fails on `ck_benchmark_results_failure_class` until S1 adds the three values.
+Blocked on: S1: add MISSING_DOCUMENT, INSUFFICIENT_EVIDENCE, ENGINE_ERROR to `FailureClass` with a CHECK migration (and the Lead to file 08 §5.4)
+Needs from others: as above; S1's A1 re-run
+Next: merge this after S1's migration; answer latency (p50 160–230 s on run 1) needs a look; then the OCR and cost report and the handwriting calibration

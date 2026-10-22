@@ -35,7 +35,8 @@ Provides:
 - Websocket topic `run`, key = run id: `progress` (start; then per case `{case_id, passed, failure_class, cases_done, cases_total, pass_rate}`), `finished` (`{status, …aggregate}`)
 - Benchmark answers: `AnswerWorkflow` in process (same code path as chat), caller groups `dcl-benchmark` + the external-allowed groups, external mode `mock` (canned results, no network); a clarification is answered once from `spec.clarification_answer` unless the case expects `must_clarify`
 - Metric rules chosen where the manual is open: tools = every expected tool called (ordered when asked), extra tools allowed; numbers read from entailed claims, units converted with pint, gauge never converts to absolute; retrieval gold found by same document and same content hash or same locator; recall@30 from a pre-rerank search (k=30), recall@8 from a reranked search (k=8), both over the question without filters; judge (Gemini) only for `must_present_both_conflicting_values` and LIBRARY_VS_INTERNAL provenance labeling, everything else deterministic
-- Failure class order: BEHAVIOR_FAIL → RETRIEVAL_MISS → RERANK_MISS → TOOL_MISROUTE → TOOL_ERROR → UNIT_ERROR → VERIFIER_FALSE_NEGATIVE → SYNTHESIS_ERROR
+- Failure class order: MISSING_DOCUMENT (an expected citation or gold anchor with no ACTIVE document, by doc_id, standard_id, title or drive item name) → BEHAVIOR_FAIL → RETRIEVAL_MISS (gold anchors) → RERANK_MISS → TOOL_MISROUTE → TOOL_ERROR → INSUFFICIENT_EVIDENCE (mode `insufficient_evidence` not asked for) → RETRIEVAL_MISS (no tool returned an expected document) → UNIT_ERROR → VERIFIER_FALSE_NEGATIVE → SYNTHESIS_ERROR; a case whose engine call raised or timed out is ENGINE_ERROR. The three new classes need S1's FailureClass/CHECK update
+- Celery case tasks run their coroutines on one process-wide event loop (`tasks.run_async`); `asyncio.run` per task broke the shared gateway client on the first scored run
 
 Consumes:
 - `backend/benchmark/catalog.py` (S3: `CaseSpec`, the queued run with its case snapshot)
@@ -63,6 +64,7 @@ Consumes:
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S2 | After the first scored run (56 cases, 38 errors): one event loop per worker process for case tasks; failure classes MISSING_DOCUMENT, INSUFFICIENT_EVIDENCE, ENGINE_ERROR and RETRIEVAL_MISS without gold anchors; 1 + 1 unit tests, DB test extended |
 | 2026-10-23 | S2 | Runner, metrics, judge, Celery tasks; 17 + 2 unit, 4 DB, 1 workflow tests |
 
 ## Related

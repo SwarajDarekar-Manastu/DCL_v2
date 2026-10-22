@@ -63,6 +63,11 @@ class Observed:
     retrieved_8: list[tuple[str, str]] = field(default_factory=list)  # (doc_id, anchor) post-rerank
     rerank_margin: float | None = None
     judge: dict[str, dict] = field(default_factory=dict)  # behaviour/provenance → {passed, rationale}
+    retrieved_docs: set[str] = field(
+        default_factory=set
+    )  # every document a tool returned (trace `retrieved`)
+    expected_docs: set[str] = field(default_factory=set)  # indexed documents matching the expected citations
+    missing_documents: list[str] = field(default_factory=list)  # expected citations with no indexed document
 
 
 # ---------------------------------------------------------------- numbers
@@ -309,14 +314,27 @@ def score_case(category: str, spec: CaseSpec, observed: Observed) -> dict[str, A
         "rerank_margin": observed.rerank_margin,
     }
     metrics["latency_ms"] = observed.latency_ms
+    if observed.missing_documents:
+        metrics["missing_documents"] = observed.missing_documents
     passed = all(checks)
     metrics["failure_class"] = None if passed else classify(category, spec, observed, metrics)
     metrics["passed"] = passed
     return metrics
 
 
+# Classes added after the first scored run (Lead 2026-10-23); S1 adds them to FailureClass and its CHECK.
+MISSING_DOCUMENT = "MISSING_DOCUMENT"
+INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+ENGINE_ERROR = "ENGINE_ERROR"
+
+
 def classify(category: str, spec: CaseSpec, observed: Observed, metrics: dict) -> str:
-    """The first failure in pipeline order (file 08 §5.4)."""
+    """The first failure in pipeline order (file 08 §5.4 plus the three classes above):
+    MISSING_DOCUMENT → BEHAVIOR_FAIL → RETRIEVAL_MISS (gold anchors) → RERANK_MISS → TOOL_MISROUTE →
+    TOOL_ERROR → INSUFFICIENT_EVIDENCE → RETRIEVAL_MISS (an expected document no tool returned) →
+    UNIT_ERROR → VERIFIER_FALSE_NEGATIVE → SYNTHESIS_ERROR."""
+    if observed.missing_documents:
+        return MISSING_DOCUMENT
     if "behavior" in metrics and not metrics["behavior"]["passed"]:
         return FailureClass.BEHAVIOR_FAIL
     if not metrics.get("out_of_scope", {}).get("passed", True):
@@ -330,6 +348,10 @@ def classify(category: str, spec: CaseSpec, observed: Observed, metrics: dict) -
         return FailureClass.TOOL_MISROUTE
     if any(re.search(r"\bfailed\b|\berror\b", w, re.IGNORECASE) for w in observed.tool_warnings):
         return FailureClass.TOOL_ERROR
+    if observed.mode == "insufficient_evidence":
+        return INSUFFICIENT_EVIDENCE
+    if observed.expected_docs and not observed.expected_docs & observed.retrieved_docs:
+        return FailureClass.RETRIEVAL_MISS
     numeric = metrics.get("numeric")
     if numeric and not numeric["passed"]:
         if numeric["unit_error"]:

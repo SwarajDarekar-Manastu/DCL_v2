@@ -5,9 +5,16 @@
 - `dcl.benchmark.sweep()` (beat, every minute): start QUEUED runs, and re-enqueue the missing cases of a
   RUNNING run whose heartbeat (a Redis key refreshed at start and after every case, expiring after
   STALE_AFTER) is gone, i.e. a lost worker; results are per case, so a repeat only redoes cases without one.
+
+The engine's clients are created once per worker process and hold asyncio objects (the gateway client's
+connection pool and rate limiter) bound to the loop they were first used on. The io_light pool runs tasks
+on threads, so every task submits its coroutine to one process-wide loop (`run_async`) instead of
+`asyncio.run`, which would give each task a new loop and break the shared clients ("Event loop is closed",
+"bound to a different event loop", seen on the first scored run).
 """
 
 import asyncio
+import threading
 import uuid
 from datetime import timedelta
 from functools import lru_cache
@@ -31,6 +38,20 @@ def _beat(run_id) -> None:
     broker().set(HEARTBEAT.format(run_id), "1", ex=int(STALE_AFTER.total_seconds()))
 
 
+_LOOP: asyncio.AbstractEventLoop | None = None
+_LOOP_LOCK = threading.Lock()
+
+
+def run_async(coroutine):
+    """Run a coroutine on the process-wide benchmark loop (started on first use) and wait for it."""
+    global _LOOP
+    with _LOOP_LOCK:
+        if _LOOP is None or _LOOP.is_closed():
+            _LOOP = asyncio.new_event_loop()
+            threading.Thread(target=_LOOP.run_forever, name="benchmark-loop", daemon=True).start()
+    return asyncio.run_coroutine_threadsafe(coroutine, _LOOP).result()
+
+
 @lru_cache(maxsize=1)
 def _deps() -> runner.RunnerDeps:
     return runner.default_deps()
@@ -52,7 +73,7 @@ def start(run_id: str) -> int:
 
 @app.task(name="dcl.benchmark.case", queue=IO_LIGHT)
 def case(run_id: str, case_id: str) -> bool | None:
-    outcome = asyncio.run(runner.run_one(uuid.UUID(run_id), case_id, _deps()))
+    outcome = run_async(runner.run_one(uuid.UUID(run_id), case_id, _deps()))
     _beat(run_id)
     return None if outcome is None else bool(outcome["passed"])
 
