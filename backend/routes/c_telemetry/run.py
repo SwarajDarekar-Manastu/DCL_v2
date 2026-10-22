@@ -1,10 +1,11 @@
-"""Route C for one LabJack run (file 03 §C.1), step 1: raw Parquet, stats, channel resolution, flags.
+"""Route C for one LabJack run (file 03 §C.1): raw Parquet, stats, channel resolution, normalization.
 
 The raw file is streamed into ``dcl-telemetry/{run_uuid}/raw.parquet`` (original names and units).
 Every channel needs a physical quantity and unit: ``v*`` columns are channel voltages (V); every other
 channel is resolved through ``channel_map`` rules (most specific rule that names it). An unresolved
-channel raises a HARD ``UNIT_AMBIGUITY`` with the header lines and the channel's stats as evidence.
-Normalized Parquet, t0 alignment and the three-tier metrics follow once every channel resolves.
+channel raises a HARD ``UNIT_AMBIGUITY`` with the header lines, the folder ``.cfg`` scaling and the
+channel's stats as evidence. Once every channel resolves, ``normalize.py`` writes ``normalized.parquet``
+(SI, ``t_rel_ms``, ``t_from_ignition_ms``), checks the sanity bounds and computes t0 and the metrics.
 """
 
 import json
@@ -22,17 +23,21 @@ import pyarrow.parquet as pq
 
 from backend.dispatcher.contract import (
     ChannelStats,
+    ConflictEvidence,
+    ConflictSide,
     DocumentFields,
     Flag,
     FlagAnchor,
     ProcessedDocument,
     ProcessedNode,
+    SanityBounds,
     TelemetryChannelRecord,
     TelemetryRunRecord,
     UnitTelemetryEvidence,
 )
 from backend.dispatcher.folder_context import FolderContext
 from backend.postgres.enums import (
+    AmbientCondition,
     DocKind,
     FlagSeverity,
     FlagType,
@@ -44,8 +49,29 @@ from backend.postgres.enums import (
     RunStatus,
     TelemetrySourceFormat,
 )
-from backend.review.rules import ChannelMapEntry, RuleRecord, RuleTarget, parse_body, resolve_where
+from backend.review.rules import (
+    ChannelMapBody,
+    ChannelMapEntry,
+    RuleRecord,
+    RuleTarget,
+    parse_body,
+    resolve_where,
+)
 from backend.routes.c_telemetry.labjack import LabJackHeader, is_voltage, parse_header, read_batches
+from backend.routes.c_telemetry.ljstream_cfg import LJStreamConfig
+from backend.routes.c_telemetry.normalize import (
+    ChannelPlan,
+    ColumnResult,
+    NormalizeConfig,
+    NormalizedRun,
+    PlanProblem,
+    SanityRange,
+    in_bounds,
+    matching_range,
+    normalize_run,
+    plan_channel,
+    voltage_plan,
+)
 from backend.storage.minio import BucketStore
 from backend.storage.parquet import schema_with_metadata, telemetry_key, write_batches
 
@@ -127,11 +153,20 @@ class _TimeBase:
 
 
 @dataclass(frozen=True)
+class FolderConfig:
+    """The folder's LJStreamM ``.cfg`` (file 03 §C.0), when there is one."""
+
+    file_name: str
+    config: LJStreamConfig
+
+
+@dataclass(frozen=True)
 class RunInputs:
     blob_sha256: str
     name: str
     context: FolderContext
     target: RuleTarget
+    folder_config: FolderConfig | None = None
 
 
 @dataclass
@@ -139,6 +174,16 @@ class Resolution:
     mapped: dict[str, ChannelMapEntry] = field(default_factory=dict)
     rule_ids: dict[str, uuid.UUID] = field(default_factory=dict)
     unresolved: list[str] = field(default_factory=list)
+    bodies: dict[uuid.UUID, ChannelMapBody] = field(default_factory=dict)
+
+    def ambient(self) -> tuple[AmbientCondition, float | None]:
+        """The run's ambient from the rules that mapped it (first one that states it)."""
+        for rule_id in dict.fromkeys(self.rule_ids.values()):
+            body = self.bodies[rule_id]
+            if body.ambient_condition is not None or body.ambient_pressure_bar_abs is not None:
+                condition = body.ambient_condition or AmbientCondition.AMBIENT_RECORDED
+                return condition, body.ambient_pressure_bar_abs
+        return AmbientCondition.UNKNOWN, None
 
 
 def resolve_channels(
@@ -160,6 +205,7 @@ def resolve_channels(
         else:
             resolution.mapped[channel] = parsed[rule.rule_id].channels[channel]
             resolution.rule_ids[channel] = rule.rule_id
+            resolution.bodies[rule.rule_id] = parsed[rule.rule_id]
     return resolution
 
 
@@ -179,6 +225,8 @@ def process_labjack(
     telemetry: BucketStore,
     cir: BucketStore,
     head: bytes,
+    normalize_config: NormalizeConfig | None = None,
+    sanity: Sequence[SanityRange] = (),
 ) -> ProcessedDocument:
     header = parse_header(head.decode("utf-8", "replace"))
     if header is None:
@@ -213,6 +261,25 @@ def process_labjack(
         raw_uri = telemetry.put_file(
             telemetry_key(str(run_id), "raw"), str(path), "application/vnd.apache.parquet"
         )
+        outcome = (
+            _normalize(
+                path,
+                Path(workdir) / "normalized.parquet",
+                header,
+                resolution,
+                {"run_uuid": str(run_id), "run_label": label, "source_blob_sha256": inputs.blob_sha256},
+                normalize_config or NormalizeConfig(),
+                sanity,
+            )
+            if not resolution.unresolved
+            else _Outcome()
+        )
+        if outcome.clean:
+            outcome.uri = telemetry.put_file(
+                telemetry_key(str(run_id), "normalized"),
+                str(Path(workdir) / "normalized.parquet"),
+                "application/vnd.apache.parquet",
+            )
 
     stats = {c: running[c].stats(*quantiles[c]) for c in header.channels}
     prefix = f"{inputs.blob_sha256}/{Route.C}/v{PARSER_VERSION}"
@@ -222,6 +289,16 @@ def process_labjack(
         "time_column": {"name": header.time_column, "unit": "s"},
         "started_at": header.started_at.isoformat() if header.started_at else None,
         "started_at_zone": "assumed Asia/Kolkata",
+        "folder_config": (
+            {
+                "file": inputs.folder_config.file_name,
+                "scan_rate_hz": inputs.folder_config.config.scan_rate_hz,
+                "scaling_disabled": inputs.folder_config.config.scaling_disabled,
+                "equations": inputs.folder_config.config.equations,
+            }
+            if inputs.folder_config
+            else None
+        ),
         "channels": {
             c: (
                 {"quantity": "voltage", "unit": "V", "source": "labjack voltage column"}
@@ -254,16 +331,29 @@ def process_labjack(
         "application/json",
     )
 
-    channels = [_channel_record(c, stats[c], resolution) for c in header.channels]
+    channels = (
+        [_normalized_record(r) for r in outcome.run.columns]
+        if outcome.clean
+        else [_channel_record(c, stats[c], resolution) for c in header.channels]
+    )
     flags = [
         Flag(
             flag_type=FlagType.UNIT_AMBIGUITY,
             severity=FlagSeverity.HARD,
             anchor=FlagAnchor(channel=c),
-            evidence=UnitTelemetryEvidence(channel=c, header_lines=header.header_lines, stats=stats[c]),
+            evidence=UnitTelemetryEvidence(
+                channel=c,
+                header_lines=header.header_lines,
+                scaling_equation=_equation(inputs.folder_config, c),
+                scaling_source=inputs.folder_config.file_name if _equation(inputs.folder_config, c) else None,
+                stats=stats[c],
+            ),
         )
         for c in resolution.unresolved
     ]
+    flags += [_with_header(f, header.header_lines, inputs.folder_config) for f in outcome.flags]
+    ambient, ambient_value = resolution.ambient()
+    t0 = outcome.run.t0 if outcome.clean else None
     rate = timebase.actual_rate_hz
     record = TelemetryRunRecord(
         run_uuid=run_id,
@@ -277,19 +367,18 @@ def process_labjack(
         n_gaps=timebase.gaps,
         n_duplicate_ts=timebase.duplicates,
         raw_parquet_uri=raw_uri,
+        normalized_parquet_uri=outcome.uri,
         schema_uri=schema_uri,
+        ambient_condition=ambient,
+        ambient_pressure_bar_abs=ambient_value,
+        t0_ignition_ms=int(round(t0.t_ms)) if t0 else None,
+        t0_method=t0.method if t0 else None,
+        t0_confidence=t0.confidence if t0 else None,
         recorded_at=header.started_at,
         channel_map_rule_id=next(iter(resolution.rule_ids.values()), None),
         channels=channels,
     )
-    summary = (
-        f"Run {label} ({inputs.name}), recorded {header.started_at:%Y-%m-%d %H:%M} local, "
-        f"{rate:.0f} Hz, {timebase.duration_s:.1f} s, {timebase.rows} rows, {len(header.channels)} channels; "
-        f"status {'FAILED_RUN' if failed else 'not yet classified'}; "
-        f"{len(resolution.unresolved)} channels await unit confirmation."
-        if header.started_at and rate and timebase.duration_s is not None
-        else f"Run {label} ({inputs.name}), {timebase.rows} rows, {len(header.channels)} channels."
-    )
+    summary = _summary(label, inputs.name, header, timebase, failed, resolution, outcome)
     return ProcessedDocument(
         blob_sha256=inputs.blob_sha256,
         route=Route.C,
@@ -322,6 +411,199 @@ def process_labjack(
         telemetry_runs=[record],
         flags=flags,
     )
+
+
+@dataclass
+class _Outcome:
+    """Normalization result: the run when it went through, and the flags it raised."""
+
+    run: NormalizedRun | None = None
+    flags: list[Flag] = field(default_factory=list)
+    uri: str | None = None
+
+    @property
+    def clean(self) -> bool:
+        return self.run is not None and not any(f.severity == FlagSeverity.HARD for f in self.flags)
+
+
+def _unit_flag(channel: str, stats: ChannelStats, note: str, sanity: SanityBounds | None = None) -> Flag:
+    return Flag(
+        flag_type=FlagType.UNIT_AMBIGUITY,
+        severity=FlagSeverity.HARD,
+        anchor=FlagAnchor(channel=channel),
+        evidence=UnitTelemetryEvidence(channel=channel, stats=stats, note=note, sanity=sanity),
+    )
+
+
+def _with_header(flag: Flag, header_lines: list[str], folder_config: FolderConfig | None) -> Flag:
+    evidence = flag.evidence
+    if not isinstance(evidence, UnitTelemetryEvidence):
+        return flag
+    equation = _equation(folder_config, evidence.channel)
+    return flag.model_copy(
+        update={
+            "evidence": evidence.model_copy(
+                update={
+                    "header_lines": header_lines,
+                    "scaling_equation": equation,
+                    "scaling_source": folder_config.file_name if equation else None,
+                }
+            )
+        }
+    )
+
+
+def _normalize(
+    raw_path: Path,
+    out_path: Path,
+    header: LabJackHeader,
+    resolution: Resolution,
+    file_metadata: dict[str, object],
+    config: NormalizeConfig,
+    sanity: Sequence[SanityRange],
+) -> _Outcome:
+    ambient, recorded = resolution.ambient()
+    plans: list[ChannelPlan] = []
+    outcome = _Outcome()
+    for channel in header.channels:
+        if is_voltage(channel):
+            plans.append(voltage_plan(channel))
+            continue
+        plan = plan_channel(channel, resolution.mapped[channel], ambient, recorded)
+        if isinstance(plan, PlanProblem):
+            outcome.flags.append(_unit_flag(channel, ChannelStats(), plan.reason))
+        else:
+            plans.append(plan)
+    if outcome.flags:
+        return outcome
+    outcome.run = normalize_run(raw_path, header.time_column, plans, out_path, config, file_metadata)
+    by_column = {r.column: r for r in outcome.run.columns}
+    for plan in plans:
+        if plan.quantity == "voltage":
+            continue
+        bounds = matching_range(sanity, plan.quantity, plan.canonical_name)
+        checked = by_column.get(plan.abs_column or plan.canonical_name) or by_column[plan.canonical_name]
+        p99 = checked.stats.get("p99")
+        if bounds is None or p99 is None or in_bounds(p99, bounds, plan.unit_si):
+            continue
+        outcome.flags.append(
+            _unit_flag(
+                plan.raw_name,
+                _stats(checked),
+                f"p99 {p99:.4g} {checked.plan.unit_si if checked.column == plan.canonical_name else 'bar'} "
+                f"of {checked.column} is outside the {bounds.id} range after conversion",
+                SanityBounds(quantity=bounds.quantity, unit=bounds.unit, min=bounds.min, max=bounds.max),
+            )
+        )
+    t0 = outcome.run.t0
+    if t0 is not None and t0.confidence < config.t0_weak_confidence:
+        raw_name = next((p.raw_name for p in plans if p.canonical_name == t0.channel), t0.channel)
+        outcome.flags.append(
+            Flag(
+                flag_type=FlagType.CONFLICT,
+                severity=FlagSeverity.SOFT,
+                anchor=FlagAnchor(channel=raw_name),
+                evidence=ConflictEvidence(
+                    subject=f"t0 alignment for {t0.channel}",
+                    a=ConflictSide(
+                        label="detected",
+                        value=f"t0 at {t0.t_ms:.0f} ms, confidence {t0.confidence:.2f}",
+                        provenance=t0.method,
+                    ),
+                    b=ConflictSide(
+                        label="expected",
+                        value=f"a sharp edge (confidence >= {config.t0_weak_confidence:g})",
+                        provenance="file 03 §C.6",
+                    ),
+                ),
+            )
+        )
+    return outcome
+
+
+def _stats(result: ColumnResult) -> ChannelStats:
+    return ChannelStats(n=result.n, **result.stats)
+
+
+def _normalized_record(result: ColumnResult) -> TelemetryChannelRecord:
+    plan = result.plan
+    absolute = result.column != plan.canonical_name
+    metrics = result.metrics
+    total = result.n + result.nulls
+    return TelemetryChannelRecord(
+        canonical_name=result.column,
+        raw_name=plan.raw_name,
+        raw_unit=plan.raw_unit or plan.rule_unit,
+        quantity=str(plan.quantity),
+        unit_si="bar" if absolute else plan.unit_si,
+        gauge_or_abs=GaugeOrAbs.ABSOLUTE if absolute else plan.gauge_or_abs,
+        conversion=plan.conversion,
+        sensor_tag=plan.sensor_tag,
+        range_min=plan.range_min_si,
+        range_max=plan.range_max_si,
+        stat_min=result.stats.get("min"),
+        stat_max=result.stats.get("max"),
+        stat_mean=result.stats.get("mean"),
+        stat_p50=result.stats.get("p50"),
+        stat_p99=result.stats.get("p99"),
+        stat_std=result.stats.get("std"),
+        peak_raw=metrics.peak_raw,
+        peak_50ms=metrics.peak_50ms,
+        steady_mean=metrics.steady_mean,
+        steady_window_ms=metrics.steady_window_ms,
+        saturated=result.saturated,
+        null_fraction=result.nulls / total if total else None,
+    )
+
+
+def _summary(
+    label: str,
+    name: str,
+    header: LabJackHeader,
+    timebase: "_TimeBase",
+    failed: bool,
+    resolution: Resolution,
+    outcome: _Outcome,
+) -> str:
+    """The run summary node (file 03 §C.7): what a semantic question needs to reach this run."""
+    parts = [f"Run {label} ({name})"]
+    if header.started_at:
+        parts.append(f"recorded {header.started_at:%Y-%m-%d %H:%M} local")
+    if timebase.actual_rate_hz:
+        parts.append(f"{timebase.actual_rate_hz:.0f} Hz")
+    if timebase.duration_s is not None:
+        parts.append(f"{timebase.duration_s:.1f} s")
+    parts.append(f"{timebase.rows} rows")
+    text = ", ".join(parts)
+    if outcome.clean:
+        described = []
+        for result in outcome.run.columns:
+            if result.plan.quantity == "voltage":
+                continue
+            unit = "bar abs" if result.column != result.plan.canonical_name else result.plan.unit_si
+            bits = [unit]
+            if result.metrics.peak_50ms is not None:
+                bits.append(f"peak {result.metrics.peak_50ms:.4g}")
+            elif result.stats.get("max") is not None:
+                bits.append(f"max {result.stats['max']:.4g}")
+            if result.metrics.steady_mean is not None:
+                bits.append(f"steady {result.metrics.steady_mean:.4g}")
+            described.append(f"{result.column} {result.plan.quantity} ({', '.join(bits)})")
+        voltages = sum(1 for r in outcome.run.columns if r.plan.quantity == "voltage")
+        text += f"; channels: {'; '.join(described) or 'none mapped'}; {voltages} raw voltage channels"
+        t0 = outcome.run.t0
+        text += f"; t0 at {t0.t_ms / 1000:.2f} s" if t0 else "; no ignition edge detected"
+    else:
+        waiting = len(resolution.unresolved) + sum(
+            1 for f in outcome.flags if f.flag_type == FlagType.UNIT_AMBIGUITY
+        )
+        text += f", {len(header.channels)} channels; {waiting} channels await unit confirmation"
+    status = "FAILED_RUN" if failed else "not yet classified"
+    return f"{text}; status {status}."
+
+
+def _equation(folder_config: FolderConfig | None, channel: str) -> str | None:
+    return folder_config.config.equations.get(channel) if folder_config else None
 
 
 def _raw_schema(header: LabJackHeader, run_id: uuid.UUID, label: str, sha: str) -> pa.Schema:

@@ -393,6 +393,11 @@ class UnitTelemetryEvidence(_Model):
     raw_unit: str | None = None
     quantity_guess: str | None = None
     header_lines: list[str] = []
+    scaling_equation: str | None = Field(
+        default=None, description="the channel's equation in the folder .cfg"
+    )
+    scaling_source: str | None = Field(default=None, description="file the scaling equation came from")
+    note: str = Field(default="", description="why the channel cannot be used as mapped, when it is mapped")
     stats: ChannelStats = ChannelStats()
     sparkline_uri: str | None = None
     candidate_units: list[CandidateUnit] = []

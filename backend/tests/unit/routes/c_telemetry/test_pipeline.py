@@ -128,9 +128,15 @@ def test_a_rule_for_every_channel_clears_the_gate(session, minio):
             scope_folder_id="F-RUN",
             body={
                 "channels": {
-                    "y0": {"canonical_name": "pt_101_bar_g", "physical_quantity": "pressure", "unit": "bar"},
-                    "y1": {"canonical_name": "tc_1_k", "physical_quantity": "temperature", "unit": "K"},
-                }
+                    "y0": {
+                        "canonical_name": "pt_101_bar_g",
+                        "physical_quantity": "pressure",
+                        "unit": "bar",
+                        "gauge_or_abs": "gauge",
+                    },
+                    "y1": {"canonical_name": "tc_1_k", "physical_quantity": "temperature", "unit": "degC"},
+                },
+                "ambient_condition": "SEA_LEVEL",
             },
             created_by="test",
         )
@@ -165,3 +171,22 @@ def test_overrides_and_strict_mode_set_severity(session, minio):
         flags=[Flag(flag_type="CONFLICT", severity="SOFT", anchor=FlagAnchor(content_sha256="ab"))],
     )
     assert [f.severity for f in apply_severity_policy(session, payload).flags] == ["HARD"]
+
+
+def test_the_folder_cfg_reaches_the_flag_evidence(session, minio):
+    cfg = (
+        b"[Main]\r\nScanRate=1000.000000\r\nNumChan=2\r\nDisableScaling=FALSE\r\n"
+        b"Scaling=y=a*24.943-12.385#!#y=b*50.044#!#\r\n"
+    )
+    _seed(session, minio, {"TP12_T01.dat": labjack_bytes(rows=200)[0], "LJStreamM.cfg": cfg})
+    pipeline_config.set_value(session, "routes.C.enabled", True, "test")
+    session.commit()
+    (release,) = dispatch(session, minio, section_file_sets=()).to_process  # the .cfg itself stays parked
+    process_document(session, minio, release.doc_id)
+    session.commit()
+    evidence = {
+        f.anchor["channel"]: f.evidence
+        for f in session.scalars(select(ReviewFlag).where(ReviewFlag.doc_id == release.doc_id))
+    }
+    assert evidence["y1"]["scaling_equation"] == "y=b*50.044"
+    assert evidence["y1"]["scaling_source"] == "LJStreamM.cfg"

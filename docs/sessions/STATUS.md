@@ -507,3 +507,16 @@ Merged / ready: Answer Engine workflow increment. Planner `backend/llm_engine/en
 Blocked on: nothing
 Needs from others: S4: dependency group with `llama-index-workflows==2.25.0`, `llama-agents-dbos==0.7.0`, `dbos==2.31.1`, verified together (dbos 3.0–3.3 break llama-agents-dbos 0.7.0: "Queue objects cannot be constructed directly"; workflow tests skip until installed); GEMINI_MODEL / GEMINI_LITE_MODEL settings. Lead: call `start_engine()` / `stop_engine()` from the API lifespan in `backend/main.py` (role api|all). S1: `answer_traces` table (M8) for the trace record (columns in `.wiki/backend/answer-engine.md`); until then traces are logged.
 Next: engine restart-resume test, T2 query_telemetry when S1's telemetry tables land, T6 external_search (grounding, sanitized query only), T3; Skills markdown
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: Route C step 1 is on main (1d7eae6). routes.C stays off on the stack until S4 confirms the worker image rebuild.
+Blocked on: Lead / SME decision. The approved channel_map derivation from "Data format.xlsx" cannot be done. That workbook is a template for the report's summary metrics, for example "Feedline Pressure - Before Firing (Bar) [Gauge]" and "AUC Mean Thrust (N)". It never names a LabJack channel. Setup.xlsx lists the instruments, also without channels. The folder's LJStreamM.cfg (file 03 §C.0) carries only the scaling per channel, for example `y=a*24.943-12.385`. The y* columns in the .dat already have it applied, which I verified on real data. No file in E1–E11 gives a channel's quantity or unit. The slopes do match Setup.xlsx: y0–y2 are about 25 bar/V (100 bar sensor, 0.5–4.5 V), y3–y4 are 2.995 bar/V (30 bar sensor, 0–10 V) and y6 is 50.044 N/V (the load cell, per the TP37 spec). y5 (120·v + 0.721) and y7 (10·v) match no listed instrument.
+Question: (A, recommended) The .cfg scaling and these slope matches go into each UNIT_AMBIGUITY flag as evidence and suggested resolutions. The flags stay HARD, and one operator rule per folder or root in the Review Console resolves all its runs. No derived rule claims a unit that no file states. Or (B): the SME supplies the y0–y7 assignment per rig (canonical name, quantity, unit, gauge/abs), which I load as operator rules. Or both: B for the known rigs, A for everything else.
+Needs from others: Lead: choose A, B or both; for B, the SME's channel table
+Next: on the answer: the telemetry_runs/telemetry_channels migration (approved), normalized Parquet, t0, metrics, the commit path
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: nothing new
+Blocked on: nothing. The question in the entry above is withdrawn on the user's instruction: the plan and decisions stand. Channels with no stated unit stay UNIT_AMBIGUITY HARD until an operator rule resolves them (file 06). The folder's .cfg scaling is attached as evidence (file 03 §C.0/C.1). Nothing is derived from Setup.xlsx or Data format.xlsx, because not every folder has them.
+Needs from others: nothing
+Next: Route C step 2: the telemetry_runs/telemetry_channels migration (approved), .cfg scaling evidence, normalized Parquet, t0, metrics, the commit path

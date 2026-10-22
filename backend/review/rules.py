@@ -17,13 +17,14 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from fnmatch import fnmatchcase
-from typing import Any, Self
+from pathlib import Path
+from typing import Any, Literal, Self
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.dispatcher.contract import ColumnMapping
-from backend.postgres.enums import AmbientCondition, GaugeOrAbs, RuleOrigin, RuleType, SourceOrigin
+from backend.postgres.enums import AmbientCondition, GaugeOrAbs, Quantity, RuleOrigin, RuleType, SourceOrigin
 
 EXPORT_VERSION = 1
 
@@ -140,7 +141,7 @@ class ChannelMapEntry(_Model):
     """One raw channel's mapping: canonical name, quantity, unit, scaling or expression, tag, range."""
 
     canonical_name: str = Field(min_length=1)
-    physical_quantity: str = Field(min_length=1)
+    physical_quantity: Quantity
     unit: str = Field(min_length=1, description="unit of the value after scaling, pint-parsable")
     gauge_or_abs: GaugeOrAbs = GaugeOrAbs.NOT_APPLICABLE
     scaling: ChannelScaling | None = None
@@ -148,11 +149,17 @@ class ChannelMapEntry(_Model):
     sensor_tag: str | None = None
     range_min: float | None = None
     range_max: float | None = None
+    open_threshold: float | None = Field(
+        default=None,
+        description="valve_state only: value (after scaling) at which the valve counts as open; default 0.5",
+    )
 
     @model_validator(mode="after")
     def _one_conversion(self) -> Self:
         if self.scaling is not None and self.expression is not None:
             raise ValueError("a channel uses scaling or expression, not both")
+        if self.open_threshold is not None and self.physical_quantity != Quantity.VALVE_STATE:
+            raise ValueError("open_threshold applies to valve_state channels only")
         return self
 
 
@@ -212,7 +219,8 @@ def parse_body(rule_type: RuleType, body: Mapping[str, Any]) -> _Model:
 
 
 class ExportedRule(_Model):
-    """One operator rule in ``config/rules/*.yaml``; a new environment loads it as an operator rule."""
+    """One operator rule in ``config/rules/*.yaml``; a new environment loads it as an operator rule
+    (``load_rules_dir``: top-level confirmed files only, never ``config/rules/proposed/``)."""
 
     rule_type: RuleType
     scope: RuleScope = RuleScope()
@@ -227,7 +235,11 @@ class ExportedRule(_Model):
 
 
 class RulesFile(_Model):
+    """``status = proposed``: drafted (for example by S5 for an SME), never applied until confirmed; a
+    confirmation in the Review UI or in writing turns it into an operator rule (Lead ruling 2026-10-22)."""
+
     version: int = EXPORT_VERSION
+    status: Literal["confirmed", "proposed"] = "confirmed"
     rules: list[ExportedRule]
 
 
@@ -240,3 +252,14 @@ def export_yaml(rules: Iterable[tuple[RuleOrigin, ExportedRule]]) -> str:
 
 def load_yaml(text: str) -> RulesFile:
     return RulesFile.model_validate(yaml.safe_load(text))
+
+
+def load_rules_dir(directory: Path) -> list[tuple[Path, ExportedRule]]:
+    """The operator rules to load: ``*.yaml`` directly in ``directory`` (never subfolders such as
+    ``proposed/``), skipping any file whose ``status`` is ``proposed``."""
+    loaded: list[tuple[Path, ExportedRule]] = []
+    for path in sorted(p for p in directory.glob("*.yaml") if p.is_file()):
+        rules_file = load_yaml(path.read_text(encoding="utf-8"))
+        if rules_file.status == "confirmed":
+            loaded.extend((path, rule) for rule in rules_file.rules)
+    return loaded

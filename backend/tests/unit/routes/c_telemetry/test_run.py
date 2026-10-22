@@ -16,6 +16,7 @@ from backend.dispatcher.contract import ProcessedDocument
 from backend.dispatcher.folder_context import FolderContext
 from backend.postgres.enums import RuleOrigin, RuleType, RunStatus
 from backend.review.rules import RuleRecord, RuleScope, RuleTarget
+from backend.routes.c_telemetry.normalize import sanity_ranges_from
 from backend.routes.c_telemetry.run import RunInputs, process_labjack, run_uuid_for
 from backend.storage.minio import CIR, TELEMETRY, BucketStore, parse_uri
 from backend.tests.unit.routes.c_telemetry.conftest import CHANNELS
@@ -51,13 +52,14 @@ def _rule(scope: dict, channels: dict, created: int = 0) -> tuple[RuleRecord, di
     return record, {"channels": channels}
 
 
-def _run(minio, raw: bytes, name: str = "TP12_T01.dat", rules=()):
+def _run(minio, raw: bytes, name: str = "TP12_T01.dat", rules=(), folder_config=None, sanity=()):
     sha = f"{uuid.uuid4().hex}{uuid.uuid4().hex}"
     inputs = RunInputs(
         blob_sha256=sha,
         name=name,
         context=CONTEXT,
         target=RuleTarget(TARGET.root_name, TARGET.folder_ids, name, TARGET.extension),
+        folder_config=folder_config,
     )
     doc = process_labjack(
         lambda: io.BytesIO(raw),
@@ -67,6 +69,7 @@ def _run(minio, raw: bytes, name: str = "TP12_T01.dat", rules=()):
         BucketStore(minio, TELEMETRY),
         BucketStore(minio, CIR),
         raw[:4096],
+        sanity=sanity,
     )
     return sha, doc
 
@@ -157,3 +160,101 @@ def test_reprocessing_the_same_bytes_writes_the_same_run(minio, labjack):
     inputs_run = first.telemetry_runs[0]
     assert inputs_run.run_uuid == run_uuid_for(sha)
     assert run_uuid_for(sha) != run_uuid_for("0" * 64)
+
+
+def test_the_folder_cfg_scaling_is_evidence_not_a_mapping(minio, labjack):
+    from backend.routes.c_telemetry.ljstream_cfg import parse_ljstream_cfg
+    from backend.routes.c_telemetry.run import FolderConfig
+
+    cfg = parse_ljstream_cfg(
+        "[Main]\nScanRate=1000\nNumChan=2\nScaling=y=a*24.943-12.385#!#y=b*50.044#!#y=c#!#"
+    )
+    raw, _ = labjack
+    sha, doc = _run(minio, raw, folder_config=FolderConfig("LJStreamM.cfg", cfg))
+    assert [f.anchor.channel for f in doc.flags] == ["y0", "y1"]  # still HARD: no unit stated anywhere
+    y0 = doc.flags[0].evidence
+    assert (y0.scaling_equation, y0.scaling_source) == ("y=a*24.943-12.385", "LJStreamM.cfg")
+    schema = json.loads(BucketStore(minio, CIR).get(f"{sha}/C/v1/schema.json"))
+    assert schema["folder_config"]["equations"] == {"y0": "y=a*24.943-12.385", "y1": "y=b*50.044"}
+
+
+SANITY = sanity_ranges_from(
+    {
+        "ranges": [
+            {
+                "id": "chamber_pressure",
+                "physical_quantity": "pressure",
+                "canonical_name_glob": "*chamber*",
+                "unit": "bar",
+                "min": 0,
+                "max": 150,
+            },
+            {
+                "id": "temperature",
+                "physical_quantity": "temperature",
+                "canonical_name_glob": "*",
+                "unit": "K",
+                "min": 200,
+                "max": 2000,
+            },
+        ]
+    }
+)
+
+
+def _mapped(unit: str):
+    return _rule(
+        {"scope_folder_id": "F-RUN"},
+        {
+            "y0": {
+                "canonical_name": "pt_101_chamber_bar_g",
+                "physical_quantity": "pressure",
+                "unit": unit,
+                "gauge_or_abs": "gauge",
+            },
+            "y1": {"canonical_name": "tc_1_k", "physical_quantity": "temperature", "unit": "degC"},
+        },
+    )
+
+
+def test_a_fully_mapped_run_is_normalized_and_catalogued_in_si(minio, labjack):
+    raw, data = labjack
+    record, body = _mapped("bar")
+    body["ambient_condition"] = "SEA_LEVEL"
+    _, doc = _run(minio, raw, rules=[(record, body)], sanity=SANITY)
+    (run,) = doc.telemetry_runs
+
+    assert doc.flags == [] or not doc.has_hard_flags
+    assert (run.ambient_condition, run.ambient_pressure_bar_abs) == ("SEA_LEVEL", None)
+    bucket, key = parse_uri(run.normalized_parquet_uri)
+    assert key == f"{run.run_uuid}/normalized.parquet"
+    table = pq.read_table(io.BytesIO(minio.get_object(bucket, key).read()))
+    assert table.column_names == [
+        "t_rel_ms",
+        "t_from_ignition_ms",
+        "v0_v",
+        "v1_v",
+        "pt_101_chamber_bar_g",
+        "pt_101_chamber_bar_abs",
+        "tc_1_k",
+    ]
+    by = {c.canonical_name: c for c in run.channels}
+    assert by["pt_101_chamber_bar_abs"].stat_mean == pytest.approx(data[:, 3].mean() + 1.01325, abs=1e-6)
+    assert (by["pt_101_chamber_bar_abs"].gauge_or_abs, by["pt_101_chamber_bar_g"].gauge_or_abs) == (
+        "absolute",
+        "gauge",
+    )
+    assert by["tc_1_k"].stat_min == pytest.approx(data[:, 4].min() + 273.15, abs=1e-6)
+    assert by["tc_1_k"].unit_si == "kelvin" and by["pt_101_chamber_bar_g"].peak_raw is not None
+    assert by["pt_101_chamber_bar_g"].conversion["abs_column"] == "pt_101_chamber_bar_abs"
+    assert "channels: pt_101_chamber_bar_g pressure (bar" in doc.nodes[0].content
+
+
+def test_a_value_outside_its_sanity_range_after_conversion_halts(minio, labjack):
+    raw, _ = labjack
+    _, doc = _run(minio, raw, rules=[_mapped("ksi")], sanity=SANITY)  # ~12 ksi is ~830 bar: not a chamber
+    (flag,) = doc.flags
+    assert (flag.flag_type, flag.severity, flag.anchor.channel) == ("UNIT_AMBIGUITY", "HARD", "y0")
+    assert flag.evidence.sanity.max == 150 and "chamber_pressure" in flag.evidence.note
+    assert flag.evidence.header_lines[-1].startswith("Time")
+    assert doc.telemetry_runs[0].normalized_parquet_uri is None
