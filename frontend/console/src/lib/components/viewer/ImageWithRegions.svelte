@@ -22,20 +22,28 @@
 </script>
 
 <!-- Regions use normalized coordinates, so percentages keep them on target at any rendered size. -->
-<div class="bg-background relative w-full overflow-hidden rounded-md border shadow-sm" style="aspect-ratio: {width} / {height}">
+<div class="bg-background relative w-full overflow-visible rounded-md border shadow-sm" style="aspect-ratio: {width} / {height}">
 	<img class="block h-full w-full" {src} {alt} {width} {height} />
 	{#each regions as region, i (i)}
-		<div
+		<!-- A button so keyboard users can Tab through the regions; focus scrolls it into view and shows its label. -->
+		<button
+			type="button"
 			class={cn(
-				'absolute rounded-[2px] border-2 shadow-[0_0_0_1px_var(--background)]',
+				'group absolute cursor-default rounded-[2px] border-2 p-0 shadow-[0_0_0_1px_var(--background)] outline-none',
+				'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1',
 				KIND[region.kind]
 			)}
 			data-testid="region"
 			data-kind={region.kind}
 			style="left: {pct(region.bbox[0])}; top: {pct(region.bbox[1])}; width: {pct(region.bbox[2] - region.bbox[0])}; height: {pct(region.bbox[3] - region.bbox[1])}"
 			title={label(region)}
-			role="note"
 			aria-label="{region.kind} region: {label(region)}"
-		></div>
+			onfocus={(e) => e.currentTarget.scrollIntoView?.({ block: 'center', inline: 'nearest' })}
+		>
+			<span
+				class="bg-popover text-popover-foreground pointer-events-none absolute bottom-full left-0 mb-1 hidden rounded-sm border px-1.5 py-0.5 text-[11px] whitespace-nowrap shadow-sm group-focus-visible:block"
+				aria-hidden="true">{label(region)}</span
+			>
+		</button>
 	{/each}
 </div>

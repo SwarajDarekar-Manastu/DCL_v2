@@ -4,6 +4,7 @@
 	import { hasRole } from '$lib/auth/roles';
 	import { session } from '$lib/auth/session.svelte';
 	import { compareHref, percent, runHref, suiteHref } from '$lib/components/benchmark/links';
+	import { RUN_TONE } from '$lib/components/benchmark/run_view';
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/shell/EmptyState.svelte';
 	import Notice from '$lib/components/shell/Notice.svelte';
@@ -57,9 +58,6 @@
 	}
 
 	const passRate = (r: BenchmarkRun) => r.aggregate?.pass_rate;
-	// Status colors only for outcomes: failed runs in red, finished in green, the rest neutral.
-	const runTone = (status: string): 'hard' | 'ok' | 'neutral' =>
-		/fail|error/i.test(status) ? 'hard' : /done|complete|finish|pass|succe/i.test(status) ? 'ok' : 'neutral';
 	function toggle(runId: string) {
 		picked = picked.includes(runId) ? picked.filter((p) => p !== runId) : [...picked, runId].slice(-2);
 	}
@@ -119,7 +117,7 @@
 							<td><input type="checkbox" aria-label="Select run {r.run_id.slice(0, 8)}" checked={picked.includes(r.run_id)} onchange={() => toggle(r.run_id)} /></td>
 							<td><a class="font-mono text-xs" href={runHref(r.run_id)}>{r.run_id.slice(0, 8)}</a></td>
 							<td>{r.suite}</td>
-							<td><ToneBadge tone={runTone(r.status)}>{r.status}</ToneBadge></td>
+							<td><ToneBadge tone={RUN_TONE[r.status]}>{r.status}</ToneBadge></td>
 							<td class="num font-mono">{Object.keys(r.case_versions).length}</td>
 							<td class="num font-mono">{percent(passRate(r))}</td>
 							<td><code class="text-muted-foreground">{r.git_commit?.slice(0, 8) ?? ''}</code></td>

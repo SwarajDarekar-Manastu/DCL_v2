@@ -16,7 +16,7 @@
 	import { session } from '$lib/auth/session.svelte';
 	import ResultDrilldown from '$lib/components/benchmark/ResultDrilldown.svelte';
 	import { compareHref, runHref, suiteHref } from '$lib/components/benchmark/links';
-	import { byCategory, failureCounts, isActive, POLL_MS, ribbon, runProgress } from '$lib/components/benchmark/run_view';
+	import { byCategory, failureCounts, isActive, POLL_MS, ribbon, RUN_TONE, runProgress } from '$lib/components/benchmark/run_view';
 	import { Button } from '$lib/components/ui/button';
 	import Notice from '$lib/components/shell/Notice.svelte';
 	import Page from '$lib/components/shell/Page.svelte';
@@ -78,7 +78,6 @@
 	let passedCount = $derived(data ? data.results.filter((r) => r.passed === true).length : 0);
 	let failedCount = $derived(data ? data.results.filter((r) => r.passed === false).length : 0);
 	let unscoredCount = $derived(data ? data.results.filter((r) => r.passed === null).length : 0);
-	const runTone = (status: string) => (status === 'completed' ? 'ok' : /fail|error/i.test(status) ? 'hard' : 'neutral');
 	let newlyFailing = $derived(new Set(comparison?.newly_failing.map((d) => d.case_id) ?? []));
 
 	async function cancel() {
@@ -105,7 +104,7 @@
 			{/snippet}
 			{#snippet below()}
 				<div class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-					<ToneBadge tone={runTone(run.status)}>{run.status}</ToneBadge>
+					<ToneBadge tone={RUN_TONE[run.status]}>{run.status}</ToneBadge>
 					<span><span class="num text-foreground font-mono">{Object.keys(run.case_versions).length}</span> cases</span>
 					<span><span class="num text-foreground font-mono">{passedCount + failedCount + unscoredCount}</span> results</span>
 					<span class="text-ok"><span class="num font-mono font-medium">{passedCount}</span> passed</span>

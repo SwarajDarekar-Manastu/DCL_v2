@@ -15,3 +15,26 @@ describe('ImageWithRegions', () => {
 		expect({ left, top, width, height }).toEqual({ left: '10%', top: '25%', width: '50%', height: '5%' });
 	});
 });
+
+describe('ImageWithRegions keyboard access', () => {
+	it('lets keyboard users reach every region by Tab, named by kind and label', () => {
+		render(ImageWithRegions, {
+			src: 'p.png',
+			alt: 'page 3',
+			width: 1000,
+			height: 1400,
+			regions: [
+				{ bbox: [0.1, 0.1, 0.5, 0.2], kind: 'cited', label: 'Table 4', confidence: null },
+				{ bbox: [0.1, 0.5, 0.5, 0.6], kind: 'handwriting', label: 'operator note', confidence: 0.82 }
+			]
+		});
+		const regions = screen.getAllByRole('button');
+		expect(regions.map((r) => r.getAttribute('aria-label'))).toEqual([
+			'cited region: Table 4',
+			'handwriting region: operator note (confidence 0.82)'
+		]);
+		regions[1].focus();
+		expect(document.activeElement).toBe(regions[1]);
+		expect(regions.every((r) => r.tabIndex === 0)).toBe(true);
+	});
+});

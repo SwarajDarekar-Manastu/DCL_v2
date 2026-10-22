@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byCategory, failureCounts, isActive, numericChecks, ribbon, runProgress, runRequest } from '../../src/lib/components/benchmark/run_view';
+import { byCategory, failureCounts, isActive, numericChecks, ribbon, RUN_TONE, runProgress, runRequest } from '../../src/lib/components/benchmark/run_view';
 import { compareHref, splitList, viewerHref } from '../../src/lib/components/benchmark/links';
 import { result } from './fixtures';
 
@@ -69,5 +69,11 @@ describe('run requests', () => {
 		expect(runRequest('telemetry')).toEqual({ suite: 'telemetry' });
 		expect(runRequest('telemetry', ['c', 'a'], ['a', 'b', 'c'])).toEqual({ suite: 'telemetry', case_ids: ['a', 'c'] });
 		expect(runRequest('telemetry', ['tp07-t04-peak'])).toEqual({ suite: 'telemetry', case_ids: ['tp07-t04-peak'] });
+	});
+});
+
+describe('run status tone', () => {
+	it('colours the five run statuses by outcome', () => {
+		expect(RUN_TONE).toEqual({ queued: 'neutral', running: 'info', completed: 'ok', failed: 'hard', cancelled: 'neutral' });
 	});
 });

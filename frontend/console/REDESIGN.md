@@ -70,9 +70,7 @@ purpose (keyboard, form semantics and the existing tests); they wear the `.field
 
 ## Risks and follow-ups
 
-- Viewer overlay regions are not keyboard-focusable (they are `role="note"` with labels and titles).
-- Benchmark run status colors match on substrings (fail/error, done/complete/pass); confirm the
-  backend's status set.
-- `.wiki/frontend/console-shell-auth.md` still names `NavBar.svelte` (now `Sidebar.svelte` +
-  `TopBar.svelte`); the wiki is outside this change's scope.
+- Viewer overlay regions are buttons: Tab reaches each one, focus scrolls it into view and shows its label (S3 review).
+- Benchmark run status colors come from `RUN_TONE` in `run_view.ts`, one entry per run status
+  (queued, running, completed, failed, cancelled) (S3 review).
 - Entities is a placeholder; Ops shows only failed tasks so far.

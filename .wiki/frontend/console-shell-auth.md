@@ -6,7 +6,7 @@
 | Status | in-progress (code and tests done; waits for the Console auth settings in `backend/config.py`, S4) |
 | Owner session | S3 |
 | Spec | docs/architecture/08_frontend_openwebui.md §2.3, §4.1, §4.3, §7 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
@@ -19,13 +19,14 @@ Code:
 - `frontend/console/src/lib/config.ts` (the only reader of `VITE_*`)
 - `frontend/console/src/lib/api_endpoint.ts` (the only file that fetches or opens a websocket)
 - `frontend/console/src/lib/auth/` (`msal.ts` Entra client, `roles.ts` role rank and nav, `session.svelte.ts` signed-in state)
-- `frontend/console/src/lib/components/shell/` (`NavBar.svelte`, `RoleGate.svelte`)
+- `frontend/console/src/lib/components/shell/`: `Sidebar.svelte` (left 240 px: areas filtered by role with `aria-current`, live HARD/SOFT counts, socket state, user with highest role, sign out), `TopBar.svelte` (sticky breadcrumb from `breadcrumbs.ts`, which also sets the document title; theme menu), `ThemeToggle.svelte` (light/dark/system, `localStorage["dcl-theme"]`, applied before first paint in `app.html`), `Page.svelte` + `PageHeader.svelte` (page frame), `Notice`, `EmptyState`, `ToneBadge`, `SeverityBadge`, `RoleGate`
+- `frontend/console/src/lib/components/ui/` (shadcn-svelte components, generated) and `src/app.css` (Geist tokens, Tailwind v4); design notes in `frontend/console/REDESIGN.md`
 - `frontend/console/src/routes/+layout.svelte`, `+layout.ts`, `+page.svelte`, placeholder pages `review/ benchmark/ entities/ settings/ ops/ audit/`
 - `backend/api/auth.py`, `backend/api/ws.py`
 - `frontend/console/Dockerfile`, `nginx.conf`, `.dockerignore` (node build → nginx; every route served by index.html so chat deep links resolve; `/healthz`; immutable cache for `/_app/immutable/`; VITE_* as build arguments). S4 wires it into compose.
 
 Tests and fixtures:
-- `frontend/console/tests/` (config, roles, api_endpoint, msal, session, NavBar, RoleGate)
+- `frontend/console/tests/` (config, roles, api_endpoint, msal, session, Sidebar, shell, RoleGate)
 - `backend/tests/unit/api/` (`conftest.py` with a local RSA key standing in for Entra JWKS, `test_auth.py`, `test_ws.py`)
 
 ## Interfaces
@@ -89,6 +90,7 @@ Known: `npm audit` reports a low-severity advisory in `cookie` (pulled in by Sve
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S3 | Redesign merged (Geist + shadcn-svelte, user decision): NavBar replaced by Sidebar + TopBar, theme toggle, page frame; reviewed by S3 |
 | 2026-10-22 | S3 | Dev-only backend sign-in (user-approved, hardened); client-side fake user removed; hermetic config test |
 | 2026-10-22 | S3 | Console container (Dockerfile, nginx SPA fallback); sign-in returns to the requested page |
 | 2026-10-21 | S3 | Shell, MSAL login, server role mapping, `/auth/me`, `/ws` with Redis bridge, tests |
