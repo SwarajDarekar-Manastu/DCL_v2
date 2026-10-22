@@ -483,3 +483,9 @@ Merged / ready: real samples local only (decision 2026-10-22): `backend/tests/fi
 Blocked on: an operator export into S5's worktree `data/samples/` (S5 has no stack credentials)
 Needs from others: DCL Lead — run the README export commands with the output under /home/ai/Desktop/Swaraj_/dcl_v2/.claude/worktrees/strange-bhaskara-1dd439/data/samples/
 Next: verify the copies, then the first 15 telemetry cases with own Python (Flash-Lite id for any model-naming case: gemini-3.1-flash-lite)
+
+## 2026-10-22 06:10 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: real-sample manifest moved to git-ignored `data/samples/real_samples.yaml`; committed `real_samples.template.yaml` (91 distinct files, no names) checked by sha256; README export wrapper loads `.env`; E1–E3 copies verified against the registry. Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend`
+Blocked on: nothing
+Needs from others: nothing now (E4–E11 export later, on request)
+Next: the first 15 telemetry cases from E1–E3 with own Python verification
