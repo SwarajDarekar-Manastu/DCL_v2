@@ -520,3 +520,14 @@ Merged / ready: nothing new
 Blocked on: nothing. The question in the entry above is withdrawn on the user's instruction: the plan and decisions stand. Channels with no stated unit stay UNIT_AMBIGUITY HARD until an operator rule resolves them (file 06). The folder's .cfg scaling is attached as evidence (file 03 §C.0/C.1). Nothing is derived from Setup.xlsx or Data format.xlsx, because not every folder has them.
 Needs from others: nothing
 Next: Route C step 2: the telemetry_runs/telemetry_channels migration (approved), .cfg scaling evidence, normalized Parquet, t0, metrics, the commit path
+## 2026-10-22 09:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: proposed channel-map rules for E1–E3 in `config/rules/proposed/` (names, quantities, units, sensor ranges; status proposed, never applied until confirmed); `test_config_rules.py` (S1 loader, units, sanity-range selection); precondition in every numeric golden case's notes. Test: `uv run pytest backend/tests/unit/config_data backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: nothing
+Needs from others: S1 — keep the future config/rules loader to the top level (never `proposed/`) or add an explicit status field; SME — confirm the proposals in the Review UI
+Next: remaining golden categories and the retrieval set once allowlisted documents are indexed (S2 engine mode)
+
+## 2026-10-22 09:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `open_threshold: 2.5` on the valve channel of the three proposed channel maps (S1 field, ab00628); verification README states the full valve-open window (`valve_signal = 1`). Merge AFTER S1's ab00628: on current main the rules test fails because the field is unknown there; on S1's code all 7 rule tests pass
+Blocked on: S1's ab00628 reaching main
+Needs from others: Lead — merge order S1 ab00628, then this branch
+Next: idle until indexed documents and S2's engine mode exist

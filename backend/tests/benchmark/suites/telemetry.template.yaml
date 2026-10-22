@@ -9,12 +9,14 @@
 # convergent / chamber exit pressure (barg), y4 unscaled in TP7 (broken scaling), y5 mass flow
 # (g/s), y6 thrust load cell (N), y7 valve signal (0-5 V; open above 2.5 V).
 #
-# Precondition (open question to DCL Lead): Route C halts these runs until SME channel-map rules
-# exist (no units in the stream header; dead thrust channel in TP7; negative chamber pressure in
-# the cold-flow runs). TELEMETRY_MATH cases assume the review cases are resolved; the two
-# HALTED_DATA_BEHAVIOR cases describe the unresolved state.
+# Precondition (Lead ruling 2026-10-22): Route C halts these runs until channel-map rules exist
+# (the stream header has no units). S5's proposed rules are in config/rules/proposed/ and apply
+# only once an SME or the user confirms them. TELEMETRY_MATH cases assume that state plus the
+# SME's decision on the bounds cases (dead TP7 thrust channel, negative cold-flow chamber
+# pressure); the two HALTED_DATA_BEHAVIOR cases describe the state before that decision.
 version: 1
 suite: telemetry
+precondition: "Precondition: answerable only after the SME confirms the channel-map rule for this run's folder (proposal in config/rules/proposed/) and resolves the run's open bounds cases; before that the run is HALTED."
 cases:
   # ---- TP7 (Test Campaign 2, Test Plan 7), Test 01, hot firing; cross-checked with the team's analysis workbook
   - case_id: tp07-t01-valve-open-duration
