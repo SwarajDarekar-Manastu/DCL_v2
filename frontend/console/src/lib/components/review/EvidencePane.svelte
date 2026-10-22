@@ -21,6 +21,7 @@
 		<p class="muted">No evidence attached to this flag.</p>
 	{:else if evidence.kind === 'unit_telemetry'}
 		<h4>Channel {evidence.channel}{evidence.raw_unit ? ` · raw unit “${evidence.raw_unit}”` : ''}{evidence.quantity_guess ? ` · looks like ${evidence.quantity_guess}` : ''}</h4>
+		{#if evidence.note}<p class="note" role="note">{evidence.note}</p>{/if}
 		{#if evidence.header_lines.length}
 			<pre class="header">{#each evidence.header_lines as line, i (i)}<span class:hit={line.includes(evidence.channel)}>{line}
 </span>{/each}</pre>
@@ -130,6 +131,11 @@
 </section>
 
 <style>
+	.note {
+		border-left: 3px solid var(--warn);
+		padding: 0.2rem 0.6rem;
+		margin: 0.3rem 0;
+	}
 	.evidence {
 		display: grid;
 		gap: 0.45rem;

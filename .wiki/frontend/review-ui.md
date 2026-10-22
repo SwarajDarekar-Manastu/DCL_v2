@@ -6,7 +6,7 @@
 | Status | in-progress (MVP UI and Audit page done; end-to-end resume waits for S1's M2 tables) |
 | Owner session | S3 |
 | Spec | docs/architecture/08_frontend_openwebui.md §4; 06 §6 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
@@ -26,7 +26,7 @@ Code:
 - `backend/api/review.py`, `backend/review/api_models.py` (S1)
 
 Tests and fixtures:
-- `frontend/console/tests/review/` (fixtures, resolution logic, format/filters, QueueList, FlagConsole, CaseView with the API mocked)
+- `frontend/console/tests/review/` (fixtures, resolution logic, format/filters, QueueList, FlagConsole, EvidencePane, CaseView with the API mocked)
 - `backend/tests/unit/api/test_assets.py`, `backend/tests/unit/api/test_audit_route.py`
 - `backend/tests/integration/api/test_audit.py` (real ParadeDB)
 - `backend/tests/integration/api/test_review.py` (S1)
@@ -82,6 +82,7 @@ uv run python -m pytest backend/tests/unit/api
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | `GET /audit` over audit_events and the Audit page; case History link |
 | 2026-10-21 | S3 | Review UI MVP: queue, case view with typed evidence and resolution consoles, dry-run gate, folder-scoped rules, assign/reject/undo, rules page, live updates; OpenAPI type generation; asset presign route |
+| 2026-10-22 | S3 | unit_telemetry evidence shows S1's `note` (why a mapped channel cannot be used) under the channel heading |
 
 ## Related
 
