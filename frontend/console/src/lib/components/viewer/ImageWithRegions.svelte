@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ViewerRegion } from '$lib/api_endpoint';
+	import { cn } from '$lib/utils';
 
 	interface Props {
 		src: string;
@@ -11,50 +12,38 @@
 
 	let { src, alt, width, height, regions }: Props = $props();
 	const pct = (value: number) => `${(value * 100).toFixed(3)}%`;
+	const label = (region: ViewerRegion) => region.label + (region.confidence == null ? '' : ` (confidence ${region.confidence.toFixed(2)})`);
+	// Status colors: cited passage = info (blue), handwriting = purple, flagged region = hard (red).
+	const KIND = {
+		cited: 'border-info bg-info/10',
+		handwriting: 'border-handwriting bg-handwriting/10 border-dashed',
+		flag: 'border-hard bg-hard/10'
+	} as const;
 </script>
 
 <!-- Regions use normalized coordinates, so percentages keep them on target at any rendered size. -->
-<div class="frame" style="aspect-ratio: {width} / {height}">
-	<img {src} {alt} {width} {height} />
+<div class="bg-background relative w-full overflow-visible rounded-md border shadow-sm" style="aspect-ratio: {width} / {height}">
+	<img class="block h-full w-full" {src} {alt} {width} {height} />
 	{#each regions as region, i (i)}
-		<div
-			class="region region-{region.kind}"
+		<!-- A button so keyboard users can Tab through the regions; focus scrolls it into view and shows its label. -->
+		<button
+			type="button"
+			class={cn(
+				'group absolute cursor-default rounded-[2px] border-2 p-0 shadow-[0_0_0_1px_var(--background)] outline-none',
+				'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1',
+				KIND[region.kind]
+			)}
 			data-testid="region"
+			data-kind={region.kind}
 			style="left: {pct(region.bbox[0])}; top: {pct(region.bbox[1])}; width: {pct(region.bbox[2] - region.bbox[0])}; height: {pct(region.bbox[3] - region.bbox[1])}"
-			title={region.label + (region.confidence == null ? '' : ` (confidence ${region.confidence.toFixed(2)})`)}
-		></div>
+			title={label(region)}
+			aria-label="{region.kind} region: {label(region)}"
+			onfocus={(e) => e.currentTarget.scrollIntoView?.({ block: 'center', inline: 'nearest' })}
+		>
+			<span
+				class="bg-popover text-popover-foreground pointer-events-none absolute bottom-full left-0 mb-1 hidden rounded-sm border px-1.5 py-0.5 text-[11px] whitespace-nowrap shadow-sm group-focus-visible:block"
+				aria-hidden="true">{label(region)}</span
+			>
+		</button>
 	{/each}
 </div>
-
-<style>
-	.frame {
-		position: relative;
-		width: 100%;
-		max-width: 60rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
-	}
-	img {
-		display: block;
-		width: 100%;
-		height: 100%;
-	}
-	.region {
-		position: absolute;
-		border: 2px solid;
-		border-radius: 2px;
-		pointer-events: auto;
-	}
-	.region-cited {
-		border-color: #f59e0b;
-		background: rgb(245 158 11 / 0.18);
-	}
-	.region-handwriting {
-		border-color: #8b5cf6;
-		background: rgb(139 92 246 / 0.12);
-	}
-	.region-flag {
-		border-color: #ef4444;
-		background: rgb(239 68 68 / 0.12);
-	}
-</style>

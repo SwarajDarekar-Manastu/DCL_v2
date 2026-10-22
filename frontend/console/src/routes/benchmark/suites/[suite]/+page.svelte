@@ -7,7 +7,12 @@
 	import { CATEGORIES } from '$lib/components/benchmark/case_form';
 	import { caseHref, runHref } from '$lib/components/benchmark/links';
 	import { runRequest } from '$lib/components/benchmark/run_view';
+	import { Button } from '$lib/components/ui/button';
+	import EmptyState from '$lib/components/shell/EmptyState.svelte';
+	import Notice from '$lib/components/shell/Notice.svelte';
+	import Page from '$lib/components/shell/Page.svelte';
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
+	import ToneBadge from '$lib/components/shell/ToneBadge.svelte';
 
 	let suite = $derived(page.params.suite ?? '');
 	let statusFilter = $derived((page.url.searchParams.get('status') ?? '') as NonNullable<BenchmarkCaseFilters['status']> | '');
@@ -19,6 +24,7 @@
 	let busy = $state(false);
 	let canEdit = $derived(hasRole(session.user?.roles ?? [], 'reviewer'));
 
+	const statusTone = (status: string) => (status === 'active' ? 'ok' : status === 'draft' ? 'warn' : 'neutral');
 	const describe = (e: unknown) => (e instanceof ApiError ? e.detail : String(e));
 
 	$effect(() => {
@@ -67,98 +73,57 @@
 </script>
 
 <RoleGate roles={session.user?.roles ?? []} role="viewer">
-	<nav class="crumbs"><a href="/benchmark">Benchmark</a> › {suite}</nav>
-	<div class="filters">
-		<label
-			>Status
-			<select value={statusFilter} onchange={(e) => filter('status', (e.currentTarget as HTMLSelectElement).value)}>
-				<option value="">any</option><option value="active">active</option><option value="draft">draft</option><option value="retired">retired</option>
-			</select>
-		</label>
-		<label
-			>Category
-			<select value={categoryFilter} onchange={(e) => filter('category', (e.currentTarget as HTMLSelectElement).value)}>
-				<option value="">any</option>
-				{#each CATEGORIES as c (c)}<option value={c}>{c}</option>{/each}
-			</select>
-		</label>
-		{#if canEdit}<button type="button" disabled={busy || activeIds.length === 0} onclick={run}>{picked.length ? `Run ${picked.length} selected` : 'Run all active'}</button>{/if}
-		{#if canEdit}<a href="/benchmark/cases/new?suite={encodeURIComponent(suite)}">New case</a>{/if}
-	</div>
-	{#if error}<p class="error" role="alert">{error}</p>{/if}
-	<table class="grid" aria-label="Cases">
-		<thead><tr>{#if canEdit}<th><span class="sr">Pick</span></th>{/if}<th>Case</th><th>v</th><th>Status</th><th>Category</th><th>Question</th><th></th></tr></thead>
-		<tbody>
-			{#each cases as c (c.case_id)}
-				<tr class:draft={c.status === 'draft'}>
-					{#if canEdit}<td>{#if c.status === 'active'}<input type="checkbox" aria-label="Pick {c.case_id}" checked={picked.includes(c.case_id)} onchange={(e) => pick(c.case_id, (e.currentTarget as HTMLInputElement).checked)} />{/if}</td>{/if}
-					<td><a href={caseHref(c.case_id)}>{c.case_id}</a></td>
-					<td>{c.version}</td>
-					<td>{c.status}{c.source_trace_id ? ' · from chat' : ''}</td>
-					<td>{c.category}</td>
-					<td>{c.question}</td>
-					<td>{#if canEdit && c.status === 'draft'}<button type="button" onclick={() => approve(c)}>Approve</button>{/if}</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
-	{#if cases.length === 0 && !error}<p class="muted">No cases match.</p>{/if}
-</RoleGate>
+	<Page title={suite} description="Cases in this suite. Drafts from chat wait for a reviewer's approval.">
+		{#snippet actions()}
+			{#if canEdit}<Button variant="outline" size="sm" disabled={busy || activeIds.length === 0} onclick={run}
+					>{picked.length ? `Run ${picked.length} selected` : 'Run all active'}</Button
+				>{/if}
+			{#if canEdit}<Button size="sm" href="/benchmark/cases/new?suite={encodeURIComponent(suite)}">New case</Button>{/if}
+		{/snippet}
+		{#snippet filters()}
+			<label class="grid gap-1"
+				><span class="field-label">Status</span>
+				<select class="field w-36" value={statusFilter} onchange={(e) => filter('status', (e.currentTarget as HTMLSelectElement).value)}>
+					<option value="">any</option><option value="active">active</option><option value="draft">draft</option><option value="retired">retired</option>
+				</select>
+			</label>
+			<label class="grid gap-1"
+				><span class="field-label">Category</span>
+				<select class="field w-44" value={categoryFilter} onchange={(e) => filter('category', (e.currentTarget as HTMLSelectElement).value)}>
+					<option value="">any</option>
+					{#each CATEGORIES as c (c)}<option value={c}>{c}</option>{/each}
+				</select>
+			</label>
+		{/snippet}
 
-<style>
-	.crumbs {
-		font-size: 0.85rem;
-	}
-	.filters {
-		display: flex;
-		gap: 1rem;
-		align-items: end;
-		font-size: 0.84rem;
-		margin: 0.6rem 0;
-	}
-	label {
-		display: grid;
-		gap: 0.15rem;
-	}
-	select {
-		font: inherit;
-		padding: 0.25rem;
-		background: var(--surface);
-		color: inherit;
-		border: 1px solid var(--border);
-	}
-	.grid {
-		border-collapse: collapse;
-		width: 100%;
-		font-size: 0.84rem;
-	}
-	.grid th,
-	.grid td {
-		border-bottom: 1px solid var(--border);
-		padding: 0.35rem 0.45rem;
-		text-align: left;
-		vertical-align: top;
-	}
-	tr.draft td:first-child {
-		border-left: 3px solid var(--warn);
-	}
-	button {
-		font: inherit;
-		font-size: 0.8rem;
-		padding: 0.15rem 0.6rem;
-		cursor: pointer;
-	}
-	.sr {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0 0 0 0);
-	}
-	.muted {
-		opacity: 0.7;
-	}
-	.error {
-		color: var(--hard);
-	}
-</style>
+		{#if error}<Notice tone="error" class="mb-4">{error}</Notice>{/if}
+		<div class="panel">
+			<table class="data-table" aria-label="Cases">
+				<thead><tr>{#if canEdit}<th class="w-8"><span class="sr-only">Pick</span></th>{/if}<th>Case</th><th class="num">v</th><th>Status</th><th>Category</th><th>Question</th><th><span class="sr-only">Actions</span></th></tr></thead>
+				<tbody>
+					{#each cases as c (c.case_id)}
+						<tr>
+							{#if canEdit}<td
+									>{#if c.status === 'active'}<input
+											type="checkbox"
+											aria-label="Pick {c.case_id}"
+											checked={picked.includes(c.case_id)}
+											onchange={(e) => pick(c.case_id, (e.currentTarget as HTMLInputElement).checked)}
+										/>{/if}</td
+								>{/if}
+							<td class="whitespace-nowrap"><a class="font-mono text-xs" href={caseHref(c.case_id)}>{c.case_id}</a></td>
+							<td class="num font-mono">{c.version}</td>
+							<td class="whitespace-nowrap"
+								><ToneBadge tone={statusTone(c.status)}>{c.status}</ToneBadge>{#if c.source_trace_id}<span class="text-muted-foreground ml-1.5 text-xs">from chat</span>{/if}</td
+							>
+							<td class="text-muted-foreground">{c.category}</td>
+							<td class="max-w-[48ch]">{c.question}</td>
+							<td class="text-right">{#if canEdit && c.status === 'draft'}<Button size="xs" variant="outline" onclick={() => approve(c)}>Approve</Button>{/if}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+			{#if cases.length === 0 && !error}<EmptyState class="m-4" title="No cases match." description="Change the filters or add a case." />{/if}
+		</div>
+	</Page>
+</RoleGate>

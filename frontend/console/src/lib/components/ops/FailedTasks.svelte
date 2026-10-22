@@ -12,25 +12,27 @@
 </script>
 
 {#if items.length === 0}
-	<p class="muted">No failed tasks.</p>
+	<p class="text-muted-foreground m-0 px-4 py-6 text-center text-[13px]">No failed tasks.</p>
 {:else}
-	<table class="grid" aria-label="Failed tasks">
-		<thead><tr><th>When (UTC)</th><th>Task</th><th>Queue</th><th>Retries</th><th>Error</th></tr></thead>
+	<table class="data-table" aria-label="Failed tasks">
+		<thead>
+			<tr><th scope="col">When (UTC)</th><th scope="col">Task</th><th scope="col">Queue</th><th scope="col" class="num">Retries</th><th scope="col">Error</th></tr>
+		</thead>
 		<tbody>
 			{#each items as t (t.task_id + t.at)}
 				<tr>
-					<td>{when(t.at)}</td>
-					<td title={t.task}>{shortName(t.task)}</td>
-					<td>{t.queue ?? '—'}</td>
-					<td>{t.retries}</td>
-					<td>
+					<td class="font-mono text-xs whitespace-nowrap">{when(t.at)}</td>
+					<td class="font-mono text-xs" title={t.task}>{shortName(t.task)}</td>
+					<td class="font-mono text-xs">{t.queue ?? '—'}</td>
+					<td class="num font-mono">{t.retries}</td>
+					<td class="min-w-0">
 						<details>
-							<summary>{t.error}</summary>
-							<dl>
+							<summary class="text-hard text-[13px] break-words">{t.error}</summary>
+							<dl class="kv mt-2">
 								<dt>Task id</dt><dd><code>{t.task_id}</code></dd>
-								<dt>Task</dt><dd><code>{t.task}</code></dd>
-								<dt>Args</dt><dd><code>{t.args}</code></dd>
-								<dt>Kwargs</dt><dd><code>{t.kwargs}</code></dd>
+								<dt>Task</dt><dd><code class="break-all">{t.task}</code></dd>
+								<dt>Args</dt><dd><code class="break-all">{t.args}</code></dd>
+								<dt>Kwargs</dt><dd><code class="break-all">{t.kwargs}</code></dd>
 							</dl>
 						</details>
 					</td>
@@ -39,35 +41,3 @@
 		</tbody>
 	</table>
 {/if}
-
-<style>
-	.grid {
-		border-collapse: collapse;
-		width: 100%;
-		font-size: 0.84rem;
-	}
-	.grid th,
-	.grid td {
-		border-bottom: 1px solid var(--border);
-		padding: 0.3rem 0.5rem;
-		text-align: left;
-		vertical-align: top;
-	}
-	summary {
-		cursor: pointer;
-		overflow-wrap: anywhere;
-	}
-	dl {
-		display: grid;
-		grid-template-columns: auto 1fr;
-		gap: 0.2rem 0.6rem;
-		margin: 0.4rem 0 0;
-	}
-	dd {
-		margin: 0;
-		overflow-wrap: anywhere;
-	}
-	.muted {
-		opacity: 0.7;
-	}
-</style>

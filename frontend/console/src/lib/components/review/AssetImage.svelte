@@ -27,12 +27,5 @@
 {#if src}
 	<img {src} {alt} class={className} />
 {:else if failed}
-	<span class="missing" title={uri}>image unavailable</span>
+	<span class="text-muted-foreground text-xs" title={uri}>image unavailable</span>
 {/if}
-
-<style>
-	.missing {
-		font-size: 0.75rem;
-		opacity: 0.6;
-	}
-</style>

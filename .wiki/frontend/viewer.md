@@ -6,7 +6,7 @@
 | Status | in-progress (wired to the database; end-to-end citation check after a real re-index waits for S1's commit path) |
 | Owner session | S3 |
 | Spec | docs/architecture/08_frontend_openwebui.md §6, §4.4; 04 §4.4, §10 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
@@ -75,6 +75,7 @@ Deployment note: presigned MinIO URLs must be reachable from engineers' browsers
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-22 | S3 | Overlay regions are keyboard-focusable buttons (Tab, scroll into view, label on focus); redesign styling merged |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S3 | Deep-link contract, payload models, Console viewer page and components, tests; endpoint 501 until wired |
 | 2026-10-22 | S3 | Endpoint wired: `build_viewer_payload` over real tables and `resolve_anchor`; integration tests on ParadeDB |

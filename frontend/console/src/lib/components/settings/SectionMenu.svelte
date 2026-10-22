@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { cn } from '$lib/utils';
 	import { SETTINGS_SECTIONS } from './sections';
 
 	interface Props {
@@ -9,36 +10,18 @@
 </script>
 
 <nav aria-label="Settings sections">
-	<ul>
+	<ul class="m-0 list-none space-y-0.5 p-0">
 		{#each SETTINGS_SECTIONS as section (section.id)}
 			<li>
-				<a href="/settings/{section.id}" aria-current={section.id === current ? 'page' : undefined}>{section.title}</a>
+				<a
+					href="/settings/{section.id}"
+					aria-current={section.id === current ? 'page' : undefined}
+					class={cn(
+						'text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 items-center rounded-md px-2.5 text-sm no-underline transition-colors hover:no-underline',
+						section.id === current && 'bg-muted text-foreground font-medium'
+					)}>{section.title}</a
+				>
 			</li>
 		{/each}
 	</ul>
 </nav>
-
-<style>
-	ul {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		gap: 0.15rem;
-	}
-	a {
-		display: block;
-		padding: 0.4rem 0.7rem;
-		border-radius: 0.3rem;
-		text-decoration: none;
-		color: inherit;
-	}
-	a[aria-current='page'] {
-		background: var(--surface);
-		border: 1px solid var(--border);
-		font-weight: 600;
-	}
-	a:hover {
-		background: var(--surface);
-	}
-</style>

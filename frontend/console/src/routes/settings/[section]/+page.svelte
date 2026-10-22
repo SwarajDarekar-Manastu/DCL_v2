@@ -1,28 +1,28 @@
 <script lang="ts">
+	import Notice from '$lib/components/shell/Notice.svelte';
+
 	let { data } = $props();
 	let section = $derived(data.section);
 </script>
 
-<h1>{section.title}</h1>
-<p>{section.summary}</p>
-<h2>Configuration keys</h2>
-<ul>
-	{#each section.keys as key (key)}
-		<li><code>{key}</code></li>
-	{/each}
-</ul>
-<p><strong>When a change applies:</strong> {section.apply}</p>
-<p class="pending">Editing, history and rollback arrive with the settings API.</p>
-
-<style>
-	h2 {
-		font-size: 1rem;
-		margin-top: 1.5rem;
-	}
-	.pending {
-		margin-top: 1.5rem;
-		padding: 0.6rem 0.8rem;
-		border-left: 4px solid var(--muted);
-		background: var(--surface);
-	}
-</style>
+<div class="border-b px-5 py-4">
+	<h2 class="m-0 text-base">{section.title}</h2>
+	<p class="text-muted-foreground m-0 mt-1 max-w-[72ch]">{section.summary}</p>
+</div>
+<div class="space-y-5 px-5 py-4">
+	<div>
+		<h3 class="eyebrow mb-2">Configuration keys</h3>
+		<ul class="m-0 divide-y rounded-md border p-0">
+			{#each section.keys as key (key)}
+				<li class="list-none px-3 py-2"><code class="text-foreground">{key}</code></li>
+			{/each}
+		</ul>
+	</div>
+	<dl class="kv">
+		<dt>When a change applies</dt>
+		<dd>{section.apply}</dd>
+	</dl>
+	<div class="bg-muted/60 rounded-md border px-3 py-2.5">
+		<Notice tone="info">Editing, history and rollback arrive with the settings API.</Notice>
+	</div>
+</div>

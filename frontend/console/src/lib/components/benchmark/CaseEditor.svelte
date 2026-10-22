@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { BEHAVIORS, CATEGORIES, emptyAnchor, emptyCitation, emptyNumeric, problems, type CaseForm } from './case_form';
 	import { viewerHref } from './links';
+	import XIcon from '@lucide/svelte/icons/x';
+	import PlusIcon from '@lucide/svelte/icons/plus';
+	import { Button } from '$lib/components/ui/button';
 
 	interface Props {
 		form: CaseForm;
@@ -16,164 +19,116 @@
 	let issues = $derived(problems(form));
 </script>
 
+{#snippet remove(label: string, onclick: () => void)}
+	<Button variant="ghost" size="icon-sm" aria-label={label} title={label} class="text-muted-foreground" {onclick}><XIcon /></Button>
+{/snippet}
+
 <form
-	class="editor"
+	class="grid gap-4"
 	aria-label="Benchmark case"
 	onsubmit={(e) => {
 		e.preventDefault();
 		if (!issues.length) onSubmit();
 	}}
 >
-	<fieldset>
-		<legend>Case</legend>
+	<fieldset class="panel m-0 grid min-w-0 gap-3 p-4">
+		<legend class="float-left mb-1 w-full p-0 text-sm font-semibold">Case</legend>
 		{#if caseId !== null}
-			<label>Case id <input value={caseId} oninput={(e) => onCaseId?.((e.currentTarget as HTMLInputElement).value)} placeholder="tp07-t04-peak" /></label>
+			<label class="grid gap-1"
+				><span class="field-label">Case id</span>
+				<input class="field font-mono" value={caseId} oninput={(e) => onCaseId?.((e.currentTarget as HTMLInputElement).value)} placeholder="tp07-t04-peak" /></label
+			>
 		{/if}
-		<div class="row">
-			<label>Suite <input bind:value={form.suite} /></label>
-			<label
-				>Category
-				<select bind:value={form.category}>{#each CATEGORIES as c (c)}<option value={c}>{c}</option>{/each}</select>
+		<div class="grid grid-cols-[minmax(0,2fr)_minmax(0,2fr)_6rem_6rem] gap-3">
+			<label class="grid gap-1"><span class="field-label">Suite</span> <input class="field" bind:value={form.suite} /></label>
+			<label class="grid gap-1"
+				><span class="field-label">Category</span>
+				<select class="field" bind:value={form.category}>{#each CATEGORIES as c (c)}<option value={c}>{c}</option>{/each}</select>
 			</label>
-			<label>Difficulty <input class="short" bind:value={form.difficulty} placeholder="1–5" /></label>
-			<label>Language <input class="short" bind:value={form.language} /></label>
+			<label class="grid gap-1"><span class="field-label">Difficulty</span> <input class="field" bind:value={form.difficulty} placeholder="1–5" /></label>
+			<label class="grid gap-1"><span class="field-label">Language</span> <input class="field" bind:value={form.language} /></label>
 		</div>
-		<label>Question <textarea rows="2" bind:value={form.question}></textarea></label>
-		<label>Paraphrases (one per line) <textarea rows="2" bind:value={form.paraphrases}></textarea></label>
+		<label class="grid gap-1"><span class="field-label">Question</span> <textarea class="field" rows="2" bind:value={form.question}></textarea></label>
+		<label class="grid gap-1"
+			><span class="field-label">Paraphrases (one per line)</span> <textarea class="field" rows="2" bind:value={form.paraphrases}></textarea></label
+		>
 	</fieldset>
 
-	<fieldset>
-		<legend>Expected numbers</legend>
+	<fieldset class="panel m-0 grid min-w-0 gap-2 p-4">
+		<legend class="float-left mb-1 w-full p-0 text-sm font-semibold">Expected numbers</legend>
 		{#each form.numeric as row, i (i)}
-			<div class="row">
-				<input aria-label="Metric {i + 1}" placeholder="metric" bind:value={row.metric} />
-				<input aria-label="Value {i + 1}" class="short" placeholder="value" bind:value={row.value} />
-				<input aria-label="Unit {i + 1}" class="short" placeholder="unit" bind:value={row.unit} />
-				<label class="inline">± <input aria-label="Tolerance {i + 1}" class="short" bind:value={row.tolerance_pct} /> %</label>
-				<button type="button" aria-label="Remove number {i + 1}" onclick={() => form.numeric.splice(i, 1)}>×</button>
+			<div class="grid grid-cols-[minmax(0,1fr)_7rem_6rem_auto_auto] items-center gap-2">
+				<input class="field" aria-label="Metric {i + 1}" placeholder="metric" bind:value={row.metric} />
+				<input class="field num font-mono" aria-label="Value {i + 1}" placeholder="value" bind:value={row.value} />
+				<input class="field" aria-label="Unit {i + 1}" placeholder="unit" bind:value={row.unit} />
+				<label class="text-muted-foreground flex items-center gap-1 text-xs"
+					>± <input class="field num w-16 font-mono" aria-label="Tolerance {i + 1}" bind:value={row.tolerance_pct} /> %</label
+				>
+				{@render remove(`Remove number ${i + 1}`, () => form.numeric.splice(i, 1))}
 			</div>
 		{/each}
-		<button type="button" onclick={() => form.numeric.push(emptyNumeric())}>Add number</button>
+		<div><Button variant="outline" size="sm" onclick={() => form.numeric.push(emptyNumeric())}><PlusIcon />Add number</Button></div>
 	</fieldset>
 
 	{#each [{ key: 'citations', title: 'Expected citations' }, { key: 'mustNotCite', title: 'Must not cite' }] as const as group (group.key)}
-		<fieldset>
-			<legend>{group.title}</legend>
+		<fieldset class="panel m-0 grid min-w-0 gap-2 p-4">
+			<legend class="float-left mb-1 w-full p-0 text-sm font-semibold">{group.title}</legend>
 			{#each form[group.key] as row, i (i)}
-				<div class="row">
-					<input aria-label="{group.title} file {i + 1}" placeholder="file name" bind:value={row.file_name} />
-					<input aria-label="{group.title} doc {i + 1}" placeholder="doc id" bind:value={row.doc_id} />
-					<input aria-label="{group.title} standard {i + 1}" placeholder="standard id" bind:value={row.standard_id} />
-					<input aria-label="{group.title} page {i + 1}" class="short" placeholder="page" bind:value={row.page} />
-					<button type="button" aria-label="Remove {group.title} {i + 1}" onclick={() => form[group.key].splice(i, 1)}>×</button>
+				<div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_5rem_auto] items-center gap-2">
+					<input class="field" aria-label="{group.title} file {i + 1}" placeholder="file name" bind:value={row.file_name} />
+					<input class="field font-mono" aria-label="{group.title} doc {i + 1}" placeholder="doc id" bind:value={row.doc_id} />
+					<input class="field" aria-label="{group.title} standard {i + 1}" placeholder="standard id" bind:value={row.standard_id} />
+					<input class="field num font-mono" aria-label="{group.title} page {i + 1}" placeholder="page" bind:value={row.page} />
+					{@render remove(`Remove ${group.title} ${i + 1}`, () => form[group.key].splice(i, 1))}
 				</div>
 			{/each}
-			<button type="button" onclick={() => form[group.key].push(emptyCitation())}>Add</button>
+			<div><Button variant="outline" size="sm" onclick={() => form[group.key].push(emptyCitation())}><PlusIcon />Add</Button></div>
 		</fieldset>
 	{/each}
 
-	<fieldset>
-		<legend>Tools and entities</legend>
-		<div class="row">
-			<label>Expected tools <input bind:value={form.tools} placeholder="query_telemetry, search_documents" /></label>
-			<label class="inline"><input type="checkbox" bind:checked={form.toolsOrdered} /> in this order</label>
+	<fieldset class="panel m-0 grid min-w-0 gap-3 p-4">
+		<legend class="float-left mb-1 w-full p-0 text-sm font-semibold">Tools and entities</legend>
+		<div class="flex items-end gap-3">
+			<label class="grid flex-1 gap-1"
+				><span class="field-label">Expected tools</span> <input class="field font-mono" bind:value={form.tools} placeholder="query_telemetry, search_documents" /></label
+			>
+			<label class="flex h-8 items-center gap-2"><input type="checkbox" bind:checked={form.toolsOrdered} /> in this order</label>
 		</div>
-		<label>Expected entities <input bind:value={form.entities} placeholder="C-103, TP37" /></label>
+		<label class="grid gap-1"><span class="field-label">Expected entities</span> <input class="field" bind:value={form.entities} placeholder="C-103, TP37" /></label>
 	</fieldset>
 
-	<fieldset>
-		<legend>Gold passages (retrieval)</legend>
+	<fieldset class="panel m-0 grid min-w-0 gap-2 p-4">
+		<legend class="float-left mb-1 w-full p-0 text-sm font-semibold">Gold passages (retrieval)</legend>
 		{#each form.anchors as row, i (i)}
-			<div class="row">
-				<input aria-label="Gold doc {i + 1}" placeholder="doc id" bind:value={row.doc_id} />
-				<input aria-label="Gold anchor {i + 1}" placeholder="page:8:3f2a9c1b7d4e5f60" bind:value={row.anchor} />
-				{#if row.doc_id && row.anchor}<a href={viewerHref(row.doc_id, row.anchor)} target="_blank" rel="noopener">open</a>{/if}
-				<button type="button" aria-label="Remove gold {i + 1}" onclick={() => form.anchors.splice(i, 1)}>×</button>
+			<div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_3rem_auto] items-center gap-2">
+				<input class="field font-mono" aria-label="Gold doc {i + 1}" placeholder="doc id" bind:value={row.doc_id} />
+				<input class="field font-mono" aria-label="Gold anchor {i + 1}" placeholder="page:8:3f2a9c1b7d4e5f60" bind:value={row.anchor} />
+				<span class="text-xs">{#if row.doc_id && row.anchor}<a href={viewerHref(row.doc_id, row.anchor)} target="_blank" rel="noopener">open</a>{/if}</span>
+				{@render remove(`Remove gold ${i + 1}`, () => form.anchors.splice(i, 1))}
 			</div>
 		{/each}
-		<button type="button" onclick={() => form.anchors.push(emptyAnchor())}>Add passage</button>
+		<div><Button variant="outline" size="sm" onclick={() => form.anchors.push(emptyAnchor())}><PlusIcon />Add passage</Button></div>
 	</fieldset>
 
-	<fieldset>
-		<legend>Expected behavior</legend>
-		{#each BEHAVIORS as b (b.value)}
-			<label class="inline"><input type="checkbox" bind:group={form.behaviors} value={b.value} /> {b.label}</label>
-		{/each}
-		<label>Clarification answer (used when the engine asks back) <input bind:value={form.clarification} /></label>
-		<label>Notes <textarea rows="2" bind:value={form.notes}></textarea></label>
+	<fieldset class="panel m-0 grid min-w-0 gap-3 p-4">
+		<legend class="float-left mb-1 w-full p-0 text-sm font-semibold">Expected behavior</legend>
+		<div class="grid gap-1.5 sm:grid-cols-2">
+			{#each BEHAVIORS as b (b.value)}
+				<label class="flex items-center gap-2"><input type="checkbox" bind:group={form.behaviors} value={b.value} /> {b.label}</label>
+			{/each}
+		</div>
+		<label class="grid gap-1"
+			><span class="field-label">Clarification answer (used when the engine asks back)</span> <input class="field" bind:value={form.clarification} /></label
+		>
+		<label class="grid gap-1"><span class="field-label">Notes</span> <textarea class="field" rows="2" bind:value={form.notes}></textarea></label>
 	</fieldset>
 
-	{#if issues.length}
-		<ul class="issues" role="alert">{#each issues as issue (issue)}<li>{issue}</li>{/each}</ul>
-	{/if}
-	<button type="submit" class="primary" disabled={busy || issues.length > 0}>{submitLabel}</button>
+	<div class="bg-background/90 sticky bottom-0 -mx-1 flex items-start justify-between gap-4 border-t px-1 py-3 backdrop-blur">
+		{#if issues.length}
+			<ul class="text-warn m-0 list-disc space-y-0.5 pl-5 text-sm" role="alert">{#each issues as issue (issue)}<li>{issue}</li>{/each}</ul>
+		{:else}
+			<span class="text-muted-foreground text-sm">Ready to save.</span>
+		{/if}
+		<Button type="submit" disabled={busy || issues.length > 0}>{submitLabel}</Button>
+	</div>
 </form>
-
-<style>
-	.editor {
-		display: grid;
-		gap: 0.8rem;
-		font-size: 0.84rem;
-		max-width: 60rem;
-	}
-	fieldset {
-		border: 1px solid var(--border);
-		border-radius: 0.4rem;
-		padding: 0.6rem 0.8rem;
-		display: grid;
-		gap: 0.45rem;
-	}
-	legend {
-		font-weight: 600;
-	}
-	.row {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.4rem 0.6rem;
-		align-items: end;
-	}
-	label {
-		display: grid;
-		gap: 0.15rem;
-	}
-	.inline {
-		display: flex;
-		align-items: center;
-		gap: 0.3rem;
-	}
-	input:not([type='checkbox']),
-	select,
-	textarea {
-		font: inherit;
-		padding: 0.25rem 0.35rem;
-		background: var(--surface);
-		color: inherit;
-		border: 1px solid var(--border);
-		border-radius: 0.25rem;
-	}
-	.short {
-		width: 5rem;
-	}
-	button {
-		justify-self: start;
-		font: inherit;
-		font-size: 0.8rem;
-		padding: 0.2rem 0.6rem;
-		cursor: pointer;
-	}
-	.primary {
-		background: var(--accent);
-		color: white;
-		border: 0;
-		border-radius: 0.3rem;
-		padding: 0.4rem 1rem;
-		font-size: 0.88rem;
-	}
-	.primary:disabled {
-		opacity: 0.5;
-	}
-	.issues {
-		color: var(--warn);
-		margin: 0;
-	}
-</style>

@@ -121,3 +121,12 @@ export function runRequest(suite: string, picked: readonly string[] = [], order:
 	const ordered = order.filter((id) => chosen.has(id));
 	return { suite, case_ids: [...ordered, ...picked.filter((id) => !ordered.includes(id))] };
 }
+
+/** Badge tone per run status: outcomes in colour (completed green, failed red), the rest neutral or info. */
+export const RUN_TONE: Record<BenchmarkRun['status'], 'ok' | 'hard' | 'info' | 'neutral'> = {
+	queued: 'neutral',
+	running: 'info',
+	completed: 'ok',
+	failed: 'hard',
+	cancelled: 'neutral'
+};

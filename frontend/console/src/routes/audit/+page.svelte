@@ -5,7 +5,10 @@
 	import { session } from '$lib/auth/session.svelte';
 	import AuditTimeline from '$lib/components/review/AuditTimeline.svelte';
 	import { auditFiltersFromUrl, auditUrl } from '$lib/components/review/audit';
+	import Notice from '$lib/components/shell/Notice.svelte';
+	import Page from '$lib/components/shell/Page.svelte';
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	const TYPES = ['case', 'flag', 'rule', 'entity', 'config', 'benchmark_case', 'document'] as const;
 
@@ -61,60 +64,36 @@
 	const day = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : '');
 </script>
 
-<RoleGate roles={session.user?.roles ?? []} role="reviewer">
-	<h1>Audit</h1>
-	<form class="filters" onsubmit={apply} aria-label="Audit filters">
-		<label
+{#snippet filterBar()}
+	<form class="flex w-full flex-wrap items-end gap-3" onsubmit={apply} aria-label="Audit filters">
+		<label class="field-label grid gap-1"
 			>Entity type
-			<select name="entity_type" value={filters.entity_type ?? ''}>
+			<select class="field text-foreground w-36" name="entity_type" value={filters.entity_type ?? ''}>
 				<option value="">any</option>
 				{#each TYPES as t (t)}<option value={t}>{t}</option>{/each}
 			</select>
 		</label>
-		<label>Entity ids <input name="entity_id" value={(filters.entity_id ?? []).join(', ')} placeholder="case key, flag id, …" /></label>
-		<label>Actor <input name="actor" value={filters.actor ?? ''} /></label>
-		<label>Action <input name="action" value={filters.action ?? ''} /></label>
-		<label>From <input name="since" type="date" value={day(filters.since)} /></label>
-		<label>Before <input name="until" type="date" value={day(filters.until)} /></label>
-		<button type="submit">Apply</button>
-		<a href="/audit">Clear</a>
+		<label class="field-label grid gap-1"
+			>Entity ids <input class="field text-foreground w-56" name="entity_id" value={(filters.entity_id ?? []).join(', ')} placeholder="case key, flag id, …" /></label
+		>
+		<label class="field-label grid gap-1">Actor <input class="field text-foreground w-44" name="actor" value={filters.actor ?? ''} /></label>
+		<label class="field-label grid gap-1">Action <input class="field text-foreground w-32" name="action" value={filters.action ?? ''} /></label>
+		<label class="field-label grid gap-1">From <input class="field text-foreground w-36" name="since" type="date" value={day(filters.since)} /></label>
+		<label class="field-label grid gap-1">Before <input class="field text-foreground w-36" name="until" type="date" value={day(filters.until)} /></label>
+		<div class="flex items-center gap-2">
+			<Button type="submit">Apply</Button>
+			<Button href="/audit" variant="ghost">Clear</Button>
+		</div>
 	</form>
-	{#if error}
-		<p role="alert">{error}</p>
-	{:else}
-		<AuditTimeline {items} />
-		{#if nextCursor}<button type="button" onclick={loadMore}>Load more</button>{/if}
-	{/if}
-</RoleGate>
+{/snippet}
 
-<style>
-	h1 {
-		font-size: 1.1rem;
-	}
-	.filters {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem 0.9rem;
-		align-items: end;
-		margin-bottom: 1rem;
-		font-size: 0.82rem;
-	}
-	label {
-		display: grid;
-		gap: 0.15rem;
-	}
-	input,
-	select {
-		font: inherit;
-		padding: 0.25rem;
-		background: var(--surface);
-		color: inherit;
-		border: 1px solid var(--border);
-		border-radius: 0.25rem;
-	}
-	button {
-		font: inherit;
-		padding: 0.3rem 0.8rem;
-		cursor: pointer;
-	}
-</style>
+<RoleGate roles={session.user?.roles ?? []} role="reviewer">
+	<Page title="Audit" description="Who changed what, when, with the before and after of each change." filters={filterBar}>
+		{#if error}
+			<Notice tone="error">{error}</Notice>
+		{:else}
+			<AuditTimeline {items} />
+			{#if nextCursor}<div class="mt-4 flex justify-center"><Button variant="outline" onclick={loadMore}>Load more</Button></div>{/if}
+		{/if}
+	</Page>
+</RoleGate>

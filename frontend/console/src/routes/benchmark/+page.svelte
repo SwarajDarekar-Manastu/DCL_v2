@@ -4,7 +4,13 @@
 	import { hasRole } from '$lib/auth/roles';
 	import { session } from '$lib/auth/session.svelte';
 	import { compareHref, percent, runHref, suiteHref } from '$lib/components/benchmark/links';
+	import { RUN_TONE } from '$lib/components/benchmark/run_view';
+	import { Button } from '$lib/components/ui/button';
+	import EmptyState from '$lib/components/shell/EmptyState.svelte';
+	import Notice from '$lib/components/shell/Notice.svelte';
+	import Page from '$lib/components/shell/Page.svelte';
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
+	import ToneBadge from '$lib/components/shell/ToneBadge.svelte';
 	import { live } from '$lib/live.svelte';
 
 	let suites = $state<SuiteSummary[]>([]);
@@ -58,101 +64,69 @@
 </script>
 
 <RoleGate roles={session.user?.roles ?? []} role="viewer">
-	<div class="head">
-		<h1>Benchmark</h1>
-		<a href="/benchmark/retrieval">Retrieval lab</a>
-		{#if canRun}<a href="/benchmark/cases/new">New case</a>{/if}
-	</div>
-	{#if error}<p class="error" role="alert">{error}</p>{/if}
+	<Page title="Benchmark" description="Golden suites, runs and regressions. Pick two runs to compare them.">
+		{#snippet actions()}
+			<Button variant="outline" size="sm" href="/benchmark/retrieval">Retrieval lab</Button>
+			{#if canRun}<Button size="sm" href="/benchmark/cases/new">New case</Button>{/if}
+		{/snippet}
 
-	<h2>Suites</h2>
-	{#if suites.length === 0 && !error}<p class="muted">No suites yet. Import one or create a case.</p>{/if}
-	<table class="grid" aria-label="Suites">
-		<thead><tr><th>Suite</th><th>Active</th><th>Drafts</th><th>Categories</th><th>Last run</th><th></th></tr></thead>
-		<tbody>
-			{#each suites as s (s.suite)}
-				<tr>
-					<td><a href={suiteHref(s.suite)}>{s.suite}</a></td>
-					<td>{s.cases_by_status.active ?? 0}</td>
-					<td>{#if s.cases_by_status.draft}<a href="{suiteHref(s.suite)}?status=draft">{s.cases_by_status.draft} to review</a>{:else}0{/if}</td>
-					<td class="cats">{Object.entries(s.cases_by_category).map(([c, n]) => `${c} ${n}`).join(' · ')}</td>
-					<td>
-						{#if s.last_run}<a href={runHref(s.last_run.run_id)}>{s.last_run.status}</a> · {percent(s.last_run.pass_rate)}{:else}—{/if}
-					</td>
-					<td class="actions">
-						{#if canRun}<button type="button" disabled={busy || !s.cases_by_status.active} onclick={() => run(s.suite)}>Run</button>{/if}
-						<button type="button" onclick={() => download(s.suite)}>Export</button>
-					</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
+		{#if error}<Notice tone="error" class="mb-4">{error}</Notice>{/if}
 
-	<h2>Recent runs</h2>
-	{#if picked.length === 2}<a class="compare" href={compareHref(picked[0], picked[1])}>Compare the two selected runs</a>{/if}
-	<table class="grid" aria-label="Runs">
-		<thead><tr><th></th><th>Run</th><th>Suite</th><th>Status</th><th>Cases</th><th>Pass rate</th><th>Commit</th><th>Started</th></tr></thead>
-		<tbody>
-			{#each runs as r (r.run_id)}
-				<tr>
-					<td><input type="checkbox" aria-label="Select run {r.run_id.slice(0, 8)}" checked={picked.includes(r.run_id)} onchange={() => toggle(r.run_id)} /></td>
-					<td><a href={runHref(r.run_id)}>{r.run_id.slice(0, 8)}</a></td>
-					<td>{r.suite}</td>
-					<td>{r.status}</td>
-					<td>{Object.keys(r.case_versions).length}</td>
-					<td>{percent(passRate(r))}</td>
-					<td><code>{r.git_commit?.slice(0, 8) ?? ''}</code></td>
-					<td>{r.started_at?.slice(0, 16).replace('T', ' ') ?? 'queued'}</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
+		<section class="panel mb-6" aria-labelledby="suites-title">
+			<div class="panel-header"><h2 id="suites-title" class="panel-title">Suites</h2></div>
+			{#if suites.length === 0 && !error}
+				<EmptyState class="m-4" title="No suites yet" description="Import one or create a case." />
+			{:else}
+				<table class="data-table" aria-label="Suites">
+					<thead><tr><th>Suite</th><th class="num">Active</th><th>Drafts</th><th>Categories</th><th>Last run</th><th><span class="sr-only">Actions</span></th></tr></thead>
+					<tbody>
+						{#each suites as s (s.suite)}
+							<tr>
+								<td class="font-medium"><a href={suiteHref(s.suite)}>{s.suite}</a></td>
+								<td class="num font-mono">{s.cases_by_status.active ?? 0}</td>
+								<td>{#if s.cases_by_status.draft}<a href="{suiteHref(s.suite)}?status=draft">{s.cases_by_status.draft} to review</a>{:else}<span class="text-muted-foreground">0</span>{/if}</td>
+								<td class="text-muted-foreground text-xs">{Object.entries(s.cases_by_category).map(([c, n]) => `${c} ${n}`).join(' · ')}</td>
+								<td class="whitespace-nowrap">
+									{#if s.last_run}<a href={runHref(s.last_run.run_id)}>{s.last_run.status}</a> · <span class="num font-mono">{percent(s.last_run.pass_rate)}</span>{:else}<span class="text-muted-foreground">—</span>{/if}
+								</td>
+								<td class="text-right whitespace-nowrap">
+									{#if canRun}<Button size="xs" disabled={busy || !s.cases_by_status.active} onclick={() => run(s.suite)}>Run</Button>{/if}
+									<Button variant="outline" size="xs" onclick={() => download(s.suite)}>Export</Button>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			{/if}
+		</section>
+
+		<section class="panel" aria-labelledby="runs-title">
+			<div class="panel-header">
+				<h2 id="runs-title" class="panel-title">Recent runs</h2>
+				{#if picked.length === 2}
+					<Button size="xs" href={compareHref(picked[0], picked[1])}>Compare the two selected runs</Button>
+				{:else}
+					<span class="text-muted-foreground text-xs">Select two runs to compare</span>
+				{/if}
+			</div>
+			<table class="data-table" aria-label="Runs">
+				<thead><tr><th class="w-8"><span class="sr-only">Select</span></th><th>Run</th><th>Suite</th><th>Status</th><th class="num">Cases</th><th class="num">Pass rate</th><th>Commit</th><th>Started</th></tr></thead>
+				<tbody>
+					{#each runs as r (r.run_id)}
+						<tr class={picked.includes(r.run_id) ? 'bg-muted/60' : ''}>
+							<td><input type="checkbox" aria-label="Select run {r.run_id.slice(0, 8)}" checked={picked.includes(r.run_id)} onchange={() => toggle(r.run_id)} /></td>
+							<td><a class="font-mono text-xs" href={runHref(r.run_id)}>{r.run_id.slice(0, 8)}</a></td>
+							<td>{r.suite}</td>
+							<td><ToneBadge tone={RUN_TONE[r.status]}>{r.status}</ToneBadge></td>
+							<td class="num font-mono">{Object.keys(r.case_versions).length}</td>
+							<td class="num font-mono">{percent(passRate(r))}</td>
+							<td><code class="text-muted-foreground">{r.git_commit?.slice(0, 8) ?? ''}</code></td>
+							<td class="num text-muted-foreground whitespace-nowrap">{r.started_at?.slice(0, 16).replace('T', ' ') ?? 'queued'}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+			{#if runs.length === 0 && !error}<p class="text-muted-foreground m-0 px-4 py-6 text-center">No runs yet.</p>{/if}
+		</section>
+	</Page>
 </RoleGate>
-
-<style>
-	.head {
-		display: flex;
-		gap: 1rem;
-		align-items: baseline;
-	}
-	h1 {
-		font-size: 1.15rem;
-	}
-	h2 {
-		font-size: 1rem;
-		margin-top: 1.4rem;
-	}
-	.grid {
-		border-collapse: collapse;
-		width: 100%;
-		font-size: 0.84rem;
-	}
-	.grid th,
-	.grid td {
-		border-bottom: 1px solid var(--border);
-		padding: 0.35rem 0.45rem;
-		text-align: left;
-	}
-	.cats {
-		font-size: 0.76rem;
-		opacity: 0.85;
-	}
-	.actions {
-		white-space: nowrap;
-	}
-	button {
-		font: inherit;
-		font-size: 0.8rem;
-		padding: 0.2rem 0.6rem;
-		cursor: pointer;
-	}
-	.compare {
-		font-size: 0.85rem;
-	}
-	.muted {
-		opacity: 0.7;
-	}
-	.error {
-		color: var(--hard);
-	}
-</style>

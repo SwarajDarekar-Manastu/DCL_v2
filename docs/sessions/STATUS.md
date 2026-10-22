@@ -706,3 +706,15 @@ Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest -q`: 
 Blocked on: nothing
 Needs from others: Lead: merge. S4: redeploy the workers (cpu_parse included). Then I set `routes.A1.enabled = true` (33 A1 documents waiting), dispatch, resume the 22 HALTED Route C documents so their flags get suggestions, and run the M2 live check.
 Next: the live M2 check after the redeploy; then the library PDF language/DOI check (started: 814 landed library PDFs; first-page text with pypdfium2, script and stopword detection, since no fastText or langdetect dependency exists)
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: the Console redesign, reviewed and merged into this branch (a fast-forward from worktree-agent-a84765e1105962288), plus review fixes.
+- Run status tones now come from an exhaustive map over the five run statuses, replacing the word matching.
+- Viewer overlay regions are keyboard-focusable buttons.
+- console-shell-auth map now names Sidebar + TopBar.
+- The redesign changes nothing in API calls, routes, auth, config.ts, live.svelte.ts or the backend. Its only build change is the Tailwind plugin in vite.config.ts.
+- Live check on 8600 with the dev sign-in: every page renders against the real API, and the viewer shows a real document with its fallback notice. Ops shows the live (empty) failed-task list.
+- Not checkable live: queue rows and the case view. On main, `/review/cases` answers 501 ("review tables arrive in M2"), so these rest on the component tests.
+- Tests: Console check 0 errors, vitest 107, build ok; backend pytest exit 0.
+Blocked on: Settings (S1's settings API); live review data needs S1's review API on main.
+Needs from others: S1: review and settings APIs.
+Next: the viewer should use the `table` view for table documents (a real engineering_table document showed its HTML table markup in the text view, escaped); Settings once S1's API is on main.

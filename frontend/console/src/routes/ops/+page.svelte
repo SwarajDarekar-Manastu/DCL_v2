@@ -2,7 +2,12 @@
 	import { ApiError, listFailedTasks, type FailedTask } from '$lib/api_endpoint';
 	import { hasRole } from '$lib/auth/roles';
 	import { session } from '$lib/auth/session.svelte';
+	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
+	import { Button } from '$lib/components/ui/button';
 	import FailedTasks from '$lib/components/ops/FailedTasks.svelte';
+	import EmptyState from '$lib/components/shell/EmptyState.svelte';
+	import Notice from '$lib/components/shell/Notice.svelte';
+	import Page from '$lib/components/shell/Page.svelte';
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
 
 	let isAdmin = $derived(hasRole(session.user?.roles ?? [], 'admin'));
@@ -23,38 +28,27 @@
 </script>
 
 <RoleGate roles={session.user?.roles ?? []} role="viewer">
-	<h1>Ops</h1>
-	<p>Sync status, queue depths, failed tasks and cost today (file 08 §4.2).</p>
-
-	{#if isAdmin}
-		<section>
-			<h2>Failed tasks <button type="button" onclick={() => (reload += 1)}>Refresh</button></h2>
-			<p class="muted">Tasks that failed after their last retry, newest first (the latest 100). Retry is not available yet.</p>
-			{#if error}<p class="error" role="alert">{error}</p>{/if}
-			{#if failed}<FailedTasks items={failed} />{/if}
-		</section>
-	{/if}
+	<Page title="Ops" description="Sync status, queue depths, failed tasks and cost today (file 08 §4.2).">
+		<div class="grid gap-5">
+			{#if isAdmin}
+				<section class="panel" aria-labelledby="failed-title">
+					<div class="panel-header">
+						<div>
+							<h2 id="failed-title" class="panel-title">Failed tasks</h2>
+							<p class="text-muted-foreground m-0 text-xs">
+								Tasks that failed after their last retry, newest first (the latest 100). Retry is not available yet.
+							</p>
+						</div>
+						<Button variant="outline" size="sm" onclick={() => (reload += 1)}><RefreshCwIcon />Refresh</Button>
+					</div>
+					{#if error}<div class="px-4 py-3"><Notice tone="error">{error}</Notice></div>{/if}
+					{#if failed}<FailedTasks items={failed} />{/if}
+				</section>
+			{/if}
+			<EmptyState
+				title="More operations data to come"
+				description="Sync freshness per root, Celery queue depths and today's model cost against the budget will appear here once their APIs are connected."
+			/>
+		</div>
+	</Page>
 </RoleGate>
-
-<style>
-	h2 {
-		font-size: 0.95rem;
-		margin: 1rem 0 0.4rem;
-		display: flex;
-		gap: 0.6rem;
-		align-items: center;
-	}
-	button {
-		font: inherit;
-		font-size: 0.8rem;
-		padding: 0.1rem 0.5rem;
-		cursor: pointer;
-	}
-	.muted {
-		opacity: 0.7;
-		font-size: 0.84rem;
-	}
-	.error {
-		color: var(--hard);
-	}
-</style>
