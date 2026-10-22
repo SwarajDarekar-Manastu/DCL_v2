@@ -263,3 +263,28 @@ def test_a_valve_signal_is_open_at_its_threshold(tmp_path):
             gauge_or_abs="gauge",
             open_threshold=1,
         )
+
+
+def test_t0_on_a_2_hz_thermocouple_marks_the_rise_onset_not_the_steep_part():
+    """DAQami at 2 Hz: 300 K until 20 s, a slow start (10 K/s for 6 s), then 80 K/s to the peak.
+    The sustain test needs two samples (20 ms is shorter than one) and t0 moves back to the onset."""
+    from backend.routes.c_telemetry.normalize import ChannelPlan, detect_t0
+
+    t = np.arange(0, 60, 0.5)
+    k = np.full_like(t, 300.0)
+    slow = (t > 20) & (t <= 26)
+    k[slow] = 300 + (t[slow] - 20) * 10
+    steep = (t > 26) & (t <= 34)
+    k[steep] = 360 + (t[steep] - 26) * 80
+    k[t > 34] = 1000.0
+    plan = ChannelPlan(
+        raw_name="TC1",
+        canonical_name="tc1_k",
+        quantity=Quantity.TEMPERATURE,
+        unit_si="K",
+        gauge_or_abs=GaugeOrAbs.NOT_APPLICABLE,
+        raw_unit="K",
+    )
+    t0 = detect_t0(t * 1000, {"tc1_k": (plan, k)}, NormalizeConfig())
+    assert t0 is not None and t0.channel == "tc1_k"
+    assert 19_500 <= t0.t_ms <= 20_500
