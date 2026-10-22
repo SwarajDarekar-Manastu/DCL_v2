@@ -649,3 +649,12 @@ Route C on the stack: 22 HALTED (20 LabJack, 2 TDMS), 7 ACTIVE, 11 ACTIVE_WITH_S
 Blocked on: nothing
 Needs from others: an SME confirmation of channel maps (S5's proposals) to resume the 22 HALTED runs
 Next: the settings API for S3, then the library PDF language check
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- Benchmark runs (file 08 §5.5): the suite page runs all active cases or a picked subset; the case editor has "Run this case now"; a queued or running run page shows a progress bar and re-reads the run every 5 s until the status is final, so it works whether or not S2's runner publishes websocket `run` events. No API change.
+- `.wiki/frontend/m9-pilot-walkthrough.md`: the M9 acceptance criteria as browser steps with pass conditions, operator preconditions and the SQL checks.
+- Tests: npm run check 0 errors, npx vitest run 94 passed, npm run build ok, uv run pytest -q exit 0.
+Blocked on: Settings editing (backend/api/settings.py is still S1's stub). The "Failed tasks" Ops page needs a `GET /ops/failed-tasks` route over `dead_letters()`; file 10 §2 puts ops routes in S1's `backend/api/sync.py`, which is a stub. Owner question sent to the Lead.
+Needs from others: S1: settings API; Lead: owner of the failed-tasks route.
+Next: the Failed tasks page once the route owner is decided; Settings editing once S1's API is on main; review the Console redesign branch when it arrives.

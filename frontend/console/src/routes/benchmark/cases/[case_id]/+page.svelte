@@ -8,13 +8,15 @@
 		caseHistory,
 		createBenchmarkCase,
 		retireCase,
+		startRun,
 		type BenchmarkCase
 	} from '$lib/api_endpoint';
 	import { hasRole } from '$lib/auth/roles';
 	import { session } from '$lib/auth/session.svelte';
 	import CaseEditor from '$lib/components/benchmark/CaseEditor.svelte';
 	import { emptyForm, formFromCase, toContent, type CaseForm } from '$lib/components/benchmark/case_form';
-	import { caseHref, suiteHref } from '$lib/components/benchmark/links';
+	import { caseHref, runHref, suiteHref } from '$lib/components/benchmark/links';
+	import { runRequest } from '$lib/components/benchmark/run_view';
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
 
 	let caseId = $derived(page.params.case_id ?? '');
@@ -65,6 +67,19 @@
 		}
 	}
 
+	async function runNow(suite: string) {
+		busy = true;
+		error = '';
+		try {
+			const created = await startRun(runRequest(suite, [caseId]));
+			await goto(runHref(created.run_id));
+		} catch (e) {
+			error = describe(e);
+		} finally {
+			busy = false;
+		}
+	}
+
 	const save = () =>
 		isNew
 			? act(() => createBenchmarkCase({ ...toContent(form), case_id: newId.trim(), status: 'active' }), 'Case created.')
@@ -78,6 +93,7 @@
 			Version {latest.version} · <strong>{latest.status}</strong> · by {latest.created_by} · {latest.created_at.slice(0, 10)}
 			{#if latest.source_trace_id}· from chat trace <code>{latest.source_trace_id}</code>{/if}
 			{#if canEdit && latest.status === 'draft'}<button type="button" disabled={busy} onclick={() => act(() => approveCase(caseId), 'Approved.')}>Approve draft</button>{/if}
+			{#if canEdit && latest.status === 'active'}<button type="button" disabled={busy} onclick={() => runNow(latest.suite)}>Run this case now</button>{/if}
 			{#if canEdit && latest.status !== 'retired'}<button type="button" disabled={busy} onclick={() => act(() => retireCase(caseId), 'Retired.')}>Retire</button>{/if}
 		</p>
 	{/if}
