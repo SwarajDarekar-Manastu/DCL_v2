@@ -537,6 +537,12 @@ Merged / ready: behaviour suite (6 cases: Isp with a dead thrust channel and a n
 Blocked on: indexed allowlist documents (doc lookups, code, failure/visual, multilingual, the retrieval set's gold anchors) and standards in the processing scope (STANDARDS cases)
 Needs from others: Lead — a ruling on STANDARDS cases: no ECSS/standards folder is in the allowlist, so those cases wait for M6 or a scope addition
 Next: page-cited FACT_LOOKUP and CODE cases from the exported E3–E5 documents
+## 2026-10-22 16:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: restart-resume test (`backend/tests/integration/llm_engine/engine/test_workflow_restart.py` + `_restart_worker.py`): an engine process killed inside the tool step is recovered by a new process; query analysis is replayed from the DBOS journal (asked once), the tool reruns, the run ends SUCCESS with the same trace id and the trace is saved. Engine map rubric item checked; durability note on the map.
+Blocked on: nothing
+Needs from others: S4's 07965fd (GEMINI_MODEL / GEMINI_LITE_MODEL) on main, then I switch vision, analysis, synthesis, enrichment to the settings
+Next: T6 external_search (grounding, sanitized query only, external_queries in the trace), T2 when S1's telemetry tables land, T3, Skills
+
 
 ## 2026-10-22 12:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: documents suite (12 FACT_LOOKUP + 3 FAILURE_ANALYSIS, page-cited, from the TP-23 and TP12 reports) and code suite (8 CODE cases on the TP7 test-plan creator); questions committed without facts or file names, answers and citations local; a test finds every expected number/entity in the cited PDF page or source file. E12 chosen: 8 ECSS standards as path globs (sent to S1). Golden set now 44 cases (15 telemetry incl. 2 halt-behaviour… see map). Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`

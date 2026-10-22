@@ -17,10 +17,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.config import ThinkingLevel
 from backend.indexing.identifiers import extract_identifiers
 from backend.llm_engine.gemini_types import CallContext, Message
+from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
 from backend.postgres.enums import EntityType, Quantity
 
-MODEL = "gemini-3.8-flash"
 PROMPT_VERSION = "parent.v1"
 PURPOSE = "enrichment.parent"
 MAX_DROP_RATE = 0.10
@@ -95,7 +95,7 @@ class EnrichedParent:
     enrichment: ParentEnrichment
     drops: Drops
     prompt_version: str = PROMPT_VERSION
-    model: str = MODEL
+    model: str = field(default_factory=model_id)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -165,7 +165,7 @@ def enrich_parent(
     prompt = load_prompt("enrichment", PROMPT_VERSION)
     user = prompt.render_user(document_context=context, language=language or "und", parent_text=parent_text)
     result = client.generate_sync(
-        model=MODEL,
+        model=model_id(),
         messages=[Message.system(prompt.system), Message.user(user)],
         context=CallContext(
             purpose=PURPOSE, prompt_version=PROMPT_VERSION, doc_id=doc_id, node_anchor=anchor
@@ -176,4 +176,4 @@ def enrich_parent(
     )
     grounded, drops = ground(result.parsed, parent_text)
     warnings = [f"drop rate {drops.rate:.0%} above {MAX_DROP_RATE:.0%}"] if drops.rate > MAX_DROP_RATE else []
-    return EnrichedParent(grounded, drops, model=result.model or MODEL, warnings=warnings)
+    return EnrichedParent(grounded, drops, model=result.model or model_id(), warnings=warnings)
