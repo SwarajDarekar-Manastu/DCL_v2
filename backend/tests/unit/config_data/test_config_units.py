@@ -80,7 +80,7 @@ def test_degree_c_spellings(ureg, apply_unit_aliases, unit_aliases):
     surfaces = {a[0] for a in unit_aliases}
     assert "°С" in surfaces  # Cyrillic С, an OCR and copy-paste trap
     assert "°C" not in surfaces  # Latin °C is pint-native and must not be aliased
-    for s in ("°C", "℃", "°С", "deg C"):
+    for s in ("°C", "℃", "°С", "deg C", "Deg C"):
         assert ureg.Quantity(25, apply_unit_aliases(s)).to("K").magnitude == pytest.approx(298.15)
 
 
@@ -92,3 +92,10 @@ def test_gauge_reference_is_not_converted_by_pint(ureg):
 def test_unknown_unit_still_raises(ureg):
     with pytest.raises(pint.UndefinedUnitError):
         ureg.Quantity(1, "furlongs_per_fortnight_gauge")
+
+
+def test_labview_unit_strings(ureg, apply_unit_aliases):
+    # National Instruments writes "Deg C" / "Deg F" / "Deg K" into TDMS unit_string (S1 request).
+    assert ureg.Quantity(100, apply_unit_aliases("Deg C")).to("K").magnitude == pytest.approx(373.15)
+    assert ureg.Quantity(212, apply_unit_aliases("Deg F")).to("degC").magnitude == pytest.approx(100)
+    assert ureg.Quantity(300, apply_unit_aliases("Deg K")).to("K").magnitude == pytest.approx(300)

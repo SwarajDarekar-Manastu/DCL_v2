@@ -604,3 +604,9 @@ Test: `uv run pytest` (1,376 passed).
 Blocked on: the app refuses to sync this worktree with main because main changes a protected file (.claude/launch.json) and the repository origin is not confirmed. The branch still merges clean.
 Needs from others: Lead: merge; S4: redeploy, then I re-dispatch on the stack and report the counts; S5: a "Deg C" alias in config/units.txt (NI's spelling; the TDMS adapter maps it locally meanwhile)
 Next: live run of the 20 parked C documents; A1/D/F adapter wiring for S2's routes
+
+## 2026-10-22 15:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `config/units.txt` aliases for LabVIEW/NI unit strings (`Deg C`, `Deg F`, `Deg K`; S1 request) with tests; verification README notes that the TP7 TDMS files halt (empty unit_string) and the cases use the DAQami CSV. proprietary_terms draft (17 terms) kept git-ignored in data/config/, sent to the Lead for the user
+Blocked on: S1's language check (MULTILINGUAL), indexed corpus (retrieval set), user confirmation of the proprietary-terms draft
+Needs from others: nothing new
+Next: idle until messaged
