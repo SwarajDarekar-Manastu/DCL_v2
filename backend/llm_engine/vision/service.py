@@ -43,7 +43,7 @@ from backend.llm_engine.vision.schemas import (
 )
 
 FLASH = "gemini-3.8-flash"
-FLASH_LITE = "gemini-3.5-flash-lite"
+FLASH_LITE = "gemini-3.1-flash-lite"
 CACHE_PREFIX = "_vision_cache"
 PROMPT_AREA = "vision"
 
