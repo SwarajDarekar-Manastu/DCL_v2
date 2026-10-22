@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S2 |
 | Spec | docs/architecture/07_phase3_answer_engine.md (all) |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
@@ -17,8 +17,9 @@ LlamaIndex Workflow under DBOS: query analysis, planner, tools T1–T6 and U1–
 Code:
 - `backend/llm_engine/engine/analysis.py` (step 1: `QueryAnalysis`, `analyze`, `resolve`: entities via aliases, test ids via the dispatcher's patterns, unit-checked bounds, web policy)
 - `backend/llm_engine/engine/synthesis.py` (steps 5–6: numbered evidence, `SynthesisOutput` with claims citing evidence ids, numeric string check, entailment verdicts, one repair pass, removal of what still fails)
-- `backend/llm_engine/prompts/engine/` (`query_analysis.v1`, `synthesis.v1`, `verify.v1`)
-- `backend/llm_engine/engine/workflow.py`
+- `backend/llm_engine/prompts/engine/` (`query_analysis.v1`, `synthesis.v1`, `verify.v1`, `physics_args.v1`, `chitchat.v1`)
+- `backend/llm_engine/engine/playbooks.py` (step 2: `build_plan(question, analysis) -> Plan{calls, caveats, needs_physics_args, read_top_document}`; one playbook per intent; T2/T3/T6 fall back to tables-only / figures-only search with a caveat)
+- `backend/llm_engine/engine/workflow.py` (`AnswerWorkflow`: analysis → plan → tools in parallel → insufficient-evidence check → synthesis + verification → frames and trace; chit-chat, clarification, extractive fallback on `GeminiError`; `EngineDeps`; `build_runtime` for DBOS; `ordered` restores frame order)
 - `backend/llm_engine/engine/tools/` (`__init__.py`: `ToolResult`, `Source`, `Provenance`, `provenance_of`, `tool_spec`; `search.py` T1; `documents.py` U1, U2; `code_diagrams.py` T4; `physics.py` T5)
 - `backend/llm_engine/engine/sanitizer.py`
 - `backend/llm_engine/engine/verifier.py` (numeric check; LLM entailment with M8)
@@ -28,18 +29,21 @@ Code:
 Tests and fixtures:
 - `backend/tests/integration/llm_engine/engine/`
 - `backend/tests/unit/llm_engine/engine/`
-- `backend/tests/integration/llm_engine/engine/` (DCL_TEST_DATABASE_URL) (API contract tests)
+- `backend/tests/integration/llm_engine/engine/` (DCL_TEST_DATABASE_URL: tools on rows, `test_workflow_dbos.py` under DBOSRuntime)
 - `backend/tests/benchmark/suites/`
 
 ## Interfaces
 
 Provides:
-- `POST /v1/answer` (SSE): request `AnswerRequest`; events `step`, `token`, `citation`, `embed`, `needs_confirmation`, `done`, `error` (models and `to_sse` in `backend/api/engine.py`; example stream in `backend/tests/unit/llm_engine/engine/example_answer_stream.sse`); 501 until M8
+- `POST /v1/answer` (SSE): request `AnswerRequest`; events `step`, `token`, `citation`, `embed`, `needs_confirmation`, `done`, `error` (models and `to_sse` in `backend/api/engine.py`; example stream in `backend/tests/unit/llm_engine/engine/example_answer_stream.sse`); streams the workflow; 503 when the engine is not configured or not installed; a failure ends the stream with `error` (`gemini_unavailable` retryable, else `internal`)
 - `POST /v1/answer/{trace_id}/confirm` (`ConfirmationReply`), `GET /v1/traces/{trace_id}` and `GET /v1/traces?chat_id=&message_id=` (`TraceView`, 404 when none), `POST /v1/traces/{trace_id}/feedback` (`FeedbackRequest {kind, comment, citation_id}` → 202); 501 until M8; `needs_confirmation` carries `trace_id`
 - Identity: headers `X-DCL-User-Id`, `X-DCL-User-Email`, `X-DCL-User-Groups`, `X-DCL-Timestamp`, `X-DCL-Signature` = hex HMAC-SHA256(`DCL_PIPE_SHARED_SECRET`, "ts\nuser_id\nemail\ngroups\nsha256(body)"), skew ≤ 300 s (`sign_identity`)
 - `sanitize_query(query, proprietary_terms, organization_names, people, folder_names, public_terms) -> SanitizedQuery(text, original_sha256, removed)`; raises `SanitizerRefused` when fewer than two content words remain (`engine/sanitizer.py`)
 - `check_numeric_claims(claims, tool_outputs) -> list[NumericMismatch]`: value and unit strings of a claim must appear in a tool result (`engine/verifier.py`)
 - Tools (each `(session?, args) -> ToolResult{tool, call_id, result, provenance[Source], warnings, display}`; `display` is what synthesis quotes and the numeric verifier checks): `search_documents` (T1: alias expansion from `entity_aliases`, widening doc_kinds → test plan → parent scope), `get_document` (U1: ordered parents, page range, section, 40k-char budget with `start_ordinal`), `catalog_lookup` (U2: documents, halted with case keys, standards with revisions), `inspect_code_and_diagrams` (T4: qualname lookup, callers/callees, diagram neighbors/upstream/downstream/path over `documents.catalog {nodes[{id,tag,label,type}], edges[{source,target,medium,label,directed}]}`), `physics_calculator` (T5: unit_convert, mass_flow_from_thrust, isentropic_sizing, cea_performance with `config/propellants.yaml`, scale_thruster); planned: T2 telemetry (Route C tables), T3 visuals, T6 external
+- Engine lifecycle for `backend/main.py`: `start_engine()` (idempotent; builds Gemini, models and session clients and launches DBOS in the DCL database, schema `dbos`) and `stop_engine()`; the endpoint starts it on first use if the lifespan did not
+- Frames: `Emit{seq, payload}` stream events; under DBOS each stream write is its own task, so frames can arrive out of order and consumers read them through `ordered(handler.stream_events())`
+- Trace record handed to `EngineDeps.save_trace`: `trace_id, query_analysis, tool_calls, retrieved, claims, citations, verifier_result, answer_markdown, mode, latency_ms` (logged until S1's `answer_traces` table exists)
 - `Provenance` (measured, internal_report, standard, vendor_claim, literature, calculation, web) is the one enum, also used by the SSE citation event
 - Skills markdown
 
@@ -54,6 +58,10 @@ Consumes:
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
 - `backend/llm_engine/engine/workflow.py`
+- `backend/llm_engine/engine/playbooks.py`
+- `backend/llm_engine/engine/analysis.py`
+- `backend/llm_engine/engine/synthesis.py`
+- `backend/llm_engine/prompts/engine/`
 - `backend/llm_engine/engine/tools/`
 - `backend/llm_engine/engine/sanitizer.py`
 - `backend/llm_engine/engine/verifier.py`
@@ -67,7 +75,9 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 - [x] SSE contract published: signed identity refused when tampered; example stream validates (`test_engine_api.py`)
 - [ ] Golden suite: telemetry exactness 100%, citation recall ≥0.85, faithfulness ≥0.95
-- [ ] Every numeric claim string-matches a tool result (check built and tested; wired into the workflow in M8)
+- [x] Every numeric claim string-matches a tool result (verifier wired into the workflow; `test_workflow.py` checks the streamed answer against the tool output)
+- [x] Fact question streams steps, tokens, citations and done; chit-chat without tools; clarification mode; insufficient-evidence template; extractive fallback on Gemini outage (`test_workflow.py`, 6 tests)
+- [x] Workflow runs under DBOSRuntime against PostgreSQL with frame order restored (`test_workflow_dbos.py`)
 - [ ] External queries pass the sanitizer and are logged in the trace (sanitizer built and tested on a leak fixture; trace logging with M8)
 - [ ] Engine restart mid-answer resumes the run
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
@@ -77,6 +87,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | Workflow increment: playbooks, `AnswerWorkflow` (DBOS), `/v1/answer` streaming, frame ordering; 6 workflow + 4 planner + 4 API tests, 1 DBOS test |
 | 2026-10-22 | S2 | Query analysis, synthesis contract and verifier (numeric + entailment, repair pass); 8 tests |
 | 2026-10-22 | S2 | Tools increment 1: T1, U1, U2, T4, T5 with `ToolResult`/`Source`; 10 unit + 7 DB tests |
 | 2026-10-22 | S2 | `trace_id` on `needs_confirmation`; trace lookup by chat/message and feedback routes for S3's Actions |
