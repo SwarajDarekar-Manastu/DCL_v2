@@ -18,6 +18,7 @@ ALL_ROLES = [ConsoleRole.VIEWER, ConsoleRole.REVIEWER, ConsoleRole.ADMIN]
 class MemoryStore:
     def __init__(self):
         self.users: dict[uuid.UUID, LocalUser] = {}
+        self.audit: list[tuple[str, str, str, dict | None, dict]] = []
 
     def count(self):
         return len(self.users)
@@ -31,15 +32,23 @@ class MemoryStore:
     def list(self):
         return sorted(self.users.values(), key=lambda u: u.email)
 
-    def create(self, user):
+    def create(self, user, actor="test"):
         if self.by_email(user.email):
             raise DuplicateEmail(user.email)
         self.users[user.user_id] = user
+        self.audit.append((actor, user.email, "create", None, user.audit_view()))
         return user
 
-    def save(self, user):
+    def save(self, user, actor="test", action="update", before=None, after=None):
         self.users[user.user_id] = user
+        self.audit.append((actor, user.email, action, before, after))
         return user
+
+    def record_login(self, user_id, at, password_hash=None):
+        user = self.users[user_id]
+        self.users[user_id] = replace(
+            user, last_login_at=at, password_hash=password_hash or user.password_hash
+        )
 
 
 def account(email, roles, password=PASSWORD, active=True):
@@ -235,3 +244,53 @@ def test_login_without_a_secret_is_503(local, auth_config, key_resolver):
     app.dependency_overrides[auth.get_local_auth] = lambda: None
     response = TestClient(app).post("/auth/login", json={"email": "a@b.c", "password": "x"})
     assert response.status_code == 503
+
+
+def test_account_changes_are_audited_with_before_after_and_the_admin(client, store):
+    store.create(account("admin@manastuspace.com", ALL_ROLES))
+    headers = bearer(sign_in(client, "admin@manastuspace.com"))
+    store.audit.clear()
+    new = client.post(
+        "/auth/users",
+        headers=headers,
+        json={
+            "email": "a@manastuspace.com",
+            "display_name": "A",
+            "roles": ["viewer"],
+            "password": "first password 1",
+        },
+    ).json()
+    path = f"/auth/users/{new['user_id']}"
+    client.patch(
+        path, headers=headers, json={"roles": ["viewer", "reviewer"], "password": "second password 2"}
+    )
+    client.patch(path, headers=headers, json={"is_active": False})
+    client.patch(path, headers=headers, json={"is_active": True})
+    sign_in(client, "a@manastuspace.com", "second password 2")  # sign-ins are not audited
+    view = {"email": "a@manastuspace.com", "display_name": "A", "roles": ["viewer"], "is_active": True}
+    reviewer = {**view, "roles": ["viewer", "reviewer"]}
+    assert store.audit == [
+        ("admin@manastuspace.com", "a@manastuspace.com", "create", None, view),
+        (
+            "admin@manastuspace.com",
+            "a@manastuspace.com",
+            "update",
+            view,
+            {**reviewer, "password_reset": True},
+        ),
+        (
+            "admin@manastuspace.com",
+            "a@manastuspace.com",
+            "deactivate",
+            reviewer,
+            {**reviewer, "is_active": False},
+        ),
+        (
+            "admin@manastuspace.com",
+            "a@manastuspace.com",
+            "reactivate",
+            {**reviewer, "is_active": False},
+            reviewer,
+        ),
+    ]
+    assert all("password_hash" not in str(entry) for entry in store.audit)

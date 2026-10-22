@@ -24,7 +24,7 @@ Code:
 - `backend/llm_engine/engine/sanitizer.py`
 - `backend/llm_engine/engine/verifier.py` (numeric check; LLM entailment with M8)
 - `backend/api/engine.py`
-- `frontend/openwebui/skills/`
+- `frontend/openwebui/skills/` (13 playbook `SKILL.md` files with front matter `name, description, intents, tools`; `publish_skills.py` publishes them through Open WebUI's `/api/v1/skills`)
 
 Tests and fixtures:
 - `backend/tests/integration/llm_engine/engine/`
@@ -51,7 +51,7 @@ Provides:
 - T3 `inspect_visuals(session, InspectVisualsArgs{query, kinds, test_plan_ids, failure_modes, components, k, similar_to_asset_id, relook_question, user_language}, embed_query, rerank, presign)`: T1 hybrid search restricted to the node types of the kinds (`hardware_photo` → photo + figure, `plot_figure` → figure, `video_frame` → video_event, `diagram` → diagram_summary + figure; none = all), failure modes and components join the query text (T1 has no entity filter); with `similar_to_asset_id`, RRF with an image-embedding kNN from that asset's node, the reference excluded. Result `visuals[]`: doc_id, title, anchor, node_type, reading, breadcrumb, page_no, asset_uri, `url_web`/`url_thumb` (presigned 15 min; thumb from the `photo_thumb` asset of the same blob, else the web image), similarity; no node ids. `relook(client, result, question, fetch)` (async): top ≤ 4 images + captions to Gemini (`relook.v1`, main model, high media resolution); returns `result.relook {source: "relook", answer, images[{image, observation, visible}], images_sent, persisted: false}` and an evidence line marked as an answer-time observation; nothing is written. The workflow runs relook when the call has `relook_question` (visual lookup) and `EngineDeps.fetch_asset` exists; a relook `GeminiError` becomes a warning. `start_engine` wires `presign`/`fetch_asset` from MinIO settings; without MinIO, T3 returns readings without links
 - `photo_strips(results)` (workflow): one `embed` frame `kind=photo_strip` per T3 result with links (≤ 6 thumbnails, escaped self-contained HTML, links to the web image), emitted before the answer tokens
 - `Provenance` (measured, internal_report, standard, vendor_claim, literature, calculation, web) is the one enum, also used by the SSE citation event
-- Skills markdown
+- Skills: `dcl-<folder>` in Open WebUI, one per §5 row (chit-chat excluded), active, public read; not attached to the engine model (open question with the Lead: attached skills are injected into every request without native function calling, and the engine drops system messages). The `tools` front matter equals the planner's tools for the skill's intents (`test_skills.py`)
 
 Consumes:
 - retrieval
@@ -86,6 +86,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] Workflow runs under DBOSRuntime against PostgreSQL with frame order restored (`test_workflow_dbos.py`)
 - [x] External queries pass the sanitizer and are logged in the trace (`test_external.py`: the captured grounded request holds no internal identifier, history or evidence; refused needs are never sent; `external_queries` in the trace; live check 2026-10-22: grounding returned 6 sources, redirects resolved)
 - [x] Engine restart mid-answer resumes the run (`test_workflow_restart.py`: the worker process dies inside the tool step; a new process recovers the run by id; query analysis is replayed from the journal, not asked again; the tool reruns; the trace is saved by the new process)
+- [x] Skills: 13 playbooks; a test builds the plan per skill and fails on drift (checked by breaking one); publish creates, then updates, activates, grants public read, dry run writes nothing (`test_skills.py`); live 2026-10-23 on a disposable Open WebUI v0.12.3: 13 created, second run 13 updates, read back with the `*` read grant
 - [x] T2: metrics reproduce Route C's stored three-tier values and numpy on the same Parquet (whole run, valve-open window, user window, value_at_t, comparison); halted run reported with its case key; missing quantity, saturation and unknown-ambient warnings (`test_telemetry_db.py`, 5 tests); planner and workflow run T2 with extracted arguments (`test_playbooks.py`, `test_workflow.py`); plot PNG, deterministic key, presigned link and `plot` embed (`test_telemetry_db.py`, `test_workflow.py`); live 2026-10-22: DuckDB over `s3://dcl-telemetry/…` on the stack's one committed run, plot rendered
 - [x] T3: kinds restrict node types, test plan filter applies, halted documents never appear; `similar_to_asset_id` ranks by image embedding and skips the reference; results carry presigned URLs and the document, no node ids (`test_visuals_db.py`, 3 tests); relook sends ≤ 4 images, returns `persisted: false`, writes nothing (`test_visuals.py`; live check 2026-10-22: two synthetic mesh images, the model told the holed one from the intact one); visual lookup and failure investigation plan T3 and stream a `photo_strip` that validates against `EmbedEvent` (`test_playbooks.py`, `test_workflow.py`)
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
@@ -95,6 +96,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-23 | S2 | Open WebUI Skills: 13 playbook SKILL.md files, `publish_skills.py`, drift test against the planner; 16 tests |
 | 2026-10-22 | S2 | T2 plot embed: Matplotlib PNG to `dcl-assets/plots/…`, presigned `plot` embed frame; 1 DB + 1 unit test |
 | 2026-10-22 | S2 | T2 `query_telemetry` over `telemetry_runs`/`telemetry_channels` (DuckDB templates, Route C-exact peaks, valve-open and user windows, halted runs with case keys); `telemetry_args.v1`; planner and workflow; 5 DB + 2 workflow + 1 planner tests |
 | 2026-10-22 | S2 | T3 `inspect_visuals` (kinds → node types, image kNN by reference asset, presigned links) and relook (answer-time, not persisted); planner and `photo_strip` embed; 3 DB + 4 unit + 1 workflow + 1 planner tests |
