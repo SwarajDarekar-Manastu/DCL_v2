@@ -17,6 +17,11 @@ def enum_check(column: str, enum: type[StrEnum]) -> CheckConstraint:
     return CheckConstraint(f"{column} IN ({values})", name=column)
 
 
+class LlmCallStatus(StrEnum):
+    OK = "ok"
+    ERROR = "error"
+
+
 class UserRole(StrEnum):
     """Console roles (local password RBAC, DECISIONS 2026-10-22); admin implies reviewer implies viewer."""
 
