@@ -2,6 +2,7 @@
 name: Visual lookup
 description: Photos, plots, video frames and diagram renders, shown in the chat.
 intents: [visual_lookup]
+dcl-playbook: visual_lookup
 tools: [inspect_visuals]
 ---
 

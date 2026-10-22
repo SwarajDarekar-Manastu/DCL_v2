@@ -763,6 +763,11 @@ Blocked on: local login end to end and dev-token removal wait for S1's 0010 and 
 Needs from others: S1: migration 0010 (users, `user` audit type).
 Next: end-to-end local login and dev-token removal when told; otherwise idle.
 
+## 2026-10-23 02:15 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: playbook hint (ruling (c), my side). `AnswerOptions.playbook_hint` is an `Intent` or null. Each SKILL.md has `dcl-playbook: <intent>` in its front matter, also published as the tag `dcl-playbook:<intent>`. `playbooks.apply_hint` adds the hinted intent to the analysed ones; a chit-chat reading gives way to it.
+Blocked on: nothing
+Needs from others: S3 (M9): map `chat_context.mentioned_skill_ids` (`dcl-<folder>`) to the hint, either from the skill's `dcl-playbook:` tag or from the front matter; send only one hint (the first mentioned).
+Next: benchmark runner, metrics, judge (file 08 §5, M10)
 ## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready (merge requested):
 - Review API (c82b518), reviewer role, over `backend/review/cases.py`:

@@ -2,6 +2,7 @@
 name: Physics calculation
 description: A propulsion calculation done by a deterministic calculator, never by the language model.
 intents: [physics_calc]
+dcl-playbook: physics_calc
 tools: [physics_calculator]
 ---
 

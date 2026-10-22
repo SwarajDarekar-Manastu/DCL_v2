@@ -179,6 +179,7 @@ class AnswerWorkflow(Workflow):
             trace_id=ev.trace_id,
         )
         _step(ctx, ev.trace_id, "analysis", "query_analysis", "Understanding the question", True)
+        analysis = playbooks.apply_hint(analysis, ev.get("playbook_hint"))
         if analysis.chitchat:
             return await self._chitchat(ctx, ev, analysis, started)
         if analysis.raw.clarification.needed and analysis.raw.clarification.question:

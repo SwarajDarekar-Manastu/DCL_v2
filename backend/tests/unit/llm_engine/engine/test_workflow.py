@@ -513,3 +513,33 @@ def test_plot_embeds_fit_the_wire_contract():
     [embed] = wf.plot_embeds([result])
     event = TypeAdapter(EmbedEvent).validate_python(embed)
     assert event.kind == "plot" and event.url == "https://minio.test/p.png" and event.html is None
+
+
+def test_a_mentioned_playbook_adds_its_intent(searches, monkeypatch):
+    searches(report_hit)
+    seen = []
+    monkeypatch.setattr(
+        wf.visual_tools,
+        "inspect_visuals",
+        lambda session, args, **kw: (
+            seen.append(args) or ToolResult(tool="inspect_visuals", result={}, display="none")
+        ),
+    )
+    client = Client(
+        query_analysis=[FACT],
+        synthesis=[SYNTH, SYNTH],
+        verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]}] * 2,
+    )
+    _, _, traces = run(client, "What chamber pressure did TP7 run 4 reach?", playbook_hint="visual_lookup")
+    assert seen and "visual_lookup" in traces[0]["query_analysis"]["raw"]["intents"]
+    assert traces[0]["query_analysis"]["raw"]["intents"][0] == "fact_lookup"
+
+
+def test_the_hint_must_be_an_intent():
+    from pydantic import ValidationError
+
+    from backend.api.engine import AnswerOptions
+
+    assert AnswerOptions(playbook_hint="telemetry_metric").playbook_hint == "telemetry_metric"
+    with pytest.raises(ValidationError):
+        AnswerOptions(playbook_hint="drop_tables")

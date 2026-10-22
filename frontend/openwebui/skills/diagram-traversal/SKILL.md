@@ -2,6 +2,7 @@
 name: Diagram traversal
 description: What is upstream, downstream or between components in our P&IDs and block diagrams.
 intents: [diagram_traversal]
+dcl-playbook: diagram_traversal
 tools: [inspect_code_and_diagrams, search_documents]
 ---
 

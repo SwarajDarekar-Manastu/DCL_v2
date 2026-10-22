@@ -2,6 +2,7 @@
 name: Fact and procedure lookup
 description: A stated fact or a procedure, found in the documents and cited by page.
 intents: [fact_lookup, procedure_lookup]
+dcl-playbook: fact_lookup
 tools: [search_documents]
 ---
 

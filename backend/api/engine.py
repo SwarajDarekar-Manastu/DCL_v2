@@ -37,6 +37,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 from backend.api.auth import CurrentUser
 from backend.config import ConfigError, Group, get_settings
 from backend.indexing.retrieval import Scope, SearchFilters, SearchResult, search
+from backend.llm_engine.engine.analysis import Intent
 from backend.llm_engine.engine.tools import Provenance
 
 MAX_CLOCK_SKEW_S = 300
@@ -80,6 +81,11 @@ class AnswerOptions(BaseModel):
     show_debug_trace: bool = False
     max_embeds: int = Field(default=6, ge=0, le=20)
     benchmark: BenchmarkMode | None = None
+    playbook_hint: Intent | None = Field(
+        default=None,
+        description="the intent of a playbook Skill the user $-mentioned (front matter `dcl-playbook`); "
+        "the planner adds it to the analysed intents",
+    )
 
 
 class AnswerRequest(BaseModel):
@@ -506,6 +512,7 @@ async def answer(
                 external_mode=request.options.benchmark.external_search
                 if request.options.benchmark
                 else None,
+                playbook_hint=request.options.playbook_hint,
             )
             async for payload in ordered(handler.stream_events()):
                 yield to_sse(EVENTS.validate_python(payload))
