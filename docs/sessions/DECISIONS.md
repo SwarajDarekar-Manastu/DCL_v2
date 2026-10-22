@@ -39,4 +39,7 @@ Written by `DCL Lead` only. Newest at the bottom. Each entry names the sessions 
 | 2026-10-22 | **User:** Docker build cache pruned by the Lead (73.6 GB reclaimed; 103 GB free). Unused images and volumes untouched | S4 | user |
 | 2026-10-22 | **User:** Flash-Lite tier uses `gemini-3.1-flash-lite` (available on the gateway); `gemini-3.8-flash-lite` is not enabled and will not be; `gemini-3.8-flash` stays the main model. S2 and S4 switch the Flash-Lite model id in config | S2, S4, S5 | user |
 | 2026-10-22 | Sample fixtures: real files stay local only (Tier B); only synthetic fixtures go to the public repo. Lead's recommendation applied until the user says otherwise | S5 | Lead |
+| 2026-10-22 | Golden benchmark values (measured results) stay local in git-ignored `data/benchmark/`; the repo holds questions, units, tolerances and the verification script. The M10 TELEMETRY_MATH gate runs on the stack host, not on GitHub | S4, S5 | Lead |
+| 2026-10-22 | **Hold-out cases, never used for tuning by any session:** `tp07-t01-throughput-valve-open`, `tp07-t01-t3-soak-20s`, `inj14-t03-fail-mfm-pressure-mean`. They are scored only in the M10 report | S2, S3, S5 | S5 proposal |
+| 2026-10-22 | S5 may draft channel-map rules for E1–E3 in `config/rules/` (names, units, scaling only, no measured values) with status `proposed`; a proposed rule is never applied by Route C until an SME confirms it in the Review UI (or the user confirms in writing), which sets origin `operator` | S1, S5 | file 06 |
 
