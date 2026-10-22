@@ -213,3 +213,20 @@ def test_every_failure_gets_a_class_from_the_first_scored_run():
     assert score_case("FACT_LOOKUP", fact, found_not_cited)["failure_class"] == "SYNTHESIS_ERROR"
     expected = CaseSpec.model_validate({"expected_behavior": ["must_state_insufficient_evidence"]})
     assert score_case("HALTED_DATA_BEHAVIOR", expected, nothing)["passed"]  # asked for: not a failure
+
+
+def test_halted_data_and_library_labels_from_the_s5_baseline():
+    halted = answer(
+        tool_warnings=["run TP07_T01 (TP07_T01.dat) is halted for review (case-unit-7)"],
+        claims=[],
+        verdicts=[],
+    )
+    assert score_case("TELEMETRY_MATH", TELEMETRY, halted)["failure_class"] == "HALTED_DATA"
+    expects = CaseSpec.model_validate({"expected_behavior": ["must_mention_halted_case"]})
+    assert score_case("HALTED_DATA_BEHAVIOR", expects, halted)["failure_class"] == "BEHAVIOR_FAIL"
+    library = CaseSpec.model_validate({"expected_behavior": ["must_label_external"]})
+    vendor = answer(
+        answer="The Moog datasheet claims 22 N (vendor claim) [1].",
+        citations=[CitedDoc(DOC, provenance="vendor_claim")],
+    )
+    assert score_case("LIBRARY_VS_INTERNAL", library, vendor)["behavior"]["passed"]

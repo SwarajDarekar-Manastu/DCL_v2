@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from backend.benchmark import metrics
 from backend.benchmark.catalog import CaseSpec, ExpectedBehavior
-from backend.postgres.enums import BenchmarkRunStatus, DocumentStatus
+from backend.postgres.enums import BenchmarkRunStatus, DocumentStatus, FailureClass
 from backend.postgres.models import BenchmarkCase, BenchmarkResult, BenchmarkRun, Document
 
 log = logging.getLogger(__name__)
@@ -336,7 +336,9 @@ async def run_one(run_id: uuid.UUID, case_id: str, deps: RunnerDeps) -> dict | N
     except Exception as exc:  # noqa: BLE001 — one broken case is recorded, the run goes on
         log.exception("benchmark %s case %s failed", run_id, case_id)
         error = f"{type(exc).__name__}: {str(exc)[:300]}"
-        outcome = {"passed": False, "metrics": {"error": error, "failure_class": metrics.ENGINE_ERROR}}
+        timed_out = isinstance(exc, TimeoutError) or type(exc).__name__ == "WorkflowTimeoutError"
+        failure = metrics.TIMEOUT if timed_out else FailureClass.TOOL_ERROR
+        outcome = {"passed": False, "metrics": {"error": error, "failure_class": str(failure)}}
     with deps.session_factory() as session:
         if status_of(session, run_id) != BenchmarkRunStatus.RUNNING:
             return None  # cancelled while answering: the result is dropped
@@ -386,7 +388,10 @@ async def run_benchmark(run_id: uuid.UUID, deps: RunnerDeps) -> str:
 # ---------------------------------------------------------------- production wiring
 
 
-def workflow_answer(engine) -> AnswerFn:
+ANSWER_TIMEOUT_S = 900.0  # per benchmark answer; run 1 hit the former 300 s on 14 cases
+
+
+def workflow_answer(engine, timeout_s: float = ANSWER_TIMEOUT_S) -> AnswerFn:
     """Benchmark answers through the Answer Engine's own workflow (same code path as chat), with the trace
     captured. The benchmark caller belongs to the external-search groups, and the external mode of the run
     (`mock` by default: canned results, no network) decides what T6 does."""
@@ -397,7 +402,7 @@ def workflow_answer(engine) -> AnswerFn:
         deps = dataclasses.replace(engine, save_trace=lambda t: (traces.append(t), engine.save_trace(t)))
         with engine.session_factory() as session:
             allowed = list(engine.external_policy(session).allowed_groups)
-        handler = AnswerWorkflow(deps, timeout=300).run(
+        handler = AnswerWorkflow(deps, timeout=timeout_s).run(
             question=question,
             trace_id=str(uuid.uuid4()),
             history=history,

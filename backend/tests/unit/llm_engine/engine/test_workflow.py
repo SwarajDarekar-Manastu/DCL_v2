@@ -170,7 +170,9 @@ def test_chitchat_answers_without_tools_or_citations(searches):
     calls = searches(report_hit)
     client = Client(
         query_analysis=[{"intents": ["chitchat_or_out_of_scope"], "language": "de"}],
-        chitchat=["Gut, danke! Fragen Sie mich gern zu Tests oder Dokumenten."],
+        chitchat=[
+            {"kind": "small_talk", "reply": "Gut, danke! Fragen Sie mich gern zu Tests oder Dokumenten."}
+        ],
     )
     events, done, _ = run(client, "Wie geht's?")
     assert calls == [] and of(events, "citation") == []
@@ -561,3 +563,37 @@ def test_benchmark_answers_take_the_chat_path_and_mock_makes_no_network_call(sea
     assert done["mode"] == "answered" and trace is logged[0]  # captured and still logged like chat
     assert trace["external_queries"][0]["provider"] == "mock"
     assert "external_search" not in client.purposes  # no grounded Gemini search either
+
+
+def test_an_out_of_scope_question_is_refused_on_the_insufficient_evidence_path(searches):
+    calls = searches(report_hit)
+    client = Client(
+        query_analysis=[{"intents": ["chitchat_or_out_of_scope"], "language": "en"}],
+        chitchat=[
+            {"kind": "out_of_scope", "reply": "I cannot answer that: the weather is outside our material."}
+        ],
+    )
+    events, done, _ = run(client, "What is the weather in Pune tomorrow?")
+    assert calls == [] and of(events, "citation") == []
+    assert done["mode"] == "insufficient_evidence" and "cannot answer" in done["answer_markdown"]
+
+
+def test_a_halted_run_is_named_in_the_answer(searches, monkeypatch):
+    searches(report_hit)
+    warning = "run TP07_T01 (TP07_T01.dat) is halted for review (case-unit-7); its telemetry is not answered"
+
+    def halted(session, args, **kw):
+        return ToolResult(tool="query_telemetry", result={"runs": []}, warnings=[warning], display="none")
+
+    monkeypatch.setattr(wf.telemetry_tools, "query_telemetry", halted)
+    monkeypatch.setattr(wf, "catalog_lookup", lambda session, args: no_hits())
+    client = Client(
+        query_analysis=[FACT | {"intents": ["telemetry_metric"]}],
+        telemetry_args=[{"channels": ["chamber_pressure"], "metrics": ["mean"]}],
+        synthesis=[SYNTH, SYNTH],  # E1 is the empty T2 result: one repair pass
+        verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]}] * 2,
+    )
+    events, done, _ = run(client, "Mean chamber pressure of TP7 run 1?")
+    assert done["answer_markdown"].endswith(f"> Note: {warning}")
+    assert warning in done["caveats"]
+    assert "".join(e["text"] for e in of(events, "token")) == done["answer_markdown"]

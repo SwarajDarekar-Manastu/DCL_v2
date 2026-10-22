@@ -864,3 +864,16 @@ Merged / ready: M10 baseline from scored run 1 (`backend/tests/benchmark/BASELIN
 Blocked on: E13 indexed (MULTILINGUAL and library cases)
 Needs from others: S2: the runner findings; Lead: is the TP12 report PDF among the 18 indexed A1 PDFs (2 cases depend on it); the weather case's answer text (gold or metric)
 Next: idle until messaged
+
+## 2026-10-23 08:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Ready, waiting on S1's enum migration: the runner findings of S5's BASELINE.md.
+- (1) All case tasks of a worker share one event loop (`tasks.run_async`); per-answer timeout 900 s (`runner.ANSWER_TIMEOUT_S`).
+- (2) Every errored case has a class: TOOL_ERROR for an exception, TIMEOUT for a timeout.
+- (3) RETRIEVAL_MISS also without gold anchors, when no tool returned an expected document. A document that is not indexed is MISSING_DOCUMENT; an unrequested insufficient-evidence answer is INSUFFICIENT_EVIDENCE.
+- (4) `must_label_external` accepts labelled external_kept library citations.
+- (5) HALTED_DATA when a tool reports the asked run halted.
+- Engine: an out-of-scope question is refused in mode insufficient_evidence (`chitchat.v2`), and a halted-run warning is named in the answer as a `> Note:` line.
+- The integration test `test_runner_db` fails on `ck_benchmark_results_failure_class` until S1 adds the new values.
+Blocked on: S1: MISSING_DOCUMENT, INSUFFICIENT_EVIDENCE, TIMEOUT, HALTED_DATA in `FailureClass` and its CHECK (migration)
+Needs from others: S4 (through the Lead): a `benchmark` queue with a limit of at least 1000 s
+Next: answer latency (225–236 s per answered case on run 1 against 76 s in my single live check) needs a profile; then the OCR and cost report and the handwriting calibration after S1's A1 re-run

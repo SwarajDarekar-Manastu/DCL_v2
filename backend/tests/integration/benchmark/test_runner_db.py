@@ -151,7 +151,7 @@ def test_a_queued_run_completes_with_results_aggregate_and_events(engine, setup)
     assert rows["tp07-mean"].trace_id == uuid.UUID(TRACE) and rows["tp07-mean"].latency_ms == 1000
     assert rows["fact-misroute"].failure_class == "TOOL_MISROUTE"
     assert rows["crash"].passed is False and "engine down" in rows["crash"].metrics["error"]
-    assert rows["crash"].failure_class == "ENGINE_ERROR"
+    assert rows["crash"].failure_class == "TOOL_ERROR"
     assert rows["not-indexed"].failure_class == "MISSING_DOCUMENT"
     assert rows["not-indexed"].metrics["missing_documents"] == ["TP12 Test Report.pdf"]
     assert rows["clarify-then-answer"].passed  # the clarification was answered from the case
@@ -165,7 +165,7 @@ def test_a_queued_run_completes_with_results_aggregate_and_events(engine, setup)
         assert run.aggregate["cases_done"] == 6 and run.aggregate["pass_rate"] == 0.5
         assert run.aggregate["failure_classes"] == {
             "TOOL_MISROUTE": 1,
-            "ENGINE_ERROR": 1,
+            "TOOL_ERROR": 1,
             "MISSING_DOCUMENT": 1,
         }
     progress = [d for _, e, d in events if e == "progress" and "case_id" in d]
