@@ -747,3 +747,8 @@ Merged / ready (step 2 of 3, code complete): local password sign-in.
 Blocked on: the live end-to-end login, and with it the dev-token removal, needs S1's `users` model and migration 0010.
 Needs from others: S1: `backend.postgres.models.User` with the agreed columns, plus migration 0010. S4: a redeploy after the merge.
 Next: step 3, Settings over S1's /settings API, while waiting for 0010.
+## 2026-10-23 01:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Open WebUI Skills. `frontend/openwebui/skills/` holds 13 playbook `SKILL.md` files, one per file 07 §5 row except chit-chat. Each has front matter (`name`, `description`, `intents`, `tools`). `test_skills.py` builds the planner's plan for each skill and fails when the tools drift; I broke one skill on purpose to check it fails. `publish_skills.py` is idempotent: it creates or updates `dcl-<folder>`, active and readable by every user, with a dry run, and never prints the key. Live on a disposable Open WebUI v0.12.3 container (since removed): 13 created, a second run made 13 updates, and the public read grant reads back.
+Blocked on: a Lead ruling (question sent)
+Needs from others: Lead: should the skills be attached to `manastu_engine.main` (file 08 §1 says attached), and should a toggled skill steer the planner? Details in the message.
+Next: idle until the ruling
