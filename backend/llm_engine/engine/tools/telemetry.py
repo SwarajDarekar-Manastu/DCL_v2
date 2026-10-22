@@ -67,7 +67,7 @@ ROLES: dict[str, tuple[Quantity, tuple[str, ...]]] = {
     "mass_flow": (Quantity.MASS_FLOW_RATE, ("*",)),
     "heater_power": (Quantity.POWER, ("*",)),
 }
-UNIT_LABEL = {"gauge": " g", "absolute": " abs"}
+BAR_LABEL = {"gauge": "barg", "absolute": "bara"}  # pint-parsable (config/units.txt), unlike "bar g"
 
 
 class TelemetryWindow(BaseModel):
@@ -370,7 +370,9 @@ def fmt(value: float) -> str:
 
 def _unit(channel) -> str:
     unit = channel.unit_si or ""
-    return unit + UNIT_LABEL.get(channel.gauge_or_abs, "") if channel.quantity == Quantity.PRESSURE else unit
+    if channel.quantity == Quantity.PRESSURE and unit == "bar":
+        return BAR_LABEL.get(channel.gauge_or_abs, unit)
+    return unit
 
 
 def _value(value: float, channel) -> str:

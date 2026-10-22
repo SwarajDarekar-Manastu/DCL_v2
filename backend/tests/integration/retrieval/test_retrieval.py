@@ -251,3 +251,37 @@ def test_node_ids_never_leave_the_request(engine, corpus):
     hit = run(engine, "chamber pressure", k=1).hits[0]
     assert "node_id" not in hit.model_dump()
     assert uuid.UUID(str(hit.doc_id))
+
+
+def test_a_node_without_a_locator_is_skipped_with_a_warning_not_a_crash(engine, corpus):
+    with Session(engine) as session:
+        d = Document(route="C", status=DocumentStatus.ACTIVE, title="Analog run table")
+        session.add(d)
+        session.flush()
+        content = "Nozzle orifice table: 0.85 mm diameter."
+        session.add(
+            DocumentNode(
+                doc_id=d.doc_id,
+                node_type=NodeType.TABLE,
+                ordinal=0,
+                content=content,
+                content_codes=content_codes(content),
+                content_sha256=content_hash(content),
+                embedding=topic_vector("nozzle"),
+                source=NodeSource.PRINTED,
+                doc_kind="engineering_table",
+                source_origin="internal",
+                trust_tier=2,
+                doc_status=d.status,
+            )
+        )
+        session.commit()
+        doc_id = d.doc_id
+    try:
+        result = run(engine, "nozzle orifice table", k=3)
+        assert all(h.doc_id != doc_id for h in result.hits) and len(result.hits) == 3
+        assert any("no page, line, time or cell locator" in w for w in result.warnings)
+    finally:
+        with Session(engine) as session:
+            session.delete(session.get(Document, doc_id))
+            session.commit()

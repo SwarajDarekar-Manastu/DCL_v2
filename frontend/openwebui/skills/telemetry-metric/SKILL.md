@@ -20,7 +20,7 @@ Peak, steady-state, mean or duration of a measured channel in a test run, comput
 2. Map the quantity you asked for (chamber pressure, thrust, bed temperature, mass flow, heater power) to the run's measured channels.
 3. Compute the metrics deterministically from the run's Parquet file with fixed SQL templates: raw peak, 50 ms peak, steady-state mean, max, min, mean, p99, duration, time to peak, value at a time, or window statistics. The window is the whole run, the stored steady plateau, the valve-open pulse, or a time range after ignition that you give.
 4. Search the test report's tables for the value the report states, to cross-check.
-5. Answer with each number's unit (bar g or bar abs), the exact window, the t0 method, the sampling rate and the data file. Ask for a plot to get a chart with the window shaded.
+5. Answer with each number's unit (barg or bara), the exact window, the t0 method, the sampling rate and the data file. Ask for a plot to get a chart with the window shaded.
 
 ## Tools
 

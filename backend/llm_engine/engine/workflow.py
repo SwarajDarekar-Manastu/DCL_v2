@@ -516,7 +516,15 @@ class AnswerWorkflow(Workflow):
         trace = {
             "trace_id": trace_id,
             "query_analysis": dump_analysis(analysis),
-            "tool_calls": [{"tool": r.tool, "call_id": r.call_id, "warnings": r.warnings} for r in results],
+            "tool_calls": [
+                {
+                    "tool": r.tool,
+                    "call_id": r.call_id,
+                    "warnings": r.warnings,
+                    "display": r.display[:TRACE_DISPLAY],
+                }
+                for r in results
+            ],
             "retrieved": [s.model_dump(mode="json") for r in results for s in r.provenance],
             "claims": [c.model_dump() for c in draft.claims] if draft else [],
             "citations": [s.model_dump(mode="json") for s in citations or []],
@@ -541,6 +549,7 @@ class AnswerWorkflow(Workflow):
         return StopEvent(result=done)
 
 
+TRACE_DISPLAY = 4000  # characters of each tool's display kept in the trace (benchmark drilldown)
 IMG_STYLE = "width:160px;height:120px;object-fit:cover"
 
 
