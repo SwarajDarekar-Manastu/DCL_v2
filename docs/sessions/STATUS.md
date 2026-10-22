@@ -610,3 +610,14 @@ Merged / ready: `config/units.txt` aliases for LabVIEW/NI unit strings (`Deg C`,
 Blocked on: S1's language check (MULTILINGUAL), indexed corpus (retrieval set), user confirmation of the proprietary-terms draft
 Needs from others: nothing new
 Next: idle until messaged
+
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- Dev-only backend sign-in (user-approved, hardened). auth.py accepts the DCL_CONSOLE_DEV_TOKEN bearer as the dev identity only with DCL_ENV=dev and DCL_CONSOLE_DEV_AUTH=true; the comparison is constant-time and every use logs a warning. The flag outside dev, a short token or an unknown role answers 503. The websocket works the same way.
+- vite.config.ts defines VITE_DEV_TOKEN from the repository .env under the dev server only; no build contains it (grep-checked). The client-side fake user is removed, so roles come from /auth/me. The session config test is hermetic.
+- Checked end to end with the real API app and the Vite dev server: signed in as reviewer, live channel open.
+- Tests: backend unit 1163 passed, frontend 91.
+Blocked on: nothing. S4 adds console_dev_auth, console_dev_token and console_dev_roles plus the start-up refusal; auth.py reads them with a safe default (off) until then.
+Needs from others: S4 as above.
+Next: review and merge the Lead's background Console redesign branch when it arrives; Settings editing after S1's settings API.

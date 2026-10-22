@@ -1,11 +1,19 @@
 """Console API authentication: Entra ID access tokens and role mapping (file 08 §2.3).
 
+Dev-only sign-in (user-approved exception, DECISIONS 2026-10-22): with DCL_ENV=dev and
+DCL_CONSOLE_DEV_AUTH=true, a request whose bearer token equals DCL_CONSOLE_DEV_TOKEN signs in as a
+fixed dev identity with the roles in DCL_CONSOLE_DEV_ROLES. Every use is logged as a warning; the
+flag outside dev is refused (503 here, and at start-up by the settings loader).
+
 Roles: any authenticated user of the tenant is `viewer`; members of `dcl-reviewers` are
 `reviewer`; members of `dcl-admins` are `admin` (admin implies reviewer). Other routers
 protect themselves with `user: Annotated[ConsoleUser, Depends(require_role(ConsoleRole.REVIEWER))]`
 or, for any signed-in user, `user: CurrentUser`.
 """
 
+import hmac
+import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -17,7 +25,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
+log = logging.getLogger(__name__)
+
 ENTRA_AUTHORITY = "https://login.microsoftonline.com"
+DEV_SESSION_S = 8 * 3600  # websocket lifetime of a dev sign-in
+DEV_TOKEN_MIN_LENGTH = 32
 CLOCK_LEEWAY_S = 60
 
 
@@ -36,6 +48,7 @@ class AuthConfig:
     audience: str
     group_reviewers: str
     group_admins: str
+    missing: tuple[str, ...] = ()  # settings not provided; verification answers 503 naming them
 
     @property
     def issuers(self) -> list[str]:
@@ -80,14 +93,41 @@ def get_auth_config() -> AuthConfig:
 
 
 def auth_config_from(**values: str | None) -> AuthConfig:
-    """Refuse to verify anything with a partial configuration (503 names what is missing)."""
-    missing = [name for name, value in values.items() if not value]
-    if missing:
+    """A partial configuration is kept, not raised: the dev sign-in must work before Entra exists."""
+    missing = tuple(name for name, value in values.items() if not value)
+    return AuthConfig(**{name: value or "" for name, value in values.items()}, missing=missing)  # type: ignore[arg-type]
+
+
+@dataclass(frozen=True)
+class DevAuth:
+    token: str
+    roles: list[ConsoleRole]
+
+
+def get_dev_auth() -> DevAuth | None:
+    """The dev sign-in, when enabled and allowed; None otherwise. Misconfiguration answers 503."""
+    from backend.config import Environment, get_settings
+
+    s = get_settings()
+    if not getattr(s, "console_dev_auth", False):
+        return None
+    if s.env != Environment.DEV:
+        log.critical("DCL_CONSOLE_DEV_AUTH is set with DCL_ENV=%s; dev sign-in refused", s.env)
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "dev sign-in is only allowed with DCL_ENV=dev"
+        )
+    secret = getattr(s, "console_dev_token", None)
+    token = secret.get_secret_value() if secret is not None else ""
+    if len(token) < DEV_TOKEN_MIN_LENGTH:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            f"Console sign-in is not configured: missing {', '.join(missing)}",
+            f"DCL_CONSOLE_DEV_TOKEN must be at least {DEV_TOKEN_MIN_LENGTH} characters",
         )
-    return AuthConfig(**values)  # type: ignore[arg-type]
+    try:
+        roles = [ConsoleRole(r.strip()) for r in getattr(s, "console_dev_roles", None) or ["viewer"]]
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"DCL_CONSOLE_DEV_ROLES: {exc}") from exc
+    return DevAuth(token=token, roles=roles)
 
 
 @lru_cache(maxsize=4)
@@ -111,6 +151,11 @@ def roles_for_groups(groups: list[str], config: AuthConfig) -> list[ConsoleRole]
 
 def verify_token(token: str, config: AuthConfig, resolve_key: KeyResolver) -> tuple[ConsoleUser, int]:
     """Return the user and the token's expiry (epoch seconds), or raise AuthError."""
+    if config.missing:
+        raise AuthError(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            f"Console sign-in is not configured: missing {', '.join(config.missing)}",
+        )
     try:
         key = resolve_key(token)
     except jwt.PyJWKClientConnectionError as exc:
@@ -147,6 +192,17 @@ def verify_token(token: str, config: AuthConfig, resolve_key: KeyResolver) -> tu
     return user, int(claims["exp"])
 
 
+def authenticate(
+    token: str, config: AuthConfig, resolve_key: KeyResolver, dev: DevAuth | None
+) -> tuple[ConsoleUser, int]:
+    """The dev identity for the dev token (when enabled), otherwise an Entra ID token."""
+    if dev is not None and hmac.compare_digest(token.encode(), dev.token.encode()):
+        log.warning("DEV SIGN-IN: Console request accepted as the dev identity (DCL_CONSOLE_DEV_AUTH=true)")
+        user = ConsoleUser(oid="dev-sign-in", name="Dev sign-in", email="dev@localhost", roles=dev.roles)
+        return user, int(time.time()) + DEV_SESSION_S
+    return verify_token(token, config, resolve_key)
+
+
 _bearer = HTTPBearer(auto_error=False)
 
 
@@ -154,13 +210,14 @@ def current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     config: Annotated[AuthConfig, Depends(get_auth_config)],
     resolve_key: Annotated[KeyResolver, Depends(get_key_resolver)],
+    dev: Annotated[DevAuth | None, Depends(get_dev_auth)],
 ) -> ConsoleUser:
     if credentials is None:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "missing bearer token", {"WWW-Authenticate": "Bearer"}
         )
     try:
-        user, _ = verify_token(credentials.credentials, config, resolve_key)
+        user, _ = authenticate(credentials.credentials, config, resolve_key, dev)
     except AuthError as exc:
         headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
         raise HTTPException(exc.status_code, exc.detail, headers) from exc

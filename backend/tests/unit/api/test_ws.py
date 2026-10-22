@@ -109,3 +109,17 @@ def test_publish_event_writes_the_channel():
     channel, payload = sent[0]
     assert channel == "dcl:console:events"
     assert Event.model_validate_json(payload).data == {"done": 4}
+
+
+def test_dev_token_opens_the_socket(client, monkeypatch):
+    from backend.api.auth import ConsoleRole, DevAuth
+
+    client.app.dependency_overrides[auth.get_dev_auth] = lambda: DevAuth(
+        token="d" * 40, roles=[ConsoleRole.REVIEWER]
+    )
+    with client.websocket_connect("/ws") as socket:
+        socket.send_json({"type": "auth", "token": "d" * 40})
+        ready = socket.receive_json()
+        assert ready["type"] == "ready" and ready["user"]["oid"] == "dev-sign-in"
+        socket.send_json({"type": "subscribe", "topics": ["case"]})
+        assert socket.receive_json() == {"type": "subscribed", "topics": ["case"]}

@@ -6,7 +6,6 @@
 	import { applyLiveEvent, live } from '$lib/live.svelte';
 	import { hasRole } from '$lib/auth/roles';
 	import { session, startSession } from '$lib/auth/session.svelte';
-	import { getConfig } from '$lib/config';
 	import NavBar from '$lib/components/shell/NavBar.svelte';
 
 	let { children } = $props();
@@ -17,7 +16,7 @@
 
 	$effect(() => {
 		const user = session.user;
-		if (session.status !== 'signed_in' || !user || getConfig().auth.mode === 'dev') return;
+		if (session.status !== 'signed_in' || !user) return;
 		const channel: LiveChannel = openLiveChannel({
 			topics: hasRole(user.roles, 'reviewer') ? ['ops', 'run', 'case'] : ['ops', 'run'],
 			onStatus: (status) => (live.status = status),

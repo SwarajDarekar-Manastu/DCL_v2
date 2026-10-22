@@ -109,14 +109,100 @@ def test_require_role_without_token_is_401(client, token):
     assert client.get("/admin-only").status_code == 401
 
 
-def test_partial_configuration_is_a_clear_503():
-    from fastapi import HTTPException
+def test_partial_configuration_is_a_clear_503(token, key_resolver):
+    partial = auth.auth_config_from(tenant_id="t", audience=None, group_reviewers="r", group_admins="")
+    assert partial.missing == ("audience", "group_admins")
+    app = FastAPI()
+    app.include_router(auth.router)
+    app.dependency_overrides[auth.get_auth_config] = lambda: partial
+    app.dependency_overrides[auth.get_key_resolver] = lambda: key_resolver
+    app.dependency_overrides[auth.get_dev_auth] = lambda: None
+    response = TestClient(app).get("/auth/me", headers={"Authorization": f"Bearer {token()}"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Console sign-in is not configured: missing audience, group_admins"
 
-    with pytest.raises(HTTPException) as refused:
-        auth.auth_config_from(tenant_id="t", audience=None, group_reviewers="r", group_admins="")
-    assert refused.value.status_code == 503
-    assert refused.value.detail == "Console sign-in is not configured: missing audience, group_admins"
-    assert (
-        auth.auth_config_from(tenant_id="t", audience="a", group_reviewers="r", group_admins="g").audience
-        == "a"
+
+# ---------------------------------------------------------------- dev-only sign-in
+
+DEV_TOKEN = "d" * 40
+
+
+def dev_settings(monkeypatch, *, env="dev", flag=True, token=DEV_TOKEN, roles=("viewer", "reviewer")):
+    from types import SimpleNamespace
+
+    from pydantic import SecretStr
+
+    from backend.config import Environment
+
+    settings = SimpleNamespace(
+        env=Environment(env),
+        console_dev_auth=flag,
+        console_dev_token=SecretStr(token) if token is not None else None,
+        console_dev_roles=list(roles),
     )
+    monkeypatch.setattr("backend.config.get_settings", lambda: settings)
+
+
+@pytest.fixture
+def unconfigured_client(key_resolver):
+    """Entra not registered yet: only the dev sign-in can work."""
+    app = FastAPI()
+    app.include_router(auth.router)
+
+    @app.get("/reviewer-only")
+    def reviewer_only(user: Annotated[ConsoleUser, Depends(require_role(ConsoleRole.REVIEWER))]):
+        return {"oid": user.oid}
+
+    app.dependency_overrides[auth.get_auth_config] = lambda: auth.auth_config_from(
+        tenant_id=None, audience=None, group_reviewers=None, group_admins=None
+    )
+    app.dependency_overrides[auth.get_key_resolver] = lambda: key_resolver
+    return TestClient(app)
+
+
+def test_dev_token_signs_in_with_configured_roles_and_logs(unconfigured_client, monkeypatch, caplog):
+    dev_settings(monkeypatch)
+    with caplog.at_level("WARNING", logger="backend.api.auth"):
+        response = unconfigured_client.get("/auth/me", headers={"Authorization": f"Bearer {DEV_TOKEN}"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "oid": "dev-sign-in",
+        "name": "Dev sign-in",
+        "email": "dev@localhost",
+        "roles": ["viewer", "reviewer"],
+    }
+    assert "DEV SIGN-IN" in caplog.text
+    ok = unconfigured_client.get("/reviewer-only", headers={"Authorization": f"Bearer {DEV_TOKEN}"})
+    assert ok.status_code == 200
+
+
+def test_other_tokens_still_need_entra(unconfigured_client, monkeypatch):
+    dev_settings(monkeypatch)
+    wrong = unconfigured_client.get("/auth/me", headers={"Authorization": "Bearer " + "x" * 40})
+    assert wrong.status_code == 503 and wrong.json()["detail"].startswith("Console sign-in is not configured")
+    assert unconfigured_client.get("/auth/me").status_code == 401
+
+
+def test_flag_off_means_no_dev_path(unconfigured_client, monkeypatch):
+    dev_settings(monkeypatch, flag=False)
+    response = unconfigured_client.get("/auth/me", headers={"Authorization": f"Bearer {DEV_TOKEN}"})
+    assert response.status_code == 503  # falls through to Entra, which is not configured
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "detail"),
+    [
+        ({"env": "staging"}, "dev sign-in is only allowed with DCL_ENV=dev"),
+        ({"env": "prod"}, "dev sign-in is only allowed with DCL_ENV=dev"),
+        ({"token": "short"}, "DCL_CONSOLE_DEV_TOKEN must be at least 32 characters"),
+        ({"token": None}, "DCL_CONSOLE_DEV_TOKEN must be at least 32 characters"),
+        ({"roles": ("viewer", "superuser")}, "DCL_CONSOLE_DEV_ROLES: 'superuser' is not a valid ConsoleRole"),
+    ],
+)
+def test_dev_misconfiguration_is_refused(unconfigured_client, monkeypatch, caplog, kwargs, detail):
+    dev_settings(monkeypatch, **kwargs)
+    with caplog.at_level("CRITICAL", logger="backend.api.auth"):
+        response = unconfigured_client.get("/auth/me", headers={"Authorization": f"Bearer {DEV_TOKEN}"})
+    assert response.status_code == 503 and response.json()["detail"] == detail
+    if "env" in kwargs:
+        assert "dev sign-in refused" in caplog.text
