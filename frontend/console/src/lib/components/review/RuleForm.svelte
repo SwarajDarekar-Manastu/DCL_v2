@@ -1,5 +1,7 @@
 <script lang="ts">
 	import type { RuleDraft, RuleType } from '$lib/api_endpoint';
+	import { Button } from '$lib/components/ui/button';
+	import Notice from '$lib/components/shell/Notice.svelte';
 
 	interface Props {
 		busy: boolean;
@@ -46,62 +48,26 @@
 	}
 </script>
 
-<form onsubmit={submit} aria-label="New rule">
-	<label
-		>Rule type
-		<select bind:value={ruleType}>{#each RULE_TYPES as t (t)}<option value={t}>{t}</option>{/each}</select>
-	</label>
-	<fieldset>
-		<legend>Scope (most specific match wins)</legend>
-		<label>Root <input bind:value={scopeRoot} placeholder="APU Heater" /></label>
-		<label>Folder id <input bind:value={scopeFolderId} placeholder="Graph item id" /></label>
-		<label>Filename glob <input bind:value={scopeGlob} placeholder="T*.dat" /></label>
-		<label>Extension <input bind:value={scopeExtension} placeholder=".dat" /></label>
+<form onsubmit={submit} aria-label="New rule" class="grid gap-4">
+	<div class="grid grid-cols-[1fr_8rem] gap-3">
+		<label class="grid gap-1"
+			><span class="field-label">Rule type</span>
+			<select class="field font-mono" bind:value={ruleType}>{#each RULE_TYPES as t (t)}<option value={t}>{t}</option>{/each}</select>
+		</label>
+		<label class="grid gap-1"><span class="field-label">Precedence</span> <input class="field num font-mono" type="number" bind:value={precedence} /></label>
+	</div>
+	<fieldset class="m-0 grid grid-cols-2 gap-3 rounded-md border p-3">
+		<legend class="text-muted-foreground px-1 text-xs font-medium">Scope (most specific match wins)</legend>
+		<label class="grid gap-1"><span class="field-label">Root</span> <input class="field" bind:value={scopeRoot} placeholder="APU Heater" /></label>
+		<label class="grid gap-1"><span class="field-label">Folder id</span> <input class="field font-mono" bind:value={scopeFolderId} placeholder="Graph item id" /></label>
+		<label class="grid gap-1"><span class="field-label">Filename glob</span> <input class="field font-mono" bind:value={scopeGlob} placeholder="T*.dat" /></label>
+		<label class="grid gap-1"><span class="field-label">Extension</span> <input class="field font-mono" bind:value={scopeExtension} placeholder=".dat" /></label>
 	</fieldset>
-	{#if global}<p class="warn">No scope: this rule applies everywhere.</p>{/if}
-	<label>Precedence <input type="number" bind:value={precedence} /></label>
-	<label>Body (JSON; validated by rule type on the server) <textarea rows="8" bind:value={bodyText}></textarea></label>
-	{#if parsed.error}<p class="warn">{parsed.error}</p>{/if}
-	<button type="submit" disabled={busy || !parsed.body}>Create rule</button>
+	{#if global}<Notice tone="warning">No scope: this rule applies everywhere.</Notice>{/if}
+	<label class="grid gap-1"
+		><span class="field-label">Body (JSON; validated by rule type on the server)</span>
+		<textarea class="field font-mono text-xs" rows="8" spellcheck="false" bind:value={bodyText}></textarea></label
+	>
+	{#if parsed.error}<Notice tone="warning">{parsed.error}</Notice>{/if}
+	<Button type="submit" class="justify-self-start" disabled={busy || !parsed.body}>Create rule</Button>
 </form>
-
-<style>
-	form,
-	fieldset {
-		display: grid;
-		gap: 0.4rem;
-		font-size: 0.82rem;
-	}
-	fieldset {
-		border: 1px solid var(--border);
-		border-radius: 0.3rem;
-		padding: 0.5rem;
-	}
-	label {
-		display: grid;
-		gap: 0.15rem;
-	}
-	input,
-	select,
-	textarea {
-		font: inherit;
-		padding: 0.25rem;
-		background: var(--bg);
-		color: inherit;
-		border: 1px solid var(--border);
-		border-radius: 0.25rem;
-	}
-	textarea {
-		font-family: ui-monospace, monospace;
-	}
-	.warn {
-		margin: 0;
-		color: var(--warn);
-	}
-	button {
-		justify-self: start;
-		font: inherit;
-		padding: 0.3rem 0.8rem;
-		cursor: pointer;
-	}
-</style>

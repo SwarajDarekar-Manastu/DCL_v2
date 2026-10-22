@@ -11,6 +11,9 @@
 		type Resolution,
 		type RuleDraft
 	} from '$lib/api_endpoint';
+	import CheckIcon from '@lucide/svelte/icons/check';
+	import { Button } from '$lib/components/ui/button';
+	import Notice from '$lib/components/shell/Notice.svelte';
 	import CaseHeader from './CaseHeader.svelte';
 	import FlagConsole from './FlagConsole.svelte';
 	import { canBecomeRule, missing, needsPreview, ruleFor, type ScopeChoice } from './resolution';
@@ -162,107 +165,37 @@
 		});
 </script>
 
-<section class="case" aria-label="Case">
+<section class="grid gap-4" aria-label="Case">
 	<CaseHeader {detail} {me} {busy} onAssign={assign} onUndo={undo} />
 
-	{#each detail.flags as flag (flag.flag_id)}
-		<FlagConsole {flag} bind:draft={drafts[flag.flag_id]} preview={previewState(flag.flag_id)} onPreview={() => preview(flag.flag_id)} />
-	{/each}
+	<div class="grid gap-3">
+		{#each detail.flags as flag (flag.flag_id)}
+			<FlagConsole {flag} bind:draft={drafts[flag.flag_id]} preview={previewState(flag.flag_id)} onPreview={() => preview(flag.flag_id)} />
+		{/each}
+	</div>
 
-	<footer class="apply">
+	<footer class="bg-background/95 sticky bottom-0 z-10 -mx-5 grid gap-2 border-t px-5 py-3 backdrop-blur">
 		{#if ruleCandidates.length}
-			<fieldset class="scope">
-				<legend>Apply to</legend>
-				<label><input type="radio" bind:group={scope} value="file" /> this file</label>
-				<label><input type="radio" bind:group={scope} value="folder" disabled={!where?.folder_id} /> this folder</label>
-				<label
+			<fieldset class="m-0 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-0 p-0 text-[13px]">
+				<legend class="field-label float-left mr-2">Apply to</legend>
+				<label class="flex items-center gap-1.5"><input type="radio" bind:group={scope} value="file" /> this file</label>
+				<label class="flex items-center gap-1.5"><input type="radio" bind:group={scope} value="folder" disabled={!where?.folder_id} /> this folder</label>
+				<label class="flex items-center gap-1.5"
 					><input type="radio" bind:group={scope} value="folder_pattern" disabled={!where?.folder_id} /> this folder, files matching
-					<input class="pattern" bind:value={pattern} placeholder="T*.dat" disabled={scope !== 'folder_pattern'} /></label
+					<input class="field h-7 w-28 font-mono" bind:value={pattern} placeholder="T*.dat" disabled={scope !== 'folder_pattern'} /></label
 				>
-				{#if scope !== 'file'}<p class="hint">Saved as an operator rule; matching halted files resume too.</p>{/if}
 			</fieldset>
+			{#if scope !== 'file'}<Notice tone="info">Saved as an operator rule; matching halted files resume too.</Notice>{/if}
 		{/if}
-		<div class="buttons">
-			<button type="button" class="primary" disabled={busy || !!blocker} onclick={apply}>
-				✓ Apply & resume{affected !== null ? ` (${affected} file${affected === 1 ? '' : 's'})` : ''}
-			</button>
-			<button type="button" disabled={busy} onclick={() => reject('mark_junk')}>Mark junk</button>
-			<button type="button" disabled={busy} onclick={() => reject('skip')}>Skip file</button>
+		<div class="flex flex-wrap items-center gap-2">
+			<Button disabled={busy || !!blocker} onclick={apply}>
+				<CheckIcon />Apply & resume{affected !== null ? ` (${affected} file${affected === 1 ? '' : 's'})` : ''}
+			</Button>
+			<Button variant="outline" disabled={busy} onclick={() => reject('mark_junk')}>Mark junk</Button>
+			<Button variant="outline" disabled={busy} onclick={() => reject('skip')}>Skip file</Button>
+			{#if blocker}<p class="text-muted-foreground m-0 ml-1 text-xs">{blocker}</p>{/if}
 		</div>
-		{#if blocker}<p class="hint">{blocker}</p>{/if}
-		{#if error}<p class="error" role="alert">{error}</p>{/if}
-		{#if notice}<p class="notice" role="status">{notice}</p>{/if}
+		{#if error}<Notice tone="error">{error}</Notice>{/if}
+		{#if notice}<Notice tone="success">{notice}</Notice>{/if}
 	</footer>
 </section>
-
-<style>
-	.case {
-		display: grid;
-		gap: 0.75rem;
-	}
-	.apply {
-		position: sticky;
-		bottom: 0;
-		background: var(--bg);
-		border-top: 1px solid var(--border);
-		padding: 0.6rem 0;
-		display: grid;
-		gap: 0.4rem;
-	}
-	.scope {
-		border: 0;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.3rem 1rem;
-		font-size: 0.82rem;
-	}
-	.scope legend {
-		font-weight: 600;
-		margin-bottom: 0.2rem;
-	}
-	.scope label {
-		display: flex;
-		align-items: center;
-		gap: 0.3rem;
-	}
-	.pattern {
-		width: 7rem;
-		font: inherit;
-	}
-	.buttons {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-	button {
-		font: inherit;
-		font-size: 0.85rem;
-		padding: 0.35rem 0.8rem;
-		cursor: pointer;
-	}
-	.primary {
-		background: var(--accent);
-		color: white;
-		border: 0;
-		border-radius: 0.3rem;
-	}
-	.primary:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	.hint {
-		margin: 0;
-		font-size: 0.8rem;
-		opacity: 0.8;
-	}
-	.error {
-		margin: 0;
-		color: var(--hard);
-	}
-	.notice {
-		margin: 0;
-		color: var(--ok);
-	}
-</style>

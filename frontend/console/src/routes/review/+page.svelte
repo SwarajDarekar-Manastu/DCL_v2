@@ -9,6 +9,11 @@
 	import QueueFilters from '$lib/components/review/QueueFilters.svelte';
 	import QueueList from '$lib/components/review/QueueList.svelte';
 	import { filtersFromUrl, urlFor } from '$lib/components/review/filters';
+	import InboxIcon from '@lucide/svelte/icons/inbox';
+	import ListChecksIcon from '@lucide/svelte/icons/list-checks';
+	import LoaderCircleIcon from '@lucide/svelte/icons/loader-circle';
+	import { Button } from '$lib/components/ui/button';
+	import Notice from '$lib/components/shell/Notice.svelte';
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
 
 	let filters = $derived(filtersFromUrl(page.url.searchParams));
@@ -89,83 +94,53 @@
 </script>
 
 <RoleGate roles={session.user?.roles ?? []} role="reviewer">
-	<div class="review">
-		<aside class="queue">
-			<div class="queue-head">
-				<h1>Queue</h1>
-				{#if counts}<span><span class="hard">{counts.hard} HARD</span> / {counts.soft} SOFT</span>{/if}
-				<a href="/review/rules">Rules</a>
+	<div class="grid min-h-[calc(100vh-3rem)] grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[23rem_minmax(0,1fr)]">
+		<aside
+			class="bg-sidebar sticky top-12 flex h-[calc(100vh-3rem)] min-h-0 flex-col border-r"
+			aria-labelledby="queue-title"
+		>
+			<div class="grid gap-3 border-b px-4 pt-4 pb-3">
+				<div class="flex items-center gap-2">
+					<h1 id="queue-title" class="m-0 text-base">Queue</h1>
+					{#if counts}
+						<span class="num flex items-center gap-1.5 text-xs" aria-label="{counts.hard} HARD, {counts.soft} SOFT open">
+							<span class="bg-hard-bg text-hard border-hard-border rounded-md border px-1.5 leading-4 font-medium">{counts.hard} HARD</span>
+							<span class="text-muted-foreground">{counts.soft} SOFT</span>
+						</span>
+					{/if}
+					<Button variant="ghost" size="sm" href="/review/rules" class="ml-auto"><ListChecksIcon />Rules</Button>
+				</div>
+				<QueueFilters {filters} onChange={setFilters} />
 			</div>
-			<QueueFilters {filters} onChange={setFilters} />
-			{#if listError}
-				<p role="alert">{listError}</p>
-			{:else}
-				<QueueList {items} selectedKey={caseKey} onOpen={open} />
-				{#if nextCursor}<button type="button" onclick={loadMore}>Load more</button>{/if}
-			{/if}
-			<p class="keys">Keys: j / k to move, Enter to open.</p>
+			<div class="min-h-0 flex-1 overflow-y-auto">
+				{#if listError}
+					<div class="p-4"><Notice tone="error">{listError}</Notice></div>
+				{:else}
+					<QueueList {items} selectedKey={caseKey} onOpen={open} />
+					{#if nextCursor}<div class="p-3"><Button variant="outline" size="sm" class="w-full" onclick={loadMore}>Load more</Button></div>{/if}
+				{/if}
+			</div>
+			<p class="text-muted-foreground m-0 flex items-center gap-1.5 border-t px-4 py-2 text-xs">
+				Keys: <kbd class="bg-muted rounded border px-1 text-[11px]">j</kbd> / <kbd class="bg-muted rounded border px-1 text-[11px]">k</kbd> to move,
+				<kbd class="bg-muted rounded border px-1 text-[11px]">Enter</kbd> to open.
+			</p>
 		</aside>
-		<section class="detail">
+		<section class="min-w-0 px-5 pt-5" aria-label="Case detail">
 			{#if caseError}
-				<p role="alert">{caseError}</p>
+				<Notice tone="error">{caseError}</Notice>
 			{:else if detail}
 				<CaseView {detail} me={session.user?.email ?? ''} onChanged={() => (reload += 1)} />
 			{:else if caseKey}
-				<p>Loading case…</p>
+				<p class="text-muted-foreground m-0 flex items-center gap-2" role="status">
+					<LoaderCircleIcon class="size-4 animate-spin" aria-hidden="true" /> Loading case…
+				</p>
 			{:else}
-				<p class="empty">Select a case from the queue.</p>
+				<div class="text-muted-foreground flex h-[60vh] flex-col items-center justify-center gap-2 text-center">
+					<InboxIcon class="size-6" aria-hidden="true" />
+					<p class="text-foreground m-0 font-medium">Select a case from the queue.</p>
+					<p class="m-0 text-xs">Cases are sorted by how many files they unblock. HARD cases halt their documents.</p>
+				</div>
 			{/if}
 		</section>
 	</div>
 </RoleGate>
-
-<style>
-	.review {
-		display: grid;
-		grid-template-columns: 19rem minmax(0, 1fr);
-		gap: 1rem;
-		align-items: start;
-	}
-	@media (max-width: 800px) {
-		.review {
-			grid-template-columns: 1fr;
-		}
-	}
-	.queue {
-		display: grid;
-		gap: 0.6rem;
-		position: sticky;
-		top: 0.5rem;
-		max-height: calc(100vh - 4.5rem);
-		overflow-y: auto;
-		padding-right: 0.25rem;
-	}
-	@media (max-width: 800px) {
-		.queue {
-			position: static;
-			max-height: none;
-		}
-	}
-	.queue-head {
-		display: flex;
-		align-items: baseline;
-		gap: 0.6rem;
-		font-size: 0.82rem;
-	}
-	.queue-head a {
-		margin-left: auto;
-	}
-	h1 {
-		font-size: 1.1rem;
-		margin: 0;
-	}
-	.hard {
-		color: var(--hard);
-		font-weight: 600;
-	}
-	.keys,
-	.empty {
-		font-size: 0.78rem;
-		opacity: 0.7;
-	}
-</style>

@@ -1,5 +1,8 @@
 <script lang="ts">
+	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import type { CaseSummary } from '$lib/api_endpoint';
+	import SeverityBadge from '$lib/components/shell/SeverityBadge.svelte';
+	import { cn } from '$lib/utils';
 	import { ageText, caseHref, flagCountsText, isAging } from './format';
 
 	interface Props {
@@ -33,93 +36,49 @@
 <svelte:window onkeydown={onKeydown} />
 
 {#if items.length === 0}
-	<p class="empty">No cases match these filters.</p>
+	<p class="text-muted-foreground m-0 px-4 py-8 text-center text-[13px]">No cases match these filters.</p>
 {:else}
-	<ol class="queue" aria-label="Review queue">
+	<ol class="m-0 list-none p-0" aria-label="Review queue">
 		{#each items as item, i (item.case_key)}
+			{@const aging = isAging(item, now)}
+			{@const selected = item.case_key === selectedKey}
 			<li
 				id="case-row-{i}"
-				class:cursor={i === cursor}
-				class:selected={item.case_key === selectedKey}
-				class:aging={isAging(item, now)}
-				aria-current={item.case_key === selectedKey ? 'true' : undefined}
+				class={cn('relative border-b', aging && 'aging', i === cursor && 'cursor')}
+				aria-current={selected ? 'true' : undefined}
 			>
 				<a
 					href={caseHref(item.case_key)}
+					class={cn(
+						'text-foreground hover:bg-muted/60 grid gap-1 py-2.5 pr-3 pl-4 no-underline transition-colors hover:no-underline focus-visible:-outline-offset-2',
+						selected && 'bg-muted hover:bg-muted',
+						i === cursor && !selected && 'bg-muted/40'
+					)}
 					onclick={(e) => {
 						e.preventDefault();
 						cursor = i;
 						onOpen(item.case_key);
 					}}
 				>
-					<span class="title">{item.title}{item.page_or_sheet ? ` · ${item.page_or_sheet}` : ''}</span>
-					<span class="meta">
-						<span class="sev sev-{item.max_severity}">{item.max_severity}</span>
-						{flagCountsText(item.flag_counts)}
+					<span class="flex min-w-0 items-start gap-2">
+						<SeverityBadge severity={item.max_severity} class="mt-px" />
+						<span class="min-w-0 flex-1 text-[13px] leading-5 font-medium break-words"
+							>{item.title}{#if item.page_or_sheet}<span class="text-muted-foreground font-normal"> · {item.page_or_sheet}</span>{/if}</span
+						>
+						{#if item.has_suggestion}<span class="text-info mt-0.5" title="has a suggested resolution"
+								><SparklesIcon class="size-3.5" aria-hidden="true" /><span class="sr-only">has suggestion</span></span
+							>{/if}
 					</span>
-					<span class="meta">
-						{#if item.files_unblocked}<span class="impact">unblocks {item.files_unblocked}</span>{/if}
-						<span title={item.oldest_created_at}>age {ageText(item.oldest_created_at, now)}</span>
-						{#if item.assignee}<span>· {item.assignee}</span>{/if}
-						{#if item.has_suggestion}<span class="suggest" title="has a suggested resolution">★</span>{/if}
+					<span class="text-muted-foreground font-mono text-[11px] leading-4 tracking-tight">{flagCountsText(item.flag_counts)}</span>
+					<span class="text-muted-foreground num flex flex-wrap gap-x-2 text-xs">
+						{#if item.files_unblocked}<span class="text-foreground font-medium">unblocks {item.files_unblocked}</span>{/if}
+						<span class={aging ? 'text-hard font-medium' : ''} title={item.oldest_created_at}>age {ageText(item.oldest_created_at, now)}</span>
+						{#if item.assignee}<span class="truncate">· {item.assignee}</span>{/if}
 					</span>
 				</a>
+				{#if selected}<span class="bg-foreground absolute inset-y-0 left-0 w-0.5" aria-hidden="true"></span>
+				{:else if aging}<span class="bg-hard absolute inset-y-0 left-0 w-0.5" aria-hidden="true"></span>{/if}
 			</li>
 		{/each}
 	</ol>
 {/if}
-
-<style>
-	.queue {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		gap: 0.25rem;
-	}
-	li a {
-		display: grid;
-		gap: 0.15rem;
-		padding: 0.45rem 0.55rem;
-		border: 1px solid var(--border);
-		border-radius: 0.35rem;
-		background: var(--surface);
-		color: inherit;
-		text-decoration: none;
-		font-size: 0.82rem;
-	}
-	li.cursor a {
-		outline: 2px solid var(--accent);
-	}
-	li.selected a {
-		border-color: var(--accent);
-	}
-	li.aging a {
-		border-left: 4px solid var(--hard);
-	}
-	.title {
-		font-weight: 600;
-		overflow-wrap: anywhere;
-	}
-	.meta {
-		display: flex;
-		gap: 0.4rem;
-		flex-wrap: wrap;
-		opacity: 0.85;
-	}
-	.sev {
-		font-weight: 700;
-	}
-	.sev-HARD {
-		color: var(--hard);
-	}
-	.impact {
-		font-weight: 600;
-	}
-	.suggest {
-		color: var(--warn);
-	}
-	.empty {
-		opacity: 0.7;
-	}
-</style>
