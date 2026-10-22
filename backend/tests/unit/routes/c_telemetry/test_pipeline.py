@@ -190,3 +190,134 @@ def test_the_folder_cfg_reaches_the_flag_evidence(session, minio):
     }
     assert evidence["y1"]["scaling_equation"] == "y=b*50.044"
     assert evidence["y1"]["scaling_source"] == "LJStreamM.cfg"
+
+
+def _fake_indexer(session, doc, doc_id, cloud_allowed):
+    """S2's real index_document with the models role and Gemini replaced (no enrichment, fixed vectors)."""
+    from backend.indexing.index_document import index_document
+    from backend.llm_engine.enrichment.entities import AliasIndex
+
+    assert cloud_allowed is False  # sync_roots.cloud_allowed defaults to false
+    return index_document(
+        doc,
+        doc_id=doc_id,
+        gemini=None,
+        embed_documents=lambda texts, titles: [[0.01] * 768 for _ in texts],
+        embed_images=None,
+        asset_bytes=None,
+        alias_index=AliasIndex(),
+        reuse_vectors=lambda hashes: {},
+        cloud_allowed=False,
+        count_tokens=lambda texts: [len(t.split()) for t in texts],
+    )
+
+
+def _all_mapped_rule(session):
+    session.add(
+        Rule(
+            rule_type="channel_map",
+            origin="operator",
+            scope_folder_id="F-RUN",
+            body={
+                "channels": {
+                    "y0": {
+                        "canonical_name": "pt_101_chamber_bar_g",
+                        "physical_quantity": "pressure",
+                        "unit": "bar",
+                        "gauge_or_abs": "gauge",
+                    },
+                    "y1": {"canonical_name": "tc_1_k", "physical_quantity": "temperature", "unit": "degC"},
+                },
+                "ambient_condition": "SEA_LEVEL",
+            },
+            created_by="test",
+        )
+    )
+
+
+def test_a_clean_run_is_indexed_and_committed_with_its_catalog(session, minio):
+    from backend.postgres.models import DocumentNode, TelemetryChannel, TelemetryRun
+
+    _seed(session, minio, {"TP12_T01.dat": labjack_bytes(rows=500)[0]})
+    pipeline_config.set_value(session, "routes.C.enabled", True, "test")
+    _all_mapped_rule(session)
+    session.commit()
+    (release,) = dispatch(session, minio, section_file_sets=()).to_process
+    outcome = process_document(session, minio, release.doc_id, indexer=_fake_indexer)
+    session.commit()
+
+    document = session.get(Document, release.doc_id)
+    assert outcome.status in ("ACTIVE", "ACTIVE_WITH_SOFT_FLAGS") and document.status == outcome.status
+    assert document.staged_payload_uri is None and document.indexed_at is not None
+    assert PROCESSED_MARK not in document.metadata_sources
+    (run,) = session.scalars(select(TelemetryRun)).all()
+    assert (run.run_label, run.doc_id, run.ambient_condition, run.n_rows) == (
+        "TP12_T01",
+        document.doc_id,
+        "SEA_LEVEL",
+        500,
+    )
+    assert run.normalized_parquet_uri.endswith("/normalized.parquet")
+    names = set(session.scalars(select(TelemetryChannel.canonical_name)))
+    assert names == {"v0_v", "v1_v", "pt_101_chamber_bar_g", "pt_101_chamber_bar_abs", "tc_1_k"}
+    nodes = session.scalars(select(DocumentNode).where(DocumentNode.doc_id == document.doc_id)).all()
+    assert nodes and all(n.doc_kind == "telemetry_run" and n.trust_tier == 1 for n in nodes)
+    assert any("pt_101_chamber_bar_g" in n.content for n in nodes)
+    assert any(n.embedding is not None for n in nodes)
+    assert "TP12_T01" in document.search_text
+
+
+def test_a_second_run_with_the_same_label_is_renamed_with_a_conflict(session, minio):
+    from backend.postgres.models import TelemetryRun
+
+    _seed(
+        session,
+        minio,
+        {"TP12_T01.dat": labjack_bytes(rows=300)[0], "TP12_T01_repeat.dat": labjack_bytes(rows=310)[0]},
+    )
+    pipeline_config.set_value(session, "routes.C.enabled", True, "test")
+    _all_mapped_rule(session)
+    session.commit()
+    releases = dispatch(session, minio, section_file_sets=()).to_process
+    for release in releases:
+        process_document(session, minio, release.doc_id, indexer=_fake_indexer)
+        session.commit()
+    labels = sorted(session.scalars(select(TelemetryRun.run_label)))
+    assert labels == ["TP12_T01", "TP12_T01_2"]
+    renamed = session.scalar(select(TelemetryRun).where(TelemetryRun.run_label == "TP12_T01_2"))
+    conflict = session.scalars(
+        select(ReviewFlag).where(ReviewFlag.doc_id == renamed.doc_id, ReviewFlag.flag_type == "CONFLICT")
+    ).all()
+    assert any(f.evidence["subject"] == "run label TP12_T01" for f in conflict)
+    assert session.get(Document, renamed.doc_id).status == "ACTIVE_WITH_SOFT_FLAGS"
+
+
+def test_a_rule_resumes_the_halted_run_from_its_raw_parquet(session, minio):
+    from backend.postgres.models import TelemetryRun
+    from backend.routes.c_telemetry.pipeline import halted_documents_for_rule, resume_document
+
+    _seed(session, minio, {"TP12_T01.dat": labjack_bytes(rows=400)[0]})
+    pipeline_config.set_value(session, "routes.C.enabled", True, "test")
+    session.commit()
+    (release,) = dispatch(session, minio, section_file_sets=()).to_process
+    assert process_document(session, minio, release.doc_id, indexer=_fake_indexer).status == "HALTED"
+    session.commit()
+
+    _all_mapped_rule(session)
+    session.commit()
+    rule_id = session.scalar(select(Rule.rule_id))
+    assert halted_documents_for_rule(session, rule_id) == [release.doc_id]
+
+    raw_key = f"{session.scalar(select(Blob.sha256))}"  # the .dat itself is no longer needed
+    minio.remove_object("dcl-raw", f"{raw_key[:2]}/{raw_key[2:4]}/{raw_key}")
+    outcome = resume_document(session, minio, release.doc_id, indexer=_fake_indexer)
+    session.commit()
+
+    assert outcome.status in ("ACTIVE", "ACTIVE_WITH_SOFT_FLAGS")
+    flags = {
+        f.anchor["channel"]: f.status for f in session.scalars(select(ReviewFlag)) if "channel" in f.anchor
+    }
+    assert flags["y0"] == flags["y1"] == "AUTO_RESOLVED"
+    (run,) = session.scalars(select(TelemetryRun)).all()
+    assert run.n_rows == 400 and run.normalized_parquet_uri is not None
+    assert halted_documents_for_rule(session, rule_id) == []

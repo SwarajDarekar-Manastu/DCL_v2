@@ -7,14 +7,17 @@ fingerprint, and decides: any HARD flag → the document is HALTED, the payload 
 ``load_staged`` reads the payload back for ``resume_from_staged`` (resolution never re-parses).
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.dispatcher.contract import Flag, ProcessedDocument
 from backend.postgres import pipeline_config
-from backend.postgres.enums import DocumentStatus, FlagSeverity
-from backend.postgres.models import Document
+from backend.postgres.enums import DocumentStatus, FlagSeverity, FlagStatus
+from backend.postgres.models import Document, ReviewFlag
 from backend.review.flags import upsert_document_flag
 from backend.storage.minio import BucketStore, parse_uri
 
@@ -28,6 +31,7 @@ class GateResult:
     halted: bool
     hard: int
     soft: int
+    document: ProcessedDocument
     staged_uri: str | None = None
 
 
@@ -47,20 +51,44 @@ def apply_severity_policy(session: Session, doc: ProcessedDocument) -> Processed
     return doc.model_copy(update={"flags": flags})
 
 
-def gate(session: Session, cir: BucketStore, document: Document, doc: ProcessedDocument) -> GateResult:
-    """Record the flags and halt on HARD. The caller commits; a clean document goes to the commit path."""
+OPEN_STATUSES = (FlagStatus.OPEN, FlagStatus.IN_PROGRESS, FlagStatus.REOPENED)
+
+
+def gate(
+    session: Session,
+    cir: BucketStore,
+    document: Document,
+    doc: ProcessedDocument,
+    stale: Callable[[ReviewFlag], bool] | None = None,
+    now: datetime | None = None,
+) -> GateResult:
+    """Record the flags and halt on HARD. The caller commits; a clean document goes to the commit path.
+
+    ``stale`` names the route's own flags: an open one the route did not raise again this time (a rule now
+    answers it) becomes ``AUTO_RESOLVED``. Flags of other origins (dispatcher, humans) are left alone."""
     doc = apply_severity_policy(session, doc)
     for flag in doc.flags:
         upsert_document_flag(session, document.doc_id, flag, str(doc.route))
+    if stale is not None:
+        current = {flag.fingerprint for flag in doc.flags}
+        for row in session.scalars(
+            select(ReviewFlag).where(
+                ReviewFlag.doc_id == document.doc_id, ReviewFlag.status.in_(OPEN_STATUSES)
+            )
+        ):
+            if row.fingerprint not in current and stale(row):
+                row.status = FlagStatus.AUTO_RESOLVED
+                row.resolved_by = "pipeline"
+                row.resolved_at = now or datetime.now(UTC)
     hard = sum(flag.severity == FlagSeverity.HARD for flag in doc.flags)
     soft = len(doc.flags) - hard
     if not hard:
-        return GateResult(halted=False, hard=0, soft=soft)
+        return GateResult(halted=False, hard=0, soft=soft, document=doc)
     staged_uri = cir.put(staged_key(doc.blob_sha256), doc.model_dump_json().encode(), "application/json")
     document.status = DocumentStatus.HALTED
     document.staged_payload_uri = staged_uri
     session.flush()
-    return GateResult(halted=True, hard=hard, soft=soft, staged_uri=staged_uri)
+    return GateResult(halted=True, hard=hard, soft=soft, document=doc, staged_uri=staged_uri)
 
 
 def load_staged(cir: BucketStore, document: Document) -> ProcessedDocument:

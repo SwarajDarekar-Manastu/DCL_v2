@@ -227,6 +227,7 @@ def process_labjack(
     head: bytes,
     normalize_config: NormalizeConfig | None = None,
     sanity: Sequence[SanityRange] = (),
+    raw_parquet: Path | None = None,
 ) -> ProcessedDocument:
     header = parse_header(head.decode("utf-8", "replace"))
     if header is None:
@@ -240,14 +241,17 @@ def process_labjack(
     running = {c: _Running() for c in header.channels}
     timebase = _TimeBase()
 
+    def observe(batch: pa.RecordBatch) -> pa.RecordBatch:
+        timebase.add(batch.column(0))
+        for i, channel in enumerate(header.channels, start=1):
+            running[channel].add(batch.column(i))
+        return batch
+
     def batches():
         stream = open_stream()
         try:
             for batch in read_batches(stream, header):
-                timebase.add(batch.column(0))
-                for i, channel in enumerate(header.channels, start=1):
-                    running[channel].add(batch.column(i))
-                yield batch
+                yield observe(batch)
         finally:
             close = getattr(stream, "release_conn", None)
             stream.close()
@@ -255,12 +259,18 @@ def process_labjack(
                 close()
 
     with tempfile.TemporaryDirectory(prefix="dcl-route-c-") as workdir:
-        path = Path(workdir) / "raw.parquet"
-        write_batches(path, raw_schema, batches())
+        if raw_parquet is None:
+            path = Path(workdir) / "raw.parquet"
+            write_batches(path, raw_schema, batches())
+            raw_uri = telemetry.put_file(
+                telemetry_key(str(run_id), "raw"), str(path), "application/vnd.apache.parquet"
+            )
+        else:  # resume: the run's own raw.parquet, the .dat is not parsed again (file 06 §1.6)
+            path = raw_parquet
+            for batch in pq.ParquetFile(path).iter_batches(columns=header.columns):
+                observe(batch)
+            raw_uri = f"s3://{telemetry.bucket}/{telemetry_key(str(run_id), 'raw')}"
         quantiles = _quantiles(path, header.channels)
-        raw_uri = telemetry.put_file(
-            telemetry_key(str(run_id), "raw"), str(path), "application/vnd.apache.parquet"
-        )
         outcome = (
             _normalize(
                 path,

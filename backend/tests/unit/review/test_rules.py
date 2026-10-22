@@ -169,22 +169,27 @@ def test_yaml_export_keeps_only_operator_rules_and_loads_back():
     text = export_yaml([(RuleOrigin.OPERATOR, operator), (RuleOrigin.CFG, derived)])
     loaded = load_yaml(text)
     assert loaded.version == 1
-    assert loaded.rules == [operator]
+    assert loaded.rules == [operator.model_copy(update={"status": "operator"})]
+    assert operator.status == "proposed"  # an exported rule is written as operator; a bare one is a proposal
     assert "F-X" not in text
 
 
 def test_the_rules_loader_skips_proposed_files_and_subfolders(tmp_path):
     from backend.review.rules import load_rules_dir
 
-    rule = (
+    proposal = (
         "rules:\n- rule_type: channel_map\n  scope: {scope_folder_id: F1}\n  body:\n    channels:\n"
         "      y0: {canonical_name: p_chamber_bar_g, physical_quantity: pressure,\n"
         "           unit: bar, gauge_or_abs: gauge}\n"
     )
-    (tmp_path / "confirmed.yaml").write_text(rule)
-    (tmp_path / "drafted.yaml").write_text("status: proposed\n" + rule)
+    operator = proposal.replace("- rule_type:", "- status: operator\n  rule_type:")
+    (tmp_path / "confirmed.yaml").write_text(operator)
+    (tmp_path / "drafted.yaml").write_text(proposal)  # no status: a proposal
+    (tmp_path / "explicit.yaml").write_text(
+        proposal.replace("- rule_type:", "- status: proposed\n  rule_type:")
+    )
     (tmp_path / "proposed").mkdir()
-    (tmp_path / "proposed" / "injector_10.yaml").write_text(rule)
+    (tmp_path / "proposed" / "injector_10.yaml").write_text(operator)
     loaded = load_rules_dir(tmp_path)
     assert [path.name for path, _ in loaded] == ["confirmed.yaml"]
     assert loaded[0][1].scope.scope_folder_id == "F1"
