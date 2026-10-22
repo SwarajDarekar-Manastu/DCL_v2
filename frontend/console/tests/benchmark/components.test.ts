@@ -96,14 +96,25 @@ describe('CaseEditor', () => {
 });
 
 describe('ResultDrilldown', () => {
-	it('shows expected versus actual, tools, retrieval and gold passages', () => {
+	it('shows expected numbers, every check, retrieval and gold passages', () => {
 		render(ResultDrilldown, { result: result(), testCase: benchCase() });
-		expect(screen.getByText('11').closest('tr')?.textContent).toContain('✗');
-		expect(screen.getByText(/expected query_telemetry · actual search_documents/)).toBeTruthy();
-		expect(screen.getByText(/recall@8 0\.0% · recall@30 100\.0%/)).toBeTruthy();
-		expect(screen.getByText('Gold passage ranked 12th after rerank.')).toBeTruthy();
+		expect(screen.getByText('not found').closest('tr')?.textContent).toContain('12.4 bar');
+		expect(screen.getByText('not found').closest('tr')?.textContent).toContain('±1%');
+		const checks = screen.getByRole('list', { name: 'Checks' }).textContent ?? '';
+		expect(checks).toContain('the verifier dropped the right number');
+		expect(checks).toContain('expected query_telemetry · used search_documents · missing query_telemetry');
+		expect(checks).toContain('must_present_both_conflicting_values · by judge: Only the folder value was given.');
+		expect(screen.getByText(/recall@8 0\.0% · recall@30 100\.0% · rerank margin 0\.050/)).toBeTruthy();
+		expect(screen.getByText('answer')).toBeTruthy();
 		expect(screen.getByRole('link', { name: 'page:8:3f2a9c1b7d4e5f60' }).getAttribute('href')).toBe(
 			`/docs/${DOC}/viewer?anchor=page%3A8%3A3f2a9c1b7d4e5f60`
 		);
+	});
+
+	it('shows the runner error instead of empty scores when a case could not be scored', () => {
+		const errored = result({ passed: false, failure_class: null, latency_ms: null, metrics: { error: 'RuntimeError: bound to a different event loop' } });
+		render(ResultDrilldown, { result: errored, testCase: benchCase() });
+		expect(screen.getByText(/The runner could not score this case: RuntimeError: bound to a different event loop/)).toBeTruthy();
+		expect(screen.queryByRole('list', { name: 'Checks' })).toBeNull();
 	});
 });

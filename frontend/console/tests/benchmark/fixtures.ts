@@ -40,16 +40,27 @@ export function result(overrides: Partial<BenchmarkResult> = {}): BenchmarkResul
 		failure_class: 'RERANK_MISS',
 		latency_ms: 6100,
 		cost_estimate: 0.0123,
+		// the shape of S2's score_case (backend/benchmark/metrics.py)
 		metrics: {
-			numeric: [{ metric: 'peak_pressure', expected: 12.4, actual: 11.0, unit: 'bar', within: false }],
-			citations: { recall: 0.5, precision: 1, forbidden_cited: [] },
-			tools: { expected: ['query_telemetry'], actual: ['search_documents'], match: false },
+			mode: 'answer',
+			numeric: {
+				passed: false,
+				details: [{ metric: 'peak_pressure', expected: 12.4, unit: 'bar', tolerance_pct: 1, found: null, ok: false }],
+				unit_error: false,
+				verifier_dropped: true
+			},
+			citations: { recall: 0.5, precision: 1, forbidden_cited: [], passed: false },
+			tools: { expected: ['query_telemetry'], actual: ['search_documents'], missing: ['query_telemetry'], passed: false },
+			entities: { missing: [], passed: true },
+			behavior: {
+				checks: { must_present_both_conflicting_values: { passed: false, by: 'judge', rationale: 'Only the folder value was given.' } },
+				passed: false
+			},
 			faithfulness: 0.9,
-			recall_at_8: 0,
-			recall_at_30: 1,
-			reranker_margin: 0.05,
-			judge_rationale: 'Gold passage ranked 12th after rerank.',
-			warnings: ['reranker unavailable; results are in RRF order']
+			retrieval: { recall_at_30: 1, recall_at_8: 0, rerank_margin: 0.05 },
+			latency_ms: 6100,
+			failure_class: 'RERANK_MISS',
+			passed: false
 		},
 		...overrides
 	};
