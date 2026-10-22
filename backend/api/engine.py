@@ -358,15 +358,15 @@ def _external_policy(session) -> Any:
     )
 
 
-def _asset_access(settings) -> tuple[Any, Any]:
-    """(presign, fetch) over MinIO for T3; (None, None) when the stack has no MinIO configured."""
-    from backend.storage.minio import client_from_settings, parse_uri, presign_get
+def _asset_access(settings) -> tuple[Any, Any, Any]:
+    """(presign, fetch, put_asset) over MinIO for T2 plots and T3; all None without MinIO configured."""
+    from backend.storage.minio import ASSETS, BucketStore, client_from_settings, parse_uri, presign_get
 
     try:
         client = client_from_settings(settings)
     except ConfigError as exc:
-        log.warning("T3 runs without image links: %s", exc)
-        return None, None
+        log.warning("T2 plots and T3 image links are off: %s", exc)
+        return None, None, None
 
     def fetch(uri: str) -> bytes:
         bucket, key = parse_uri(uri)
@@ -377,7 +377,12 @@ def _asset_access(settings) -> tuple[Any, Any]:
             response.close()
             response.release_conn()
 
-    return (lambda uri: presign_get(client, uri)), fetch
+    assets = BucketStore(client, ASSETS)
+    return (
+        (lambda uri: presign_get(client, uri)),
+        fetch,
+        (lambda key, data: assets.put(key, data, content_type="image/png")),
+    )
 
 
 def _telemetry_connect(settings) -> Any:
@@ -427,7 +432,7 @@ async def start_engine() -> None:
         from backend.llm_engine.local_models import ModelsClient
 
         models = ModelsClient(base_url=str(settings.models_url))
-        presign, fetch_asset = _asset_access(settings)
+        presign, fetch_asset, put_asset = _asset_access(settings)
         deps = EngineDeps(
             gemini=GeminiClient(settings),
             session_factory=_session_factory(),
@@ -439,6 +444,7 @@ async def start_engine() -> None:
             external_policy=_external_policy,
             presign=presign,
             fetch_asset=fetch_asset,
+            put_asset=put_asset,
             telemetry_connect=_telemetry_connect(settings),
         )
         database_url = settings.stack_database_url().get_secret_value().replace("+psycopg", "")

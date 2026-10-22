@@ -19,6 +19,9 @@ or a user window on `t_from_ignition_ms`. `steady_mean` is the stored steady win
 query and the window mean otherwise.
 """
 
+import hashlib
+import io
+import json
 import math
 import re
 import uuid
@@ -144,6 +147,8 @@ class Pair:
     steady: tuple[float, float] | None
     rolling_n: int = 1
     at_rel: float | None = None
+    run_t_first: float = 0.0
+    run_t_last: float = 0.0
 
 
 def _runs(session: Session, args: QueryTelemetryArgs) -> list[Run]:
@@ -376,7 +381,12 @@ def _value(value: float, channel) -> str:
 
 
 def query_telemetry(
-    session: Session, args: QueryTelemetryArgs, *, connect: Callable[[], Any] | None
+    session: Session,
+    args: QueryTelemetryArgs,
+    *,
+    connect: Callable[[], Any] | None,
+    put_asset: Callable[[str, bytes], str] | None = None,
+    presign: Callable[[str], str] | None = None,
 ) -> ToolResult:
     warnings: list[str] = []
     runs = _runs(session, args)
@@ -384,8 +394,8 @@ def query_telemetry(
         warnings.append(f"more than {MAX_RUNS} runs match; the first {MAX_RUNS} by label are used")
         runs = runs[:MAX_RUNS]
     warnings += _halted(session, args, {r.run_label for r in runs})
-    if args.plot:
-        warnings.append("plots of telemetry are not available yet; the numbers are below")
+    if args.plot and (put_asset is None or presign is None):
+        warnings.append("plots need the asset store, which is not configured on this server")
     if connect is None:
         warnings.append("the telemetry store is not configured on this server")
         runs = []
@@ -403,9 +413,14 @@ def query_telemetry(
     try:
         pairs = _pairs(con, runs, args, warnings)
         rows = _execute(con, pairs, warnings)
+        plots = []
+        if args.plot and put_asset is not None and presign is not None:
+            plots = _plots(con, pairs, rows, args, put_asset, presign, warnings)
     finally:
         con.close()
-    return _result(runs, pairs, rows, args, warnings)
+    result = _result(runs, pairs, rows, args, warnings)
+    result.result["plots"] = plots
+    return result
 
 
 def _pairs(con, runs: list[Run], args: QueryTelemetryArgs, warnings: list[str]) -> list[Pair]:
@@ -609,3 +624,94 @@ def _result(
         warnings=warnings,
         display="\n".join(display) or "No telemetry values could be computed.",
     )
+
+
+MAX_PLOT_POINTS = 4000
+PLOT_SERIES = 4
+
+
+def plot_key(run: Run, pairs: list[Pair], args: QueryTelemetryArgs) -> str:
+    """Deterministic per run, channels and window, so asking again overwrites instead of adding objects."""
+    material = json.dumps(
+        [
+            run.run_uuid.hex,
+            [p.channel.canonical_name for p in pairs],
+            args.window_kind,
+            [pairs[0].lo, pairs[0].hi],
+        ]
+    )
+    return f"plots/{run.run_uuid}/{hashlib.sha256(material.encode()).hexdigest()[:16]}.png"
+
+
+def render_plot(series: list[tuple[Pair, Any, Any, dict]], title: str) -> bytes:
+    """One PNG (Agg, no pyplot state): a panel per channel over time from ignition, the window shaded and
+    the peak marked."""
+    from matplotlib.figure import Figure
+
+    figure = Figure(figsize=(8, 2.2 * len(series)), dpi=110, layout="constrained")
+    axes = figure.subplots(len(series), 1, sharex=True, squeeze=False)[:, 0]
+    for ax, (pair, t_s, values, row) in zip(axes, series, strict=True):
+        ax.plot(t_s, values, linewidth=0.8, color="#1f6feb")
+        origin = pair.run.t0_ms if pair.run.t0_ms is not None else 0.0
+        if pair.lo is not None or pair.hi is not None:
+            lo = (pair.lo if pair.lo is not None else pair.run_t_first) - origin
+            hi = (pair.hi if pair.hi is not None else pair.run_t_last) - origin
+            ax.axvspan(lo / 1000, hi / 1000, color="#f2cc60", alpha=0.3, label=pair.window_text)
+        elif pair.steady is not None:
+            ax.axvspan(
+                (pair.steady[0] - origin) / 1000,
+                (pair.steady[1] - origin) / 1000,
+                color="#8fd19e",
+                alpha=0.3,
+                label="steady window",
+            )
+        if row.get("t_peak") is not None and row.get("max") is not None:
+            ax.plot([(row["t_peak"] - origin) / 1000], [row["max"]], "v", color="#d1242f", label="peak")
+        ax.set_ylabel(f"{pair.channel.canonical_name}\n[{_unit(pair.channel)}]", fontsize=8)
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=7, loc="upper right")
+    axes[-1].set_xlabel("time from ignition [s]" if series[0][0].run.t0_ms is not None else "time [s]")
+    figure.suptitle(title, fontsize=10)
+    buffer = io.BytesIO()
+    figure.savefig(buffer, format="png")
+    return buffer.getvalue()
+
+
+def _plots(con, pairs, rows, args, put_asset, presign, warnings) -> list[dict]:
+    out = []
+    by_run: dict[str, list[Pair]] = {}
+    for pair in pairs:
+        if pair.key in rows:
+            by_run.setdefault(pair.run.run_label, []).append(pair)
+    for label, run_pairs in by_run.items():
+        run_pairs = run_pairs[:PLOT_SERIES]
+        run = run_pairs[0].run
+        columns = ", ".join(_column(p.channel.canonical_name) for p in run_pairs)
+        try:
+            data = con.execute(
+                f"SELECT t_rel_ms, {columns} FROM read_parquet(?) ORDER BY t_rel_ms",  # noqa: S608 — catalog columns
+                [run.uri],
+            ).fetchnumpy()
+        except Exception as exc:  # noqa: BLE001 — a failed plot is a warning, the numbers stand
+            warnings.append(f"plot of run {label} failed: {str(exc)[:200]}")
+            continue
+        t = data["t_rel_ms"]
+        step = max(1, len(t) // MAX_PLOT_POINTS)
+        origin = run.t0_ms if run.t0_ms is not None else 0.0
+        series = []
+        for pair in run_pairs:
+            pair.run_t_first, pair.run_t_last = float(t[0]), float(t[-1])
+            series.append(
+                (pair, (t[::step] - origin) / 1000, data[pair.channel.canonical_name][::step], rows[pair.key])
+            )
+        uri = put_asset(plot_key(run, run_pairs, args), render_plot(series, f"Run {label}"))
+        names = ", ".join(p.channel.canonical_name for p in run_pairs)
+        out.append(
+            {
+                "run_label": label,
+                "asset_uri": uri,
+                "url": presign(uri),
+                "alt": f"Run {label}: {names} over time, {run_pairs[0].window_text}",
+            }
+        )
+    return out
