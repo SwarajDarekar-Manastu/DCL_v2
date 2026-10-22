@@ -113,7 +113,7 @@ def test_identical_crops_cost_once(make_service):
     assert second.reading == first.reading
     assert len(client.calls) == 1
     assert list(cache.objects) == [
-        f"_vision_cache/gemini-3.5-flash-lite/triage_page.v1/{first.input_sha256}.json"
+        f"_vision_cache/gemini-3.1-flash-lite/triage_page.v1/{first.input_sha256}.json"
     ]
 
 
@@ -237,7 +237,7 @@ def test_production_cache_is_the_cir_bucket():
 
 
 def test_only_flash_lite_tasks_ask_for_minimal_thinking():
-    """gemini-3.8-flash rejects "minimal" thinking with a non-retryable 400; 3.5 Flash-Lite accepts it."""
+    """gemini-3.8-flash rejects "minimal" thinking with a non-retryable 400; 3.1 Flash-Lite accepts it."""
     minimal = {str(c) for c, t in TASKS.items() if t.thinking is ThinkingLevel.MINIMAL}
     assert minimal == {"triage_page", "classify_image"}
-    assert all(TASKS[c].model == "gemini-3.5-flash-lite" for c in minimal)
+    assert all(TASKS[c].model == "gemini-3.1-flash-lite" for c in minimal)
