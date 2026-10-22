@@ -43,3 +43,22 @@ def test_physics_and_summary_flags_and_chitchat_plans_nothing():
     summary = plan_for(intents=["document_summary"])
     assert summary.read_top_document and summary.calls[0].args.scope == Scope.PARENT
     assert plan_for(intents=["chitchat_or_out_of_scope"]).calls == []
+
+
+def external_plan(groups, **raw):
+    analysis = resolve(
+        QueryAnalysis(**raw), AliasIndex(), user_groups=groups, external_allowed_groups=["ext"]
+    )
+    return build_plan("question", analysis)
+
+
+def test_external_search_follows_the_policy():
+    assert external_plan(["ext"], intents=["fact_lookup"], external_requested=True).external == "yes"
+    assert external_plan(["ext"], intents=["design_synthesis"]).external == "if_gap"
+    assert external_plan(["ext"], intents=["fact_lookup"]).external == "no"
+    internal = external_plan(
+        ["ext"], intents=["fact_lookup"], external_requested=True, source_scope="internal_only"
+    )
+    assert internal.external == "no"
+    refused = external_plan(["eng"], intents=["fact_lookup"], external_requested=True)
+    assert refused.external == "no" and any("not enabled for your groups" in c for c in refused.caveats)

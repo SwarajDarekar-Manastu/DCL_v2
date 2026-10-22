@@ -346,6 +346,18 @@ def _log_trace(trace: dict) -> None:
     )
 
 
+def _external_policy(session) -> Any:
+    """File 07 §6 policy from `pipeline_config`: kill switch, allowed groups, proprietary terms."""
+    from backend.llm_engine.engine.tools.external import ExternalPolicy
+    from backend.postgres import pipeline_config
+
+    return ExternalPolicy(
+        enabled=bool(pipeline_config.get(session, "answer.external_search_enabled", True)),
+        allowed_groups=tuple(pipeline_config.get(session, "answer.external_allowed_groups", [])),
+        proprietary_terms=tuple(pipeline_config.get(session, "answer.proprietary_terms", [])),
+    )
+
+
 async def start_engine() -> None:
     """Build the workflow with its process-level clients and launch DBOS (decision H8). Idempotent."""
     async with _ENGINE_LOCK:
@@ -368,6 +380,7 @@ async def start_engine() -> None:
             alias_index=index_from_db,
             viewer_url=_viewer_url,
             save_trace=_log_trace,
+            external_policy=_external_policy,
         )
         database_url = settings.stack_database_url().get_secret_value().replace("+psycopg", "")
         runtime = build_runtime(database_url)
@@ -425,6 +438,9 @@ async def answer(
                 user_id=identity.user_id,
                 chat_id=request.chat_id,
                 message_id=request.message_id,
+                external_mode=request.options.benchmark.external_search
+                if request.options.benchmark
+                else None,
             )
             async for payload in ordered(handler.stream_events()):
                 yield to_sse(EVENTS.validate_python(payload))

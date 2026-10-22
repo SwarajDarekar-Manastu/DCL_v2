@@ -258,3 +258,21 @@ def test_retrieval_lab_needs_a_console_user_and_returns_the_search_result(monkey
     assert response.status_code == 200
     assert response.json()["dense_path"] == "exact"
     assert seen == {"query": "TP37 Pc", "k": 10, "rerank": None}
+
+
+def test_benchmark_mode_passes_the_external_search_mode_to_the_workflow(client):
+    pytest.importorskip("backend.llm_engine.engine.workflow")
+    fake = FakeEngine(FakeHandler([]))
+    body = json.dumps(
+        {
+            "messages": [{"role": "user", "content": "q?"}],
+            "chat_id": "c",
+            "message_id": "m",
+            "options": {"benchmark": {"case_id": "G-7", "case_version": 1, "external_search": "mock"}},
+        }
+    ).encode()
+    with_engine(client, fake).post("/v1/answer", content=body, headers=signed_headers(body))
+    assert fake.kwargs["external_mode"] == "mock"
+    plain = FakeEngine(FakeHandler([]))
+    with_engine(client, plain).post("/v1/answer", content=BODY, headers=signed_headers(BODY))
+    assert plain.kwargs["external_mode"] is None
