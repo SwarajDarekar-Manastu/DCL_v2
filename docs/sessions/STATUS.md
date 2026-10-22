@@ -542,3 +542,9 @@ Merged / ready: restart-resume test (`backend/tests/integration/llm_engine/engin
 Blocked on: nothing
 Needs from others: S4's 07965fd (GEMINI_MODEL / GEMINI_LITE_MODEL) on main, then I switch vision, analysis, synthesis, enrichment to the settings
 Next: T6 external_search (grounding, sanitized query only, external_queries in the trace), T2 when S1's telemetry tables land, T3, Skills
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: object-store evaluation `backend/devops/object_store_evaluation.md` + reusable `backend/devops/ci/s3_compat_check.py`: RustFS 1.0.3 passes every data-plane check and enforces lifecycle (recommended, pending a RustFS-native way to create the app user/policy); SeaweedFS 4.48 does not enforce lifecycle and has no admin API; Garage v2.4.1 has no versioning. Stack redeployed from main 72ae92f at migration 0009. Backups map marked deprecated (user decision)
+Blocked on: nothing
+Needs from others: Lead — decision on the object store before M6
+Next: Open WebUI service (DCL_OPENWEBUI_PORT 8300), Portainer in compose.dev.yaml, Console service with S3

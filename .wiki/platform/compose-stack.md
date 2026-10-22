@@ -76,6 +76,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | Object-store evaluation (`backend/devops/object_store_evaluation.md`, `backend/devops/ci/s3_compat_check.py`): RustFS 1.0.3 recommended over SeaweedFS 4.48 and Garage v2.4.1 |
 | 2026-10-22 | S4 | Office conversion service + client (unoserver dropped: inline and path-based xlsx loads fail on LibreOffice 7.4); verified rtf/doc→docx, docx→pdf, xls→xlsx, xlsx recalculation (stale 999 → 81), FMEA fixture → pdf |
 | 2026-10-22 | S4 | Dead-letter list and poison-task stop (`DclTask`), M1 queue load test harness (passed), 24 h lifecycle on `dcl-exports/uploads/` |
 | 2026-10-22 | S4 | `parse` image for cpu_parse (CPU torch via a group-scoped index; `models` and `parse` declared conflicting); `HF_HUB_DISABLE_XET=1`; observability services; `_incoming/` lifecycle rule; S1 process schedules |
