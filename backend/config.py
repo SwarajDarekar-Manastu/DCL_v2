@@ -186,6 +186,8 @@ class Settings(BaseSettings):
     console_group_admins: str | None = _env("DCL_CONSOLE_GROUP_ADMINS", default=None)
     console_group_external_search: str | None = _env("DCL_CONSOLE_GROUP_EXTERNAL_SEARCH", default=None)
     console_allowed_origins: CommaList = _env("DCL_CONSOLE_ALLOWED_ORIGINS", default_factory=list)
+    console_spa_client_id: str | None = _env("DCL_CONSOLE_SPA_CLIENT_ID", default=None)
+    console_api_scope: str | None = _env("DCL_CONSOLE_API_SCOPE", default=None)
     console_dev_auth: bool = _env("DCL_CONSOLE_DEV_AUTH", default=False)
     console_dev_token: SecretStr | None = _env("DCL_CONSOLE_DEV_TOKEN", default=None)
     console_dev_roles: CommaList = _env(

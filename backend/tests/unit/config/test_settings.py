@@ -489,3 +489,18 @@ def test_console_dev_auth_needs_a_long_token(monkeypatch, token):
         monkeypatch.setenv("DCL_CONSOLE_DEV_TOKEN", token)
     with pytest.raises(ConfigError, match="DCL_CONSOLE_DEV_TOKEN of 32\\+ chars"):
         load_settings(env_file=None)
+
+
+def test_console_spa_build_names_are_optional_and_read(monkeypatch):
+    settings = load_settings(env_file=None)
+    assert settings.console_spa_client_id is None and settings.console_api_scope is None
+    set_env(
+        monkeypatch,
+        {
+            "DCL_CONSOLE_SPA_CLIENT_ID": "1b2c3d4e-0000-4000-8000-000000000001",
+            "DCL_CONSOLE_API_SCOPE": "api://dcl/access",
+        },
+    )
+    settings = load_settings(env_file=None)
+    assert settings.console_spa_client_id == "1b2c3d4e-0000-4000-8000-000000000001"
+    assert settings.console_api_scope == "api://dcl/access"

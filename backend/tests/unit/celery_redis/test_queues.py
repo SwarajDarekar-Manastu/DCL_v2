@@ -131,6 +131,7 @@ def test_published_host_ports_follow_the_lead_allocation():
         "8500",
         "8200",
         "${DCL_GRAFANA_PORT:-3300}",
+        "8601",
     }
     data_ports = {name: svc["ports"] for name, svc in services.items() if name in ("postgres", "redis")}
     assert all(
