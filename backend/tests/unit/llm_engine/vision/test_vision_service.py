@@ -5,6 +5,8 @@ from backend.llm_engine.gemini_types import CapabilityUnavailable, Image, Struct
 from backend.llm_engine.vision.schemas import HandwritingReading, PageTriage
 from backend.llm_engine.vision.service import TASKS, VisionCapability, vision_cache
 
+VERSIONS = {VisionCapability.TRANSCRIBE_PAGE: 2}  # v2 (2026-10-22): page furniture as its own field
+
 PNG = Image(b"\x89PNG fake crop bytes", "image/png")
 OTHER_PNG = Image(b"\x89PNG another crop", "image/png")
 
@@ -99,7 +101,11 @@ def test_every_capability_renders_its_prompt_and_returns_its_schema(make_service
     service, client, _ = make_service(READINGS[capability])
     output = CALLS[capability](service)
     assert isinstance(output.reading, TASKS[capability].schema)
-    assert output.prompt_version == f"{capability}.v1"
+    assert (
+        output.prompt_version
+        == TASKS[capability].prompt_version
+        == f"{capability}.v{VERSIONS.get(capability, 1)}"
+    )
     assert client.calls[0]["model"] == TASKS[capability].model
     assert client.calls[0]["schema"] is TASKS[capability].schema
     assert client.contexts[0].purpose == f"vision.{capability}"
@@ -241,3 +247,19 @@ def test_only_flash_lite_tasks_ask_for_minimal_thinking():
     minimal = {str(c) for c, t in TASKS.items() if t.thinking is ThinkingLevel.MINIMAL}
     assert minimal == {"triage_page", "classify_image"}
     assert all(TASKS[c].model == "gemini-3.1-flash-lite" for c in minimal)
+
+
+def test_transcribe_page_v2_asks_for_furniture_and_the_schema_keeps_it():
+    from backend.llm_engine.prompts import load_prompt
+    from backend.llm_engine.vision.schemas import PageTranscription
+
+    prompt = load_prompt("vision", "transcribe_page.v2")
+    assert "furniture" in prompt.system and "Skip page headers" not in prompt.system
+    reading = PageTranscription.model_validate(
+        {"markdown": "x", "language": "en", "confidence": 0.9, "furniture": ["Test Plan 6"]}
+    )
+    assert reading.furniture == ["Test Plan 6"]
+    assert (
+        PageTranscription.model_validate({"markdown": "x", "language": "en", "confidence": 0.9}).furniture
+        == []
+    )

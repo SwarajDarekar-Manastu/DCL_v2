@@ -23,8 +23,16 @@ from pathlib import Path
 
 import yaml
 
-from backend.dispatcher.contract import DocumentFields, ExternalIds, Flag, FlagAnchor, SensitiveEvidence
-from backend.dispatcher.folder_context import FolderContext
+from backend.dispatcher.contract import (
+    ConflictEvidence,
+    ConflictSide,
+    DocumentFields,
+    ExternalIds,
+    Flag,
+    FlagAnchor,
+    SensitiveEvidence,
+)
+from backend.dispatcher.folder_context import PLAN_PATTERNS, FolderContext
 from backend.postgres.enums import DocKind, FlagSeverity, FlagType, SourceOrigin
 
 VENDORS_FILE = Path(__file__).resolve().parents[3] / "config" / "vendors.yaml"
@@ -130,6 +138,54 @@ def number_locale(text: str) -> str | None:
 def humanize(file_name: str) -> str:
     stem = Path(file_name).stem
     return re.sub(r"\s+", " ", re.sub(r"[_]+", " ", stem)).strip()
+
+
+def _plan_ids(text: str) -> list[tuple[str, str]]:
+    """(normalized plan id, the matched text) in reading order, with the dispatcher's patterns."""
+    found = []
+    for pattern in PLAN_PATTERNS:
+        for match in pattern.finditer(text):
+            found.append((match.start(), f"TP{int(match.group(1)):02d}", match.group(0)))
+    return [(plan, surface) for _, plan, surface in sorted(found)]
+
+
+def plan_conflicts(
+    folder: FolderContext, furniture: dict[int, list[str]], first_page_text: str
+) -> list[Flag]:
+    """File 03 §A1.3 (2026-10-22): a test plan id printed in the page furniture or on page 1 that differs
+    from the folder's raises CONFLICT SOFT naming both; the folder value stays `test_plan_id`."""
+    if not folder.test_plan_id:
+        return []
+    folder_source = next(
+        (i.source for i in folder.inferences.get("test_plan_id", []) if i.value == folder.test_plan_id),
+        "folder",
+    )
+    seen: set[str] = set()
+    flags = []
+    places = [(page, line, "header or footer") for page in sorted(furniture) for line in furniture[page]]
+    places += [(1, line, "text") for line in first_page_text.splitlines()]
+    for page, line, where in places:
+        for plan, surface in _plan_ids(line):
+            if plan == folder.test_plan_id or plan in seen:
+                continue
+            seen.add(plan)
+            flags.append(
+                Flag(
+                    flag_type=FlagType.CONFLICT,
+                    severity=FlagSeverity.SOFT,
+                    anchor=FlagAnchor(page=page),
+                    evidence=ConflictEvidence(
+                        subject="test_plan_id",
+                        a=ConflictSide(label="folder", value=folder.test_plan_id, provenance=folder_source),
+                        b=ConflictSide(
+                            label=f"page {page} {where}",
+                            value=plan,
+                            provenance=f"page {page} {where}: {line.strip()[:200]!r} ({surface!r})",
+                        ),
+                    ),
+                )
+            )
+    return flags
 
 
 def extract_metadata(

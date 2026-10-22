@@ -584,3 +584,9 @@ Merged / ready: T6 `external_search` (`backend/llm_engine/engine/tools/external.
 Blocked on: nothing
 Needs from others: S1 / Lead: seed `answer.external_allowed_groups` (e.g. the `dcl-external-search` group name the Pipe sends) and `answer.proprietary_terms`; until then nobody goes external. New key `answer.external_search_enabled` (kill switch, default on) for file 05's key list.
 Next: A1 transcribe_page v2 with furniture + test-plan CONFLICT (Lead confirmed), then T3, T2, Skills
+
+## 2026-10-22 21:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: A1 page furniture and the test-plan CONFLICT (file 03 §A1.3 as amended): `transcribe_page.v2` returns printed headers/footers as `furniture` (live-checked on S5's fixtures: the DOI paper's running head and the German datasheet's footer land in furniture, not in the body); `plan_conflicts` raises CONFLICT SOFT for a plan id in furniture or page-1 text that differs from the folder's (folder value stays). A Gemini error on `transcribe_page` now keeps the OCR text with LOW_CONFIDENCE SOFT instead of failing the document; seen live: a first wording of v2 got `block_reason=SAFETY` on the HTP paper, the neutral wording passes 3/3.
+Blocked on: nothing
+Needs from others: S5: the real TP7 sheet through A1 once the samples are local, to confirm the footer reaches furniture on that scan
+Next: T3 inspect_visuals, T2 query_telemetry (S1's telemetry tables), Skills

@@ -84,6 +84,9 @@ class PageTranscription(Reading):
     language: str
     confidence: Confidence
     illegible_regions: list[Box2D] = Field(default_factory=list)
+    furniture: list[str] = Field(
+        default_factory=list, description="printed headers, footers and margin identifiers, top first (v2)"
+    )
 
     @field_validator("illegible_regions")
     @classmethod

@@ -5,7 +5,7 @@ import pytest
 pdfium = pytest.importorskip("pypdfium2")
 
 from backend.dispatcher.folder_context import build_folder_context  # noqa: E402
-from backend.postgres.enums import DocKind, FlagType, SourceOrigin  # noqa: E402
+from backend.postgres.enums import DocKind, FlagSeverity, FlagType, SourceOrigin  # noqa: E402
 from backend.routes.a1_office.metadata import (  # noqa: E402
     Vendor,
     extract_metadata,
@@ -155,3 +155,45 @@ def test_number_locale(text, locale):
 
 def test_title_falls_back_to_the_humanized_file_name():
     assert humanize("Test_Report_37_final.pdf") == "Test Report 37 final"
+
+
+# ---------------------------------------------------------------- test plan id in the furniture (2026-10-22)
+
+
+def tp7_folder():
+    return build_folder_context("APS", ["APS", "Test Campaign 2", "TP7", "Handwritten"], "sheet_03.pdf")
+
+
+def test_a_footer_plan_id_that_differs_from_the_folder_is_a_soft_conflict():
+    from backend.routes.a1_office.metadata import plan_conflicts
+
+    folder = tp7_folder()
+    assert folder.test_plan_id == "TP07"
+    [flag] = plan_conflicts(
+        folder, {3: ["Test Campaign 2 - Test Plan 6", "Page 3 of 4"]}, "Injector cold flow"
+    )
+    assert flag.flag_type == FlagType.CONFLICT and flag.severity == FlagSeverity.SOFT
+    assert flag.anchor.page == 3
+    evidence = flag.evidence
+    assert evidence.subject == "test_plan_id"
+    assert (evidence.a.value, evidence.b.value) == ("TP07", "TP06")
+    assert "Test Plan 6" in evidence.b.provenance and "header or footer" in evidence.b.label
+    assert evidence.a.provenance != ""  # where the folder value came from
+
+
+def test_page_one_text_conflicts_too_and_agreement_or_no_folder_plan_raises_nothing():
+    from backend.routes.a1_office.metadata import plan_conflicts
+
+    folder = tp7_folder()
+    [flag] = plan_conflicts(folder, {}, "Setup sheet\nHeader: TP6 rev B\nTP 7 run log")
+    assert flag.anchor.page == 1 and flag.evidence.b.value == "TP06"
+    assert plan_conflicts(folder, {1: ["TP07 - Test Plan 7"]}, "TP7 run 4") == []
+    loose = build_folder_context("APS", ["APS", "Misc"], "sheet.pdf")
+    assert plan_conflicts(loose, {1: ["Test Plan 6"]}, "") == []
+
+
+def test_each_conflicting_plan_is_flagged_once():
+    from backend.routes.a1_office.metadata import plan_conflicts
+
+    flags = plan_conflicts(tp7_folder(), {1: ["Test Plan 6"], 2: ["Test Plan 6"], 3: ["TP08"]}, "")
+    assert [(f.anchor.page, f.evidence.b.value) for f in flags] == [(1, "TP06"), (3, "TP08")]

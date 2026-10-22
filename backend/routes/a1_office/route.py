@@ -16,6 +16,7 @@ Not yet here: the visual-twin check and page map (A1.0), DOCX/PPTX (A1.9–A1.10
 
 import hashlib
 import json
+import logging
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
@@ -31,12 +32,12 @@ from backend.dispatcher.contract import (
     UnitHash,
 )
 from backend.dispatcher.folder_context import FolderContext
-from backend.llm_engine.gemini_types import Image
+from backend.llm_engine.gemini_types import GeminiError, Image
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType, Route
 from backend.routes.a1_office.convert import OcrPlan, Run, RunResult, convert_run, low_ocr_pages, plan_runs
 from backend.routes.a1_office.figures import read_figures
 from backend.routes.a1_office.handwriting import transcribe_regions
-from backend.routes.a1_office.metadata import extract_metadata, humanize
+from backend.routes.a1_office.metadata import extract_metadata, humanize, plan_conflicts
 from backend.routes.a1_office.preflight import Preflight, PreflightFailure, preflight, render_page
 from backend.routes.a1_office.structure import PageContext, build_structure
 from backend.routes.a1_office.tables_qa import check_tables
@@ -44,6 +45,8 @@ from backend.routes.a1_office.triage import PageDecision, triage_pages
 
 PARSER_VERSION = 1
 RENDER_DPI = 150
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -157,19 +160,25 @@ def process_pdf(
         [r.document for r in results], page_contexts, fallback_title=humanize(file_name)
     )
     nodes: list[ProcessedNode] = structure.nodes
+    furniture = {page: list(lines) for page, lines in structure.furniture.items()}
     flags: list[Flag] = []
     assets: list[ProcessedAsset] = []
 
     for page_no in still_low:
+        reading = None
         if cloud_allowed:
             image = Image(render_page(pdf, page_no, dpi=200), "image/png")
-            reading = vision.transcribe_page(
-                image,
-                context=context,
-                language_hint=by_page[page_no].language,
-                doc_id=doc_id,
-                anchor=f"page:{page_no}:",
-            ).reading
+            try:
+                reading = vision.transcribe_page(
+                    image,
+                    context=context,
+                    language_hint=by_page[page_no].language,
+                    doc_id=doc_id,
+                    anchor=f"page:{page_no}:",
+                ).reading
+            except GeminiError as exc:  # e.g. a safety block on propellant chemistry: keep the OCR text
+                log.warning("transcribe_page failed on page %s of %s: %s", page_no, file_name, exc)
+        if reading is not None:
             keep = [n for n in nodes if n.page_no != page_no]
             crumb = next(
                 (n.breadcrumb for n in nodes if n.page_no == page_no), structure.title or humanize(file_name)
@@ -189,6 +198,8 @@ def process_pdf(
                 )
                 for i, p in enumerate(paragraphs)
             ]
+            # v2: the model's headers and footers replace the failed OCR's, one printed line each
+            furniture[page_no] = [line for f in reading.furniture for line in f.splitlines() if line.strip()]
             passes[page_no] = "transcribe_page"
         else:
             flags.append(
@@ -199,7 +210,7 @@ def process_pdf(
                     evidence=LowConfidenceEvidence(),
                 )
             )
-            passes[page_no] = "ocr_low"
+            passes[page_no] = "transcribe_failed" if cloud_allowed else "ocr_low"
     nodes = sorted(nodes, key=lambda n: (n.page_no or 0, n.ordinal))
 
     figures = read_figures(
@@ -246,12 +257,13 @@ def process_pdf(
         title=structure.title,
         first_page_text=page_text.get(1, ""),
         full_text="\n".join(page_text.values()),
-        furniture=[t for p in sorted(structure.furniture) for t in structure.furniture[p]],
+        furniture=[t for p in sorted(furniture) for t in furniture[p]],
         folder=folder,
         page_languages=[d.language for d in decisions],
         page_count=checked.page_count,
     )
     flags += metadata.flags
+    flags += plan_conflicts(folder, furniture, page_text.get(1, ""))
 
     for page_no in range(1, checked.page_count + 1):
         uri = stores.put_asset(
