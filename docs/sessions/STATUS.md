@@ -590,3 +590,13 @@ Merged / ready: frontend/openwebui/install_functions.py with a README. It create
 Blocked on: syncing with main. The app refuses the merge because main changes .claude/launch.json and the repository origin is not yet confirmed by the user (Help › Troubleshooting › Review Pinned Git Origins).
 Needs from others: S4 to wire the Console container into compose (build args VITE_*, a published port matching DCL_CONSOLE_BASE_URL, healthcheck /healthz) and to tell me when Open WebUI is up; the user to create the Open WebUI admin account and API key, then run the install script. Lead: the decision on the dev-only backend sign-in (option b) is with the user.
 Next: verify the install against the running Open WebUI once the admin account exists.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- Dev-only backend sign-in (user-approved, hardened). auth.py accepts the DCL_CONSOLE_DEV_TOKEN bearer as the dev identity only with DCL_ENV=dev and DCL_CONSOLE_DEV_AUTH=true; the comparison is constant-time and every use logs a warning. The flag outside dev, a short token or an unknown role answers 503. The websocket works the same way.
+- vite.config.ts defines VITE_DEV_TOKEN from the repository .env under the dev server only; no build contains it (grep-checked). The client-side fake user is removed, so roles come from /auth/me. The session config test is hermetic.
+- Checked end to end with the real API app and the Vite dev server: signed in as reviewer, live channel open.
+- Tests: backend unit 1163 passed, frontend 91.
+Blocked on: nothing. S4 adds console_dev_auth, console_dev_token and console_dev_roles plus the start-up refusal; auth.py reads them with a safe default (off) until then.
+Needs from others: S4 as above.
+Next: review and merge the Lead's background Console redesign branch when it arrives; Settings editing after S1's settings API.

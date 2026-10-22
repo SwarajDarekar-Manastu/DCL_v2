@@ -3,7 +3,6 @@
 import { ApiError, configureApi, getMe, type ConsoleUser } from '$lib/api_endpoint';
 import { getConfig, type ConsoleConfig } from '$lib/config';
 import { createDevAuth, createMsalAuth, type AuthClient } from './msal';
-import type { ConsoleRole } from './roles';
 
 export type SessionStatus = 'loading' | 'signed_out' | 'signed_in' | 'error';
 
@@ -29,7 +28,7 @@ export async function startSession(configOverride?: ConsoleConfig, auth?: AuthCl
 	session.error = '';
 	try {
 		const config = configOverride ?? getConfig();
-		session.auth = auth ?? (config.auth.mode === 'dev' ? createDevAuth() : createMsalAuth(config.auth));
+		session.auth = auth ?? (config.auth.mode === 'dev' ? createDevAuth(config.auth.devToken) : createMsalAuth(config.auth));
 		const client = session.auth;
 		configureApi({ baseUrl: config.apiBaseUrl, wsUrl: config.wsUrl, getToken: () => client.getToken() });
 		const accountName = await client.init();
@@ -37,10 +36,7 @@ export async function startSession(configOverride?: ConsoleConfig, auth?: AuthCl
 			session.status = 'signed_out';
 			return;
 		}
-		session.user =
-			config.auth.mode === 'dev'
-				? { oid: 'dev', name: accountName, email: 'dev@localhost', roles: config.auth.devRoles as ConsoleRole[] }
-				: await getMe();
+		session.user = await getMe(); // roles always come from the server, in dev sign-in too
 		session.status = 'signed_in';
 	} catch (error) {
 		session.status = 'error';

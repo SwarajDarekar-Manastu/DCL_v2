@@ -12,7 +12,8 @@ export interface ConsoleConfig {
 		apiScope: string;
 		authority: string;
 		redirectUri: string;
-		devRoles: string[];
+		/** Dev-only sign-in token, set by vite.config.ts under the dev server only */
+		devToken: string;
 	};
 }
 
@@ -34,6 +35,10 @@ export function buildConfig(env: Env, origin: string): ConsoleConfig {
 	}
 	if (mode === 'dev' && env.DEV !== true) {
 		throw new ConfigError('VITE_AUTH_MODE=dev is only allowed under the Vite dev server');
+	}
+	const devToken = str(env, 'VITE_DEV_TOKEN');
+	if (mode === 'dev' && !devToken) {
+		throw new ConfigError('VITE_AUTH_MODE=dev needs DCL_CONSOLE_DEV_TOKEN in the repository .env (dev sign-in)');
 	}
 	const tenantId = str(env, 'VITE_ENTRA_TENANT_ID');
 	const clientId = str(env, 'VITE_ENTRA_CLIENT_ID');
@@ -58,7 +63,7 @@ export function buildConfig(env: Env, origin: string): ConsoleConfig {
 			apiScope,
 			authority: `https://login.microsoftonline.com/${tenantId}`,
 			redirectUri: origin + '/',
-			devRoles: (str(env, 'VITE_DEV_ROLES') || 'viewer,reviewer,admin').split(',').map((r) => r.trim())
+			devToken
 		}
 	};
 }

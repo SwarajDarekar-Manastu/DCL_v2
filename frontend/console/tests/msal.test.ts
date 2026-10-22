@@ -9,7 +9,7 @@ const AUTH = {
 	apiScope: 'api://dcl-console-api/access_as_user',
 	authority: 'https://login.microsoftonline.com/tenant-1',
 	redirectUri: 'https://console/',
-	devRoles: []
+	devToken: ''
 };
 const ACCOUNT = { name: 'Asha Rao', username: 'asha@manastuspace.com', homeAccountId: 'h' };
 

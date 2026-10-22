@@ -30,9 +30,12 @@ describe('buildConfig', () => {
 
 	it('allows dev auth only under the Vite dev server', () => {
 		expect(() => buildConfig({ VITE_AUTH_MODE: 'dev', DEV: false }, 'http://x')).toThrow(ConfigError);
-		const config = buildConfig({ VITE_AUTH_MODE: 'dev', DEV: true, VITE_DEV_ROLES: 'viewer' }, 'http://x');
+		expect(() => buildConfig({ VITE_AUTH_MODE: 'dev', DEV: true }, 'http://x')).toThrow(
+			new ConfigError('VITE_AUTH_MODE=dev needs DCL_CONSOLE_DEV_TOKEN in the repository .env (dev sign-in)')
+		);
+		const config = buildConfig({ VITE_AUTH_MODE: 'dev', DEV: true, VITE_DEV_TOKEN: 't'.repeat(40) }, 'http://x');
 		expect(config.auth.mode).toBe('dev');
-		expect(config.auth.devRoles).toEqual(['viewer']);
+		expect(config.auth.devToken).toBe('t'.repeat(40));
 	});
 
 	it('refuses an unknown auth mode', () => {

@@ -37,14 +37,14 @@ Provides:
 - Console: `api_endpoint.ts` (`configureApi`, `getMe`, `openLiveChannel`, `ApiError`), `session`, `hasRole`, `RoleGate`
 
 Consumes:
-- `backend.config.get_settings()` attributes `tenant_id`, `console_api_audience`, `console_group_reviewers`, `console_group_admins`, `console_allowed_origins`, `redis_url` (S4; names proposed 2026-10-21, pending in file 01 §7.1)
+- `backend.config.get_settings()` attributes `tenant_id`, `console_api_audience`, `console_group_reviewers`, `console_group_admins`, `console_allowed_origins`, `redis_url`, `env`, and `console_dev_auth`, `console_dev_token`, `console_dev_roles` (S4; read with a safe default until S4's loader has them)
 - Entra ID: one SPA app registration (redirect URI = Console origin) and one API registration exposing `access_as_user`, `accessTokenAcceptedVersion = 2`, groups claim limited to groups assigned to the application
 
 Role rule: any authenticated user of the tenant is `viewer`; `dcl-reviewers` adds `reviewer`; `dcl-admins` adds `reviewer` and `admin`. Roles always come from the server (`/auth/me`), never from the client token. Tokens with group overage are refused with 403. Nav visibility: Review and Audit need reviewer, Settings needs admin, the rest viewer.
 
 After a redirect sign-in MSAL returns to the page that asked for it (`navigateToLoginRequestUrl`, `redirectStartPage`), so a citation opened while signed out lands on that citation.
 
-Dev mode: `VITE_AUTH_MODE=dev` (roles from `VITE_DEV_ROLES`) works only under the Vite dev server; the backend has no bypass.
+Dev-only sign-in (user-approved exception, DECISIONS 2026-10-22): the backend accepts `Authorization: Bearer <DCL_CONSOLE_DEV_TOKEN>` as a fixed dev identity (`dev-sign-in`, roles from `DCL_CONSOLE_DEV_ROLES`) only when `DCL_ENV=dev` and `DCL_CONSOLE_DEV_AUTH=true`; constant-time comparison; every use logged as a warning; the flag outside dev answers 503 with a critical log (S4's loader also refuses to start); a token shorter than 32 characters or an unknown role answers 503. The Entra path is unchanged and still answers 503 naming missing settings. `VITE_AUTH_MODE=dev` works only under the Vite dev server: `vite.config.ts` defines `VITE_DEV_TOKEN` from the repository `.env` when serving in development only, so builds never contain it (checked by grepping the build). The user and roles come from `GET /auth/me`; there is no client-side fake user. The websocket accepts the dev token the same way.
 
 ## Workspace (files to touch when modifying this feature)
 
@@ -58,6 +58,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `frontend/console/src/lib/components/shell/`
 - `frontend/console/src/routes/{+layout.svelte,+layout.ts,+page.svelte}`
 - `frontend/console/{Dockerfile,nginx.conf,.dockerignore}`
+- `frontend/console/vite.config.ts` (dev sign-in token, dev server only)
 - `backend/api/auth.py`
 - `backend/api/ws.py`
 - `frontend/console/tests/`
@@ -69,7 +70,9 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] Unauthorized routes are blocked server-side (`require_role`: 401 without or with a bad token, 403 for a missing role; websocket topics gated by role)
 - [x] Websocket refuses unauthenticated sockets (4401) and delivers only subscribed topics
 - [x] Only `api_endpoint.ts` fetches or opens a websocket (grep)
-- [ ] `auth.py` runs against the real settings object (waits for S4's Console auth attributes) and a login against the real tenant is demonstrated
+- [x] `auth.py` runs against the real settings object
+- [x] Dev-only sign-in: guards tested (env, flag, token length, roles, wrong token), end to end with the real API app and the Vite dev server, no token in builds
+- [ ] A login against the real tenant is demonstrated (after the user registers Entra ID)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 Verify:
@@ -86,6 +89,7 @@ Known: `npm audit` reports a low-severity advisory in `cookie` (pulled in by Sve
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S3 | Dev-only backend sign-in (user-approved, hardened); client-side fake user removed; hermetic config test |
 | 2026-10-22 | S3 | Console container (Dockerfile, nginx SPA fallback); sign-in returns to the requested page |
 | 2026-10-21 | S3 | Shell, MSAL login, server role mapping, `/auth/me`, `/ws` with Redis bridge, tests |
 
