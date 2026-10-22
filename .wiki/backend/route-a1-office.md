@@ -68,6 +68,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S2 | Docling converters cached per OCR plan in the worker (measured in the parse worker: text layer 13.1 s → 2.1 s, Tesseract 5.9 s → 3.7 s per run; two converters peak 2.2 GB); Docling's OSD "Too few characters" error on near-empty scanned pages logged as INFO (OCR proceeds with the explicit script model; seen on doc 1539b6b4, the Rafael valves datasheet); 1 test |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S2 | Page furniture kept for the plan extractor (`transcribe_page.v2`), test-plan `CONFLICT` from furniture / page-1 text, blocked transcription degrades to OCR; 6 tests |
 | 2026-10-22 | S2 | Figures, tables QA, handwriting and `process_pdf` assembly; Tesseract script models; 38 tests (route tests run real Docling on S5's digital fixtures) |
