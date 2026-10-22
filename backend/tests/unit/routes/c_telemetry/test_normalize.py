@@ -232,3 +232,34 @@ def test_sanity_ranges_first_match_wins():
     assert matching_range(ranges, Quantity.FORCE, "thrust_n") is None
     flow = matching_range(ranges, Quantity.MASS_FLOW_RATE, "mdot_g_s")
     assert in_bounds(4999.0, flow, "gram / second") and not in_bounds(5001.0, flow, "gram / second")
+
+
+def test_a_valve_signal_is_open_at_its_threshold(tmp_path):
+    """S5 measured the logged signal near 5.3 when open with ramped edges; 2.5 matches the SME window."""
+    t = np.arange(0, 3, 0.001)
+    signal = np.interp(t, [0, 0.999, 1.0, 1.003, 2.0, 2.003, 3], [0, 0, 1.5, 5.3, 5.3, 2.3, 0])
+    write_raw(tmp_path / "raw.parquet", Time=t, y7=signal)
+    valve = entry(
+        canonical_name="valve_signal",
+        physical_quantity="valve_state",
+        unit="dimensionless",
+        open_threshold=2.5,
+    )
+    plan = plan_channel("y7", valve, None, None)
+    run = normalize_run(
+        tmp_path / "raw.parquet", "Time", [plan], tmp_path / "n.parquet", NormalizeConfig(), {}
+    )
+    state = pq.read_table(tmp_path / "n.parquet")["valve_signal"].to_numpy()
+    opened = t[state == 1.0]
+    assert set(np.unique(state)) == {0.0, 1.0}
+    assert opened[0] == pytest.approx(1.001, abs=0.0011) and opened[-1] == pytest.approx(2.002, abs=0.0005)
+    assert run.t0.method == "valve_state rising edge" and run.t0.t_ms == pytest.approx(opened[0] * 1000)
+    assert plan.conversion["open_threshold"] == 2.5
+    with pytest.raises(ValueError, match="valve_state channels only"):
+        entry(
+            canonical_name="p",
+            physical_quantity="pressure",
+            unit="bar",
+            gauge_or_abs="gauge",
+            open_threshold=1,
+        )

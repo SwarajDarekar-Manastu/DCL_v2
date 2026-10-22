@@ -44,6 +44,7 @@ STEADY_AFTER_T0_MS = 1000.0
 STEADY_MIN_MS = 500.0
 STEADY_NEAR_TOP = 0.5
 SATURATION_SAMPLES = 20
+DEFAULT_VALVE_OPEN = 0.5
 
 
 @dataclass(frozen=True)
@@ -142,11 +143,16 @@ class ChannelPlan:
     range_min_si: float | None = None
     range_max_si: float | None = None
     rule_unit: str | None = None
+    open_threshold: float | None = None
 
     def convert(self, raw: np.ndarray) -> np.ndarray:
+        """SI values; a ``valve_state`` channel becomes 1 (open) / 0 (closed) at ``open_threshold``."""
         value = compile_expression(self.expression)(raw) if self.expression else raw * self.scaling_slope
         if not self.expression:
             value = value + self.scaling_offset
+        if self.quantity == Quantity.VALVE_STATE:
+            threshold = DEFAULT_VALVE_OPEN if self.open_threshold is None else self.open_threshold
+            return np.where(np.isnan(value), np.nan, (value >= threshold).astype(np.float64))
         return value * self.to_si_slope + self.to_si_offset
 
     @property
@@ -157,6 +163,8 @@ class ChannelPlan:
             out["expression"] = self.expression
         elif (self.scaling_slope, self.scaling_offset) != (1.0, 0.0):
             out["scaling"] = [self.scaling_slope, self.scaling_offset]
+        if self.quantity == Quantity.VALVE_STATE:
+            out["open_threshold"] = DEFAULT_VALVE_OPEN if self.open_threshold is None else self.open_threshold
         if self.abs_column:
             out["abs_column"] = self.abs_column
             out["ambient_bar_abs"] = self.ambient_bar_abs
@@ -238,6 +246,7 @@ def plan_channel(
         range_min_si=entry.range_min * slope + offset if entry.range_min is not None else None,
         range_max_si=entry.range_max * slope + offset if entry.range_max is not None else None,
         rule_unit=entry.unit,
+        open_threshold=entry.open_threshold,
     )
 
 

@@ -149,11 +149,17 @@ class ChannelMapEntry(_Model):
     sensor_tag: str | None = None
     range_min: float | None = None
     range_max: float | None = None
+    open_threshold: float | None = Field(
+        default=None,
+        description="valve_state only: value (after scaling) at which the valve counts as open; default 0.5",
+    )
 
     @model_validator(mode="after")
     def _one_conversion(self) -> Self:
         if self.scaling is not None and self.expression is not None:
             raise ValueError("a channel uses scaling or expression, not both")
+        if self.open_threshold is not None and self.physical_quantity != Quantity.VALVE_STATE:
+            raise ValueError("open_threshold applies to valve_state channels only")
         return self
 
 
