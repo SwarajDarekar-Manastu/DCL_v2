@@ -740,3 +740,9 @@ Merged / ready: on the branch for the single merge request after the watch check
 Blocked on: time. The RustFS step 2 lifecycle watch is due by 2026-10-24 00:00Z
 Needs from others: nothing
 Next: after 2026-10-24 00:00Z run `lifecycle_watch.py check`, then the merge request (the api and workers need a rebuild from main after it for httpfs)
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: redeploy from main 4924253: migrate to 0010 (users table present), api, beat and five workers rebuilt and healthy, 11 stack tests green; worker-cpu-parse kept on the 9a20edc build so S1's A1 batch was not interrupted
+Blocked on: time. The RustFS step 2 lifecycle watch is due by 2026-10-24 00:00Z
+Needs from others: Lead — when to recreate cpu_parse (after S1's batch drains), and whether to rebuild the console from 4924253
+Next: lifecycle_watch.py check after 2026-10-24 00:00Z, then the merge request (f7fdefb, step 3, httpfs 80ccc4b, step 2)
