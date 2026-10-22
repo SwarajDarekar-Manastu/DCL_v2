@@ -424,35 +424,43 @@ def _telemetry_connect(settings) -> Any:
     return connect
 
 
+def engine_deps(settings) -> Any:
+    """The workflow's process-level clients (Gemini, models, database, MinIO, DuckDB); shared with the
+    benchmark runner so a benchmark answer takes the same code path as chat."""
+    if settings.models_url is None:
+        raise ConfigError("DCL_MODELS_URL is required by the Answer Engine")
+    from backend.llm_engine.engine.workflow import EngineDeps
+    from backend.llm_engine.enrichment.entities import index_from_db
+    from backend.llm_engine.gemini_client import GeminiClient
+    from backend.llm_engine.local_models import ModelsClient
+
+    models = ModelsClient(base_url=str(settings.models_url))
+    presign, fetch_asset, put_asset = _asset_access(settings)
+    return EngineDeps(
+        gemini=GeminiClient(settings),
+        session_factory=_session_factory(),
+        embed_query=lambda q: models.embed_queries([q])[0],
+        rerank=models.rerank,
+        alias_index=index_from_db,
+        viewer_url=_viewer_url,
+        save_trace=_log_trace,
+        external_policy=_external_policy,
+        presign=presign,
+        fetch_asset=fetch_asset,
+        put_asset=put_asset,
+        telemetry_connect=_telemetry_connect(settings),
+    )
+
+
 async def start_engine() -> None:
     """Build the workflow with its process-level clients and launch DBOS (decision H8). Idempotent."""
     async with _ENGINE_LOCK:
         if "workflow" in _ENGINE:
             return
         settings = get_settings()
-        if settings.models_url is None:
-            raise ConfigError("DCL_MODELS_URL is required by the Answer Engine")
-        from backend.llm_engine.engine.workflow import AnswerWorkflow, EngineDeps, build_runtime
-        from backend.llm_engine.enrichment.entities import index_from_db
-        from backend.llm_engine.gemini_client import GeminiClient
-        from backend.llm_engine.local_models import ModelsClient
+        from backend.llm_engine.engine.workflow import AnswerWorkflow, build_runtime
 
-        models = ModelsClient(base_url=str(settings.models_url))
-        presign, fetch_asset, put_asset = _asset_access(settings)
-        deps = EngineDeps(
-            gemini=GeminiClient(settings),
-            session_factory=_session_factory(),
-            embed_query=lambda q: models.embed_queries([q])[0],
-            rerank=models.rerank,
-            alias_index=index_from_db,
-            viewer_url=_viewer_url,
-            save_trace=_log_trace,
-            external_policy=_external_policy,
-            presign=presign,
-            fetch_asset=fetch_asset,
-            put_asset=put_asset,
-            telemetry_connect=_telemetry_connect(settings),
-        )
+        deps = engine_deps(settings)
         database_url = settings.stack_database_url().get_secret_value().replace("+psycopg", "")
         runtime = build_runtime(database_url)
         workflow = AnswerWorkflow(deps, runtime=runtime, workflow_name="answer", timeout=ANSWER_TIMEOUT_S)

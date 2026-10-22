@@ -385,13 +385,21 @@ def search(
     ordered = _drop_near_duplicates(ordered, _near_duplicates(session, doc_ids), documents)
 
     hits = []
-    for c in ordered[:k]:
+    unanchored: set[uuid.UUID] = set()
+    for c in ordered:
+        if len(hits) == k:
+            break
+        try:
+            anchor = _anchor(c.best, c.parent)
+        except AnchorError:
+            unanchored.add(c.best.doc_id)  # a route wrote a node without a locator: not citable, skipped
+            continue
         doc = documents.get(c.best.doc_id)
         hits.append(
             Hit(
                 doc_id=c.best.doc_id,
                 title=doc.title if doc else None,
-                anchor=_anchor(c.best, c.parent),
+                anchor=anchor,
                 parent_text=c.parent.content,
                 passage=c.best.content,
                 node_type=c.best.node_type,
@@ -412,6 +420,11 @@ def search(
                 rerank_score=c.rerank_score,
                 also_in=c.also_in,
             )
+        )
+    if unanchored:
+        warnings.append(
+            f"{len(unanchored)} document(s) skipped: their passages have no page, line, time or cell locator "
+            f"({', '.join(sorted(str(d) for d in unanchored)[:3])})"
         )
     return SearchResult(
         hits=hits,

@@ -788,3 +788,18 @@ Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest -q`: 
 Blocked on: nothing
 Needs from others: S3: regenerate `api_schema.d.ts` (review routes live, `Suggestion.resolution` nullable); users store emails must be lower-case (S3 lowercases on create; keep it on update). S5: pick the MULTILINGUAL folder from the 8.
 Next: report the A1 counts and the M2 TP7 check when the A1 batch ends
+
+## 2026-10-23 04:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: benchmark runner, metrics and judge (`backend/benchmark/{metrics,judge,runner,tasks}.py`, prompt `benchmark/judge.v1`, map `backend/benchmark-runner`).
+- The runner claims a queued run and snapshots the model config, pipeline version and ACTIVE document count. It answers each case through `AnswerWorkflow` in process, with external search mocked: no network, checked by a test.
+- It scores each case per file 08 §5.4, classifies failures, writes `benchmark_results`, keeps the aggregate current and publishes `run` progress and finished events.
+- A cancelled run stops between cases. A redelivered run resumes only the cases without a result.
+- Celery on io_light, one task per case (soft limit 300 s): `dcl.benchmark.start`, `dcl.benchmark.case`, and `dcl.benchmark.sweep` (starts queued runs; re-enqueues the cases of a run whose Redis heartbeat expired).
+- Also in this merge:
+  - Retrieval no longer fails a whole search on a node without a locator; it skips the node with a warning. Seen live: Route C table and table_row nodes (503 rows) carry no page, line, time or cells.
+  - T2 pressure units are now `barg`/`bara`, because pint read "bar g" as bar·gram.
+  - `engine_deps(settings)` is shared by the API and the runner.
+- Live: one benchmark answer went through the stack (Gemini, models, DB), was scored and its citations resolved to file names (76 s).
+Blocked on: nothing
+Needs from others: S4: add `backend.benchmark.tasks` to `TASK_MODULES` and a beat entry `dcl.benchmark.sweep` every 60 s on io_light. Optional: a queue with a longer soft limit if 300 s per case proves short (one live answer took 76 s). S1: Route C `table`/`table_row` nodes need a locator (`sheet_name` + `cell_range`, or `line_start` for CSV rows); until then they cannot be cited. S3 (optional): send `dcl.benchmark.start` on `POST /benchmark/runs` so a run starts without waiting up to a minute for the sweep.
+Next: idle until messaged

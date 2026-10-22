@@ -448,7 +448,7 @@ def test_visual_lookup_runs_t3_looks_again_and_streams_a_photo_strip(searches, m
     assert any(s.get("tool") == "inspect_visuals" and s["done"] for s in of(events, "step"))
 
 
-MEASURED = "Run TP07_T04 · chamber_pressure → p_chamber_1_bar_g (bar g, gauge): peak_50ms 12.38 bar g"
+MEASURED = "Run TP07_T04 · chamber_pressure → p_chamber_1_bar_g (barg, gauge): peak_50ms 12.38 barg"
 
 
 def test_telemetry_question_runs_t2_with_extracted_arguments(searches, monkeypatch):
@@ -471,9 +471,9 @@ def test_telemetry_question_runs_t2_with_extracted_arguments(searches, monkeypat
         telemetry_args=[{"channels": ["chamber_pressure"], "metrics": ["peak_50ms"]}],
         synthesis=[
             {
-                "answer_markdown": "The 50 ms peak chamber pressure was 12.38 bar g [1].",
+                "answer_markdown": "The 50 ms peak chamber pressure was 12.38 barg [1].",
                 "claims": [
-                    {"text": "peak 12.38 bar g", "kind": "numeric", "evidence_ids": ["E1"]},
+                    {"text": "peak 12.38 barg", "kind": "numeric", "evidence_ids": ["E1"]},
                 ],
             }
         ],
@@ -543,3 +543,21 @@ def test_the_hint_must_be_an_intent():
     assert AnswerOptions(playbook_hint="telemetry_metric").playbook_hint == "telemetry_metric"
     with pytest.raises(ValidationError):
         AnswerOptions(playbook_hint="drop_tables")
+
+
+def test_benchmark_answers_take_the_chat_path_and_mock_makes_no_network_call(searches, monkeypatch):
+    from backend.benchmark.runner import workflow_answer
+
+    async def no_network(*args, **kwargs):
+        raise AssertionError("benchmark mock mode must not reach the network")
+
+    monkeypatch.setattr(external_tools, "resolve_redirect", no_network)
+    monkeypatch.setattr(external_tools, "arxiv", no_network)
+    searches(report_hit)
+    client = external_client(["fact_lookup"], synthesis=SYNTH)
+    logged = []
+    answer = workflow_answer(deps(client, logged, ALLOWED))  # the benchmark caller is in the allowed group
+    done, trace = asyncio.run(answer("Search the web for catalyst preheat", "", "mock"))
+    assert done["mode"] == "answered" and trace is logged[0]  # captured and still logged like chat
+    assert trace["external_queries"][0]["provider"] == "mock"
+    assert "external_search" not in client.purposes  # no grounded Gemini search either

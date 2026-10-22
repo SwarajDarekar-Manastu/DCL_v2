@@ -195,7 +195,7 @@ def test_whole_run_metrics_reproduce_route_c_and_numpy(engine, data):
     assert got["mean"] == pytest.approx(x.mean(), rel=1e-9)
     assert got["p99"] == pytest.approx(np.percentile(x, 99), rel=1e-9)
     assert got["time_to_peak"] == pytest.approx(0.5)  # the spike at 1.5 s, t0 = 1.0 s
-    assert f"peak_50ms {fmt(stored.peak_50ms)} bar g" in result.display
+    assert f"peak_50ms {fmt(stored.peak_50ms)} barg" in result.display
     assert "t0_method pressure_slope" in result.display and "1000 Hz" in result.display
     assert result.provenance[0].provenance == Provenance.MEASURED
     assert "absolute values are not computed because the ambient condition" in " ".join(result.warnings)
