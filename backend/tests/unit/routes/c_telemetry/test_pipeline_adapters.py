@@ -139,3 +139,24 @@ def test_csv_tdms_workbook_and_config_documents(session, minio, tmp_path):
     config = docs["LJStreamM.cfg"]
     assert (config.status, config.doc_kind) == ("ACTIVE", "config")
     assert outcomes["LJStreamM"].rows is None  # keyed by the dispatch title (the file stem)
+
+
+def test_committed_table_nodes_carry_locators_and_old_ones_are_found(session, minio):
+    from sqlalchemy import update
+
+    from backend.postgres.models import DocumentNode
+    from backend.routes.c_telemetry.pipeline import unlocated_table_documents
+
+    _seed(session, minio, {("F-TEMP-RUN", "Analog - 04-12-2025 11-45-10.6.csv"): daqami_csv(22)})
+    (release,) = dispatch(session, minio, section_file_sets=()).to_process
+    process_document(session, minio, release.doc_id, indexer=_fake_indexer)
+    session.commit()
+    rows = session.scalars(
+        select(DocumentNode)
+        .where(DocumentNode.doc_id == release.doc_id, DocumentNode.node_type == "table_row")
+        .order_by(DocumentNode.ordinal)
+    ).all()
+    assert [(r.line_start, r.line_end) for r in rows[:2]] == [(8, 8), (9, 9)]
+    assert unlocated_table_documents(session) == []
+    session.execute(update(DocumentNode).where(DocumentNode.doc_id == release.doc_id).values(line_start=None))
+    assert unlocated_table_documents(session) == [release.doc_id]

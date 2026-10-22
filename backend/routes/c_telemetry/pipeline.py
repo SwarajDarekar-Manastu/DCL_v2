@@ -552,3 +552,23 @@ def _apply_fields(document: Document, processed) -> None:
     document.doc_date = fields.doc_date
     document.date_source = fields.date_source
     document.unit_count = fields.unit_count
+
+
+def unlocated_table_documents(session: Session) -> list[uuid.UUID]:
+    """Committed Route C documents with a table or table_row node that has no stable-anchor locator
+    (neither sheet + cell_range nor line_start): written before rows carried their positions."""
+    from backend.postgres.models import DocumentNode
+
+    rows = session.scalars(
+        select(DocumentNode.doc_id)
+        .join(Document, Document.doc_id == DocumentNode.doc_id)
+        .where(
+            Document.route == "C",
+            Document.status.in_([DocumentStatus.ACTIVE, DocumentStatus.ACTIVE_WITH_SOFT_FLAGS]),
+            DocumentNode.node_type.in_([NodeType.TABLE, NodeType.TABLE_ROW]),
+            DocumentNode.line_start.is_(None),
+            DocumentNode.cell_range.is_(None),
+        )
+        .distinct()
+    ).all()
+    return list(rows)

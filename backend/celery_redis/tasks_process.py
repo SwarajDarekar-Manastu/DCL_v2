@@ -155,6 +155,22 @@ def route_a1(doc_id: str) -> dict[str, object]:
     }
 
 
+@app.task(name="dcl.process.relocate_route_c_tables", queue=IO_LIGHT)
+def relocate_route_c_tables() -> dict[str, int]:
+    """One-off backfill: re-run Route C for committed documents whose table/row nodes have no locator, so
+    the commit rewrites the nodes with sheet + cell_range or file lines (vectors reused by hash)."""
+    from backend.routes.c_telemetry.pipeline import unlocated_table_documents
+
+    with Session(_engine(), expire_on_commit=False) as session:
+        doc_ids = unlocated_table_documents(session)
+        for doc_id in doc_ids:
+            session.get(Document, doc_id).status = DocumentStatus.PROCESSING
+        session.commit()
+    for doc_id in doc_ids:
+        app.send_task("dcl.process.route_c", args=[str(doc_id)], queue=TELEMETRY_STREAM)
+    return {"documents": len(doc_ids)}
+
+
 @app.task(name="dcl.process.resume_for_rule", queue=IO_LIGHT)
 def resume_for_rule(rule_id: str) -> dict[str, int]:
     """Retroactive pass after a channel_map rule is created or changed (file 06 §8): every HALTED Route C
