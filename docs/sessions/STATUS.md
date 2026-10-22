@@ -817,3 +817,9 @@ Merged / ready: benchmark runner, metrics and judge (`backend/benchmark/{metrics
 Blocked on: nothing
 Needs from others: S4: add `backend.benchmark.tasks` to `TASK_MODULES` and a beat entry `dcl.benchmark.sweep` every 60 s on io_light. Optional: a queue with a longer soft limit if 300 s per case proves short (one live answer took 76 s). S1: Route C `table`/`table_row` nodes need a locator (`sheet_name` + `cell_range`, or `line_start` for CSV rows); until then they cannot be cited. S3 (optional): send `dcl.benchmark.start` on `POST /benchmark/runs` so a run starts without waiting up to a minute for the sweep.
 Next: idle until messaged
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c-bench
+Merged / ready: c50df0a on claude/gifted-hofstadter-0bec1c-bench (from main 5ce1602): backend.benchmark.tasks in TASK_MODULES, beat benchmark-sweep every 60 s on io_light. Test: uv run pytest 1378 passed, 305 skipped
+Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
+Needs from others: Lead — merge; then I redeploy beat and io_light from main
+Next: redeploy beat and worker-io-light after the merge
