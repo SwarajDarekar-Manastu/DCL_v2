@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/04_metadata_enrichment_chunking_embedding.md §7 |
-| Last updated | 2026-10-22 |
+| Last updated | 2026-10-23 |
 
 ## Purpose
 
@@ -51,6 +51,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S1 | First commit path (Route C first): entities, nodes, mentions, facts, telemetry catalog, documents row, run-label collisions |
+| 2026-10-23 | S1 | `strip_nul()` over the ProcessedDocument and IndexPlan at the start of `commit_document` (PostgreSQL refuses NUL); `backend/tests/unit/indexing/test_commit_nul.py` |
 
 ## Related
 
