@@ -87,8 +87,9 @@ def searches(monkeypatch):
     return install
 
 
-def deps(client, traces, policy=None):
+def deps(client, traces, policy=None, **extra):
     return wf.EngineDeps(
+        **extra,
         external_policy=lambda session: policy or ExternalPolicy(enabled=False),
         gemini=client,
         session_factory=contextlib.nullcontext,
@@ -100,11 +101,11 @@ def deps(client, traces, policy=None):
     )
 
 
-def run(client, question, traces=None, *, groups=("dcl-engineers",), policy=None, **start):
+def run(client, question, traces=None, *, groups=("dcl-engineers",), policy=None, extra=None, **start):
     traces = [] if traces is None else traces
 
     async def go():
-        workflow = wf.AnswerWorkflow(deps(client, traces, policy), timeout=30)
+        workflow = wf.AnswerWorkflow(deps(client, traces, policy, **(extra or {})), timeout=30)
         handler = workflow.run(question=question, trace_id=str(uuid.uuid4()), groups=list(groups), **start)
         events = [payload async for payload in wf.ordered(handler.stream_events())]
         return events, await handler
@@ -375,3 +376,73 @@ def test_at_most_three_external_queries(searches, offline):
     client = external_client(["fact_lookup"], needs=needs)  # five needs: three are searched
     _, _, traces = run(client, "Search the web for catalyst preheat", groups=["dcl-external"], policy=ALLOWED)
     assert len(traces[0]["external_queries"]) == 3
+
+
+PHOTO = "Catalyst screen deformed after T04, discoloured ring."
+
+
+def photo_result() -> ToolResult:
+    source = Source(
+        doc_id=REPORT,
+        anchor="page:1:" + "b" * 64,
+        title="TP07 post-test photos",
+        label="TP07 post-test photos, p. 1",
+        provenance=Provenance.INTERNAL_REPORT,
+    )
+    shown = {
+        "doc_id": str(REPORT),
+        "title": "TP07 post-test photos",
+        "anchor": source.anchor,
+        "node_type": "photo",
+        "reading": PHOTO,
+        "breadcrumb": "TP07 › post-test",
+        "asset_uri": "s3://dcl-assets/photos/a_web.jpg",
+        "url_web": "https://minio.test/a_web.jpg",
+        "url_thumb": "https://minio.test/a_thumb.jpg",
+    }
+    return ToolResult(
+        tool="inspect_visuals",
+        result={"visuals": [shown], "hits": [{"parent_text": PHOTO}]},
+        provenance=[source],
+        display=PHOTO,
+    )
+
+
+def test_visual_lookup_runs_t3_looks_again_and_streams_a_photo_strip(searches, monkeypatch):
+    searches(report_hit)
+    t3_calls, fetched = [], []
+
+    def fake_visuals(session, args, *, embed_query, rerank, presign):
+        t3_calls.append(args)
+        return photo_result()
+
+    monkeypatch.setattr(wf.visual_tools, "inspect_visuals", fake_visuals)
+    client = Client(
+        query_analysis=[{"intents": ["visual_lookup"], "test_plan_ids": ["TP7"], "language": "en"}],
+        relook=[
+            {
+                "answer": "Yes, the ring is buckled.",
+                "images": [{"image": 1, "observation": "buckled", "visible": "yes"}],
+            }
+        ],
+        synthesis=[
+            {
+                "answer_markdown": "The post-test photos show the catalyst screen deformed [1].",
+                "claims": [
+                    {"text": "the catalyst screen is deformed", "kind": "factual", "evidence_ids": ["E1"]}
+                ],
+            }
+        ],
+        verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]}],
+    )
+    events, done, traces = run(
+        client,
+        "Show me the catalyst screen photos of TP7",
+        extra={"fetch_asset": lambda uri: fetched.append(uri) or b"jpeg"},
+    )
+    assert t3_calls[0].test_plan_ids == ["TP07"] and t3_calls[0].relook_question
+    assert fetched == ["s3://dcl-assets/photos/a_web.jpg"] and "relook" in client.purposes
+    [strip] = of(events, "embed")
+    assert strip["kind"] == "photo_strip" and "https://minio.test/a_thumb.jpg" in strip["html"]
+    assert done["mode"] == "answered"
+    assert any(s.get("tool") == "inspect_visuals" and s["done"] for s in of(events, "step"))

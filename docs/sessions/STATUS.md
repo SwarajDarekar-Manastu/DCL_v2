@@ -669,3 +669,8 @@ Merged / ready:
 Blocked on: Settings editing (S1's settings API).
 Needs from others: S1: settings API. Regenerated types show S1's new `note` on unit_telemetry evidence; the Review UI does not display it yet (next small S3 task).
 Next: show the evidence `note` in the unit pane; Settings once S1's API is on main; review the Console redesign branch when it arrives.
+## 2026-10-22 22:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: T3 `inspect_visuals` (`backend/llm_engine/engine/tools/visuals.py`, prompt `vision/relook.v1`): T1 hybrid search restricted to the node types of the requested kinds, optional RRF with an image-embedding kNN from `similar_to_asset_id` (reference excluded), presigned web + thumb URLs (15 min) and the containing document, no node ids. Relook sends the top ≤ 4 images with the question and returns an answer-time observation (`source: relook`, `persisted: false`), nothing written. The planner uses T3 for visual lookups (with relook) and failure investigations (damage photos); the stream carries a `photo_strip` embed. `start_engine` wires MinIO presign/fetch; without MinIO, T3 returns readings without links. Live relook check on the gateway passed.
+Blocked on: nothing
+Needs from others: S4: the gateway client's per-capability `safety_settings` pass-through (DECISIONS 2026-10-22) is not on main yet; I wire the flag for the extraction capabilities once it lands
+Next: T2 query_telemetry over `telemetry_runs`/`telemetry_channels`, then Skills for Open WebUI
