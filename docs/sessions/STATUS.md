@@ -590,3 +590,9 @@ Merged / ready: object-store evaluation `backend/devops/object_store_evaluation.
 Blocked on: nothing
 Needs from others: Lead — decision on the object store before M6
 Next: Open WebUI service (DCL_OPENWEBUI_PORT 8300), Portainer in compose.dev.yaml, Console service with S3
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: dev-only Console sign-in settings (`console_dev_auth`, `console_dev_token`, `console_dev_roles` default viewer,reviewer,admin; refused unless DCL_ENV=dev and the token has 32+ chars); Portainer service in compose.dev.yaml (reuses volume dcl-v2-portainer-data, password from DCL_PORTAINER_PASSWORD as a compose secret); object-store evaluation + `s3_compat_check.py`. Open WebUI container dropped (stays in M9). Test: `uv run pytest` green; real `.env` loads
+Blocked on: nothing
+Needs from others: Lead — merge; S3 — Console Dockerfile on main (a9b26db) for the compose wiring
+Next: redeploy workers from main b9cf8f2 for S1; switch the running Portainer to the compose service; Console service wiring

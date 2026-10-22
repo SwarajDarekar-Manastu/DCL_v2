@@ -2,6 +2,7 @@
 # - Dev-only defaults for the database and MinIO pairs when .env leaves them empty (the Lead allows them here
 #   only); the application MinIO keys then default to the root pair.
 # - The sync worker runs as the host user (uid 1001 on the dev host) so it can use DCL_TOKEN_DIR (mode 700).
+# - Portainer (Docker UI) runs in dev only.
 # - Lower concurrency and memory for cpu_parse and telemetry_stream: this host has 15 GB RAM, while the
 #   production limits of file 10 §4 add up to about 38 GB.
 
@@ -82,3 +83,25 @@ services:
 
   worker-embed:
     environment: *dev-env
+
+  portainer:
+    image: portainer/portainer-ce:2.45.2
+    command: ["--admin-password-file", "/run/secrets/portainer_admin"]
+    ports:
+      - "${DCL_BIND_HOST:-127.0.0.1}:9443:9443"
+      - "${DCL_BIND_HOST:-127.0.0.1}:9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    secrets:
+      - portainer_admin
+    restart: unless-stopped
+
+secrets:
+  portainer_admin:
+    environment: DCL_PORTAINER_PASSWORD
+
+volumes:
+  portainer-data:
+    name: dcl-v2-portainer-data
+    external: true

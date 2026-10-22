@@ -43,7 +43,8 @@ PLACEHOLDER = re.compile(
     r"|your[-_ ].*|fill[-_ ]?me|fill[-_ ]?in|none|null)\s*$",
     re.IGNORECASE,
 )
-COMMA_LISTS = ("DCL_FOLDER_IDS", "DCL_FOLDER_PATHS", "DCL_CONSOLE_ALLOWED_ORIGINS")
+COMMA_LISTS = ("DCL_FOLDER_IDS", "DCL_FOLDER_PATHS", "DCL_CONSOLE_ALLOWED_ORIGINS", "DCL_CONSOLE_DEV_ROLES")
+DEV_TOKEN_MIN_LENGTH = 32
 DEV_DEFAULTS: dict[str, str] = {
     "DCL_REDIS_URL": "redis://redis:6379/0",
     "DCL_MINIO_ENDPOINT": "http://minio:9000",
@@ -183,6 +184,11 @@ class Settings(BaseSettings):
     console_group_admins: str | None = _env("DCL_CONSOLE_GROUP_ADMINS", default=None)
     console_group_external_search: str | None = _env("DCL_CONSOLE_GROUP_EXTERNAL_SEARCH", default=None)
     console_allowed_origins: CommaList = _env("DCL_CONSOLE_ALLOWED_ORIGINS", default_factory=list)
+    console_dev_auth: bool = _env("DCL_CONSOLE_DEV_AUTH", default=False)
+    console_dev_token: SecretStr | None = _env("DCL_CONSOLE_DEV_TOKEN", default=None)
+    console_dev_roles: CommaList = _env(
+        "DCL_CONSOLE_DEV_ROLES", default_factory=lambda: ["viewer", "reviewer", "admin"]
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -214,6 +220,18 @@ class Settings(BaseSettings):
             if len(raw) != 32:
                 raise ValueError("must be a Fernet key (32 bytes, url-safe base64)")
         return value
+
+    @model_validator(mode="after")
+    def _console_dev_auth_only_in_dev(self) -> "Settings":
+        if self.console_dev_auth:
+            if self.env is not Environment.DEV:
+                raise ValueError("DCL_CONSOLE_DEV_AUTH=true is allowed only with DCL_ENV=dev")
+            token = self.console_dev_token.get_secret_value() if self.console_dev_token else ""
+            if len(token) < DEV_TOKEN_MIN_LENGTH:
+                raise ValueError(
+                    f"DCL_CONSOLE_DEV_AUTH=true needs DCL_CONSOLE_DEV_TOKEN of {DEV_TOKEN_MIN_LENGTH}+ chars"
+                )
+        return self
 
     @model_validator(mode="after")
     def _roots_pair_up(self) -> "Settings":
