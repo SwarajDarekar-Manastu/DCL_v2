@@ -28,7 +28,12 @@ describe('settings sections', () => {
 	it('marks the current section in the menu', () => {
 		render(SectionMenu, { current: 'gate' });
 		expect(screen.getByRole('link', { name: 'Gate' }).getAttribute('aria-current')).toBe('page');
-		expect(screen.getAllByRole('link')).toHaveLength(9);
+		expect(screen.getAllByRole('link')).toHaveLength(10); // nine sections and Users
+	});
+
+	it('marks Users when it is the current page', () => {
+		render(SectionMenu, { current: 'users' });
+		expect(screen.getByRole('link', { name: 'Users' }).getAttribute('aria-current')).toBe('page');
 	});
 
 	it('redirects /settings to the first section and 404s unknown sections', () => {

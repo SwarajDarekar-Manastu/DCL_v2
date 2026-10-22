@@ -11,6 +11,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { documentTitle } from '$lib/components/shell/breadcrumbs';
+	import LoginForm from '$lib/components/shell/LoginForm.svelte';
 	import Notice from '$lib/components/shell/Notice.svelte';
 	import Sidebar from '$lib/components/shell/Sidebar.svelte';
 	import TopBar from '$lib/components/shell/TopBar.svelte';
@@ -56,7 +57,11 @@
 			{:else}
 				<h1 class="m-0 text-lg">DCL Console</h1>
 				<p class="text-muted-foreground mt-1">Review, benchmarks and configuration for the Document Context Layer.</p>
-				<Button class="mt-6 w-full" onclick={() => session.signIn()}>Sign in with Microsoft</Button>
+				{#if session.mode === 'local'}
+					<LoginForm notice={session.notice} onSubmit={(email, password) => session.signInWithPassword(email, password)} />
+				{:else}
+					<Button class="mt-6 w-full" onclick={() => session.signIn()}>Sign in with Microsoft</Button>
+				{/if}
 			{/if}
 		</div>
 	</main>

@@ -1,4 +1,12 @@
-"""Console API authentication: Entra ID access tokens and role mapping (file 08 §2.3).
+"""Console API authentication (file 08 §2.3).
+
+Local accounts (user decision 2026-10-22, this cycle): users sign in with email and password
+(argon2id) at POST /auth/login and get a short-lived HS256 JWT signed with DCL_AUTH_SECRET (TTL
+DCL_AUTH_TOKEN_TTL_HOURS). Every request re-reads the account, so deactivation and role changes apply
+at once. Five failed logins per minute per email answer 429. While the `users` table is empty, the
+first login creates the admin from DCL_BOOTSTRAP_ADMIN_EMAIL / DCL_BOOTSTRAP_ADMIN_PASSWORD. Admins
+manage accounts at /auth/users. Entra ID verification (RS256, group → role mapping) stays below for
+the future and is used only for non-HS256 tokens.
 
 Dev-only sign-in (user-approved exception, DECISIONS 2026-10-22): with DCL_ENV=dev and
 DCL_CONSOLE_DEV_AUTH=true, a request whose bearer token equals DCL_CONSOLE_DEV_TOKEN signs in as a
@@ -13,17 +21,23 @@ or, for any signed-in user, `user: CurrentUser`.
 
 import hmac
 import logging
+import threading
 import time
+import uuid
+from collections import defaultdict, deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from enum import StrEnum
-from functools import lru_cache
-from typing import Annotated, Any
+from functools import cache, lru_cache
+from typing import Annotated, Any, Protocol
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 log = logging.getLogger(__name__)
 
@@ -192,14 +206,314 @@ def verify_token(token: str, config: AuthConfig, resolve_key: KeyResolver) -> tu
     return user, int(claims["exp"])
 
 
+# ---------------------------------------------------------------- local accounts
+
+LOCAL_ISSUER = "dcl-console"
+AUTH_SECRET_MIN_LENGTH = 32
+PASSWORD_MIN_LENGTH = 12
+LOGIN_FAILURES_PER_WINDOW = 5
+LOGIN_WINDOW_S = 60
+EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+_hasher = PasswordHasher()  # argon2id with the library's current recommended parameters
+
+
+def hash_password(password: str) -> str:
+    return _hasher.hash(password)
+
+
+@cache
+def _dummy_hash() -> str:
+    return _hasher.hash("not-a-real-password-used-for-timing")
+
+
+def _password_matches(password_hash: str, password: str) -> bool:
+    try:
+        return _hasher.verify(password_hash, password)
+    except (VerificationError, InvalidHashError):
+        return False
+
+
+def _ordered(roles: list[ConsoleRole]) -> list[ConsoleRole]:
+    return sorted(set(roles), key=ROLE_RANK.__getitem__)
+
+
+@dataclass
+class LocalUser:
+    """A row of S1's `users` table (migration 0010)."""
+
+    user_id: uuid.UUID
+    email: str
+    display_name: str
+    password_hash: str
+    roles: list[ConsoleRole]
+    is_active: bool = True
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_login_at: datetime | None = None
+
+    def console_user(self) -> ConsoleUser:
+        return ConsoleUser(oid=str(self.user_id), name=self.display_name, email=self.email, roles=self.roles)
+
+
+class DuplicateEmail(Exception):
+    pass
+
+
+class UserStore(Protocol):
+    def count(self) -> int: ...
+    def get(self, user_id: uuid.UUID) -> LocalUser | None: ...
+    def by_email(self, email: str) -> LocalUser | None: ...
+    def list(self) -> list[LocalUser]: ...
+    def create(self, user: LocalUser) -> LocalUser: ...
+    def save(self, user: LocalUser) -> LocalUser: ...
+
+
+class SqlUserStore:
+    """The only code that queries `users`; S1 owns the model (backend.postgres.models.User)."""
+
+    def __init__(self, session_factory: Callable[[], Any]):
+        self._sessions = session_factory
+
+    @staticmethod
+    def _model():
+        from backend.postgres.models import User  # published with migration 0010
+
+        return User
+
+    @staticmethod
+    def _user(row: Any) -> LocalUser:
+        return LocalUser(
+            user_id=row.user_id,
+            email=row.email,
+            display_name=row.display_name,
+            password_hash=row.password_hash,
+            roles=_ordered([ConsoleRole(r) for r in row.roles]),
+            is_active=row.is_active,
+            created_at=row.created_at,
+            last_login_at=row.last_login_at,
+        )
+
+    def count(self) -> int:
+        from sqlalchemy import func, select
+
+        with self._sessions() as session:
+            return session.scalar(select(func.count()).select_from(self._model())) or 0
+
+    def get(self, user_id: uuid.UUID) -> LocalUser | None:
+        with self._sessions() as session:
+            row = session.get(self._model(), user_id)
+            return self._user(row) if row else None
+
+    def by_email(self, email: str) -> LocalUser | None:
+        from sqlalchemy import select
+
+        model = self._model()
+        with self._sessions() as session:
+            row = session.scalar(select(model).where(model.email == email))
+            return self._user(row) if row else None
+
+    def list(self) -> list[LocalUser]:
+        from sqlalchemy import select
+
+        model = self._model()
+        with self._sessions() as session:
+            return [self._user(r) for r in session.scalars(select(model).order_by(model.email))]
+
+    def create(self, user: LocalUser) -> LocalUser:
+        from sqlalchemy.exc import IntegrityError
+
+        model = self._model()
+        with self._sessions() as session:
+            row = model(
+                user_id=user.user_id,
+                email=user.email,
+                display_name=user.display_name,
+                password_hash=user.password_hash,
+                roles=[str(r) for r in user.roles],
+                is_active=user.is_active,
+            )
+            session.add(row)
+            try:
+                session.commit()
+            except IntegrityError as exc:
+                raise DuplicateEmail(user.email) from exc
+            session.refresh(row)
+            return self._user(row)
+
+    def save(self, user: LocalUser) -> LocalUser:
+        with self._sessions() as session:
+            row = session.get(self._model(), user.user_id)
+            row.display_name = user.display_name
+            row.password_hash = user.password_hash
+            row.roles = [str(r) for r in user.roles]
+            row.is_active = user.is_active
+            row.last_login_at = user.last_login_at
+            session.commit()
+            return self._user(row)
+
+
+class LoginLimiter:
+    """Failed logins per email in a sliding window; in memory, per API process."""
+
+    def __init__(self, limit: int = LOGIN_FAILURES_PER_WINDOW, window_s: int = LOGIN_WINDOW_S):
+        self.limit, self.window_s = limit, window_s
+        self._failures: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def retry_after(self, email: str, now: float) -> int | None:
+        with self._lock:
+            failures = self._failures[email]
+            while failures and failures[0] <= now - self.window_s:
+                failures.popleft()
+            if len(failures) < self.limit:
+                return None
+            return max(1, int(failures[0] + self.window_s - now + 1))
+
+    def failed(self, email: str, now: float) -> None:
+        with self._lock:
+            self._failures[email].append(now)
+
+    def succeeded(self, email: str) -> None:
+        with self._lock:
+            self._failures.pop(email, None)
+
+
+@dataclass
+class LocalAuth:
+    secret: str
+    ttl_s: int
+    store: UserStore
+    limiter: LoginLimiter
+    bootstrap: tuple[str, str] | None = None  # (email, password) for the first admin
+
+
+@cache
+def _sql_store() -> SqlUserStore:
+    from backend.postgres.session import default_session_factory
+
+    return SqlUserStore(default_session_factory())
+
+
+_limiter = LoginLimiter()
+
+
+def get_local_auth() -> LocalAuth | None:
+    """Local sign-in when DCL_AUTH_SECRET is set; None otherwise (login then answers 503)."""
+    from backend.config import get_settings
+
+    s = get_settings()
+    configured = getattr(s, "auth_secret", None)
+    secret = configured.get_secret_value() if configured else ""
+    if not secret:
+        return None
+    if len(secret) < AUTH_SECRET_MIN_LENGTH:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            f"DCL_AUTH_SECRET must be at least {AUTH_SECRET_MIN_LENGTH} characters",
+        )
+    bootstrap = None
+    email, password = getattr(s, "bootstrap_admin_email", None), getattr(s, "bootstrap_admin_password", None)
+    if email and password:
+        bootstrap = (email, password.get_secret_value())
+    return LocalAuth(
+        secret=secret,
+        ttl_s=getattr(s, "auth_token_ttl_hours", 12) * 3600,
+        store=_sql_store(),
+        limiter=_limiter,
+        bootstrap=bootstrap,
+    )
+
+
+def issue_token(user: LocalUser, local: LocalAuth, now: int | None = None) -> tuple[str, int]:
+    now = int(time.time()) if now is None else now
+    expires_at = now + local.ttl_s
+    claims = {
+        "iss": LOCAL_ISSUER,
+        "aud": LOCAL_ISSUER,
+        "sub": str(user.user_id),
+        "email": user.email,
+        "name": user.display_name,
+        "roles": [str(r) for r in user.roles],
+        "iat": now,
+        "exp": expires_at,
+    }
+    return jwt.encode(claims, local.secret, algorithm="HS256"), expires_at
+
+
+def _is_local_token(token: str) -> bool:
+    try:
+        return jwt.get_unverified_header(token).get("alg") == "HS256"
+    except jwt.PyJWTError:
+        return False
+
+
+def verify_local_token(token: str, local: LocalAuth) -> tuple[ConsoleUser, int]:
+    """The account behind a local token, re-read from the store: roles and is_active are current."""
+    try:
+        claims = jwt.decode(
+            token,
+            local.secret,
+            algorithms=["HS256"],
+            audience=LOCAL_ISSUER,
+            issuer=LOCAL_ISSUER,
+            leeway=CLOCK_LEEWAY_S,
+            options={"require": ["exp", "iat", "iss", "aud", "sub"]},
+        )
+        user_id = uuid.UUID(claims["sub"])
+    except jwt.ExpiredSignatureError as exc:
+        raise AuthError(status.HTTP_401_UNAUTHORIZED, "token expired") from exc
+    except (jwt.PyJWTError, ValueError) as exc:
+        raise AuthError(status.HTTP_401_UNAUTHORIZED, f"invalid token: {type(exc).__name__}") from exc
+    user = local.store.get(user_id)
+    if user is None or not user.is_active:
+        raise AuthError(status.HTTP_401_UNAUTHORIZED, "account disabled")
+    return user.console_user(), int(claims["exp"])
+
+
+def ensure_bootstrap_admin(local: LocalAuth) -> None:
+    """Create the first admin from the bootstrap settings, only while there are no accounts."""
+    if local.bootstrap is None or local.store.count() > 0:
+        return
+    email, password = local.bootstrap
+    if len(password) < PASSWORD_MIN_LENGTH:
+        log.error(
+            "DCL_BOOTSTRAP_ADMIN_PASSWORD is shorter than %d characters; no admin created",
+            PASSWORD_MIN_LENGTH,
+        )
+        return
+    try:
+        local.store.create(
+            LocalUser(
+                user_id=uuid.uuid4(),
+                email=email.strip().lower(),
+                display_name="Administrator",
+                password_hash=hash_password(password),
+                roles=list(ConsoleRole),
+            )
+        )
+    except DuplicateEmail:
+        return  # another request created it first
+    log.warning("bootstrap admin %s created (users table was empty)", email)
+
+
 def authenticate(
-    token: str, config: AuthConfig, resolve_key: KeyResolver, dev: DevAuth | None
+    token: str,
+    config: AuthConfig,
+    resolve_key: KeyResolver,
+    dev: DevAuth | None,
+    local: LocalAuth | None = None,
 ) -> tuple[ConsoleUser, int]:
-    """The dev identity for the dev token (when enabled), otherwise an Entra ID token."""
+    """The dev identity for the dev token (when enabled), a local account for HS256, else Entra ID."""
     if dev is not None and hmac.compare_digest(token.encode(), dev.token.encode()):
         log.warning("DEV SIGN-IN: Console request accepted as the dev identity (DCL_CONSOLE_DEV_AUTH=true)")
         user = ConsoleUser(oid="dev-sign-in", name="Dev sign-in", email="dev@localhost", roles=dev.roles)
         return user, int(time.time()) + DEV_SESSION_S
+    if _is_local_token(token):
+        if local is None:
+            raise AuthError(
+                status.HTTP_503_SERVICE_UNAVAILABLE, "local sign-in is not configured: DCL_AUTH_SECRET"
+            )
+        return verify_local_token(token, local)
     return verify_token(token, config, resolve_key)
 
 
@@ -211,13 +525,14 @@ def current_user(
     config: Annotated[AuthConfig, Depends(get_auth_config)],
     resolve_key: Annotated[KeyResolver, Depends(get_key_resolver)],
     dev: Annotated[DevAuth | None, Depends(get_dev_auth)],
+    local: Annotated[LocalAuth | None, Depends(get_local_auth)],
 ) -> ConsoleUser:
     if credentials is None:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "missing bearer token", {"WWW-Authenticate": "Bearer"}
         )
     try:
-        user, _ = authenticate(credentials.credentials, config, resolve_key, dev)
+        user, _ = authenticate(credentials.credentials, config, resolve_key, dev, local)
     except AuthError as exc:
         headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
         raise HTTPException(exc.status_code, exc.detail, headers) from exc
@@ -242,3 +557,160 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.get("/me")
 def me(user: CurrentUser) -> ConsoleUser:
     return user
+
+
+# ---------------------------------------------------------------- local sign-in and accounts
+
+LocalAuthDep = Annotated[LocalAuth | None, Depends(get_local_auth)]
+Admin = Annotated[ConsoleUser, Depends(require_role(ConsoleRole.ADMIN))]
+
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"  # noqa: S105 (OAuth token type, not a secret)
+    expires_at: datetime
+    user: ConsoleUser
+
+
+class UserView(BaseModel):
+    user_id: uuid.UUID
+    email: str
+    display_name: str
+    roles: list[ConsoleRole]
+    is_active: bool
+    created_at: datetime
+    last_login_at: datetime | None
+
+
+class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(pattern=EMAIL_PATTERN, max_length=320)
+    display_name: str = Field(min_length=1, max_length=200)
+    roles: list[ConsoleRole] = Field(min_length=1)
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=1024)
+
+
+class UserUpdate(BaseModel):
+    """Only the fields present change; `password` is an admin reset."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, min_length=1, max_length=200)
+    roles: list[ConsoleRole] | None = Field(default=None, min_length=1)
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=PASSWORD_MIN_LENGTH, max_length=1024)
+
+
+def _view(user: LocalUser) -> UserView:
+    return UserView(
+        user_id=user.user_id,
+        email=user.email,
+        display_name=user.display_name,
+        roles=user.roles,
+        is_active=user.is_active,
+        created_at=user.created_at,
+        last_login_at=user.last_login_at,
+    )
+
+
+def _require_local(local: LocalAuth | None) -> LocalAuth:
+    if local is None:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "local sign-in is not configured: DCL_AUTH_SECRET"
+        )
+    return local
+
+
+@router.post("/login")
+def login(body: LoginRequest, local: LocalAuthDep, response: Response) -> LoginResponse:
+    local = _require_local(local)
+    email = body.email.strip().lower()
+    now = time.time()
+    retry_after = local.limiter.retry_after(email, now)
+    if retry_after is not None:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "too many failed sign-ins; try again shortly",
+            {"Retry-After": str(retry_after)},
+        )
+    ensure_bootstrap_admin(local)
+    user = local.store.by_email(email)
+    if user is None or not user.is_active:
+        _password_matches(_dummy_hash(), body.password)  # same work whether or not the account exists
+        ok = False
+    else:
+        ok = _password_matches(user.password_hash, body.password)
+    if not ok or user is None:
+        local.limiter.failed(email, now)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wrong email or password")
+    local.limiter.succeeded(email)
+    if _hasher.check_needs_rehash(user.password_hash):
+        user.password_hash = hash_password(body.password)
+    user = local.store.save(replace(user, last_login_at=datetime.now(UTC)))
+    token, expires_at = issue_token(user, local)
+    response.headers["Cache-Control"] = "no-store"
+    return LoginResponse(
+        access_token=token, expires_at=datetime.fromtimestamp(expires_at, UTC), user=user.console_user()
+    )
+
+
+@router.get("/users")
+def list_users(_: Admin, local: LocalAuthDep) -> list[UserView]:
+    return [_view(u) for u in _require_local(local).store.list()]
+
+
+@router.post("/users", status_code=status.HTTP_201_CREATED)
+def create_user(body: UserCreate, admin: Admin, local: LocalAuthDep) -> UserView:
+    local = _require_local(local)
+    user = LocalUser(
+        user_id=uuid.uuid4(),
+        email=body.email.strip().lower(),
+        display_name=body.display_name.strip(),
+        password_hash=hash_password(body.password),
+        roles=_ordered(body.roles),
+    )
+    try:
+        created = local.store.create(user)
+    except DuplicateEmail as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"an account for {user.email} exists") from exc
+    log.info("user %s created with roles %s by %s", created.email, created.roles, admin.email)
+    return _view(created)
+
+
+@router.patch("/users/{user_id}")
+def update_user(user_id: uuid.UUID, body: UserUpdate, admin: Admin, local: LocalAuthDep) -> UserView:
+    local = _require_local(local)
+    user = local.store.get(user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no user {user_id}")
+    changed = replace(
+        user,
+        display_name=body.display_name.strip() if body.display_name is not None else user.display_name,
+        roles=_ordered(body.roles) if body.roles is not None else user.roles,
+        is_active=body.is_active if body.is_active is not None else user.is_active,
+        password_hash=hash_password(body.password) if body.password is not None else user.password_hash,
+    )
+    was_admin = user.is_active and ConsoleRole.ADMIN in user.roles
+    stays_admin = changed.is_active and ConsoleRole.ADMIN in changed.roles
+    if was_admin and not stays_admin:
+        other_admins = [
+            u
+            for u in local.store.list()
+            if u.user_id != user_id and u.is_active and ConsoleRole.ADMIN in u.roles
+        ]
+        if not other_admins:
+            raise HTTPException(status.HTTP_409_CONFLICT, "keep at least one active admin")
+    saved = local.store.save(changed)
+    fields = sorted(body.model_dump(exclude_none=True).keys() - {"password"}) + (
+        ["password"] if body.password else []
+    )
+    log.info("user %s updated (%s) by %s", saved.email, ", ".join(fields), admin.email)
+    return _view(saved)

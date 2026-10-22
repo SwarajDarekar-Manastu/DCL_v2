@@ -31,10 +31,12 @@ from backend.api.auth import (
     ConsoleUser,
     DevAuth,
     KeyResolver,
+    LocalAuth,
     authenticate,
     get_auth_config,
     get_dev_auth,
     get_key_resolver,
+    get_local_auth,
 )
 
 log = logging.getLogger(__name__)
@@ -105,7 +107,11 @@ router = APIRouter(tags=["ws"])
 
 
 async def _authenticate(
-    websocket: WebSocket, config: AuthConfig, resolve_key: KeyResolver, dev: DevAuth | None
+    websocket: WebSocket,
+    config: AuthConfig,
+    resolve_key: KeyResolver,
+    dev: DevAuth | None,
+    local: LocalAuth | None = None,
 ) -> tuple[ConsoleUser, int] | None:
     try:
         frame = await asyncio.wait_for(websocket.receive_json(), AUTH_DEADLINE_S)
@@ -116,7 +122,7 @@ async def _authenticate(
         await websocket.close(CLOSE_UNAUTHENTICATED, "authenticate first")
         return None
     try:
-        return await run_in_threadpool(authenticate, frame["token"], config, resolve_key, dev)
+        return await run_in_threadpool(authenticate, frame["token"], config, resolve_key, dev, local)
     except AuthError as exc:
         await websocket.close(CLOSE_UNAUTHENTICATED, exc.detail[:120])
         return None
@@ -135,9 +141,10 @@ async def console_socket(
     config: Annotated[AuthConfig, Depends(get_auth_config)],
     resolve_key: Annotated[KeyResolver, Depends(get_key_resolver)],
     dev: Annotated[DevAuth | None, Depends(get_dev_auth)],
+    local: Annotated[LocalAuth | None, Depends(get_local_auth)],
 ) -> None:
     await websocket.accept()
-    authenticated = await _authenticate(websocket, config, resolve_key, dev)
+    authenticated = await _authenticate(websocket, config, resolve_key, dev, local)
     if authenticated is None:
         return
     user, expires_at = authenticated

@@ -10,6 +10,10 @@ type Schemas = components['schemas'];
 
 /** backend/api/auth.py */
 export type ConsoleUser = Schemas['ConsoleUser'];
+export type LoginResponse = Schemas['LoginResponse'];
+export type LocalAccount = Schemas['UserView'];
+export type LocalAccountCreate = Schemas['UserCreate'];
+export type LocalAccountUpdate = Schemas['UserUpdate'];
 
 /** backend/api/viewer.py */
 export type ViewerPayload = Schemas['ViewerPayload'];
@@ -111,6 +115,8 @@ interface ApiWiring {
 	baseUrl: string;
 	wsUrl: string;
 	getToken: () => Promise<string>;
+	/** Called once per 401 answer, before the ApiError is thrown (local sign-in ends the session). */
+	onUnauthorized?: () => void;
 	fetch: typeof globalThis.fetch;
 	WebSocket: typeof globalThis.WebSocket;
 }
@@ -130,9 +136,9 @@ function wired(): ApiWiring {
 	return wiring;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, signedIn = true): Promise<T> {
 	const w = wired();
-	const headers: Record<string, string> = { Authorization: `Bearer ${await w.getToken()}` };
+	const headers: Record<string, string> = signedIn ? { Authorization: `Bearer ${await w.getToken()}` } : {};
 	if (body !== undefined) headers['Content-Type'] = 'application/json';
 	const response = await w.fetch(w.baseUrl + path, {
 		method,
@@ -147,12 +153,24 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 		} catch {
 			// non-JSON error body: keep the status text
 		}
+		if (response.status === 401 && signedIn) w.onUnauthorized?.();
 		throw new ApiError(response.status, detail);
 	}
 	return (await response.json()) as T;
 }
 
 // ---------------------------------------------------------------- routes
+
+/** POST /auth/login (backend/api/auth.py): local accounts; sent without a bearer token */
+export function login(email: string, password: string): Promise<LoginResponse> {
+	return request<LoginResponse>('POST', '/auth/login', { email, password }, false);
+}
+
+/** GET/POST/PATCH /auth/users (admin): local accounts */
+export const listAccounts = () => request<LocalAccount[]>('GET', '/auth/users');
+export const createAccount = (body: LocalAccountCreate) => request<LocalAccount>('POST', '/auth/users', body);
+export const updateAccount = (userId: string, body: LocalAccountUpdate) =>
+	request<LocalAccount>('PATCH', `/auth/users/${encodeURIComponent(userId)}`, body);
 
 /** GET /auth/me (backend/api/auth.py) */
 export function getMe(): Promise<ConsoleUser> {

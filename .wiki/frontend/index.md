@@ -2,7 +2,7 @@
 
 | Feature | Status | Owner | Purpose |
 |---------|--------|-------|---------|
-| [Console shell, Entra ID login, roles, websocket](console-shell-auth.md) | in-progress | S3 | SvelteKit app shell with OIDC login, role mapping, navigation, websocket channel for live updates. |
+| [Console shell, sign-in (local accounts; Entra ID later), roles, websocket](console-shell-auth.md) | in-progress | S3 | SvelteKit app shell with local password sign-in (Entra ID later), role mapping, navigation, websocket channel for live updates. |
 | [Review UI (queue, case view, resolution consoles, rules, audit)](review-ui.md) | in-progress | S3 | Impact-sorted queue, polymorphic evidence and resolution panes per flag type, dry-run preview, rules page with simulation, audit page, undo. |
 | [Shared document viewer with anchor resolution and translate toggle](viewer.md) | in-progress | S3 | Renders page images with bbox overlays, tables, code, photos, plots, diagram renders and video with seeking; resolves stable anchors with page fallback; translate toggle. |
 | [Settings UI (sources, scopes, gate, routes, models, translation, flags, prompts)](settings-ui.md) | in-progress | S3 | Configuration screens over pipeline_config with validation, impact counts, cost estimates for scope widening, history and rollback. |

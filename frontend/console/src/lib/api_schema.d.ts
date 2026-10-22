@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -70,6 +87,41 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/auth/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Users */
+        get: operations["list_users_auth_users_get"];
+        put?: never;
+        /** Create User */
+        post: operations["create_user_auth_users_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update User */
+        patch: operations["update_user_auth_users__user_id__patch"];
         trace?: never;
     };
     "/benchmark/cases": {
@@ -520,6 +572,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Settings */
+        get: operations["list_settings_settings_get"];
+        /** Apply */
+        put: operations["apply_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview */
+        post: operations["preview_settings_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rollback */
+        post: operations["rollback_settings_rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/{key}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Key History */
+        get: operations["key_history_settings__key__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/answer": {
         parameters: {
             query?: never;
@@ -706,6 +827,28 @@ export interface components {
              *     }
              */
             options: components["schemas"]["AnswerOptions"];
+        };
+        /** AppliedView */
+        AppliedView: {
+            after: components["schemas"]["JsonValue"];
+            before: components["schemas"]["JsonValue"];
+            /** Key */
+            key: string;
+            /** Version */
+            version: number;
+        };
+        /** ApplyResponse */
+        ApplyResponse: {
+            /** Applied */
+            applied: components["schemas"]["AppliedView"][];
+            /** Dispatch Started */
+            dispatch_started: boolean;
+            /** Held Downloads */
+            held_downloads: number;
+            /** Impacts */
+            impacts: components["schemas"]["ImpactView"][];
+            /** Released Downloads */
+            released_downloads: number;
         };
         /**
          * ApproveDownload
@@ -1139,6 +1282,27 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** Change */
+        Change: {
+            /**
+             * Expected Version
+             * @description the version the editor saw (0 = key absent); a newer one answers 409
+             */
+            expected_version?: number | null;
+            /** Key */
+            key: string;
+            value: components["schemas"]["JsonValue"];
+        };
+        /** ChangeBatch */
+        ChangeBatch: {
+            /** Changes */
+            changes: components["schemas"]["Change"][];
+            /**
+             * Description
+             * @description why; stored with every new version
+             */
+            description?: string | null;
+        };
         /** ChannelPreview */
         ChannelPreview: {
             /** Canonical Name */
@@ -1281,6 +1445,28 @@ export interface components {
             sparkline_uri?: string | null;
             /** Std */
             std?: number | null;
+        };
+        /** ConfigEntry */
+        ConfigEntry: {
+            /** Description */
+            description: string | null;
+            /** Key */
+            key: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string;
+            value: components["schemas"]["JsonValue"];
+            /** Version */
+            version: number;
+        };
+        /** ConfigList */
+        ConfigList: {
+            /** Items */
+            items: components["schemas"]["ConfigEntry"][];
         };
         /** ConfirmationReply */
         ConfirmationReply: {
@@ -1752,6 +1938,27 @@ export interface components {
             /** Width */
             width: number;
         };
+        /** ImpactView */
+        ImpactView: {
+            /** By Extension */
+            by_extension: {
+                [key: string]: number;
+            };
+            /** Bytes */
+            bytes: number;
+            /** Cost Note */
+            cost_note: string | null;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Estimated Cost Usd */
+            estimated_cost_usd: number | null;
+            /** Key */
+            key: string;
+            /** Summary */
+            summary: string;
+        };
         /** ImportCounts */
         ImportCounts: {
             /** Created */
@@ -1785,6 +1992,30 @@ export interface components {
             missing_keys: string[];
             /** Top Level Keys */
             top_level_keys: string[];
+        };
+        JsonValue: unknown;
+        /** LoginRequest */
+        LoginRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /** LoginResponse */
+        LoginResponse: {
+            /** Access Token */
+            access_token: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Token Type
+             * @default bearer
+             */
+            token_type: string;
+            user: components["schemas"]["ConsoleUser"];
         };
         /**
          * LowConfidenceEvidence
@@ -1923,6 +2154,11 @@ export interface components {
             /** Size Bytes */
             size_bytes?: number | null;
         };
+        /** PreviewResponse */
+        PreviewResponse: {
+            /** Impacts */
+            impacts: components["schemas"]["ImpactView"][];
+        };
         /**
          * Redact
          * @description SENSITIVE_CONTENT: process a redacted derived copy; the original stays restricted.
@@ -2059,6 +2295,18 @@ export interface components {
              * @default en
              */
             user_language: string;
+        };
+        /** RollbackRequest */
+        RollbackRequest: {
+            /** Description */
+            description?: string | null;
+            /**
+             * Versions
+             * @description key → version to restore
+             */
+            versions: {
+                [key: string]: number;
+            };
         };
         /**
          * Route
@@ -2452,8 +2700,11 @@ export interface components {
              * @default
              */
             rationale: string;
-            /** Resolution */
-            resolution: components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"];
+            /**
+             * Resolution
+             * @description None: no proposal; the rationale says why (an explicit 'no suggestion')
+             */
+            resolution?: (components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"]) | null;
         };
         /** SuiteExport */
         SuiteExport: {
@@ -2696,6 +2947,54 @@ export interface components {
             action: "use_replacement";
             /** Replacement Blob Sha256 */
             replacement_blob_sha256: string;
+        };
+        /** UserCreate */
+        UserCreate: {
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+            /** Roles */
+            roles: components["schemas"]["ConsoleRole"][];
+        };
+        /**
+         * UserUpdate
+         * @description Only the fields present change; `password` is an admin reset.
+         */
+        UserUpdate: {
+            /** Display Name */
+            display_name?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Password */
+            password?: string | null;
+            /** Roles */
+            roles?: components["schemas"]["ConsoleRole"][] | null;
+        };
+        /** UserView */
+        UserView: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Last Login At */
+            last_login_at: string | null;
+            /** Roles */
+            roles: components["schemas"]["ConsoleRole"][];
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -2946,6 +3245,39 @@ export interface operations {
             };
         };
     };
+    login_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     me_auth_me_get: {
         parameters: {
             query?: never;
@@ -2962,6 +3294,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConsoleUser"];
+                };
+            };
+        };
+    };
+    list_users_auth_users_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserView"][];
+                };
+            };
+        };
+    };
+    create_user_auth_users_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_auth_users__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3886,6 +4306,167 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleSimulation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_settings_settings_get: {
+        parameters: {
+            query?: {
+                prefix?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_settings_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_settings_rollback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    key_history_settings__key__history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigList"];
                 };
             };
             /** @description Validation Error */
