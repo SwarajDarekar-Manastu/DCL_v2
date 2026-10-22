@@ -18,6 +18,7 @@ from backend.llm_engine.engine.analysis import Analysis, Intent, SourceScope
 from backend.llm_engine.engine.tools.code_diagrams import CodeDiagramArgs
 from backend.llm_engine.engine.tools.documents import CatalogArgs, GetDocumentArgs
 from backend.llm_engine.engine.tools.search import SearchDocumentsArgs
+from backend.llm_engine.engine.tools.visuals import InspectVisualsArgs
 from backend.postgres.enums import EntityType, SourceOrigin
 
 FAILURE_KINDS = ["test_report", "failure_report"]
@@ -29,7 +30,6 @@ UNAVAILABLE = {
     "query_telemetry": (
         "telemetry statistics (Route C) are not available yet; numbers come from report tables"
     ),
-    "inspect_visuals": "photo similarity search is not available yet; figures come from document search",
 }
 
 
@@ -90,6 +90,17 @@ def _search(
     )
 
 
+def _visuals(analysis: Analysis, question: str, *, kinds=(), relook: str | None = None) -> InspectVisualsArgs:
+    return InspectVisualsArgs(
+        query=question,
+        kinds=list(kinds),
+        test_plan_ids=analysis.test_plan_ids,
+        components=_tags(analysis)[:3],
+        relook_question=relook,
+        user_language=analysis.raw.language,
+    )
+
+
 def _tags(analysis: Analysis) -> list[str]:
     tag_types = {EntityType.SENSOR_TAG, EntityType.PART_NUMBER, EntityType.COMPONENT}
     return [e.surface for e in analysis.raw.entities if e.type in tag_types] + analysis.hardware_items
@@ -123,9 +134,8 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
     if Intent.FAILURE_INVESTIGATION in intents:
         plan.add("search_documents", _search(analysis, question, doc_kinds=FAILURE_KINDS), "failure reports")
         plan.add(
-            "search_documents", _search(analysis, question, scope=Scope.FIGURES_ONLY), "photos of the damage"
+            "inspect_visuals", _visuals(analysis, question, kinds=["hardware_photo"]), "photos of the damage"
         )
-        plan.note_unavailable("inspect_visuals")
         for tag in _tags(analysis)[:2]:
             plan.add(
                 "inspect_code_and_diagrams",
@@ -200,10 +210,8 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
         )
         plan.add("search_documents", _search(analysis, question), "where it is discussed")
     if Intent.VISUAL_LOOKUP in intents or analysis.raw.needs_visuals:
-        plan.add(
-            "search_documents", _search(analysis, question, scope=Scope.FIGURES_ONLY), "photos and plots"
-        )
-        plan.note_unavailable("inspect_visuals")
+        relook = question if Intent.VISUAL_LOOKUP in intents else None
+        plan.add("inspect_visuals", _visuals(analysis, question, relook=relook), "photos and plots")
     for sub in analysis.raw.sub_questions:
         if sub.tool in (None, "search_documents"):
             plan.add("search_documents", _search(analysis, sub.text), f"sub-question: {sub.text}")
