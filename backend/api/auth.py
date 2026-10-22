@@ -254,18 +254,35 @@ class LocalUser:
     def console_user(self) -> ConsoleUser:
         return ConsoleUser(oid=str(self.user_id), name=self.display_name, email=self.email, roles=self.roles)
 
+    def audit_view(self) -> dict[str, Any]:
+        """What audit_events keeps of an account: never the password hash."""
+        return {
+            "email": self.email,
+            "display_name": self.display_name,
+            "roles": [str(r) for r in self.roles],
+            "is_active": self.is_active,
+        }
+
+
+AUDIT_ENTITY_USER = "user"  # AuditEntityType.USER, added by S1 with migration 0010
+
 
 class DuplicateEmail(Exception):
     pass
 
 
 class UserStore(Protocol):
+    """Account changes (create, save) write their audit_events row in the same transaction."""
+
     def count(self) -> int: ...
     def get(self, user_id: uuid.UUID) -> LocalUser | None: ...
     def by_email(self, email: str) -> LocalUser | None: ...
     def list(self) -> list[LocalUser]: ...
-    def create(self, user: LocalUser) -> LocalUser: ...
-    def save(self, user: LocalUser) -> LocalUser: ...
+    def create(self, user: LocalUser, actor: str) -> LocalUser: ...
+    def save(
+        self, user: LocalUser, actor: str, action: str, before: dict[str, Any], after: dict[str, Any]
+    ) -> LocalUser: ...
+    def record_login(self, user_id: uuid.UUID, at: datetime, password_hash: str | None = None) -> None: ...
 
 
 class SqlUserStore:
@@ -319,7 +336,22 @@ class SqlUserStore:
         with self._sessions() as session:
             return [self._user(r) for r in session.scalars(select(model).order_by(model.email))]
 
-    def create(self, user: LocalUser) -> LocalUser:
+    @staticmethod
+    def _audit(session: Any, actor: str, user_id: uuid.UUID, action: str, before: Any, after: Any) -> None:
+        from backend.postgres.models import AuditEvent
+
+        session.add(
+            AuditEvent(
+                actor=actor,
+                entity_type=AUDIT_ENTITY_USER,
+                entity_id=str(user_id),
+                action=action,
+                before=before,
+                after=after,
+            )
+        )
+
+    def create(self, user: LocalUser, actor: str) -> LocalUser:
         from sqlalchemy.exc import IntegrityError
 
         model = self._model()
@@ -333,6 +365,7 @@ class SqlUserStore:
                 is_active=user.is_active,
             )
             session.add(row)
+            self._audit(session, actor, user.user_id, "create", None, user.audit_view())
             try:
                 session.commit()
             except IntegrityError as exc:
@@ -340,16 +373,26 @@ class SqlUserStore:
             session.refresh(row)
             return self._user(row)
 
-    def save(self, user: LocalUser) -> LocalUser:
+    def save(
+        self, user: LocalUser, actor: str, action: str, before: dict[str, Any], after: dict[str, Any]
+    ) -> LocalUser:
         with self._sessions() as session:
             row = session.get(self._model(), user.user_id)
             row.display_name = user.display_name
             row.password_hash = user.password_hash
             row.roles = [str(r) for r in user.roles]
             row.is_active = user.is_active
-            row.last_login_at = user.last_login_at
+            self._audit(session, actor, user.user_id, action, before, after)
             session.commit()
             return self._user(row)
+
+    def record_login(self, user_id: uuid.UUID, at: datetime, password_hash: str | None = None) -> None:
+        with self._sessions() as session:
+            row = session.get(self._model(), user_id)
+            row.last_login_at = at
+            if password_hash is not None:
+                row.password_hash = password_hash
+            session.commit()
 
 
 class LoginLimiter:
@@ -489,7 +532,8 @@ def ensure_bootstrap_admin(local: LocalAuth) -> None:
                 display_name="Administrator",
                 password_hash=hash_password(password),
                 roles=list(ConsoleRole),
-            )
+            ),
+            actor="bootstrap",
         )
     except DuplicateEmail:
         return  # another request created it first
@@ -652,9 +696,8 @@ def login(body: LoginRequest, local: LocalAuthDep, response: Response) -> LoginR
         local.limiter.failed(email, now)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wrong email or password")
     local.limiter.succeeded(email)
-    if _hasher.check_needs_rehash(user.password_hash):
-        user.password_hash = hash_password(body.password)
-    user = local.store.save(replace(user, last_login_at=datetime.now(UTC)))
+    rehashed = hash_password(body.password) if _hasher.check_needs_rehash(user.password_hash) else None
+    local.store.record_login(user.user_id, datetime.now(UTC), rehashed)
     token, expires_at = issue_token(user, local)
     response.headers["Cache-Control"] = "no-store"
     return LoginResponse(
@@ -678,10 +721,10 @@ def create_user(body: UserCreate, admin: Admin, local: LocalAuthDep) -> UserView
         roles=_ordered(body.roles),
     )
     try:
-        created = local.store.create(user)
+        created = local.store.create(user, actor=admin.email)
     except DuplicateEmail as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, f"an account for {user.email} exists") from exc
-    log.info("user %s created with roles %s by %s", created.email, created.roles, admin.email)
+    log.info("user %s created by %s", created.email, admin.email)
     return _view(created)
 
 
@@ -708,9 +751,12 @@ def update_user(user_id: uuid.UUID, body: UserUpdate, admin: Admin, local: Local
         ]
         if not other_admins:
             raise HTTPException(status.HTTP_409_CONFLICT, "keep at least one active admin")
-    saved = local.store.save(changed)
-    fields = sorted(body.model_dump(exclude_none=True).keys() - {"password"}) + (
-        ["password"] if body.password else []
-    )
-    log.info("user %s updated (%s) by %s", saved.email, ", ".join(fields), admin.email)
+    before, after = user.audit_view(), changed.audit_view()
+    if body.password is not None:
+        after["password_reset"] = True
+    action = "update"
+    if user.is_active != changed.is_active:
+        action = "reactivate" if changed.is_active else "deactivate"
+    saved = local.store.save(changed, actor=admin.email, action=action, before=before, after=after)
+    log.info("user %s: %s by %s", saved.email, action, admin.email)
     return _view(saved)
