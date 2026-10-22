@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §1, §2 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
@@ -18,8 +18,9 @@ Code:
 - `backend/dispatcher/type_resolution.py` (`resolve_type(head, name, zip_names) -> ResolvedType{kind, mime, route, by, ext_mismatch}`)
 - `backend/dispatcher/folder_context.py` (`build_folder_context`: breadcrumb, TP/T/INJ ids with source, conflicts, siblings, folder kind, origin, trust tier)
 - `backend/dispatcher/assembler.py` (`assemble`: LaTeX master + parts + PDF twin, orphan .tex, JSON section sets)
-- `backend/dispatcher/routing.py` (`dispatch`: processing scope, typing, assembly, documents + document_sources, gating, UNSUPPORTED_FORMAT, CONFLICT flags, then `apply_supersessions`; `sweep_documents`; `retype_waiting`; `reset_waiting`; CLI `dispatch | sweep | retype | reassemble --route X`); ZIP-based files typed by their members
-- `backend/celery_redis/tasks_process.py` (`dcl.process.dispatch`, `dcl.process.sweep_documents`, io_light)
+- `backend/dispatcher/routing.py` (`dispatch`: processing scope, typing, assembly, documents + document_sources, gating, UNSUPPORTED_FORMAT, CONFLICT flags, then `apply_supersessions`, then `release_waiting` (parked documents whose route is enabled and whose adapter accepts the file become PROCESSING; enqueued after the commit through `enqueue`); `sweep_documents`; `retype_waiting`; `reset_waiting`; CLI `dispatch | sweep | retype | reassemble --route X`); ZIP-based files typed by their members
+- `backend/dispatcher/adapters.py` (registry: `Adapter{name, route, task, queue, can_handle}`, `adapter_for(route, head, name)`; a route is implemented kind by kind)
+- `backend/celery_redis/tasks_process.py` (`dcl.process.dispatch` enqueues every PROCESSING document on its adapter's task, `dcl.process.sweep_documents`, io_light; `dcl.process.route_c`)
 - `backend/dispatcher/contract.py` (published: `ProcessedDocument` and parts, `Flag` fingerprint, `Anchor` + `parse_anchor`/`format_anchor`)
 
 Tests and fixtures:
@@ -35,7 +36,7 @@ Provides:
 - Box convention: `PageBox {page_no, x0, y0, x1, y1}` in 0..1, origin top-left, a list per node
 - Flag evidence (`Evidence`, union on `kind`: unit_telemetry, unit_fact, array_schema, json_schema, conflict, parse_failure, low_confidence, sensitive, file_facts; provisional) and `Suggestion {resolution, confidence, rationale, proposed_by}`
 - Resolution actions (`Resolution`, union on `action`), `ALLOWED_ACTIONS`, `ADMIN_ONLY_ACTIONS`: the file 06 §6 vocabulary shared by routes, review API and overlays
-- type resolution: content first (file 03 §1.1 signatures, ZIP member names, delimiter sniff), extension refines text, `ext_mismatch` for `drive_items`; route None → `UNSUPPORTED_FORMAT`; pickles are named, never loaded; LabJack header regex pending a real sample
+- type resolution: content first (file 03 §1.1 signatures, ZIP member names, delimiter sniff), extension refines text, `ext_mismatch` for `drive_items`; route None → `UNSUPPORTED_FORMAT`; pickles are named, never loaded
 - route selection
 
 Consumes:
@@ -50,6 +51,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/dispatcher/folder_context.py`
 - `backend/dispatcher/assembler.py`
 - `backend/dispatcher/routing.py`
+- `backend/dispatcher/adapters.py`
 - `backend/celery_redis/tasks_process.py`
 - `backend/dispatcher/contract.py`
 - `backend/tests/unit/dispatcher/`
@@ -74,6 +76,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | S1 | Published `contract.py` (route output contract, flags with fingerprints, stable anchors and their link format); 27 tests |
 | 2026-10-21 | S1 | Typed flag evidence and suggestions; resolution actions moved here from review/api_models |
 | 2026-10-21 | S1 | Type resolution (magic bytes, sniffers, extension refinement, mismatch); 39 tests |
+| 2026-10-22 | S1 | Adapter registry, release of parked documents, enqueue after commit (Route C LabJack first) |
 
 ## Related
 

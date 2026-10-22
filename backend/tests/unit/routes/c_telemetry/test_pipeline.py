@@ -1,0 +1,167 @@
+"""Route C through dispatch on a migrated PostgreSQL + MinIO: release of parked documents, enqueueing,
+processing, the validation gate (HALTED with a staged payload), and rules that clear the flags.
+
+Needs DCL_TEST_DATABASE_URL and DCL_TEST_MINIO_ENDPOINT.
+"""
+
+import hashlib
+import io
+
+from sqlalchemy import select
+
+from backend.dispatcher.contract import DocumentFields, Flag, FlagAnchor, ProcessedDocument
+from backend.dispatcher.routing import PROCESSED_MARK, dispatch
+from backend.postgres import pipeline_config
+from backend.postgres.enums import DriveItemStatus
+from backend.postgres.models import Blob, Document, DriveFolder, DriveItem, ReviewFlag, Rule
+from backend.review.staged import apply_severity_policy, load_staged
+from backend.routes.c_telemetry.pipeline import process_document
+from backend.storage.minio import CIR, RAW, BucketStore, raw_key
+from backend.tests.unit.routes.c_telemetry.conftest import labjack_bytes
+
+FOLDERS = [
+    ("ROOT", "APU Injector", None, "APU Injector"),
+    ("F-TP12", "Test Plan 12", "ROOT", "APU Injector/Test Plan 12"),
+    ("F-RUN", "Pressure_Data_Files", "F-TP12", "APU Injector/Test Plan 12/Pressure_Data_Files"),
+]
+
+
+def _seed(session, minio, files: dict[str, bytes]) -> None:
+    for item_id, name, parent, path in FOLDERS:
+        session.add(
+            DriveFolder(
+                drive_id="D",
+                item_id=item_id,
+                root_name="APU Injector",
+                name=name,
+                parent_item_id=parent,
+                path_cached=path,
+            )
+        )
+    for name, data in files.items():
+        sha = hashlib.sha256(data).hexdigest()
+        minio.put_object(RAW, raw_key(sha), io.BytesIO(data), len(data))
+        session.add(Blob(sha256=sha, size_bytes=len(data), minio_uri=f"s3://dcl-raw/{raw_key(sha)}"))
+        session.flush()
+        session.add(
+            DriveItem(
+                drive_id="D",
+                item_id=name,
+                root_name="APU Injector",
+                name=name,
+                extension="." + name.rsplit(".", 1)[-1],
+                parent_item_id="F-RUN",
+                path_cached=f"{FOLDERS[-1][3]}/{name}",
+                status=DriveItemStatus.LANDED,
+                blob_sha256=sha,
+                detected_mime="text/plain",
+                size_bytes=len(data),
+            )
+        )
+    pipeline_config.set_value(session, pipeline_config.PROCESSING_SCOPE, ["F-TP12"], "test")
+    session.commit()
+
+
+def _files():
+    run, _ = labjack_bytes(rows=600)
+    other, _ = labjack_bytes(rows=400, gap_at=None)
+    return {
+        "TP12_T01.dat": run,
+        "TP12_T02.dat_fail": other,
+        "TP12_legacy.dat": b"time\tAIN0\n0.0\t1.2\n0.001\t1.3\n",
+    }
+
+
+def _docs(session):
+    return {d.title: d for d in session.scalars(select(Document))}
+
+
+def test_parked_documents_are_released_processed_and_halted(session, minio):
+    _seed(session, minio, _files())
+    first = dispatch(session, minio, section_file_sets=())
+    assert (first.created, first.waiting, first.released, first.to_process) == (3, 3, 0, [])
+
+    pipeline_config.set_value(session, "routes.C.enabled", True, "test")
+    session.commit()
+    queued = []
+    second = dispatch(session, minio, section_file_sets=(), enqueue=queued.append)
+    docs = _docs(session)
+    assert (second.created, second.released) == (0, 2)
+    assert {r.task for r in queued} == {"dcl.process.route_c"} and {r.queue for r in queued} == {
+        "telemetry_stream"
+    }
+    assert {r.doc_id for r in queued} == {docs["TP12_T01"].doc_id, docs["TP12_T02"].doc_id}
+    assert docs["TP12_legacy"].status == "WAITING_FOR_ROUTE"  # no adapter for this layout yet
+
+    outcome = process_document(session, minio, docs["TP12_T01"].doc_id)
+    session.commit()
+    document = session.get(Document, docs["TP12_T01"].doc_id)
+    assert (outcome.status, outcome.rows, outcome.channels, outcome.hard_flags) == ("HALTED", 600, 4, 2)
+    assert (document.status, document.doc_kind, document.trust_tier, document.unit_count) == (
+        "HALTED",
+        "telemetry_run",
+        1,
+        4,
+    )
+    assert document.staged_payload_uri.endswith("/staged.json")
+    flags = session.scalars(select(ReviewFlag).where(ReviewFlag.doc_id == document.doc_id)).all()
+    assert sorted((f.flag_type, f.severity, f.route, f.anchor["channel"]) for f in flags) == [
+        ("UNIT_AMBIGUITY", "HARD", "C", "y0"),
+        ("UNIT_AMBIGUITY", "HARD", "C", "y1"),
+    ]
+    staged = load_staged(BucketStore(minio, CIR), document)
+    assert staged.telemetry_runs[0].n_rows == 600
+    assert {f.fingerprint for f in staged.flags} == {f.fingerprint for f in flags}
+
+    again = process_document(session, minio, document.doc_id)
+    assert again.status == "HALTED" and again.rows is None  # not PROCESSING any more: left alone
+    assert dispatch(session, minio, section_file_sets=(), enqueue=queued.append).released == 0
+
+
+def test_a_rule_for_every_channel_clears_the_gate(session, minio):
+    _seed(session, minio, {"TP12_T01.dat": labjack_bytes(rows=300)[0]})
+    pipeline_config.set_value(session, "routes.C.enabled", True, "test")
+    session.add(
+        Rule(
+            rule_type="channel_map",
+            origin="operator",
+            scope_folder_id="F-RUN",
+            body={
+                "channels": {
+                    "y0": {"canonical_name": "pt_101_bar_g", "physical_quantity": "pressure", "unit": "bar"},
+                    "y1": {"canonical_name": "tc_1_k", "physical_quantity": "temperature", "unit": "K"},
+                }
+            },
+            created_by="test",
+        )
+    )
+    session.commit()
+    result = dispatch(session, minio, section_file_sets=())
+    (release,) = result.to_process
+    outcome = process_document(session, minio, release.doc_id)
+    session.commit()
+    document = session.get(Document, release.doc_id)
+    assert (outcome.status, outcome.hard_flags, document.staged_payload_uri) == ("WAITING_FOR_ROUTE", 0, None)
+    assert document.metadata_sources[PROCESSED_MARK]["uri"].endswith("/C/v1/processed.json")
+    assert dispatch(session, minio, section_file_sets=()).released == 0  # waits for the commit path
+
+
+def test_overrides_and_strict_mode_set_severity(session, minio):
+    _seed(session, minio, {"TP12_T01.dat": labjack_bytes(rows=200)[0]})
+    pipeline_config.set_value(session, "routes.C.enabled", True, "test")
+    pipeline_config.set_value(session, "flags.severity_overrides", {"C": {"UNIT_AMBIGUITY": "SOFT"}}, "test")
+    session.commit()
+    (release,) = dispatch(session, minio, section_file_sets=()).to_process
+    outcome = process_document(session, minio, release.doc_id)
+    assert (outcome.status, outcome.hard_flags, outcome.soft_flags) == ("WAITING_FOR_ROUTE", 0, 2)
+
+    pipeline_config.set_value(session, "flags.strict_mode", True, "test")
+    payload = ProcessedDocument(
+        blob_sha256="a" * 64,
+        route="C",
+        parser_version=1,
+        cir_uri=f"s3://dcl-cir/{'a' * 64}/C/v1/",
+        document=DocumentFields(title="t"),
+        flags=[Flag(flag_type="CONFLICT", severity="SOFT", anchor=FlagAnchor(content_sha256="ab"))],
+    )
+    assert [f.severity for f in apply_severity_policy(session, payload).flags] == ["HARD"]

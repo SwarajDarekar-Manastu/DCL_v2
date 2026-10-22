@@ -409,12 +409,24 @@ Blocked on: nothing
 Needs from others: nothing
 Next: Route C
 
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: Route C step 1 for LabJack .dat/.dat_fail. A run streams to `dcl-telemetry/{run_uuid}/raw.parquet` (ZSTD, 100k-row groups), with per-channel stats, actual rate, gaps and duplicates. `v*` channels are volts; every other channel resolves through `channel_map` rules or gets UNIT_AMBIGUITY HARD. The validation gate (`backend/review/staged.py`) then halts the document with a staged payload. New: the adapter registry, release of parked documents on dispatch, and `dcl.process.route_c` on telemetry_stream. pyarrow, duckdb, numpy, pint, pyyaml, openpyxl and nptdms are now main dependencies, so the backend image needs a rebuild. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest` (1,210 passed, 20 skipped).
+Read-only census of the stack: 20 of the 40 waiting C documents are LabJack (18 .dat, 2 .dat_fail, 819 MB). The other 20 (12 xlsx, 4 cfg, 2 csv, 2 tdms) wait for step 2 adapters. Dry run on real data: 628 MB, 3.79 M rows in 3.7 s; 16 channels per file, 8 of them y* with no unit.
+Blocked on: merge + stack image rebuild, then `routes.C.enabled = true` on the stack and a re-dispatch (live counts follow)
+Needs from others: Lead: approval for the `telemetry_runs`/`telemetry_channels` migration (step 2); S4: rebuild the worker image after the merge
+Next: live Route C run and counts; then step 2 (normalized Parquet, t0, metrics, catalog tables, commit path) and the A1/D/F adapter wiring S2 published
 
 ## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
 Merged / ready: Benchmark UI. Suites, cases with drafts to approve, the case editor covering every CaseSpec field (edit = new version), the results dashboard with a baseline ribbon, failure classes, per-category counts and newly failing cases, the drilldown, compare runs and the Retrieval lab over S2's /v1/retrieval/search; run pages refresh on the live `run` topic. 90 Vitest; check and build clean; browser run against a mock API.
 Blocked on: nothing. A real benchmark run waits for S2's runner (M10).
 Needs from others: S2 to publish `run` events (progress, finished) through publish_event when the runner lands.
 Next: Open WebUI "Add to benchmark" action against POST /benchmark/drafts; Settings editing once S1 publishes the settings API.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: "Add to benchmark" Open WebUI action. It prefills a draft from the trace (verified numeric claims, cited pages, tools) and posts it to POST /benchmark/drafts; the prefill is tested against the API's DraftFromChat model. 68 Open WebUI tests pass on source and bundles.
+Blocked on: nothing. Settings editing waits for S1's settings API; live Pipe and actions wait for the engine (M8).
+Needs from others: nothing new.
+Next: idle until S1's settings API, or new tasks.
 ## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
 Merged / ready: observability (telemetry module + metric catalogue of file 02 §10, collector, Prometheus + 7 operational alerts with promtool tests, Alertmanager → Teams, Tempo, Grafana dashboard; verified live in a throwaway project); `parse` image for cpu_parse (Docling 2.141 + RapidOCR + onnxruntime on CPU torch, Tesseract OSD + Latin/Cyrillic/Devanagari/Arabic; scanned page OCR'd correctly by both engines); `HF_HUB_DISABLE_XET=1` in model images; `_incoming/` lifecycle rule; S1's process schedules; parse image in CI scan. Stack on the host runs main 65dd09f at migration 0008. Test: `uv run pytest` green (alert-rule tests need Docker)
 Blocked on: nothing
@@ -427,11 +439,27 @@ Blocked on: DCL Lead / user decision before backups (brief task 6, file 05 §6, 
 Needs from others: answers above; approval of `DCL_GRAFANA_ADMIN_PASSWORD` / `DCL_GRAFANA_PORT`
 Next: backups and restore drill once answered; MinIO replacement comparison by end of M4
 
+## 2026-10-22 06:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Route A1 for PDFs end to end (`backend/routes/a1_office/{convert,structure,metadata,figures,tables_qa,handwriting,route}.py`): Docling runs by OCR plan with the second pass and `transcribe_page`, structure with references as mentions, L1 metadata, figure readings, table A/B QA, handwriting with critical-field HARD flags, CIR and assets; 67 route tests (Docling on S5's digital fixtures).
+Blocked on: nothing
+Needs from others: S1: the dispatcher's adapter call into `process_pdf` and `IMPLEMENTED_ROUTES` (signature in `.wiki/backend/route-a1-office.md`); `critical_field_patterns` from pipeline_config
+Next: A1.0 visual twin + page map, DOCX/PPTX, rotation; then Routes D and F; then the answer workflow
+
+## 2026-10-22 05:10 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: M1.md row 10 with S4's queue load-test procedure and expected report (from S4, at the Lead's request)
+Blocked on: the user's answer on the sample list
+Needs from others: nothing new
+Next: idle until the answer
 ## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
 Merged / ready: dead-letter list + poison-task stop for every task (`DclTask` in `backend/celery_redis/app.py`; `Queue.DEAD_LETTER` removed, the list is `dcl:dead_letter`, read with `dead_letters()`); M1 queue load test harness `backend/devops/ci/queue_load_test.sh` + `backend.celery_redis.load_test` — passed on a throwaway project (5,002 tasks, no loss, no misrouting, 54 dead letters as planned, kills confined to telemetry_stream); 24 h lifecycle on `dcl-exports/uploads/` (applied live). Test: `uv run pytest` green
 Blocked on: backups questions (destination, RPO/RTO, tool, retention ownership) with DCL Lead
 Needs from others: S5 — add the load-test command and expected output to `backend/tests/acceptance/M1.md` row 10 (sent); S3/S1 — Console "Failed tasks" page reads `dead_letters()`
 Next: office conversion client for S1/S2 (`backend/common/office.py`, env name pending Lead), then backups once answered
+## 2026-10-22 07:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Route D (`backend/routes/d_photos.py`, `classify_image` capability) and Route F (`backend/routes/f_video.py`), 17 tests; Route A1 for PDFs requested earlier.
+Blocked on: nothing (A1 DOCX/PPTX waits for S4's `backend/common/office.py`, signature agreed)
+Needs from others: Lead: parse/media deps pillow-heif==1.8.1, imagehash==4.3.2, faster-whisper==1.2.1; S1: dispatcher calls for `process_photo` (with `cluster_photos` in the assembler) and `process_video`
+Next: the Answer Engine workflow (query analysis, planner, tools T1–T6/U1–U2, synthesis, verifier, DBOS)
 
 ## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
 Merged / ready: office conversion for S1 and S2: `backend/common/office.py` `convert(data, from_ext, to, *, recalc=False)` against the libreoffice container, which now runs `office_server.py` (one soffice run per request, profile that recalculates formulas on load) instead of unoserver (unoserver cannot load .xlsx on LibreOffice 7.4, inline or by path). Verified live: rtf/doc → docx, docx → pdf, xls → xlsx, xlsx recalculation (stale 999 → 81), S5's FMEA fixture → pdf; PPT/PPTX untested (no sample). Env name `DCL_OFFICE_URL` used, pending Lead approval. Test: `uv run pytest` green

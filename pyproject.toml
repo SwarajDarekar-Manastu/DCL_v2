@@ -29,6 +29,13 @@ dependencies = [
     "opentelemetry-instrumentation-httpx>=0.66b0",
     "opentelemetry-instrumentation-celery>=0.66b0",
     "pgvector>=0.4",
+    "pyarrow>=17",
+    "duckdb>=1.1",
+    "numpy>=1.26",
+    "pint>=0.24",
+    "pyyaml>=6.0",
+    "openpyxl>=3.1",
+    "nptdms>=1.9",
 ]
 
 [dependency-groups]
@@ -39,6 +46,11 @@ parse = [
     "torch==2.14.1",
     "torchvision==0.29.1",
     "onnxruntime==1.31.0",
+]
+media = [
+    "pillow-heif==1.8.1",
+    "imagehash==4.3.2",
+    "faster-whisper==1.2.1",
 ]
 models = [
     "torch==2.14.1",

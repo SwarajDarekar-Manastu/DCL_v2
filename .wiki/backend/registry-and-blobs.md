@@ -18,7 +18,7 @@ Code:
 - `backend/sync/downloader.py` (`land_item()`: zero-download link by (quickXorHash, size), 302 target fetched without the token, one-pass SHA-256 + quickXorHash, verify, server-side copy to the content address, conflict-safe blob insert, item LANDED)
 - `backend/postgres/models/registry.py` (M1 tables, done with backend/schema-and-migrations)
 - `backend/sync/export_blobs.py` (read-only export of landed blobs of folder subtrees; CLI)
-- `backend/storage/minio.py` (client from `Group.MINIO`, `BucketStore.get/put`, `presign_get` 15 min, `ensure_buckets`, `raw_key`, `uri`/`parse_uri`)
+- `backend/storage/minio.py` (client from `Group.MINIO`, `BucketStore.get/put/put_file/open`, `presign_get` 15 min, `ensure_buckets`, `raw_key`, `uri`/`parse_uri`)
 
 Tests and fixtures:
 - `backend/tests/unit/storage/test_minio.py` (server tests need `DCL_TEST_MINIO_ENDPOINT` on a disposable MinIO)

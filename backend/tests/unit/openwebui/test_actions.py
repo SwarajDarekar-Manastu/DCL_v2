@@ -34,8 +34,18 @@ TRACE = {
         }
     ],
     "external_queries": [],
-    "claims": [{"text": "12.4 bar(a)", "kind": "numeric", "verdict": "entailed"}],
-    "citations": [],
+    "claims": [
+        {"text": "steady-state mean 12.4 bar(a)", "kind": "numeric", "verdict": "entailed"},
+        {"text": "peak 13.1 bar(a)", "kind": "numeric", "verdict": "not_supported"},
+        {"text": "the run was nominal", "kind": "factual", "verdict": "entailed"},
+    ],
+    "citations": [
+        {"anchor": {"doc_id": "6f1c2a3e-0000-4000-8000-000000000001", "page_no": 8}, "label": "TR37 p. 8"},
+        {
+            "anchor": {"doc_id": "6f1c2a3e-0000-4000-8000-000000000001", "page_no": 8},
+            "label": "TR37 p. 8 again",
+        },
+    ],
     "verifier_result": {"claims": 1, "entailed": 1},
     "answer_markdown": "12.4 bar(a) [1]",
     "latency_ms": 6100,
@@ -94,8 +104,8 @@ def run(action, sub_id, reply=None):
     return result, events, calls
 
 
-def test_declares_two_actions(module):
-    assert [a["id"] for a in module.Action.actions] == ["show_trace", "report_issue"]
+def test_declares_three_actions(module):
+    assert [a["id"] for a in module.Action.actions] == ["show_trace", "add_to_benchmark", "report_issue"]
 
 
 def test_show_trace_returns_an_inline_embed_with_escaped_values(module):
@@ -104,7 +114,7 @@ def test_show_trace_returns_an_inline_embed_with_escaped_values(module):
     assert isinstance(result, HTMLResponse)
     assert result.headers["content-disposition"] == "inline"
     page = result.body.decode()
-    assert "query_telemetry" in page and "310" in page and "entailed" in page
+    assert "query_telemetry" in page and "310" in page and "entailed" in page and "not_supported" in page
     assert "<script>x</script>" not in page and "&lt;script&gt;x&lt;/script&gt;" in page
     assert 'href="https://console.test/docs/d/viewer?anchor=page%3A8%3A"' in page
     assert "iframe:height" in page
@@ -172,3 +182,54 @@ def test_parse_report(text, expected):
 
 def test_bundle_is_current():
     assert BUNDLED.read_text() == bundle("actions_manastu.py")
+
+
+def test_draft_prefill_is_what_the_benchmark_api_accepts():
+    from backend.benchmark.catalog import DraftFromChat
+
+    draft = actions_manastu.draft_from_trace(TRACE, "from-chat")
+    parsed = DraftFromChat.model_validate(draft)
+    assert parsed.category == "TELEMETRY_MATH" and parsed.question == TRACE["question"]
+    assert [(n.value, n.unit) for n in parsed.spec.expected_numeric] == [
+        (12.4, "bar(a)")
+    ]  # only verified numbers
+    assert [(str(c.doc_id), c.page) for c in parsed.spec.expected_citations] == [
+        ("6f1c2a3e-0000-4000-8000-000000000001", 8)
+    ]
+    assert parsed.spec.expected_tools.tools == ["query_telemetry"]
+    assert str(parsed.source_trace_id) == TRACE_ID
+
+
+def test_add_to_benchmark_posts_a_draft(module):
+    routes = {
+        ("GET", "/v1/traces"): (200, TRACE),
+        ("POST", "/benchmark/drafts"): (201, {"case_id": "chat-1a2b3c4d5e6f", "status": "draft"}),
+    }
+    action, seen = make(module, routes)
+    result, events, calls = run(action, "add_to_benchmark", reply="golden-chat")
+    assert result is None and calls[0]["type"] == "input"
+    body = json.loads(seen[1].content)
+    assert body["suite"] == "golden-chat" and body["source_trace_id"] == TRACE_ID
+    assert "x-dcl-signature" in seen[1].headers
+    assert events[-1]["data"] == {
+        "type": "success",
+        "content": "Draft case chat-1a2b3c4d5e6f added to golden-chat; approve it in the Console.",
+    }
+
+
+@pytest.mark.parametrize("reply", [None, False, {"error": "timed out"}])
+def test_cancelled_draft_sends_nothing(module, reply):
+    action, seen = make(module, {("GET", "/v1/traces"): (200, TRACE)})
+    run(action, "add_to_benchmark", reply=reply)
+    assert [r.method for r in seen] == ["GET"]
+
+
+def test_empty_suite_defaults_and_refusal_is_reported(module):
+    routes = {
+        ("GET", "/v1/traces"): (200, TRACE),
+        ("POST", "/benchmark/drafts"): (422, {"detail": "question: String should have at least 1 character"}),
+    }
+    action, seen = make(module, routes)
+    _, events, _ = run(action, "add_to_benchmark", reply="  ")
+    assert json.loads(seen[1].content)["suite"] == "from-chat"
+    assert events[-1]["data"]["type"] == "error" and "could not be created" in events[-1]["data"]["content"]

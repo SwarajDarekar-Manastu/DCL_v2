@@ -28,3 +28,15 @@ Written by `DCL Lead` only. Newest at the bottom. Each entry names the sessions 
 | 2026-10-22 | `benchmark_runs.status` values: QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED (migration 0006) | S1, S3, S5 | file 05 benchmark_runs |
 | 2026-10-22 | `parse` dependency group in pyproject (pypdfium2 5.14.0, pikepdf 10.17.0; docling added with A1.3); lxml arrives with pikepdf, so the fixture generator pins `OPENPYXL_LXML=False` | S2, S4, S5 | Lead |
 | 2026-10-22 | CI test job installs `fonts-dejavu-core` and `fonts-noto-cjk` for the synthetic fixture generator (Lead edit in S4's workflow, S4 informed) | S4, S5 | ci.yml |
+| 2026-10-22 | `DCL_GRAFANA_ADMIN_PASSWORD` (secret, required outside dev) and `DCL_GRAFANA_PORT` (compose-only, default 3300) approved and added to the env contract (file 01 §7.1) | S4 | Lead |
+| 2026-10-22 | Backups: WAL-G (base + continuous WAL, point-in-time restore) to an S3-compatible off-host target; MinIO buckets mirrored to the same target; RPO 15 min, RTO 2 h, proven by the restore drill in M11. Destination and credential env names come from the user | S4 | file 10 §3 prod |
+| 2026-10-22 | Retention deletes: the code (`backend/sync/retention.py`) is S1's; S4 schedules it in beat and owns the backup/restore tooling | S1, S4 | S4 question 4 |
+| 2026-10-22 | `models` and `parse` dependency groups conflict by design (CPU torch in `parse`, CUDA torch in `models`); the parse image syncs only `parse`; onnxruntime 1.31.0 in `parse` for RapidOCR | S2, S4 | S4 merge a19ad4f |
+| 2026-10-22 | `DCL_OFFICE_URL` approved; `backend/common/office.py` (S4) is the one office-conversion client that S1 and S2 call; unoserver dropped, one soffice per request | S1, S2, S4 | file 01 §7.1 |
+| 2026-10-22 | `media` dependency group (pillow-heif 1.8.1, imagehash 4.3.2, faster-whisper 1.2.1) for the media worker image | S2, S4 | Lead |
+| 2026-10-22 | Route C: `telemetry_runs` and `telemetry_channels` migration approved per file 05 §4.4; `channel_map` rules may be derived from each folder's "Data format.xlsx" with `origin=header`, scoped to that folder subtree, provenance = source blob + sheet/cell; a human rule (`operator`) always wins; nearest folder wins between derived rules | S1, S5 | file 06 §8 |
+| 2026-10-22 | **User:** no backups for now. Postgres and the one MinIO instance stay on the local disk; no off-host target, no WAL archiving, no bucket mirror. S4's backup task (brief task 6) is deferred; a second S3 container may be added later. Retention stays as decided | S4, S1 | user |
+| 2026-10-22 | **User:** Docker build cache pruned by the Lead (73.6 GB reclaimed; 103 GB free). Unused images and volumes untouched | S4 | user |
+| 2026-10-22 | **User:** Flash-Lite tier uses `gemini-3.1-flash-lite` (available on the gateway); `gemini-3.8-flash-lite` is not enabled and will not be; `gemini-3.8-flash` stays the main model. S2 and S4 switch the Flash-Lite model id in config | S2, S4, S5 | user |
+| 2026-10-22 | Sample fixtures: real files stay local only (Tier B); only synthetic fixtures go to the public repo. Lead's recommendation applied until the user says otherwise | S5 | Lead |
+

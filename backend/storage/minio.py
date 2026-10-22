@@ -116,6 +116,15 @@ class BucketStore:
         )
         return uri(self.bucket, key)
 
+    def put_file(self, key: str, path: str, content_type: str = "application/octet-stream") -> str:
+        """Upload a local file (multipart for large ones); returns its ``s3://`` URI."""
+        self._client.fput_object(self.bucket, check_key(key), path, content_type=content_type)
+        return uri(self.bucket, key)
+
+    def open(self, key: str):
+        """A streaming response for ``key``; the caller closes it and releases the connection."""
+        return self._client.get_object(self.bucket, check_key(key))
+
 
 def presign_get(client: Minio, minio_uri: str, ttl: timedelta = PRESIGN_TTL) -> str:
     """A GET URL valid for ``ttl`` (15 minutes by default). Callers check the user's session first."""

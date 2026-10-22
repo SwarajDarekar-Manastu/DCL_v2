@@ -159,6 +159,8 @@ class Settings(BaseSettings):
     bind_host: str = _env("DCL_BIND_HOST", default="127.0.0.1")
     portainer_user: str | None = _env("DCL_PORTAINER_USER", default=None)
     portainer_password: SecretStr | None = _env("DCL_PORTAINER_PASSWORD", default=None)
+    grafana_admin_password: SecretStr | None = _env("DCL_GRAFANA_ADMIN_PASSWORD", default=None)
+    grafana_port: Port = _env("DCL_GRAFANA_PORT", default=3300)
 
     redis_url: str | None = _env("DCL_REDIS_URL", default=None)
     minio_endpoint: AnyHttpUrl | None = _env("DCL_MINIO_ENDPOINT", default=None)
