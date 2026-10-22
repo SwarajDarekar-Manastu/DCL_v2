@@ -43,9 +43,11 @@ publishes the CIR snapshot format.
 
 ## Local real samples (never committed)
 
-`real_samples.template.yaml` lists 91 distinct files (about 400 MB) from the allowlist entries E1–E11 of
-DECISIONS.md: the E1–E3 telemetry used to verify the benchmark cases, one real file per format
-for every route, and the library PDFs (third-party copyright). Copy them from MinIO with S1's
+`real_samples.template.yaml` lists 18 files (about 69 MB). Rule (user, 2026-10-22): one file per
+supported type, chosen from registry metadata by extension and file name only (no content
+opened to choose), plus the E1–E3 telemetry runs the benchmark cases need. A `.pptx` and a `.zip`
+are pending: no allowlist folder has them, so S1 picks them from the registry. Copy the files
+from MinIO with S1's
 read-only export, one directory per entry. `export_blobs` reads its settings from `os.environ`,
 so the stack's `.env` must be loaded first; only an operator has it. From the main checkout:
 
@@ -58,9 +60,6 @@ export_blobs --folder-id 01RDWVU42SMG6ALQAFJJG3LSYXU56T7OWJ data/samples/E4
 export_blobs --folder-id 01RDWVU4ZM5TFKN7MZAJELC4TBIG5UGDC7 data/samples/E5
 export_blobs --folder-id 01RDWVU43XKEVJHLVPJZCLWXDUB6B74OPS data/samples/E6
 export_blobs --folder-id 01RDWVU4YQX7G7T47P6BALUPKS3BEEP5PC data/samples/E7
-export_blobs --folder-id 01RDWVU44OZM3GH2XQMFHKUXPTAUSOLEWZ data/samples/E8
-export_blobs --folder-id 01RDWVU46A6HDMZK253RBYAULGDACN2PZZ data/samples/E10
-export_blobs --folder-id 01RDWVU457TPDUS3AFZZH3RTJTFZV2FOHJ data/samples/E11
 ```
 
 The output paths are relative to the main checkout; prefix them with another worktree's path to
