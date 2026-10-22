@@ -1,6 +1,6 @@
 // Results dashboard helpers (file 08 §5.4–§5.5). Aggregate and metric keys follow the runner contract with S2.
 
-import type { BenchmarkCase, BenchmarkResult, FailureClass } from '$lib/api_endpoint';
+import type { BenchmarkCase, BenchmarkResult, BenchmarkRun, FailureClass, RunRequest } from '$lib/api_endpoint';
 
 export interface RibbonItem {
 	key: string;
@@ -91,4 +91,33 @@ export function numericChecks(metrics: Record<string, unknown>): NumericCheck[] 
 			unit: String(r.unit ?? ''),
 			within: typeof r.within === 'boolean' ? r.within : null
 		}));
+}
+
+/** How often a run page re-reads a queued or running run; the runner may not publish websocket events. */
+export const POLL_MS = 5000;
+
+/** Queued and running runs can still change; the other statuses are final. */
+export function isActive(status: BenchmarkRun['status']): boolean {
+	return status === 'queued' || status === 'running';
+}
+
+export interface RunProgress {
+	done: number;
+	total: number;
+	label: string;
+}
+
+/** Results recorded so far against the run's case snapshot. */
+export function runProgress(run: Pick<BenchmarkRun, 'case_versions'>, results: Pick<BenchmarkResult, 'case_id'>[]): RunProgress {
+	const total = Object.keys(run.case_versions).length;
+	const done = Math.min(results.length, total);
+	return { done, total, label: `${done} of ${total} cases` };
+}
+
+/** A run of the whole suite's active cases, or of the picked subset in suite order. */
+export function runRequest(suite: string, picked: readonly string[] = [], order: readonly string[] = []): RunRequest {
+	if (picked.length === 0) return { suite };
+	const chosen = new Set(picked);
+	const ordered = order.filter((id) => chosen.has(id));
+	return { suite, case_ids: [...ordered, ...picked.filter((id) => !ordered.includes(id))] };
 }
