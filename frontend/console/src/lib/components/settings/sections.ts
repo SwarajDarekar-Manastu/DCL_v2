@@ -43,7 +43,8 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 			'thresholds.*',
 			'critical_field_patterns',
 			'report_json_schemas',
-			'sanity_ranges'
+			'sanity_ranges',
+			'telemetry.*'
 		],
 		apply: 'Hot for new files. "Re-process affected documents" shows the count first.'
 	},
@@ -79,7 +80,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 		id: 'answer',
 		title: 'Answer engine',
 		summary: 'External search per group, proprietary-terms list for the sanitizer, token budget per answer, latency targets, extractive fallback.',
-		keys: ['answer.external_allowed_groups', 'answer.proprietary_terms'],
+		keys: ['answer.external_search_enabled', 'answer.external_allowed_groups', 'answer.proprietary_terms'],
 		apply: 'Hot.'
 	},
 	{
