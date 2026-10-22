@@ -752,3 +752,13 @@ Merged / ready: Open WebUI Skills. `frontend/openwebui/skills/` holds 13 playboo
 Blocked on: a Lead ruling (question sent)
 Needs from others: Lead: should the skills be attached to `manastu_engine.main` (file 08 §1 says attached), and should a toggled skill steer the planner? Details in the message.
 Next: idle until the ruling
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- Step 3: the Settings pages edit pipeline_config over S1's /settings API. Typed editors, then Preview showing impacts (counts, bytes, extensions), then Apply with a reason and the versions the editor saw. 422 reasons show per key; a 409 reloads the current values. Each key has its history with Restore.
+- Live on the stack: an edit of gate.junk_names was applied and then restored. Both writes are audited.
+- Account changes now write audit_events (entity_type `user`; Lead ruling).
+- Tests: Console check 0 errors, vitest 137, build ok; backend pytest exit 0.
+Blocked on: local login end to end and dev-token removal wait for S1's 0010 and S4's redeploy (the Lead will say when). The cost estimate in the preview waits for S1's llm_calls price ledger.
+Needs from others: S1: migration 0010 (users, `user` audit type).
+Next: end-to-end local login and dev-token removal when told; otherwise idle.

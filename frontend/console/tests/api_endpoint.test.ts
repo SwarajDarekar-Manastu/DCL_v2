@@ -195,3 +195,15 @@ describe('listFailedTasks', () => {
 		expect(urls).toEqual(['http://api/ops/failed-tasks?limit=100', 'http://api/ops/failed-tasks?limit=20']);
 	});
 });
+
+describe('settings errors', () => {
+	it('keeps the per-key reasons of a 422 answer', async () => {
+		const { previewSettings } = await import('../src/lib/api_endpoint');
+		const body = { detail: { errors: { 'gate.max_download_bytes': 'must be positive', 'x.y': 'unknown key' } } };
+		wire(vi.fn(async () => new Response(JSON.stringify(body), { status: 422 })) as unknown as typeof fetch);
+		const error = await previewSettings({ changes: [{ key: 'x.y', value: 1 }] }).catch((e) => e);
+		expect(error).toBeInstanceOf(ApiError);
+		expect(error.errors).toEqual(body.detail.errors);
+		expect(error.detail).toBe('gate.max_download_bytes: must be positive; x.y: unknown key');
+	});
+});

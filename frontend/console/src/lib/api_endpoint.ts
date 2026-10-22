@@ -11,6 +11,13 @@ type Schemas = components['schemas'];
 /** backend/api/auth.py */
 export type ConsoleUser = Schemas['ConsoleUser'];
 export type LoginResponse = Schemas['LoginResponse'];
+export type ConfigEntry = Schemas['ConfigEntry'];
+export type ConfigChange = Schemas['Change'];
+export type ConfigBatch = Schemas['ChangeBatch'];
+export type ConfigImpact = Schemas['ImpactView'];
+export type ConfigPreview = Schemas['PreviewResponse'];
+export type ConfigApplied = Schemas['ApplyResponse'];
+export type ConfigRollback = Schemas['RollbackRequest'];
 export type LocalAccount = Schemas['UserView'];
 export type LocalAccountCreate = Schemas['UserCreate'];
 export type LocalAccountUpdate = Schemas['UserUpdate'];
@@ -103,7 +110,9 @@ export interface LiveEvent {
 export class ApiError extends Error {
 	constructor(
 		readonly status: number,
-		readonly detail: string
+		readonly detail: string,
+		/** Per-field reasons from a 422 body `{"detail": {"errors": {key: reason}}}` (settings API) */
+		readonly errors: Record<string, string> = {}
 	) {
 		super(`${status}: ${detail}`);
 	}
@@ -147,14 +156,21 @@ async function request<T>(method: string, path: string, body?: unknown, signedIn
 	});
 	if (!response.ok) {
 		let detail = response.statusText;
+		let errors: Record<string, string> = {};
 		try {
 			const payload = await response.json();
 			if (typeof payload?.detail === 'string') detail = payload.detail;
+			else if (payload?.detail?.errors && typeof payload.detail.errors === 'object') {
+				errors = payload.detail.errors as Record<string, string>;
+				detail = Object.entries(errors)
+					.map(([key, reason]) => `${key}: ${reason}`)
+					.join('; ');
+			}
 		} catch {
 			// non-JSON error body: keep the status text
 		}
 		if (response.status === 401 && signedIn) w.onUnauthorized?.();
-		throw new ApiError(response.status, detail);
+		throw new ApiError(response.status, detail, errors);
 	}
 	return (await response.json()) as T;
 }
@@ -207,6 +223,15 @@ export function listAudit(filters: AuditFilters = {}): Promise<AuditPage> {
 	const text = q.toString();
 	return request<AuditPage>('GET', `/audit${text ? `?${text}` : ''}`);
 }
+
+// ---------------------------------------------------------------- settings (backend/api/settings.py, S1)
+
+/** GET /settings?prefix (admin): current value and version of every key */
+export const listSettings = (prefix = '') => request<{ items: ConfigEntry[] }>('GET', `/settings${query({ prefix: prefix || undefined })}`);
+export const settingHistory = (key: string) => request<{ items: ConfigEntry[] }>('GET', `/settings/${encodeURIComponent(key)}/history`);
+export const previewSettings = (body: ConfigBatch) => request<ConfigPreview>('POST', '/settings/preview', body);
+export const applySettings = (body: ConfigBatch) => request<ConfigApplied>('PUT', '/settings', body);
+export const rollbackSettings = (body: ConfigRollback) => request<ConfigApplied>('POST', '/settings/rollback', body);
 
 // ---------------------------------------------------------------- ops (backend/api/ops.py)
 
