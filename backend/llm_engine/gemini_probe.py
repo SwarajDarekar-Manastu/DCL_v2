@@ -487,8 +487,9 @@ async def run(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--write", action="store_true", help="update gemini_capabilities.json")
-    parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--lite-model", default=DEFAULT_LITE_MODEL)
+    settings = get_settings()
+    parser.add_argument("--model", default=settings.gemini_model)
+    parser.add_argument("--lite-model", default=settings.gemini_lite_model)
     args = parser.parse_args(argv)
     document = asyncio.run(run(args.write, args.model, args.lite_model))
     sys.stdout.write(to_markdown(document) + "\n")

@@ -410,3 +410,15 @@ def test_outside_drive_id_is_optional_without_default(monkeypatch):
     settings = load_with(monkeypatch)
     assert settings.test_outside_drive_id is None
     assert load_with(monkeypatch, DCL_TEST_OUTSIDE_DRIVE_ID="drive-x").test_outside_drive_id == "drive-x"
+
+
+def test_model_ids_default_in_every_environment(monkeypatch):
+    for env in ("dev", "prod"):
+        monkeypatch.setenv("DCL_ENV", env)
+        settings = load_settings(env_file=None)
+        assert (settings.gemini_model, settings.gemini_lite_model) == (
+            "gemini-3.8-flash",
+            "gemini-3.1-flash-lite",
+        )
+    monkeypatch.setenv("GEMINI_LITE_MODEL", "gemini-3.5-flash-lite")
+    assert load_settings(env_file=None).gemini_lite_model == "gemini-3.5-flash-lite"
