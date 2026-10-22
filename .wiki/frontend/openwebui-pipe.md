@@ -19,8 +19,10 @@ Code:
 - `frontend/openwebui/api_endpoint.py` (every backend call: signed identity headers, SSE parser, `stream_answer`, `confirm`, `get_trace`; mirror of `api_endpoint.ts`)
 - `frontend/openwebui/config.py` (`build_config` from the Valves; mirror of `config.ts`)
 - `frontend/openwebui/build_functions.py` → `frontend/openwebui/bundled/manastu_engine.py` (generated single file to install; never edit)
+- `frontend/openwebui/install_functions.py` + `frontend/openwebui/README.md` (install into the stack's Open WebUI through its admin API; a person runs it with an API key after creating the admin account)
 
 Tests and fixtures:
+- `backend/tests/unit/openwebui/test_install.py` (fake Open WebUI admin API: idempotent, valves, actions on the engine model only, dry run)
 - `backend/tests/unit/openwebui/test_pipe.py` (replays S2's `backend/tests/unit/llm_engine/engine/example_answer_stream.sse` through both the source and the bundle)
 
 ## Interfaces
@@ -44,6 +46,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `frontend/openwebui/api_endpoint.py`
 - `frontend/openwebui/config.py`
 - `frontend/openwebui/build_functions.py`, `frontend/openwebui/bundled/` (regenerate only)
+- `frontend/openwebui/install_functions.py`, `frontend/openwebui/README.md`, `backend/tests/unit/openwebui/test_install.py`
 - `backend/api/assets.py` (upload route), `backend/tests/unit/api/test_assets.py`
 - `backend/tests/unit/openwebui/test_pipe.py`
 
@@ -54,6 +57,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] Error states surface in chat (501, 401, 502, unreachable, `error` event, missing Valves; tests)
 - [x] The engine's own verifier accepts the Pipe's signed headers; a tampered body is refused
 - [x] The installable bundle is current and passes the same tests
+- [x] Install script for the stack's Open WebUI (create/update, activate, valves, actions on the engine model), tested against the v0.12.3 routes
+- [ ] Installed in the stack's Open WebUI by the admin (after S4 brings it up and the admin account exists)
 - [ ] Pilot run in a real Open WebUI against the live engine (M8/M9)
 - [x] Attachments forwarded through `POST /assets/upload` (only the user's own files, size-capped, failures skipped with a notification)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
@@ -71,6 +76,7 @@ uv run python -m pytest backend/tests/unit/openwebui
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | Pipe, api_endpoint.py, config.py, single-file build, replay tests |
+| 2026-10-22 | S3 | Install script and README for the stack's Open WebUI (Lead request: Open WebUI on the stack now) |
 | 2026-10-22 | S3 | Chat attachments via `POST /assets/upload` (Lead decision); bundler accepts parenthesized inline imports |
 
 ## Related
