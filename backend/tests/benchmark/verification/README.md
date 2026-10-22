@@ -43,5 +43,8 @@ Verification notes for the first 15 cases (2026-10-22):
   is shorter by design; an engine that answers from the steady window gets different means.
 - The team's "Through put" is the mass-flow integral over the whole record; the case asks for
   the valve-open integral, which differs by about 9%.
+- TP7 temperatures come from the 2 Hz DAQami CSV log (T1-T8 in °C). The two TP7 `.tdms` files hold
+  AI0-AI7 with an empty unit_string and HALT on UNIT_AMBIGUITY in Route C (S1, 2026-10-22); the
+  cases do not use them.
 - Injector 10 and Injector 14 runs have no matching team workbook; their values rest on the
   committed functions alone.

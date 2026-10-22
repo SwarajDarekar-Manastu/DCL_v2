@@ -10,7 +10,7 @@
 # Part 2: surface aliases, one per line, in the form
 #     #= <surface> => <pint expression> | <dimension>
 # pint ignores them because they start with "#". They cover spellings pint cannot parse as
-# identifiers (℃, ㎫, kgf/cm2) or parses WRONGLY (pint reads "bar(g)" as bar * gram).
+# identifiers (℃, ㎫, kgf/cm2, LabVIEW/NI "Deg C") or parses WRONGLY (pint reads "bar(g)" as bar * gram).
 # backend/common/units.py replaces each surface in the unit string before calling pint,
 # longest surface first, exact (case-sensitive) substring match. Aliases are chosen so that
 # no surface is a substring of a correct spelling (no "bar a", which would corrupt "bar abs").
@@ -70,6 +70,9 @@ standard_cubic_centimeter_per_minute = standard_atmosphere * cubic_centimeter / 
 #= ° C => degC | [temperature]
 #= deg C => degC | [temperature]
 #= deg F => degF | [temperature]
+#= Deg C => degC | [temperature]
+#= Deg F => degF | [temperature]
+#= Deg K => K | [temperature]
 #= ㎏ => kg | [mass]
 #= ㎜ => mm | [length]
 #= ㎝ => cm | [length]
