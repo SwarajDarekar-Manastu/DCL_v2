@@ -718,3 +718,9 @@ Merged / ready: the Console redesign, reviewed and merged into this branch (a fa
 Blocked on: Settings (S1's settings API); live review data needs S1's review API on main.
 Needs from others: S1: review and settings APIs.
 Next: the viewer should use the `table` view for table documents (a real engineering_table document showed its HTML table markup in the text view, escaped); Settings once S1's API is on main.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: the viewer opens table documents as a `table` view, with cell text parsed from the HTML table node. A row anchor or a cells anchor is highlighted. Content without a table still falls back to the text view. This was checked in-process against the stack DB on de504f83. uv run pytest exit 0.
+Blocked on: S1's users model and migration 0010 for local auth. Lead: argon2-cffi version for pyproject (in the merge message).
+Needs from others: S1: `users` model and migration 0010.
+Next: local auth (auth.py login, me and users routes, Console login page and Users admin page), then Settings over S1's /settings API.

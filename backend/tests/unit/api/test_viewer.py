@@ -144,3 +144,38 @@ def test_route_answers_404_for_an_unknown_document(client, token):
     )
     assert response.status_code == 404
     assert response.json()["detail"] == f"no document {DOC}"
+
+
+TABLE_HTML = (
+    "<table><thead><tr><th>Location</th><th>Pre Heat [ C ]</th><th>Max &amp; Firing</th></tr></thead>"
+    "<tbody><tr><td>Lower Thermal Standoff</td><td>196.8</td><td><b>196.8</b></td></tr>"
+    "<tr><td>CW near\n  Flange</td><td>348.5</td><td>358.4</td></tr></tbody></table>"
+)
+
+
+def test_table_html_becomes_plain_cell_rows():
+    view = viewer.table_view(TABLE_HTML, "Temperature", "A1:C3")
+    assert view == viewer.TableView(
+        sheet_name="Temperature",
+        header_rows=1,
+        rows=[
+            ["Location", "Pre Heat [ C ]", "Max & Firing"],
+            ["Lower Thermal Standoff", "196.8", "196.8"],
+            ["CW near Flange", "348.5", "358.4"],
+        ],
+        highlight=None,
+    )
+
+
+def test_cells_anchor_highlights_relative_to_the_table_origin():
+    view = viewer.table_view(TABLE_HTML, "Temperature", "C5:E7", cited_range="D6:E7")
+    assert view is not None and view.highlight == (1, 1, 2, 2)
+
+
+def test_row_anchor_highlights_the_data_row_below_the_header():
+    view = viewer.table_view(TABLE_HTML, "Temperature", "A1:C3", cited_row=1)
+    assert view is not None and view.highlight == (2, 0, 2, 2)
+
+
+def test_content_without_a_table_is_not_a_table_view():
+    assert viewer.table_view("Temperature | Location: CW near Flange | 348.5", None, None) is None
