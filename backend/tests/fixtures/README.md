@@ -9,8 +9,9 @@ Two kinds of fixtures:
 - **synthetic**: produced by `make_synthetic.py` (fictitious content only). Regenerate with
   `uv run python backend/tests/fixtures/make_synthetic.py`; the integrity test checks that
   regeneration reproduces every fixture marked `byte_stable: true`.
-- **real**: small copies of corpus files chosen from the allowlisted folders and approved by
-  the user. Nothing proprietary or export-controlled is ever copied here.
+- **real**: corpus files from the allowlisted folders. The repository is public, so real files
+  are **never committed** (DECISIONS.md 2026-10-22). They live in the git-ignored `data/samples/`
+  and are listed in `real_samples.yaml` (path, size, registry sha256, route, purpose).
 
 Some fixtures are deliberately hostile (`c_telemetry/malicious_pickle`, `g_archives/*`). Never
 `pickle.load` a fixture and never extract an archive fixture outside a guarded test.
@@ -37,3 +38,28 @@ Some fixtures are deliberately hostile (`c_telemetry/malicious_pickle`, `g_archi
 
 These expectations are at document level. CIR snapshot comparisons are added once S1
 publishes the CIR snapshot format.
+
+## Local real samples (never committed)
+
+`real_samples.yaml` lists 93 files (about 400 MB) from the allowlist entries E1–E11 of
+DECISIONS.md: the E1–E3 telemetry used to verify the benchmark cases, one real file per format
+for every route, and the library PDFs (third-party copyright). Copy them from MinIO with S1's
+read-only export, one directory per entry; this needs the stack's `.env`, so an operator runs it:
+
+```bash
+uv run python -m backend.sync.export_blobs --folder-id 01RDWVU44XRPVPLV7YQRAL5CUFXNI7FPRO data/samples/E1
+uv run python -m backend.sync.export_blobs --folder-id 01RDWVU42EH7Y5QREJ4JG2L4QNOWGWUFOJ data/samples/E2
+uv run python -m backend.sync.export_blobs --folder-id 01RDWVU46OPFLY26YAGREI7G3A6ZIH5CTW data/samples/E3
+uv run python -m backend.sync.export_blobs --folder-id 01RDWVU42SMG6ALQAFJJG3LSYXU56T7OWJ data/samples/E4
+uv run python -m backend.sync.export_blobs --folder-id 01RDWVU4ZM5TFKN7MZAJELC4TBIG5UGDC7 data/samples/E5
+uv run python -m backend.sync.export_blobs --folder-id 01RDWVU43XKEVJHLVPJZCLWXDUB6B74OPS data/samples/E6
+uv run python -m backend.sync.export_blobs --folder-id 01RDWVU4YQX7G7T47P6BALUPKS3BEEP5PC data/samples/E7
+uv run python -m backend.sync.export_blobs --folder-id 01RDWVU44OZM3GH2XQMFHKUXPTAUSOLEWZ data/samples/E8
+uv run python -m backend.sync.export_blobs --folder-id 01RDWVU46A6HDMZK253RBYAULGDACN2PZZ data/samples/E10
+uv run python -m backend.sync.export_blobs --folder-id 01RDWVU457TPDUS3AFZZH3RTJTFZV2FOHJ data/samples/E11
+```
+
+The export copies whole subtrees (more files than the manifest; E3 includes a 613 MB run that
+no test uses). `uv run pytest backend/tests/fixtures/test_real_samples.py` then checks every
+manifest file against the registry's size and sha256; without `data/samples/` those checks are
+skipped. `data/` is git-ignored at the repository root; never move a real sample elsewhere.

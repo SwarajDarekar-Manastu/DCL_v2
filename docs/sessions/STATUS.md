@@ -477,3 +477,9 @@ Merged / ready: Google Search grounding capability (e911384; probe re-run with t
 Blocked on: backups questions with DCL Lead
 Needs from others: Lead approval of `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`
 Next: MinIO replacement evaluation, hands-on (bucket versioning, prefix lifecycle, presigned GET, DuckDB httpfs, via the same minio-py client) against pinned candidates rustfs/rustfs:1.0.3, chrislusf/seaweedfs:4.48, dxflrs/garage:v2.4.1, MinIO as baseline; written comparison to the Lead by end of M4
+
+## 2026-10-22 05:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: real samples local only (decision 2026-10-22): `backend/tests/fixtures/real_samples.yaml` (93 files of E1–E11, registry sha256), export procedure in the fixtures README (git-ignored `data/samples/<entry>/`), `test_real_samples.py` (manifest checks; local copies when present). Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend`
+Blocked on: an operator export into S5's worktree `data/samples/` (S5 has no stack credentials)
+Needs from others: DCL Lead — run the README export commands with the output under /home/ai/Desktop/Swaraj_/dcl_v2/.claude/worktrees/strange-bhaskara-1dd439/data/samples/
+Next: verify the copies, then the first 15 telemetry cases with own Python (Flash-Lite id for any model-naming case: gemini-3.1-flash-lite)
