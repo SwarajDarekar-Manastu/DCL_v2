@@ -9,6 +9,7 @@
 | [Benchmark UI (suites, cases, runs, results, drilldown, compare, retrieval lab)](benchmark-ui.md) | in-progress | S3 | Golden-suite management and regression dashboards with failure classes and trace drilldowns; draft approval from chat. |
 | [Open WebUI Pipe (engine model, event mapping)](openwebui-pipe.md) | in-progress | S3 | The Pipe function that exposes the Answer Engine as a model, maps engine SSE events to status/source/embeds/confirmation, with Valves and UserValves. |
 | [Open WebUI Actions, Filter and Skills publication](openwebui-actions-skills.md) | in-progress | S3 | Actions 'Show trace', 'Add to benchmark', 'Report issue'; Filter attaching user policy; publishing playbooks as Skills; the single gateway connection for plain Gemini chat. |
+| [Ops page (failed tasks; sync, queues and cost to follow)](ops-page.md) | in-progress | S3 | Failed tasks from the Celery dead-letter list; later sync status, queue depths, cost today. |
 
 ## Guides
 
