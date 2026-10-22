@@ -537,3 +537,9 @@ Merged / ready: behaviour suite (6 cases: Isp with a dead thrust channel and a n
 Blocked on: indexed allowlist documents (doc lookups, code, failure/visual, multilingual, the retrieval set's gold anchors) and standards in the processing scope (STANDARDS cases)
 Needs from others: Lead — a ruling on STANDARDS cases: no ECSS/standards folder is in the allowlist, so those cases wait for M6 or a scope addition
 Next: page-cited FACT_LOOKUP and CODE cases from the exported E3–E5 documents
+
+## 2026-10-22 12:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: documents suite (12 FACT_LOOKUP + 3 FAILURE_ANALYSIS, page-cited, from the TP-23 and TP12 reports) and code suite (8 CODE cases on the TP7 test-plan creator); questions committed without facts or file names, answers and citations local; a test finds every expected number/entity in the cited PDF page or source file. E12 chosen: 8 ECSS standards as path globs (sent to S1). Golden set now 44 cases (15 telemetry incl. 2 halt-behaviour… see map). Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: indexing of E12 standards (STANDARDS cases); indexed corpus for CONFLICT and the retrieval set
+Needs from others: S1 — E12 globs into processing.scope
+Next: visual/handwriting cases from the exported TP7 sheets and E7 photos; multilingual cases (none in the allowlist: synthetic German/Japanese fixtures only)

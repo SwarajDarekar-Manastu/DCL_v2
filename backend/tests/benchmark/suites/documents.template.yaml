@@ -1,0 +1,101 @@
+# Golden document suite: TEMPLATE (DECISIONS.md 2026-10-22, option b). Owner: S5.
+# Page-cited FACT_LOOKUP and FAILURE_ANALYSIS cases from allowlisted test reports. Questions name
+# the document and the kind of fact only; answers, entities and page citations are in the
+# git-ignored data/benchmark/documents.local.yaml (the reports are confidential).
+# Built by the build_suites module (verification folder).
+version: 1
+suite: documents
+cases:
+  # ---- TP-23 cooling-sleeve hot-fire test plan (Test Campaign 2, Test Plan 23)
+  - case_id: tp23-propellant-composition
+    category: FACT_LOOKUP
+    question: Which propellant does the TP-23 cooling-sleeve hot-fire test plan specify, and what is its composition?
+    expected_tools: [search_documents]
+    difficulty: 1
+    local: true
+  - case_id: tp23-max-firing-duration
+    category: FACT_LOOKUP
+    question: What is the maximum firing duration per test allowed by the TP-23 cooling-sleeve test plan?
+    expected_tools: [search_documents]
+    difficulty: 1
+    local: true
+  - case_id: tp23-worst-channel-flow
+    category: FACT_LOOKUP
+    question: In the TP-23 test plan, what coolant flow rate was measured in the worst cooling-sleeve channel during cold-flow characterisation?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  - case_id: tp23-wall-temperature-abort
+    category: FACT_LOOKUP
+    question: At what chamber wall temperature must a firing be aborted under the TP-23 test plan?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  - case_id: tp23-number-of-tests
+    category: FACT_LOOKUP
+    question: How many hot-fire tests does the TP-23 test matrix contain?
+    expected_tools: [search_documents]
+    difficulty: 1
+    local: true
+  - case_id: tp23-last-test-condition
+    category: FACT_LOOKUP
+    question: Under the TP-23 test plan, what peak channel 4 wall temperature in the previous test is the condition for running the final test?
+    expected_tools: [search_documents]
+    difficulty: 3
+    local: true
+  - case_id: tp23-expected-isp-mid-pressure
+    category: FACT_LOOKUP
+    question: What ground specific impulse does the TP-23 test plan expect at a tank pressure of 19 bar gauge?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  # ---- TP12 report (Test Campaign 1, Test Plan 12)
+  - case_id: tp12-customer-cumulative-firing
+    category: FACT_LOOKUP
+    question: According to the Test Campaign 1, Test Plan 12 report, what cumulative firing time per APU does the customer require?
+    expected_tools: [search_documents]
+    difficulty: 1
+    local: true
+  - case_id: tp12-customer-throughput
+    category: FACT_LOOKUP
+    question: According to the Test Campaign 1, Test Plan 12 report, what propellant throughput does the customer require?
+    expected_tools: [search_documents]
+    difficulty: 1
+    local: true
+  - case_id: tp12-wall-material-limit
+    category: FACT_LOOKUP
+    question: Which chamber wall material and temperature limit do the Test Campaign 1 objectives in the TP12 report name?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  - case_id: tp12-load-cell-range
+    category: FACT_LOOKUP
+    question: What measurement range does the thrust load cell listed in the TP12 report's instrumentation table have?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  - case_id: tp12-test4-tank-pressure
+    category: FACT_LOOKUP
+    question: What tank pressure does the TP12 test plan table set for Test 4?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  # ---- TP12 failure analysis
+  - case_id: tp12-flame-quench-time
+    category: FAILURE_ANALYSIS
+    question: In the Test Plan 12 firing of Test Campaign 1, after about how long did the flame die out?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+  - case_id: tp12-combustion-not-sustained-causes
+    category: FAILURE_ANALYSIS
+    question: Why could the Test Plan 12 configuration of Test Campaign 1 not sustain combustion?
+    expected_tools: [search_documents]
+    difficulty: 4
+    local: true
+  - case_id: tp12-monolith-cell-density
+    category: FACT_LOOKUP
+    question: What cell density did the in-house monolith catalyst used in Test Plan 12 of Test Campaign 1 have?
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
