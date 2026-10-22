@@ -257,7 +257,10 @@ export interface paths {
         /** Get Runs */
         get: operations["get_runs_benchmark_runs_get"];
         put?: never;
-        /** Post Run */
+        /**
+         * Post Run
+         * @description Snapshot the cases as a QUEUED run, commit, then ask the runner to start it at once.
+         */
         post: operations["post_run_benchmark_runs_post"];
         delete?: never;
         options?: never;
@@ -2425,7 +2428,10 @@ export interface components {
             /** Supersedes Rule Id */
             supersedes_rule_id: string | null;
         };
-        /** RunComparison */
+        /**
+         * RunComparison
+         * @description Only cases scored in both runs are compared; the rest are listed so nothing hides.
+         */
         RunComparison: {
             /** Aggregate Delta */
             aggregate_delta: {
@@ -2443,6 +2449,15 @@ export interface components {
             newly_failing: components["schemas"]["CaseDelta"][];
             /** Newly Passing */
             newly_passing: components["schemas"]["CaseDelta"][];
+            /**
+             * Not Scored
+             * @description the runner could not score it in one run
+             */
+            not_scored?: components["schemas"]["CaseDelta"][];
+            /** Only In Base */
+            only_in_base?: string[];
+            /** Only In Head */
+            only_in_head?: string[];
             /** Still Failing */
             still_failing: components["schemas"]["CaseDelta"][];
         };

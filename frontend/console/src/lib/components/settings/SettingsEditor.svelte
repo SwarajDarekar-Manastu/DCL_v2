@@ -203,9 +203,9 @@
 					{#each impacts as impact (impact.key)}
 						<li class="list-none">
 							<code>{impact.key}</code>: {impact.summary}
-							{#if Object.keys(impact.counts).length}<span class="text-muted-foreground"> · {Object.entries(impact.counts).map(([k, n]) => `${k} ${n}`).join(' · ')}</span>{/if}
-							{#if impact.bytes}<span class="text-muted-foreground"> · {fmtBytes(impact.bytes)}</span>{/if}
-							{#if Object.keys(impact.by_extension).length}<span class="text-muted-foreground"> · {topExtensions(impact.by_extension)}</span>{/if}
+							{#if Object.keys(impact.counts).length}<span class="text-muted-foreground">{` · ${Object.entries(impact.counts).map(([k, n]) => `${k} ${n}`).join(' · ')}`}</span>{/if}
+							{#if impact.bytes}<span class="text-muted-foreground">{` · ${fmtBytes(impact.bytes)}`}</span>{/if}
+							{#if Object.keys(impact.by_extension).length}<span class="text-muted-foreground">{` · ${topExtensions(impact.by_extension)}`}</span>{/if}
 							{#if impact.estimated_cost_usd !== null}<span> · about ${impact.estimated_cost_usd.toFixed(2)}</span>{/if}
 							{#if impact.cost_note}<span class="text-muted-foreground"> ({impact.cost_note})</span>{/if}
 						</li>

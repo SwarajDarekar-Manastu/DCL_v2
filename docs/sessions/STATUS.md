@@ -853,3 +853,16 @@ Merged / ready: M10 baseline from scored run 1 (`backend/tests/benchmark/BASELIN
 Blocked on: E13 indexed (MULTILINGUAL and library cases)
 Needs from others: S2: the runner findings; Lead: is the TP12 report PDF among the 18 indexed A1 PDFs (2 cases depend on it); the weather case's answer text (gold or metric)
 Next: idle until messaged
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: the Benchmark pages now match S2's real runner output.
+- Checked against the six real runs.
+- The aggregate and metric keys match the runner's; recall was never shown before.
+- Runner errors are their own outcome, and a running run's pass rate says how much is scored so far.
+- The drilldown follows score_case.
+- Compare counts only cases scored in both runs and warns about cross-suite comparisons.
+- A whitespace bug in four components is fixed.
+- Tests: Console 138, backend pytest exit 0, compare integration tests pass on a scratch DB.
+Blocked on: nothing.
+Needs from others: S2 (via the Lead): 38 of 56 real results are runner errors, either "RuntimeError: <asyncio.locks.Event> is bound to a different event loop" (likely the lru_cached RunnerDeps reused across asyncio.run calls in tasks.py) or a 300 s WorkflowTimeoutError. Answered cases took about 225 to 236 s.
+Next: idle.
