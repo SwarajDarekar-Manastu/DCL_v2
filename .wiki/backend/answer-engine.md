@@ -15,8 +15,11 @@ LlamaIndex Workflow under DBOS: query analysis, planner, tools T1–T6 and U1–
 ## Location
 
 Code:
+- `backend/llm_engine/engine/analysis.py` (step 1: `QueryAnalysis`, `analyze`, `resolve`: entities via aliases, test ids via the dispatcher's patterns, unit-checked bounds, web policy)
+- `backend/llm_engine/engine/synthesis.py` (steps 5–6: numbered evidence, `SynthesisOutput` with claims citing evidence ids, numeric string check, entailment verdicts, one repair pass, removal of what still fails)
+- `backend/llm_engine/prompts/engine/` (`query_analysis.v1`, `synthesis.v1`, `verify.v1`)
 - `backend/llm_engine/engine/workflow.py`
-- `backend/llm_engine/engine/tools/`
+- `backend/llm_engine/engine/tools/` (`__init__.py`: `ToolResult`, `Source`, `Provenance`, `provenance_of`, `tool_spec`; `search.py` T1; `documents.py` U1, U2; `code_diagrams.py` T4; `physics.py` T5)
 - `backend/llm_engine/engine/sanitizer.py`
 - `backend/llm_engine/engine/verifier.py` (numeric check; LLM entailment with M8)
 - `backend/api/engine.py`
@@ -24,7 +27,8 @@ Code:
 
 Tests and fixtures:
 - `backend/tests/integration/llm_engine/engine/`
-- `backend/tests/unit/llm_engine/engine/` (API contract tests)
+- `backend/tests/unit/llm_engine/engine/`
+- `backend/tests/integration/llm_engine/engine/` (DCL_TEST_DATABASE_URL) (API contract tests)
 - `backend/tests/benchmark/suites/`
 
 ## Interfaces
@@ -35,6 +39,8 @@ Provides:
 - Identity: headers `X-DCL-User-Id`, `X-DCL-User-Email`, `X-DCL-User-Groups`, `X-DCL-Timestamp`, `X-DCL-Signature` = hex HMAC-SHA256(`DCL_PIPE_SHARED_SECRET`, "ts\nuser_id\nemail\ngroups\nsha256(body)"), skew ≤ 300 s (`sign_identity`)
 - `sanitize_query(query, proprietary_terms, organization_names, people, folder_names, public_terms) -> SanitizedQuery(text, original_sha256, removed)`; raises `SanitizerRefused` when fewer than two content words remain (`engine/sanitizer.py`)
 - `check_numeric_claims(claims, tool_outputs) -> list[NumericMismatch]`: value and unit strings of a claim must appear in a tool result (`engine/verifier.py`)
+- Tools (each `(session?, args) -> ToolResult{tool, call_id, result, provenance[Source], warnings, display}`; `display` is what synthesis quotes and the numeric verifier checks): `search_documents` (T1: alias expansion from `entity_aliases`, widening doc_kinds → test plan → parent scope), `get_document` (U1: ordered parents, page range, section, 40k-char budget with `start_ordinal`), `catalog_lookup` (U2: documents, halted with case keys, standards with revisions), `inspect_code_and_diagrams` (T4: qualname lookup, callers/callees, diagram neighbors/upstream/downstream/path over `documents.catalog {nodes[{id,tag,label,type}], edges[{source,target,medium,label,directed}]}`), `physics_calculator` (T5: unit_convert, mass_flow_from_thrust, isentropic_sizing, cea_performance with `config/propellants.yaml`, scale_thruster); planned: T2 telemetry (Route C tables), T3 visuals, T6 external
+- `Provenance` (measured, internal_report, standard, vendor_claim, literature, calculation, web) is the one enum, also used by the SSE citation event
 - Skills markdown
 
 Consumes:
@@ -71,6 +77,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | Query analysis, synthesis contract and verifier (numeric + entailment, repair pass); 8 tests |
+| 2026-10-22 | S2 | Tools increment 1: T1, U1, U2, T4, T5 with `ToolResult`/`Source`; 10 unit + 7 DB tests |
 | 2026-10-22 | S2 | `trace_id` on `needs_confirmation`; trace lookup by chat/message and feedback routes for S3's Actions |
 | 2026-10-21 | S2 | IP sanitizer (leak fixture, refusal rule) and deterministic numeric claim check; 24 tests |
 | 2026-10-21 | S2 | `/v1/answer` SSE event schema, identity signature, trace view, example stream (publish-first #4); endpoints 501 until M8 |

@@ -1,7 +1,6 @@
 """Hybrid retrieval on real document_nodes rows; needs DCL_TEST_DATABASE_URL (empty ParadeDB 0.26.2).
 
-The BM25 DDL is the one sent to S1 for the pinned migration (bm25_ddl_sent_to_s1.sql); once that migration is
-on main the fixture stops creating it.
+The BM25 indexes come from S1's pinned migration 0004 (`alembic upgrade head`).
 """
 
 import math
@@ -13,7 +12,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from backend.indexing import retrieval
@@ -26,7 +25,6 @@ from backend.postgres.models import Document, DocumentNode, DocumentRelation
 from backend.postgres.session import normalize_url
 
 ALEMBIC_INI = Path(__file__).resolve().parents[3] / "postgres" / "alembic.ini"
-BM25_DDL = Path(__file__).with_name("bm25_ddl_sent_to_s1.sql").read_text()
 TOPICS = ["pressure", "temperature", "valve", "catalyst", "calibration", "nozzle"]
 
 
@@ -65,19 +63,7 @@ def engine():
         config = Config(str(ALEMBIC_INI))
         command.upgrade(config, "head")
         eng = create_engine(url)
-        with eng.begin() as conn:
-            # Migration 0004 creates the BM25 indexes; apply the local DDL only on a bare schema.
-            bm25_names = "('bm25_document_nodes', 'bm25_documents')"
-            present = conn.execute(
-                text(f"select count(*) from pg_indexes where indexname in {bm25_names}")
-            ).scalar()
-            if not present:
-                conn.execute(text(BM25_DDL))
         yield eng
-        with eng.begin() as conn:
-            conn.execute(
-                text("DROP INDEX IF EXISTS bm25_document_nodes; DROP INDEX IF EXISTS bm25_documents")
-            )
         eng.dispose()
         command.downgrade(config, "base")
 

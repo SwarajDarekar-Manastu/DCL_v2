@@ -466,3 +466,8 @@ Merged / ready: office conversion for S1 and S2: `backend/common/office.py` `con
 Blocked on: backups questions with DCL Lead
 Needs from others: Lead — approve `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`; merge 31eb0be + this
 Next: backups once answered; MinIO replacement comparison by end of M4
+## 2026-10-22 09:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: engine tools T1 search_documents, U1 get_document, U2 catalog_lookup, T4 code and diagrams, T5 physics_calculator (`backend/llm_engine/engine/tools/`), 17 tests; one `Provenance` enum (adds `calculation`); retrieval test on migration 0004. (Route wiring now goes through S1's adapter registry in `backend/dispatcher/adapters.py`, not IMPLEMENTED_ROUTES.)
+Blocked on: nothing
+Needs from others: S1: telemetry_runs/channels and Parquet for T2; the diagram catalog shape in `.wiki/backend/answer-engine.md` for Route E; S4: whether the gateway proxies Google Search grounding for T6
+Next: T2/T3/T6, then query analysis, synthesis, entailment verifier, workflow + DBOS, /v1/answer streaming
