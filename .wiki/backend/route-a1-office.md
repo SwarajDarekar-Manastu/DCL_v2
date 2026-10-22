@@ -68,6 +68,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S2 | Owner-password PDFs (open without a password; the 8 ECSS standards) decrypted in memory and processed, `Preflight.decrypted`; PARSE_FAILURE only when a user password is needed (file 03 §A1.1 amended); 1 test |
 | 2026-10-23 | S2 | NUL bytes stripped from every string of the output (`without_nul`; an Elsevier paper's text layer made the commit fail); 1 test |
 | 2026-10-23 | S2 | Docling converters cached per OCR plan in the worker (measured in the parse worker: text layer 13.1 s → 2.1 s, Tesseract 5.9 s → 3.7 s per run; two converters peak 2.2 GB); Docling's OSD "Too few characters" error on near-empty scanned pages logged as INFO (OCR proceeds with the explicit script model; seen on doc 1539b6b4, the Rafael valves datasheet); 1 test |
 | 2026-10-21 | Lead | Map created from the architecture manual |

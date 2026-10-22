@@ -1,6 +1,8 @@
 """A1.1 pre-flight (file 03 §A1.1): can the PDF be read, and what does each page's text layer look like.
 
-- Encrypted or password-protected → `PreflightFailure("encrypted")`; the route raises PARSE_FAILURE (HARD).
+- A PDF that needs a user password → `PreflightFailure("encrypted")`; the route raises PARSE_FAILURE (HARD).
+  One that opens without a password (owner-password restrictions only, e.g. the ECSS standards) is decrypted
+  in memory and processed (file 03 §A1.1 as amended 2026-10-23); `decrypted = True`.
 - A damaged file is repaired by rewriting it with pikepdf (`repaired = True`); unrepairable → failure.
 - Per page: characters in the text layer, a garbage ratio, embedded image count, rotation, size.
   A page with fewer than 50 characters or more than 40% garbage is image-only for triage. Garbage is counted
@@ -53,6 +55,7 @@ class Preflight:
     repaired: bool
     pages: list[PageSignals]
     windows: list[tuple[int, int]] = field(default_factory=list)
+    decrypted: bool = False
 
     def page(self, page_no: int) -> PageSignals:
         return self.pages[page_no - 1]
@@ -96,15 +99,23 @@ def windows(page_count: int) -> list[tuple[int, int]]:
     ]
 
 
-def _open(pdf_bytes: bytes) -> tuple[pdfium.PdfDocument, bytes, bool]:
+def decrypt(pdf_bytes: bytes) -> tuple[bytes, bool]:
+    """The bytes without encryption when the PDF opens with an empty user password; a PDF that needs a
+    password is a failure. Damaged files pass through unchanged (repaired in `_open`)."""
     try:
         with pikepdf.open(io.BytesIO(pdf_bytes)) as probe:
-            if probe.is_encrypted:
-                raise PreflightFailure("encrypted", "the PDF is password-protected or encrypted")
+            if not probe.is_encrypted:
+                return pdf_bytes, False
+            out = io.BytesIO()
+            probe.save(out, encryption=False)
+            return out.getvalue(), True
     except pikepdf.PasswordError as exc:
         raise PreflightFailure("encrypted", "the PDF needs a password") from exc
     except pikepdf.PdfError:
-        pass  # damaged: repaired below
+        return pdf_bytes, False
+
+
+def _open(pdf_bytes: bytes) -> tuple[pdfium.PdfDocument, bytes, bool]:
     try:
         return pdfium.PdfDocument(pdf_bytes), pdf_bytes, False
     except pdfium.PdfiumError:
@@ -120,6 +131,7 @@ def _open(pdf_bytes: bytes) -> tuple[pdfium.PdfDocument, bytes, bool]:
 
 
 def preflight(pdf_bytes: bytes) -> Preflight:
+    pdf_bytes, decrypted = decrypt(pdf_bytes)
     document, usable, repaired = _open(pdf_bytes)
     try:
         if len(document) == 0:
@@ -141,7 +153,7 @@ def preflight(pdf_bytes: bytes) -> Preflight:
                     image_count=images,
                 )
             )
-        return Preflight(usable, len(pages), repaired, pages, windows(len(pages)))
+        return Preflight(usable, len(pages), repaired, pages, windows(len(pages)), decrypted)
     finally:
         document.close()
 
