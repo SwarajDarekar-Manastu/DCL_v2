@@ -1,9 +1,21 @@
 import pytest
 
 from backend.config import Settings, ThinkingLevel
-from backend.llm_engine.gemini_types import CapabilityUnavailable, Image, StructuredOutputError, Text
+from backend.llm_engine.gemini_types import (
+    EXTRACTION_SAFETY,
+    CapabilityUnavailable,
+    Image,
+    StructuredOutputError,
+    Text,
+)
 from backend.llm_engine.vision.schemas import HandwritingReading, PageTriage
-from backend.llm_engine.vision.service import TASKS, VisionCapability, vision_cache
+from backend.llm_engine.vision.service import (
+    EXTRACTION_CAPABILITIES,
+    TASKS,
+    VisionCapability,
+    extraction_safety,
+    vision_cache,
+)
 
 VERSIONS = {VisionCapability.TRANSCRIBE_PAGE: 2}  # v2 (2026-10-22): page furniture as its own field
 
@@ -263,3 +275,28 @@ def test_transcribe_page_v2_asks_for_furniture_and_the_schema_keeps_it():
         PageTranscription.model_validate({"markdown": "x", "language": "en", "confidence": 0.9}).furniture
         == []
     )
+
+
+@pytest.mark.parametrize("capability", list(VisionCapability))
+def test_safety_settings_are_off_by_default(make_service, capability):
+    service, client, _ = make_service(READINGS[capability])
+    CALLS[capability](service)
+    assert "safety_settings" not in client.calls[0]
+
+
+@pytest.mark.parametrize("capability", list(VisionCapability))
+def test_the_flag_sends_extraction_safety_only_for_extraction_capabilities(make_service, capability):
+    service, client, _ = make_service(READINGS[capability], extraction_safety=extraction_safety(True))
+    CALLS[capability](service)
+    expected = EXTRACTION_SAFETY if capability in EXTRACTION_CAPABILITIES else None
+    assert client.calls[0].get("safety_settings") == expected
+
+
+def test_the_config_value_names_capabilities_and_refuses_typos():
+    assert len(extraction_safety(True)) == 7
+    assert extraction_safety(None) == extraction_safety(False) == extraction_safety([]) == frozenset()
+    assert extraction_safety(["transcribe_page"]) == {VisionCapability.TRANSCRIBE_PAGE}
+    with pytest.raises(ValueError, match="triage_page"):
+        extraction_safety(["triage_page"])
+    with pytest.raises(ValueError, match="must be true"):
+        extraction_safety("yes")

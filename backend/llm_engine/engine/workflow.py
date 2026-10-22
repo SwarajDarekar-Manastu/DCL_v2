@@ -22,6 +22,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel
 from workflows import Context, Workflow, step
 from workflows.events import Event, StartEvent, StopEvent
 
@@ -31,6 +32,7 @@ from backend.llm_engine.engine.analysis import Analysis, QueryAnalysis, analyze
 from backend.llm_engine.engine.playbooks import PlannedCall
 from backend.llm_engine.engine.tools import Source, ToolResult
 from backend.llm_engine.engine.tools import external as external_tools
+from backend.llm_engine.engine.tools import telemetry as telemetry_tools
 from backend.llm_engine.engine.tools import visuals as visual_tools
 from backend.llm_engine.engine.tools.code_diagrams import inspect_code_and_diagrams
 from backend.llm_engine.engine.tools.documents import (
@@ -58,8 +60,12 @@ class EngineDeps:
     external_policy: Callable[[Any], ExternalPolicy] = lambda session: ExternalPolicy(enabled=False)
     viewer_url: Callable[[uuid.UUID, str | None], str | None] = lambda doc_id, anchor: None
     save_trace: Callable[[dict], None] = lambda trace: None
+    telemetry_connect: Callable[[], Any] | None = None  # DuckDB connection that reads the stored Parquet URIs
     presign: Callable[[str], str] | None = None  # MinIO URI → presigned GET (15 min)
-    fetch_asset: Callable[[str], bytes] | None = None  # MinIO URI → bytes (T3 relook)
+    fetch_asset: Callable[[str], bytes] | None = None
+    put_asset: Callable[[str, bytes], str] | None = (
+        None  # dcl-assets key, PNG → s3:// URI (T2 plots)  # MinIO URI → bytes (T3 relook)
+    )
 
 
 class Emit(Event):
@@ -206,9 +212,14 @@ class AnswerWorkflow(Workflow):
         plan = playbooks.build_plan(request["question"], analysis)
         calls = list(plan.calls)
         if plan.needs_physics_args:
-            physics = await self._physics_args(request)
+            physics = await self._extract(request, "physics_args", PhysicsArgs)
             if physics is not None:
                 calls.append(PlannedCall("physics_calculator", physics, "the calculation asked for"))
+        if plan.needs_telemetry_args:
+            asked = await self._extract(request, "telemetry_args", telemetry_tools.TelemetryRequest)
+            args = asked and telemetry_tools.args_for(asked, analysis.test_plan_ids, analysis.test_run_ids)
+            if args is not None:
+                calls.insert(0, PlannedCall(telemetry_tools.NAME, args, "the measured run data"))
         trace_id = request["trace_id"]
         results = await asyncio.gather(*(self._call(ctx, trace_id, i, c) for i, c in enumerate(calls)))
         if plan.read_top_document:
@@ -267,8 +278,10 @@ class AnswerWorkflow(Workflow):
             results.append(result)
         return results
 
-    async def _physics_args(self, request: dict) -> PhysicsArgs | None:
-        prompt = load_prompt("engine", "physics_args.v1")
+    async def _extract(self, request: dict, name: str, schema: type[BaseModel]) -> Any:
+        """Tool arguments from the question (`<name>.v1`); None when Gemini fails."""
+        version = f"{name}.v1"
+        prompt = load_prompt("engine", version)
         try:
             result = await self.deps.gemini.generate(
                 model=model_id(),
@@ -277,11 +290,11 @@ class AnswerWorkflow(Workflow):
                     Message.user(prompt.render_user(question=request["question"])),
                 ],
                 context=CallContext(
-                    purpose="engine.physics_args",
-                    prompt_version="physics_args.v1",
+                    purpose=f"engine.{name}",
+                    prompt_version=version,
                     trace_id=request["trace_id"],
                 ),
-                schema=PhysicsArgs,
+                schema=schema,
                 thinking=ThinkingLevel.LOW,
             )
         except GeminiError:
@@ -330,6 +343,14 @@ class AnswerWorkflow(Workflow):
                 return get_document(session, call.args)
             if call.tool == "catalog_lookup":
                 return catalog_lookup(session, call.args)
+            if call.tool == telemetry_tools.NAME:
+                return telemetry_tools.query_telemetry(
+                    session,
+                    call.args,
+                    connect=self.deps.telemetry_connect,
+                    put_asset=self.deps.put_asset,
+                    presign=self.deps.presign,
+                )
             if call.tool == visual_tools.NAME:
                 return visual_tools.inspect_visuals(
                     session,
@@ -445,7 +466,7 @@ class AnswerWorkflow(Workflow):
         caveats: list[str] | None = None,
         citations: list[Source] | None = None,
     ) -> StopEvent:
-        for embed in photo_strips(results):
+        for embed in [*plot_embeds(results), *photo_strips(results)]:
             _emit(ctx, trace_id, embed)
         _tokens(ctx, trace_id, markdown)
         for n, source in enumerate(citations or [], start=1):
@@ -532,6 +553,23 @@ def _photo_cell(visual: dict) -> str:
         f'<img src="{thumb}" alt="{alt}" style="{IMG_STYLE}"></a>'
         f'<figcaption style="font:12px sans-serif">{caption}</figcaption></figure>'
     )
+
+
+def plot_embeds(results: list[ToolResult]) -> list[dict]:
+    """One `plot` embed (presigned PNG link) per T2 plot."""
+    return [
+        {
+            "type": "embed",
+            "embed_id": f"plot-{result.call_id}-{i}",
+            "kind": "plot",
+            "url": plot["url"],
+            "alt": plot["alt"],
+            "height": 360,
+        }
+        for result in results
+        if result.tool == telemetry_tools.NAME and isinstance(result.result, dict)
+        for i, plot in enumerate(result.result.get("plots", []))
+    ]
 
 
 def photo_strips(results: list[ToolResult]) -> list[dict]:

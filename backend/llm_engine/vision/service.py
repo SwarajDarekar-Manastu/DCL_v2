@@ -13,6 +13,12 @@ Only the client's adapter-neutral interface is used (`generate_sync(model=, mess
 **options)` with `Message`/`Text`/`Image` parts and the options thinking, media_resolution, temperature), so
 the gateway's wire format (S4's adapters) never leaks in here.
 
+Safety settings (DECISIONS 2026-10-22): the extraction capabilities may send
+`gemini_types.EXTRACTION_SAFETY` (DANGEROUS_CONTENT at BLOCK_ONLY_HIGH), because propellant-chemistry pages
+were blocked with the gateway defaults. It is off unless `pipeline_config` `vision.extraction_safety` turns it
+on: `true` for all seven extraction capabilities, or a list of capability names. Other capabilities never send
+it. Refusals are not cached, so switching the flag on lets a refused page through on the next run.
+
 Methods are synchronous (Celery prefork workers on cpu_parse and media). CapabilityUnavailable (image input
 not enabled on the gateway), BudgetExhausted (retry later) and StructuredOutputError propagate to the route.
 """
@@ -26,7 +32,7 @@ from typing import Protocol
 
 from backend.config import Settings, ThinkingLevel, get_settings
 from backend.llm_engine.gemini_client import GeminiClient
-from backend.llm_engine.gemini_types import CallContext, Image, Message, Text
+from backend.llm_engine.gemini_types import EXTRACTION_SAFETY, CallContext, Image, Message, Text
 from backend.llm_engine.model_ids import Tier, model_id
 from backend.llm_engine.prompts import load_prompt
 from backend.llm_engine.vision.schemas import (
@@ -60,6 +66,44 @@ class VisionCapability(StrEnum):
     DESCRIBE_SLIDE = "describe_slide"
     VIDEO_TIMELINE = "video_timeline"
     CLASSIFY_IMAGE = "classify_image"
+
+
+EXTRACTION_CAPABILITIES = frozenset(
+    {
+        VisionCapability.TRANSCRIBE_PAGE,
+        VisionCapability.TRANSCRIBE_HANDWRITING,
+        VisionCapability.READ_TABLE_IMAGE,
+        VisionCapability.DIGITIZE_PLOT,
+        VisionCapability.READ_SCHEMATIC,
+        VisionCapability.DESCRIBE_SLIDE,
+        VisionCapability.VIDEO_TIMELINE,
+    }
+)
+SAFETY_CONFIG_KEY = "vision.extraction_safety"
+
+
+def extraction_safety(value: object) -> frozenset[VisionCapability]:
+    """The capabilities that send EXTRACTION_SAFETY, from the `vision.extraction_safety` config value.
+
+    `true` → all extraction capabilities; a list → those named; absent, `false` or empty → none. A name
+    that is not an extraction capability is refused, so a typo cannot silently leave the flag off."""
+    if value is None or value is False:
+        return frozenset()
+    if value is True:
+        return EXTRACTION_CAPABILITIES
+    if not isinstance(value, list | tuple):
+        raise ValueError(f"{SAFETY_CONFIG_KEY} must be true, false or a list of capabilities, got {value!r}")
+    unknown = sorted(str(v) for v in value if v not in EXTRACTION_CAPABILITIES)
+    if unknown:
+        raise ValueError(f"{SAFETY_CONFIG_KEY}: not extraction capabilities: {', '.join(unknown)}")
+    return frozenset(VisionCapability(v) for v in value)
+
+
+def extraction_safety_from(session) -> frozenset[VisionCapability]:
+    """`extraction_safety` read from `pipeline_config` (default off)."""
+    from backend.postgres import pipeline_config
+
+    return extraction_safety(pipeline_config.get(session, SAFETY_CONFIG_KEY, None))
 
 
 @dataclass(frozen=True)
@@ -153,9 +197,16 @@ def _or_none(value: str | None) -> str:
 
 
 class VisionService:
-    def __init__(self, client: GeminiClient, cache: VisionCache):
+    def __init__(
+        self,
+        client: GeminiClient,
+        cache: VisionCache,
+        *,
+        extraction_safety: frozenset[VisionCapability] = frozenset(),
+    ):
         self._client = client
         self._cache = cache
+        self._safety = extraction_safety & EXTRACTION_CAPABILITIES
 
     def triage_page(
         self, thumbnail: Image, *, context: str, doc_id: str | None = None, anchor: str | None = None
@@ -301,6 +352,7 @@ class VisionService:
             thinking=task.thinking,
             media_resolution=task.media_resolution,
             temperature=0.0,
+            **({"safety_settings": EXTRACTION_SAFETY} if capability in self._safety else {}),
         )
         reading = result.parsed
         entry = {

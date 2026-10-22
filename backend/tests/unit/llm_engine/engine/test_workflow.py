@@ -446,3 +446,70 @@ def test_visual_lookup_runs_t3_looks_again_and_streams_a_photo_strip(searches, m
     assert strip["kind"] == "photo_strip" and "https://minio.test/a_thumb.jpg" in strip["html"]
     assert done["mode"] == "answered"
     assert any(s.get("tool") == "inspect_visuals" and s["done"] for s in of(events, "step"))
+
+
+MEASURED = "Run TP07_T04 · chamber_pressure → p_chamber_1_bar_g (bar g, gauge): peak_50ms 12.38 bar g"
+
+
+def test_telemetry_question_runs_t2_with_extracted_arguments(searches, monkeypatch):
+    searches(report_hit)
+    t2_calls = []
+
+    def fake_telemetry(session, args, *, connect, put_asset, presign):
+        t2_calls.append(args)
+        source = Source(
+            doc_id=REPORT, label="Run TP07_T04 (measured telemetry)", provenance=Provenance.MEASURED
+        )
+        return ToolResult(tool="query_telemetry", result={"runs": []}, provenance=[source], display=MEASURED)
+
+    monkeypatch.setattr(wf.telemetry_tools, "query_telemetry", fake_telemetry)
+    monkeypatch.setattr(wf, "catalog_lookup", lambda session, args: no_hits())
+    client = Client(
+        query_analysis=[
+            {"intents": ["telemetry_metric"], "test_plan_ids": ["TP7"], "test_run_ids": ["Run 4"]}
+        ],
+        telemetry_args=[{"channels": ["chamber_pressure"], "metrics": ["peak_50ms"]}],
+        synthesis=[
+            {
+                "answer_markdown": "The 50 ms peak chamber pressure was 12.38 bar g [1].",
+                "claims": [
+                    {"text": "peak 12.38 bar g", "kind": "numeric", "evidence_ids": ["E1"]},
+                ],
+            }
+        ],
+        verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "measured"}]}],
+    )
+    events, done, traces = run(client, "What was the 50 ms peak chamber pressure in TP7 run 4?")
+    [args] = t2_calls
+    assert (args.test_plan_id, args.test_run_ids, args.channels) == ("TP07", ["T04"], ["chamber_pressure"])
+    assert args.metrics == ["peak_50ms"] and args.window_kind == "run"
+    assert traces[0]["tool_calls"][0]["tool"] == "query_telemetry"
+    assert done["mode"] == "answered" and done["caveats"] == []
+    assert of(events, "citation")[0]["provenance"] == "measured"
+
+
+def test_telemetry_question_without_a_quantity_skips_t2(searches, monkeypatch):
+    searches(report_hit)
+    monkeypatch.setattr(wf, "catalog_lookup", lambda session, args: no_hits())
+    monkeypatch.setattr(wf.telemetry_tools, "query_telemetry", pytest.fail)
+    client = Client(
+        query_analysis=[{"intents": ["telemetry_metric"], "test_plan_ids": ["TP7"]}],
+        telemetry_args=[{"channels": []}],
+        synthesis=[SYNTH, SYNTH],  # the claim cites E1, the empty catalog result: one repair pass
+        verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]}] * 2,
+    )
+    _, done, traces = run(client, "Which runs of TP7 had a sensor fault?")
+    assert "query_telemetry" not in [c["tool"] for c in traces[0]["tool_calls"]]
+
+
+def test_plot_embeds_fit_the_wire_contract():
+    from backend.api.engine import EmbedEvent
+
+    result = ToolResult(
+        tool="query_telemetry",
+        result={"runs": [], "plots": [{"url": "https://minio.test/p.png", "alt": "Run TP07_T04: thrust_n"}]},
+        display="x",
+    )
+    [embed] = wf.plot_embeds([result])
+    event = TypeAdapter(EmbedEvent).validate_python(embed)
+    assert event.kind == "plot" and event.url == "https://minio.test/p.png" and event.html is None

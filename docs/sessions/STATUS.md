@@ -718,3 +718,20 @@ Merged / ready: the Console redesign, reviewed and merged into this branch (a fa
 Blocked on: Settings (S1's settings API); live review data needs S1's review API on main.
 Needs from others: S1: review and settings APIs.
 Next: the viewer should use the `table` view for table documents (a real engineering_table document showed its HTML table markup in the text view, escaped); Settings once S1's API is on main.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: the viewer opens table documents as a `table` view, with cell text parsed from the HTML table node. A row anchor or a cells anchor is highlighted. Content without a table still falls back to the text view. This was checked in-process against the stack DB on de504f83. uv run pytest exit 0.
+Blocked on: S1's users model and migration 0010 for local auth. Lead: argon2-cffi version for pyproject (in the merge message).
+Needs from others: S1: `users` model and migration 0010.
+Next: local auth (auth.py login, me and users routes, Console login page and Users admin page), then Settings over S1's /settings API.
+## 2026-10-22 23:45 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: (1) per-capability extraction safety flag (9b4e3f1): `pipeline_config` `vision.extraction_safety` (`true` or a list of capability names; default off) makes the seven extraction capabilities send `EXTRACTION_SAFETY`; triage, photo and classify never do; unknown names refused; `extraction_safety_from(session)` for whoever builds VisionService in a worker. (2) T2 `query_telemetry` over `telemetry_runs`/`telemetry_channels`: DuckDB SQL from one template over `normalized.parquet` (catalog column names only), peaks that reproduce Route C's stored values exactly, steady/valve-open/user windows, value_at_t, comparison as UNION ALL, halted runs reported with their case keys; `telemetry_args.v1`; the planner runs T2 for telemetry metric, run comparison and failure investigation with a test plan; `start_engine` builds DuckDB connections with httpfs and a MinIO secret. Live: DuckDB read `s3://dcl-telemetry/…` of the stack's one committed run (a thermocouple run; no chamber pressure/thrust run is committed yet, 22 C documents halted).
+Blocked on: nothing
+Needs from others: Lead: new `pipeline_config` key `vision.extraction_safety` for file 05's key list (S1 seeds nothing; absent = off). S4: the API image has DuckDB without the httpfs extension; `INSTALL httpfs` downloads it on first use, so please bake it into the image for offline hosts. The Matplotlib plot embed of T2 is not built (no matplotlib dependency); `plot=true` returns a warning.
+Next: Skills for Open WebUI
+
+## 2026-10-23 00:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: T2 plot embed. With `plot=true`, T2 renders one PNG per run (Matplotlib Agg, a panel per channel over time from ignition, window shaded, peak marked). It writes the PNG to `dcl-assets` at `plots/{run_uuid}/{sha16}.png` through `put_asset` (the same question overwrites the same key), and the stream carries a `plot` embed frame with the presigned URL. `start_engine` wires `put_asset` from MinIO. Live: plot rendered from the stack's committed run.
+Blocked on: nothing
+Needs from others: Lead: the `plots/{run_uuid}/…png` key prefix for file 05's dcl-assets layout (answer-time only, no `assets` row). S1, through the Lead: `office_run.default_build()` should pass `extraction_safety=extraction_safety_from(session)` to VisionService. Observation for S1: on the stack's committed thermocouple run, t0 lands at the temperature peak (detection at 2 Hz); the rise starts about 11 s earlier.
+Next: Skills for Open WebUI
