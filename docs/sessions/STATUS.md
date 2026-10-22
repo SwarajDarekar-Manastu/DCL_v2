@@ -658,3 +658,14 @@ Merged / ready:
 Blocked on: Settings editing (backend/api/settings.py is still S1's stub). The "Failed tasks" Ops page needs a `GET /ops/failed-tasks` route over `dead_letters()`; file 10 §2 puts ops routes in S1's `backend/api/sync.py`, which is a stub. Owner question sent to the Lead.
 Needs from others: S1: settings API; Lead: owner of the failed-tasks route.
 Next: the Failed tasks page once the route owner is decided; Settings editing once S1's API is on main; review the Console redesign branch when it arrives.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- `GET /ops/failed-tasks?limit=100` (admin, 1–500) in the new `backend/api/ops.py` (Lead ruling). It reads S4's `dead_letters()` newest first and imports the Celery app only when the route runs. Malformed entries are skipped, and Redis down answers 503. No retry.
+- The router is registered in `backend/main.py` for the api role; this is the Lead-accepted change of two list entries.
+- The Console Ops page has a "Failed tasks" section (admin only, Refresh, empty state). New map page `frontend/ops-page`.
+- The live read against the stack's Redis works; the list is currently empty.
+- Tests: backend `uv run pytest -q` exit 0 (5 new route tests); Console check 0 errors, vitest 97, build ok.
+Blocked on: Settings editing (S1's settings API).
+Needs from others: S1: settings API. Regenerated types show S1's new `note` on unit_telemetry evidence; the Review UI does not display it yet (next small S3 task).
+Next: show the evidence `note` in the unit pane; Settings once S1's API is on main; review the Console redesign branch when it arrives.
