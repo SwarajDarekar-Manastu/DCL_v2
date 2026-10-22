@@ -409,6 +409,12 @@ Blocked on: nothing
 Needs from others: nothing
 Next: Route C
 
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: Route C step 1 for LabJack .dat/.dat_fail. A run streams to `dcl-telemetry/{run_uuid}/raw.parquet` (ZSTD, 100k-row groups), with per-channel stats, actual rate, gaps and duplicates. `v*` channels are volts; every other channel resolves through `channel_map` rules or gets UNIT_AMBIGUITY HARD. The validation gate (`backend/review/staged.py`) then halts the document with a staged payload. New: the adapter registry, release of parked documents on dispatch, and `dcl.process.route_c` on telemetry_stream. pyarrow, duckdb, numpy, pint, pyyaml, openpyxl and nptdms are now main dependencies, so the backend image needs a rebuild. Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest` (1,210 passed, 20 skipped).
+Read-only census of the stack: 20 of the 40 waiting C documents are LabJack (18 .dat, 2 .dat_fail, 819 MB). The other 20 (12 xlsx, 4 cfg, 2 csv, 2 tdms) wait for step 2 adapters. Dry run on real data: 628 MB, 3.79 M rows in 3.7 s; 16 channels per file, 8 of them y* with no unit.
+Blocked on: merge + stack image rebuild, then `routes.C.enabled = true` on the stack and a re-dispatch (live counts follow)
+Needs from others: Lead: approval for the `telemetry_runs`/`telemetry_channels` migration (step 2); S4: rebuild the worker image after the merge
+Next: live Route C run and counts; then step 2 (normalized Parquet, t0, metrics, catalog tables, commit path) and the A1/D/F adapter wiring S2 published
 
 ## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
 Merged / ready: Benchmark UI. Suites, cases with drafts to approve, the case editor covering every CaseSpec field (edit = new version), the results dashboard with a baseline ribbon, failure classes, per-category counts and newly failing cases, the drilldown, compare runs and the Retrieval lab over S2's /v1/retrieval/search; run pages refresh on the live `run` topic. 90 Vitest; check and build clean; browser run against a mock API.
@@ -455,11 +461,46 @@ Blocked on: nothing (A1 DOCX/PPTX waits for S4's `backend/common/office.py`, sig
 Needs from others: Lead: parse/media deps pillow-heif==1.8.1, imagehash==4.3.2, faster-whisper==1.2.1; S1: dispatcher calls for `process_photo` (with `cluster_photos` in the assembler) and `process_video`
 Next: the Answer Engine workflow (query analysis, planner, tools T1–T6/U1–U2, synthesis, verifier, DBOS)
 
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: office conversion for S1 and S2: `backend/common/office.py` `convert(data, from_ext, to, *, recalc=False)` against the libreoffice container, which now runs `office_server.py` (one soffice run per request, profile that recalculates formulas on load) instead of unoserver (unoserver cannot load .xlsx on LibreOffice 7.4, inline or by path). Verified live: rtf/doc → docx, docx → pdf, xls → xlsx, xlsx recalculation (stale 999 → 81), S5's FMEA fixture → pdf; PPT/PPTX untested (no sample). Env name `DCL_OFFICE_URL` used, pending Lead approval. Test: `uv run pytest` green
+Blocked on: backups questions with DCL Lead
+Needs from others: Lead — approve `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`; merge 31eb0be + this
+Next: backups once answered; MinIO replacement comparison by end of M4
 ## 2026-10-22 09:00 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: engine tools T1 search_documents, U1 get_document, U2 catalog_lookup, T4 code and diagrams, T5 physics_calculator (`backend/llm_engine/engine/tools/`), 17 tests; one `Provenance` enum (adds `calculation`); retrieval test on migration 0004. (Route wiring now goes through S1's adapter registry in `backend/dispatcher/adapters.py`, not IMPLEMENTED_ROUTES.)
 Blocked on: nothing
 Needs from others: S1: telemetry_runs/channels and Parquet for T2; the diagram catalog shape in `.wiki/backend/answer-engine.md` for Route E; S4: whether the gateway proxies Google Search grounding for T6
 Next: T2/T3/T6, then query analysis, synthesis, entailment verifier, workflow + DBOS, /v1/answer streaming
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: Google Search grounding capability (e911384; probe re-run with the real `.env`, 9 capabilities enabled); office client (96cec91); dead letters + M1 load test (31eb0be); observability + parse image (a19ad4f) — all on this branch, merge requested
+Blocked on: backups questions with DCL Lead
+Needs from others: Lead approval of `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`
+Next: MinIO replacement evaluation, hands-on (bucket versioning, prefix lifecycle, presigned GET, DuckDB httpfs, via the same minio-py client) against pinned candidates rustfs/rustfs:1.0.3, chrislusf/seaweedfs:4.48, dxflrs/garage:v2.4.1, MinIO as baseline; written comparison to the Lead by end of M4
+
+## 2026-10-22 05:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: real samples local only (decision 2026-10-22): `backend/tests/fixtures/real_samples.yaml` (93 files of E1–E11, registry sha256), export procedure in the fixtures README (git-ignored `data/samples/<entry>/`), `test_real_samples.py` (manifest checks; local copies when present). Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend`
+Blocked on: an operator export into S5's worktree `data/samples/` (S5 has no stack credentials)
+Needs from others: DCL Lead — run the README export commands with the output under /home/ai/Desktop/Swaraj_/dcl_v2/.claude/worktrees/strange-bhaskara-1dd439/data/samples/
+Next: verify the copies, then the first 15 telemetry cases with own Python (Flash-Lite id for any model-naming case: gemini-3.1-flash-lite)
+
+## 2026-10-22 06:10 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: real-sample manifest moved to git-ignored `data/samples/real_samples.yaml`; committed `real_samples.template.yaml` (91 distinct files, no names) checked by sha256; README export wrapper loads `.env`; E1–E3 copies verified against the registry. Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend`
+Blocked on: nothing
+Needs from others: nothing now (E4–E11 export later, on request)
+Next: the first 15 telemetry cases from E1–E3 with own Python verification
+
+## 2026-10-22 07:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: real samples trimmed per the user rule (one file per supported type, chosen by extension and name only, plus the telemetry runs of the benchmark cases): 18 files, ~69 MB; README export list cut to E1–E7. Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: S1 — one `.pptx` and one `.zip` from the registry (not in the allowlist folders)
+Needs from others: Lead — export E4–E7 into S5's `data/samples/` when convenient
+Next: telemetry suite (option b: values in git-ignored data/benchmark/) and the two halt behaviour cases
+
+## 2026-10-22 08:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: first 15 TELEMETRY_MATH golden cases + 2 HALTED_DATA_BEHAVIOR cases (TP7 Test 01, Injector 10, Injector 14): committed template without values, `telemetry_metrics.py` verification + `build`, recompute test; values in git-ignored `data/benchmark/` (option b); all 17 validate against S3's `CaseCreate`; TP7 values match the team workbook. Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: Lead — index-state precondition for the numeric cases (runs halt until SME channel-map rules) and whether S5 drafts those rules; hold-out subset to record
+Needs from others: Lead — tell S4 the suite exists (`data/benchmark/telemetry.json`); export X1/X2 samples
+Next: remaining golden categories and the 40-query retrieval set (need indexed documents and S2's engine mode)
 
 ## 2026-10-22 14:00 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: Answer Engine workflow increment. Planner `backend/llm_engine/engine/playbooks.py`, `AnswerWorkflow` in `backend/llm_engine/engine/workflow.py` (analysis → plan → tools in parallel → insufficient-evidence check → synthesis + verification; chit-chat, clarification, extractive fallback; trace record), `POST /v1/answer` streams it (`backend/api/engine.py`, 503 when unconfigured or not installed). Prompts `physics_args.v1`, `chitchat.v1`. Runs under DBOSRuntime (tables in schema `dbos` of the DCL database, self-migrated). Under DBOS stream writes arrive out of order, so frames carry `seq` and `ordered()` restores them. 15 new unit tests + 1 DBOS DB test. Flash-Lite = gemini-3.1-flash-lite (a125d60, probed: MINIMAL works).

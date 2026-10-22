@@ -406,3 +406,37 @@ def test_disabled_capabilities_raise_before_sending(capability):
             model=MODEL, messages=[Message.user("x", Image(b"x"))], context=CTX, tools=[TOOL]
         )
     assert gw.requests == []
+
+
+async def test_google_search_grounding_sends_the_tool_and_returns_queries_and_sources():
+    gw = Gateway(recorded("grounding"))
+    result = await client(gw).generate(
+        model=MODEL, messages=[Message.user("latest Python release?")], context=CTX, google_search=True
+    )
+    assert gw.bodies[0]["config"]["tools"] == [{"google_search": {}}]
+    assert result.grounding is not None
+    assert result.grounding.queries and all(isinstance(q, str) for q in result.grounding.queries)
+    assert result.grounding.sources and result.grounding.sources[0].uri.startswith("https://")
+
+
+async def test_google_search_and_function_tools_share_one_tools_list():
+    gw = Gateway(recorded("plain"))
+    await client(gw).generate(
+        model=MODEL, messages=[Message.user("q")], context=CTX, tools=[TOOL], google_search=True
+    )
+    tools = gw.bodies[0]["config"]["tools"]
+    assert tools[0]["function_declarations"][0]["name"] == "get_run_peak" and tools[1] == {
+        "google_search": {}
+    }
+
+
+def test_google_search_needs_its_capability_and_a_gemini_style_gateway():
+    caps = Capabilities(enabled=frozenset(Capability) - {Capability.GOOGLE_SEARCH})
+    with pytest.raises(Exception, match="google_search"):
+        client(Gateway(recorded("plain")), caps=caps).generate_sync(
+            model=MODEL, messages=[Message.user("q")], context=CTX, google_search=True
+        )
+    with pytest.raises(Exception, match="google_search"):
+        client(Gateway(recorded("plain")), style="openai").generate_sync(
+            model=MODEL, messages=[Message.user("q")], context=CTX, google_search=True
+        )

@@ -28,3 +28,4 @@ models/
 **/*.sqlite
 backend/tests/
 backend/devops/
+!backend/devops/docker/office_server.py

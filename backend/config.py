@@ -48,6 +48,7 @@ DEV_DEFAULTS: dict[str, str] = {
     "DCL_REDIS_URL": "redis://redis:6379/0",
     "DCL_MINIO_ENDPOINT": "http://minio:9000",
     "DCL_MODELS_URL": "http://models:8500",
+    "DCL_OFFICE_URL": "http://libreoffice:2003",
     "DCL_API_BASE_URL": "http://localhost:8200",
     "DCL_CONSOLE_BASE_URL": "http://localhost:8100",
     "DCL_CONSOLE_ALLOWED_ORIGINS": "http://localhost:8100",
@@ -96,6 +97,7 @@ class Group(StrEnum):
     REDIS = "redis"
     MINIO = "minio"
     MODELS = "models"
+    OFFICE = "office"
     LINKS = "links"
     CONSOLE_AUTH = "console_auth"
     PIPE = "pipe"
@@ -168,6 +170,7 @@ class Settings(BaseSettings):
     minio_root_user: str | None = _env("DCL_MINIO_ROOT_USER", default=None)
     minio_root_password: SecretStr | None = _env("DCL_MINIO_ROOT_PASSWORD", default=None)
     models_url: AnyHttpUrl | None = _env("DCL_MODELS_URL", default=None)
+    office_url: AnyHttpUrl | None = _env("DCL_OFFICE_URL", default=None)
     api_base_url: AnyHttpUrl | None = _env("DCL_API_BASE_URL", default=None)
     console_base_url: AnyHttpUrl | None = _env("DCL_CONSOLE_BASE_URL", default=None)
     pipe_shared_secret: SecretStr | None = _env("DCL_PIPE_SHARED_SECRET", default=None)
@@ -272,6 +275,7 @@ REQUIRED_BY_GROUP: dict[Group, tuple[str, ...]] = {
     Group.REDIS: ("DCL_REDIS_URL",),
     Group.MINIO: ("DCL_MINIO_ENDPOINT", "DCL_MINIO_ACCESS_KEY", "DCL_MINIO_SECRET_KEY"),
     Group.MODELS: ("DCL_MODELS_URL",),
+    Group.OFFICE: ("DCL_OFFICE_URL",),
     Group.LINKS: ("DCL_API_BASE_URL", "DCL_CONSOLE_BASE_URL"),
     Group.CONSOLE_AUTH: (
         "DCL_TENANT_ID",

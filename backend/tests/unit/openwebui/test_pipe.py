@@ -386,3 +386,23 @@ def test_oversized_or_refused_attachments_are_skipped_not_fatal(pipe_module):
     ]
     assert json.loads(recorder.requests[-2].content)["attachments"] == []  # last two: answer, then confirm
     assert "".join(i for i in yielded if isinstance(i, str)).startswith("TP07 run T04")
+
+
+def test_every_engine_provenance_has_a_label():
+    from backend.api.engine import Provenance
+
+    assert {p.value for p in Provenance} <= set(pipe_manastu_engine.PROVENANCE_LABEL)
+    sources = pipe_manastu_engine.group_sources(
+        [
+            {
+                "citation_id": "2",
+                "doc_id": None,
+                "title": "RocketCEA",
+                "label": "Isp at 20 bar",
+                "provenance": "calculation",
+                "url_viewer": None,
+            }
+        ],
+        "https://console.test",
+    )
+    assert sources[0]["metadata"][0]["name"] == "[2] Isp at 20 bar (calculation)"

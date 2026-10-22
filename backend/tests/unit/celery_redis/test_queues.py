@@ -90,6 +90,7 @@ IN_NETWORK = {
     "DCL_REDIS_URL": "redis://redis:6379/0",
     "DCL_MINIO_ENDPOINT": "http://minio:9000",
     "DCL_MODELS_URL": "http://models:8500",
+    "DCL_OFFICE_URL": "http://libreoffice:2003",
 }
 
 
