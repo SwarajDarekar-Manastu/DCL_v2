@@ -735,3 +735,15 @@ Merged / ready: T2 plot embed. With `plot=true`, T2 renders one PNG per run (Mat
 Blocked on: nothing
 Needs from others: Lead: the `plots/{run_uuid}/…png` key prefix for file 05's dcl-assets layout (answer-time only, no `assets` row). S1, through the Lead: `office_run.default_build()` should pass `extraction_safety=extraction_safety_from(session)` to VisionService. Observation for S1: on the stack's committed thermocouple run, t0 lands at the temperature peak (detection at 2 Hz); the rise starts about 11 s earlier.
 Next: Skills for Open WebUI
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready (step 2 of 3, code complete): local password sign-in.
+- POST /auth/login: argon2id, HS256 JWT. Wrong password, unknown and inactive accounts get the same 401; 5 failures per minute per email answer 429.
+- Every request re-reads the account, so deactivation and role changes apply to existing tokens at once.
+- Admin routes /auth/users: create, set roles, deactivate, reset password. The last active admin is kept.
+- The bootstrap admin is created while `users` is empty.
+- Console: local mode is the default, with a login form, the token in sessionStorage and a Users page under Settings. MSAL stays dormant.
+- Tests: backend pytest exit 0 (10 new), Console check 0 errors, vitest 124, build ok.
+Blocked on: the live end-to-end login, and with it the dev-token removal, needs S1's `users` model and migration 0010.
+Needs from others: S1: `backend.postgres.models.User` with the agreed columns, plus migration 0010. S4: a redeploy after the merge.
+Next: step 3, Settings over S1's /settings API, while waiting for 0010.

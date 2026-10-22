@@ -23,5 +23,15 @@
 				>
 			</li>
 		{/each}
+		<li class="border-border mt-2 border-t pt-2">
+			<a
+				href="/settings/users"
+				aria-current={current === 'users' ? 'page' : undefined}
+				class={cn(
+					'text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 items-center rounded-md px-2.5 text-sm no-underline transition-colors hover:no-underline',
+					current === 'users' && 'bg-muted text-foreground font-medium'
+				)}>Users</a
+			>
+		</li>
 	</ul>
 </nav>
