@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/05_storage_schema.md (all) |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
@@ -21,6 +21,9 @@ Code:
 - `backend/postgres/pipeline_config.py` (get / get_prefix / set_value, `seed_gate` from `config/gate.yaml`, `seed_sanity_ranges` from `config/sanity_ranges.yaml`, `gate_config()`, `sanity_ranges()`, `download_scope()`, `processing_scope()`; CLI `seed-config | seed-gate [--reseed]`)
 - `backend/postgres/alembic.ini`, `backend/postgres/migrations/env.py`, `backend/postgres/migrations/script.py.mako`
 - `backend/postgres/migrations/versions/0001_m1_registry.py`, `0002_pipeline_config.py` (table + `v_config_current`), `0003_documents_entities_audit.py` (vector extension, 10 tables, `hnsw_document_nodes_embedding` / `_image_embedding`), `0004_bm25_indexes.py` (pg_search `bm25_document_nodes` + `bm25_documents`, S2's verified DDL verbatim), `0005_review_flags_rules.py`, `0006_benchmark_tables.py`, `0007_documents_route_nullable.py`, `0008_previous_blob.py`
+- `backend/postgres/pipeline_config.py` settings layer: `KEYS`/`FAMILIES` registry (file 05 key list; `gate.*` validated through `GateConfig`, `telemetry.*` through `NormalizeConfig`, `sanity_ranges` through Route C's parser), `validate_changes`, `current_entries`, `history`, `apply_changes` (append-only versions + `audit_events` config rows, atomic batch, `expected_version` → `VersionConflict`), `rollback_changes`
+- `backend/postgres/config_impact.py` (`preview`: held items to download, landed files entering/leaving `processing.scope`, parked documents per route, landed files a new gate would reject; `apply_effects`: download-scope release/hold, dispatch needed; no cost estimate until an `llm_calls` ledger and prices exist)
+- `backend/api/settings.py` (admin only: `GET /settings?prefix=`, `GET /settings/{key}/history`, `POST /settings/preview`, `PUT /settings`, `POST /settings/rollback`; 422 `{errors: {key: reason}}`, 409 stale version; starts `dcl.process.dispatch` / `dcl.sync.enqueue_downloads` after a commit)
 - `backend/postgres/session.py` (`engine_from_settings`, `session_factory`, `normalize_url`, FastAPI dependency `get_session`)
 - `backend/postgres/views.sql` (planned, M2–M3)
 
@@ -59,6 +62,9 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/postgres/alembic.ini`
 - `backend/postgres/migrations/`
 - `backend/tests/schema/`
+- `backend/postgres/config_impact.py`
+- `backend/api/settings.py`
+- `backend/tests/unit/api/test_settings_route.py`
 
 ## Rubric (what "done" means for this feature)
 
@@ -83,9 +89,11 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | Migrations 0005 (rules, review_flags with location-level fingerprint uniqueness) and 0006 (benchmark tables; run statuses chosen by S1) |
 | 2026-10-22 | S1 | Migration 0004: BM25 indexes from S2's verified pg_search 0.26.2 DDL |
 | 2026-10-22 | S1 | `get_session` dependency; `sanity_ranges` key seeded from config/sanity_ranges.yaml |
+| 2026-10-22 | S1 | Settings API for S3 (file 08 §3.2): registry, validation, history, atomic batches, rollback, audit, previews and apply semantics; 15 tests (`backend/tests/schema/test_settings_changes.py`, `backend/tests/unit/api/test_settings_route.py`) |
 | 2026-10-22 | S1 | Migration 0003: M2 document tables, M4 entity/fact tables, audit_events (Lead decision); HNSW indexes; pgvector dep |
 
 ## Related
 
 - `.wiki/index.md`
 - `backend/sync-engine`, `backend/gate-and-scope`, `backend/registry-and-blobs` (write the M1 tables)
+- `frontend/settings-ui` (S3; consumes the /settings API)

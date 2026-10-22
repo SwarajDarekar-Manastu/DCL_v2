@@ -690,3 +690,19 @@ Merged / ready (4 commits on main d9a720b): network split + Redis password (d2da
 Blocked on: nothing
 Needs from others: Lead — merge; add `DCL_DATA_BIND_HOST`, `DCL_REDIS_PASSWORD`, `DCL_CONSOLE_SPA_CLIENT_ID`, `DCL_CONSOLE_API_SCOPE` to file 01 §7.1; S2 — wire the per-capability flag to `safety_settings=EXTRACTION_SAFETY`
 Next: redeploy from main after the merge; RustFS step 2 (one-day lifecycle watch) and step 3 (M6-scale load test)
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready (merge requested):
+- Settings API for S3 (79a0b7b). Endpoints in `backend/api/settings.py`: `GET /settings?prefix=`, `GET /settings/{key}/history`, `POST /settings/preview`, `PUT /settings` (atomic batch, `expected_version` → 409) and `POST /settings/rollback`. Admin only.
+  - Every write appends a version and writes an `audit_events` config row with before and after.
+  - Keys are validated against file 05's list: `gate.*` through GateConfig, `telemetry.*`, `sanity_ranges`. Errors come back as 422 `{errors: {key: reason}}`.
+  - Previews: held items that would download, landed files entering or leaving processing.scope, parked documents per route, and landed files a new gate would reject.
+  - Apply: download-scope release or hold; a dispatch starts after scope or route changes.
+  - No Gemini cost estimate: no `llm_calls` ledger or price table exists. The preview returns `estimated_cost_usd: null` with the reason.
+- Lead's M2 item 1 (ac27e8e): Route A1 (PDF) is in the adapter table, sent to `dcl.process.route_a1` on cpu_parse. `backend/dispatcher/office_run.py` calls S2's `process_pdf` (VisionService, Stores, critical_field_patterns, OCR engine table), then gate, index and commit, or parks the result. DOCX/PPTX/PPT stay WAITING. The parse image imports the task and Docling (checked).
+- Lead's M2 item 2 (067cd91): every telemetry UNIT_AMBIGUITY gets a `suggested_resolution`. A unit is proposed only when a file states it: the raw unit, a sibling unit for the same channel name, or a unit in the channel name. Otherwise it gets an explicit "no suggestion" with the .cfg scaling as context, per the 2026-10-22 ruling. `Suggestion.resolution` is now optional; the Console already guards null, and S3 should regenerate `api_schema.d.ts`.
+- Wiki: the stale plan sheet catalog-commit is closed; its open live item moved to the Route C rubric. The labjack-dat sheet was already gone.
+Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest -q`: 1,640 tests, 0 failures, 73 skipped.
+Blocked on: nothing
+Needs from others: Lead: merge. S4: redeploy the workers (cpu_parse included). Then I set `routes.A1.enabled = true` (33 A1 documents waiting), dispatch, resume the 22 HALTED Route C documents so their flags get suggestions, and run the M2 live check.
+Next: the live M2 check after the redeploy; then the library PDF language/DOI check (started: 814 landed library PDFs; first-page text with pypdfium2, script and stopword detection, since no fastText or langdetect dependency exists)

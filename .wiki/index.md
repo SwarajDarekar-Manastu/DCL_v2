@@ -62,7 +62,6 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
-| [backend__route-c-telemetry__catalog-commit](plans/backend__route-c-telemetry__catalog-commit.md) | `backend/route-c-telemetry` | S1 | 2026-10-22 |
 
 ## Maintenance
 

@@ -159,7 +159,7 @@ def reset_waiting(session: Session, route: Route) -> int:
     return removed
 
 
-def _folder_tree(session: Session) -> tuple[dict[str, DriveFolder], dict[str, list[str]]]:
+def folder_tree(session: Session) -> tuple[dict[str, DriveFolder], dict[str, list[str]]]:
     folders = {
         f.item_id: f for f in session.scalars(select(DriveFolder).where(DriveFolder.deleted_at.is_(None)))
     }
@@ -339,7 +339,7 @@ def dispatch(
     routes_on = enabled_routes(session)
     sets = load_section_file_sets() if section_file_sets is None else section_file_sets
     roots = {r.root_name: r for r in session.scalars(select(SyncRoot))}
-    folders, ancestors = _folder_tree(session)
+    folders, ancestors = folder_tree(session)
     claimed = set(session.scalars(select(DocumentSource.blob_sha256)))
     cir = BucketStore(minio, CIR)
 

@@ -24,8 +24,14 @@ class Adapter:
     can_handle: Callable[[bytes, str], bool]
 
 
+def is_pdf(head: bytes, name: str) -> bool:
+    """Route A1 reads PDFs (S2's ``process_pdf``); DOCX/PPTX/PPT wait for A1.9–A1.10."""
+    return b"%PDF-" in head[:1024]
+
+
 _C = ("dcl.process.route_c", Queue.TELEMETRY_STREAM)
 ADAPTERS: tuple[Adapter, ...] = (
+    Adapter("pdf", Route.A1, "dcl.process.route_a1", Queue.CPU_PARSE, is_pdf),
     Adapter("labjack_dat", Route.C, *_C, labjack.can_handle),
     Adapter("tdms", Route.C, *_C, tdms.can_handle),
     Adapter("delimited", Route.C, *_C, delimited.can_handle),

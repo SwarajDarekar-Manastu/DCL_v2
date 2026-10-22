@@ -19,7 +19,8 @@ Code:
 - `backend/dispatcher/folder_context.py` (`build_folder_context`: breadcrumb, TP/T/INJ ids with source, conflicts, siblings, folder kind, origin, trust tier)
 - `backend/dispatcher/assembler.py` (`assemble`: LaTeX master + parts + PDF twin, orphan .tex, JSON section sets)
 - `backend/dispatcher/routing.py` (`dispatch`: processing scope, typing, assembly, documents + document_sources, gating, UNSUPPORTED_FORMAT, CONFLICT flags, then `apply_supersessions`, then `release_waiting` (parked documents whose route is enabled and whose adapter accepts the file become PROCESSING; enqueued after the commit through `enqueue`); `sweep_documents`; `retype_waiting`; `reset_waiting`; CLI `dispatch | sweep | retype | reassemble --route X`); ZIP-based files typed by their members
-- `backend/dispatcher/adapters.py` (registry: `Adapter{name, route, task, queue, can_handle}`, `adapter_for(route, head, name)`; a route is implemented kind by kind; Route C: `labjack_dat`, `tdms`, `delimited`, `workbook`, `config_file`)
+- `backend/dispatcher/adapters.py` (registry: `Adapter{name, route, task, queue, can_handle}`, `adapter_for(route, head, name)`; a route is implemented kind by kind; Route C: `labjack_dat`, `tdms`, `delimited`, `workbook`, `config_file`; Route A1: `pdf` → `dcl.process.route_a1` on `cpu_parse`)
+- `backend/dispatcher/office_run.py` (`process_a1_document(session, minio, doc_id, build, indexer)`: S1's side of Route A1 around S2's `process_pdf`; stores over `dcl-cir/{sha}/A1/v1/` and `dcl-assets`; gate, index, commit or park; `default_build()` with the production VisionService)
 - `backend/celery_redis/tasks_process.py` (`dcl.process.dispatch` enqueues every PROCESSING document on its adapter's task, `dcl.process.sweep_documents`, io_light; `dcl.process.route_c`)
 - `backend/dispatcher/contract.py` (published: `ProcessedDocument` and parts, `Flag` fingerprint, `Anchor` + `parse_anchor`/`format_anchor`)
 
@@ -52,6 +53,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/dispatcher/assembler.py`
 - `backend/dispatcher/routing.py`
 - `backend/dispatcher/adapters.py`
+- `backend/dispatcher/office_run.py`
+- `backend/tests/unit/dispatcher/test_office_run.py`
 - `backend/celery_redis/tasks_process.py`
 - `backend/dispatcher/contract.py`
 - `backend/tests/unit/dispatcher/`
@@ -77,6 +80,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | S1 | Typed flag evidence and suggestions; resolution actions moved here from review/api_models |
 | 2026-10-21 | S1 | Type resolution (magic bytes, sniffers, extension refinement, mismatch); 39 tests |
 | 2026-10-22 | S1 | Adapter registry, release of parked documents, enqueue after commit (Route C LabJack first) |
+| 2026-10-22 | S1 | Route A1 (PDF) adapter on cpu_parse with `office_run.py`; `folder_tree` public (settings previews); `Suggestion.resolution` optional (explicit no-suggestion) |
 
 ## Related
 
