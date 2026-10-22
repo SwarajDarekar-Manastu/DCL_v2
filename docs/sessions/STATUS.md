@@ -473,3 +473,9 @@ Blocked on: Lead / SME decision. The approved channel_map derivation from "Data 
 Question: (A, recommended) The .cfg scaling and these slope matches go into each UNIT_AMBIGUITY flag as evidence and suggested resolutions. The flags stay HARD, and one operator rule per folder or root in the Review Console resolves all its runs. No derived rule claims a unit that no file states. Or (B): the SME supplies the y0–y7 assignment per rig (canonical name, quantity, unit, gauge/abs), which I load as operator rules. Or both: B for the known rigs, A for everything else.
 Needs from others: Lead: choose A, B or both; for B, the SME's channel table
 Next: on the answer: the telemetry_runs/telemetry_channels migration (approved), normalized Parquet, t0, metrics, the commit path
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: nothing new
+Blocked on: nothing. The question in the entry above is withdrawn on the user's instruction: the plan and decisions stand. Channels with no stated unit stay UNIT_AMBIGUITY HARD until an operator rule resolves them (file 06). The folder's .cfg scaling is attached as evidence (file 03 §C.0/C.1). Nothing is derived from Setup.xlsx or Data format.xlsx, because not every folder has them.
+Needs from others: nothing
+Next: Route C step 2: the telemetry_runs/telemetry_channels migration (approved), .cfg scaling evidence, normalized Parquet, t0, metrics, the commit path
