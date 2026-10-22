@@ -45,6 +45,7 @@ PLACEHOLDER = re.compile(
 )
 COMMA_LISTS = ("DCL_FOLDER_IDS", "DCL_FOLDER_PATHS", "DCL_CONSOLE_ALLOWED_ORIGINS", "DCL_CONSOLE_DEV_ROLES")
 DEV_TOKEN_MIN_LENGTH = 32
+AUTH_SECRET_MIN_LENGTH = 32
 DEV_DEFAULTS: dict[str, str] = {
     "DCL_REDIS_URL": "redis://redis:6379/0",
     "DCL_MINIO_ENDPOINT": "http://minio:9000",
@@ -231,6 +232,15 @@ class Settings(BaseSettings):
             if len(raw) != 32:
                 raise ValueError("must be a Fernet key (32 bytes, url-safe base64)")
         return value
+
+    @model_validator(mode="after")
+    def _auth_secret_strength(self) -> "Settings":
+        if self.auth_secret is not None:
+            if len(self.auth_secret.get_secret_value()) < AUTH_SECRET_MIN_LENGTH:
+                raise ValueError(f"DCL_AUTH_SECRET needs {AUTH_SECRET_MIN_LENGTH}+ characters")
+        elif self.env is not Environment.DEV and self.role in (Role.API, Role.ALL):
+            raise ValueError("DCL_AUTH_SECRET is required outside dev for DCL_ROLE=api or all")
+        return self
 
     @model_validator(mode="after")
     def _console_dev_auth_only_in_dev(self) -> "Settings":

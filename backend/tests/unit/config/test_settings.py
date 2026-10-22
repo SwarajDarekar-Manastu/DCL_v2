@@ -504,3 +504,33 @@ def test_console_spa_build_names_are_optional_and_read(monkeypatch):
     settings = load_settings(env_file=None)
     assert settings.console_spa_client_id == "1b2c3d4e-0000-4000-8000-000000000001"
     assert settings.console_api_scope == "api://dcl/access"
+
+
+AUTH_SECRET = "a" * 31 + "Z"
+
+
+def test_auth_secret_shorter_than_32_characters_is_refused_in_every_environment(monkeypatch):
+    monkeypatch.setenv("DCL_AUTH_SECRET", AUTH_SECRET[:-1])
+    with pytest.raises(ConfigError, match="DCL_AUTH_SECRET needs 32") as err:
+        load_settings(env_file=None)
+    assert AUTH_SECRET[:-1] not in str(err.value)
+    monkeypatch.setenv("DCL_AUTH_SECRET", AUTH_SECRET)
+    assert load_settings(env_file=None).auth_secret.get_secret_value() == AUTH_SECRET
+
+
+@pytest.mark.parametrize("env", ["staging", "prod"])
+@pytest.mark.parametrize("role", ["api", "all"])
+def test_auth_secret_is_required_outside_dev_for_roles_that_serve_auth(monkeypatch, env, role):
+    set_env(monkeypatch, {"DCL_ENV": env, "DCL_ROLE": role})
+    with pytest.raises(ConfigError, match="DCL_AUTH_SECRET is required outside dev"):
+        load_settings(env_file=None)
+    monkeypatch.setenv("DCL_AUTH_SECRET", AUTH_SECRET)
+    assert load_settings(env_file=None).auth_secret is not None
+
+
+def test_auth_secret_may_be_missing_in_dev_and_for_workers_and_models(monkeypatch):
+    assert load_settings(env_file=None).auth_secret is None
+    set_env(monkeypatch, {"DCL_ENV": "prod"})
+    assert load_settings(env_file=None).auth_secret is None
+    monkeypatch.setenv("DCL_ROLE", "models")
+    assert load_settings(env_file=None).auth_secret is None
