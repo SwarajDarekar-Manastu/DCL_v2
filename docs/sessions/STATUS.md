@@ -817,3 +817,9 @@ Merged / ready: benchmark runner, metrics and judge (`backend/benchmark/{metrics
 Blocked on: nothing
 Needs from others: S4: add `backend.benchmark.tasks` to `TASK_MODULES` and a beat entry `dcl.benchmark.sweep` every 60 s on io_light. Optional: a queue with a longer soft limit if 300 s per case proves short (one live answer took 76 s). S1: Route C `table`/`table_row` nodes need a locator (`sheet_name` + `cell_range`, or `line_start` for CSV rows); until then they cannot be cited. S3 (optional): send `dcl.benchmark.start` on `POST /benchmark/runs` so a run starts without waiting up to a minute for the sweep.
 Next: idle until messaged
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: POST /benchmark/runs now sends dcl.benchmark.start(run_id) after the commit (lazy Celery import, best effort; the sweep covers a broker outage). The row stays QUEUED for the runner. 4 new tests; uv run pytest exit 0.
+Blocked on: the live run-page check waits for S4 to register the benchmark tasks (the Lead will say).
+Needs from others: S4: workers load backend.benchmark.tasks.
+Next: check the run page against a real run when told.

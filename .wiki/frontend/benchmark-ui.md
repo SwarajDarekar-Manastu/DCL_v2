@@ -31,7 +31,7 @@ Provides (viewer reads; reviewer writes):
 - `GET /benchmark/suites` (case counts by status and category, last run with pass rate); `GET /benchmark/suites/{suite}/export`; `POST /benchmark/suites/{suite}/import` (counts created / versioned / unchanged)
 - `GET /benchmark/cases?suite&status&category` (latest versions); `GET /benchmark/cases/{case_id}` (all versions); `POST /benchmark/cases`; `POST /benchmark/cases/{case_id}/versions` (an edit is a new version); `POST …/approve` (draft → active); `POST …/retire`
 - `POST /benchmark/drafts` (signed Pipe identity only; Add-to-benchmark action; status `draft`, `source_trace_id` kept)
-- `GET /benchmark/runs?suite&limit`; `POST /benchmark/runs` (snapshot `{case_id: version}` of the active cases or a subset; status `queued` for S2's runner); `GET /benchmark/runs/{run_id}` (run + per-case results); `POST …/cancel`
+- `GET /benchmark/runs?suite&limit`; `POST /benchmark/runs` (snapshot `{case_id: version}` of the active cases or a subset; status `queued`; after the commit it sends `dcl.benchmark.start(run_id)` by name so S2's runner starts it at once, best effort: with the broker down the runner's one-minute sweep starts it); `GET /benchmark/runs/{run_id}` (run + per-case results); `POST …/cancel`
 - `GET /benchmark/compare?base&head` (newly failing / passing / still failing, numeric aggregate deltas, config diff)
 - `CaseSpec` (file 08 §5.3): language, paraphrases, expected_numeric {metric, value, unit, tolerance_pct}, expected_citations / must_not_cite {file_name | doc_id | standard_id, page}, expected_tools {tools, ordered}, expected_entities, retrieval_gold_anchors {doc_id, anchor `<kind>:<value>:<hash>`}, expected_behavior (5 values), clarification_answer; unknown keys are refused
 
@@ -71,6 +71,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-22 | S3 | A new run enqueues `dcl.benchmark.start` after the commit (lazy Celery import) |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | Benchmark API and `CaseSpec` over migration 0006; unit and ParadeDB integration tests |
 | 2026-10-22 | S3 | Console screens and Retrieval lab; live `run` topic refreshes run pages |
