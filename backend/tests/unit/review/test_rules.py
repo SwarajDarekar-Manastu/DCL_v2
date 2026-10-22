@@ -171,3 +171,20 @@ def test_yaml_export_keeps_only_operator_rules_and_loads_back():
     assert loaded.version == 1
     assert loaded.rules == [operator]
     assert "F-X" not in text
+
+
+def test_the_rules_loader_skips_proposed_files_and_subfolders(tmp_path):
+    from backend.review.rules import load_rules_dir
+
+    rule = (
+        "rules:\n- rule_type: channel_map\n  scope: {scope_folder_id: F1}\n  body:\n    channels:\n"
+        "      y0: {canonical_name: p_chamber_bar_g, physical_quantity: pressure,\n"
+        "           unit: bar, gauge_or_abs: gauge}\n"
+    )
+    (tmp_path / "confirmed.yaml").write_text(rule)
+    (tmp_path / "drafted.yaml").write_text("status: proposed\n" + rule)
+    (tmp_path / "proposed").mkdir()
+    (tmp_path / "proposed" / "injector_10.yaml").write_text(rule)
+    loaded = load_rules_dir(tmp_path)
+    assert [path.name for path, _ in loaded] == ["confirmed.yaml"]
+    assert loaded[0][1].scope.scope_folder_id == "F1"

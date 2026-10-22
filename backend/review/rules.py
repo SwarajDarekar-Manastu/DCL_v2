@@ -17,7 +17,8 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from fnmatch import fnmatchcase
-from typing import Any, Self
+from pathlib import Path
+from typing import Any, Literal, Self
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -212,7 +213,8 @@ def parse_body(rule_type: RuleType, body: Mapping[str, Any]) -> _Model:
 
 
 class ExportedRule(_Model):
-    """One operator rule in ``config/rules/*.yaml``; a new environment loads it as an operator rule."""
+    """One operator rule in ``config/rules/*.yaml``; a new environment loads it as an operator rule
+    (``load_rules_dir``: top-level confirmed files only, never ``config/rules/proposed/``)."""
 
     rule_type: RuleType
     scope: RuleScope = RuleScope()
@@ -227,7 +229,11 @@ class ExportedRule(_Model):
 
 
 class RulesFile(_Model):
+    """``status = proposed``: drafted (for example by S5 for an SME), never applied until confirmed; a
+    confirmation in the Review UI or in writing turns it into an operator rule (Lead ruling 2026-10-22)."""
+
     version: int = EXPORT_VERSION
+    status: Literal["confirmed", "proposed"] = "confirmed"
     rules: list[ExportedRule]
 
 
@@ -240,3 +246,14 @@ def export_yaml(rules: Iterable[tuple[RuleOrigin, ExportedRule]]) -> str:
 
 def load_yaml(text: str) -> RulesFile:
     return RulesFile.model_validate(yaml.safe_load(text))
+
+
+def load_rules_dir(directory: Path) -> list[tuple[Path, ExportedRule]]:
+    """The operator rules to load: ``*.yaml`` directly in ``directory`` (never subfolders such as
+    ``proposed/``), skipping any file whose ``status`` is ``proposed``."""
+    loaded: list[tuple[Path, ExportedRule]] = []
+    for path in sorted(p for p in directory.glob("*.yaml") if p.is_file()):
+        rules_file = load_yaml(path.read_text(encoding="utf-8"))
+        if rules_file.status == "confirmed":
+            loaded.extend((path, rule) for rule in rules_file.rules)
+    return loaded
