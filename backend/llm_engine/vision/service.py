@@ -27,6 +27,7 @@ from typing import Protocol
 from backend.config import Settings, ThinkingLevel, get_settings
 from backend.llm_engine.gemini_client import GeminiClient
 from backend.llm_engine.gemini_types import CallContext, Image, Message, Text
+from backend.llm_engine.model_ids import Tier, model_id
 from backend.llm_engine.prompts import load_prompt
 from backend.llm_engine.vision.schemas import (
     HandwritingReading,
@@ -42,8 +43,8 @@ from backend.llm_engine.vision.schemas import (
     VideoTimeline,
 )
 
-FLASH = "gemini-3.8-flash"
-FLASH_LITE = "gemini-3.1-flash-lite"
+FLASH = Tier.FLASH
+FLASH_LITE = Tier.LITE
 CACHE_PREFIX = "_vision_cache"
 PROMPT_AREA = "vision"
 
@@ -65,9 +66,14 @@ class VisionCapability(StrEnum):
 class Task:
     prompt_version: str
     schema: type[Reading]
-    model: str
+    tier: Tier
     media_resolution: str
     thinking: ThinkingLevel
+
+    @property
+    def model(self) -> str:
+        """The model id of the task's tier, from the settings (GEMINI_MODEL / GEMINI_LITE_MODEL)."""
+        return model_id(self.tier)
 
 
 TASKS: dict[VisionCapability, Task] = {
