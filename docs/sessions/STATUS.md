@@ -679,3 +679,9 @@ Merged / ready: read-only M2 acceptance checks for Route C and the TP7 footer CO
 Blocked on: nothing
 Needs from others: expected live failures, for the owners: TP7 check needs Route A1 in the dispatcher's adapter table (S1) and the sheet processed; 1c fails until Route C fills `suggested_resolution` on UNIT_AMBIGUITY (S1, file 06 §5); A1 persists page furniture only inside the CONFLICT evidence, not in the CIR (S2, informational)
 Next: idle until messaged (MULTILINGUAL and the retrieval set parked)
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: the Review case view shows S1's unit_telemetry evidence `note` (why a mapped channel cannot be used) under the channel heading, only when it is non-empty; EvidencePane component tests. Console check 0 errors, vitest 99, build ok; backend pytest exit 0.
+Blocked on: Settings editing (S1's settings API).
+Needs from others: S1: settings API.
+Next: Settings once S1's API is on main; review the Console redesign branch when it arrives.
