@@ -40,7 +40,7 @@ def evidence_items(results: list[ToolResult]) -> list[Evidence]:
     items: list[Evidence] = []
     for result in results:
         hits = (result.result or {}).get("hits") if isinstance(result.result, dict) else None
-        if result.tool == "search_documents" and hits:
+        if hits:  # search results and external results: one evidence item per hit and source
             for hit, source in zip(hits, result.provenance, strict=False):
                 items.append(
                     Evidence(

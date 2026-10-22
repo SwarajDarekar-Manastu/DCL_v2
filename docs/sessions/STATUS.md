@@ -578,3 +578,9 @@ Merged / ready: standards suite (5 STANDARDS cases from the E12 ECSS standards: 
 Blocked on: S1's library language/DOI check (MULTILINGUAL), indexed corpus (retrieval set with gold anchors)
 Needs from others: nothing new
 Next: idle on MULTILINGUAL and the retrieval set until their inputs exist (Lead ruling)
+
+## 2026-10-22 19:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: T6 `external_search` (`backend/llm_engine/engine/tools/external.py`, prompts `external_intent.v1`, `external_search.v1`): generic needs from the question alone, sanitized, isolated grounded Gemini call (only the sanitized query; rule confirmed by the Lead), arXiv for literature, ≤ 3 queries, `external_queries` in the trace, benchmark mock; planner goes external on request or for a design-synthesis gap; policy from `pipeline_config` (`answer.external_search_enabled`, `answer.external_allowed_groups`, `answer.proprietary_terms`). Live check: grounding returned 6 sources, all redirect links resolved.
+Blocked on: nothing
+Needs from others: S1 / Lead: seed `answer.external_allowed_groups` (e.g. the `dcl-external-search` group name the Pipe sends) and `answer.proprietary_terms`; until then nobody goes external. New key `answer.external_search_enabled` (kill switch, default on) for file 05's key list.
+Next: A1 transcribe_page v2 with furniture + test-plan CONFLICT (Lead confirmed), then T3, T2, Skills

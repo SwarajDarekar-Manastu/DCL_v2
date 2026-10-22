@@ -9,6 +9,7 @@ T6 external) are planned as fallbacks — tables-only or figures-only searches �
 """
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -20,13 +21,15 @@ from backend.llm_engine.engine.tools.search import SearchDocumentsArgs
 from backend.postgres.enums import EntityType, SourceOrigin
 
 FAILURE_KINDS = ["test_report", "failure_report"]
+EXTERNAL_NOT_ALLOWED = (
+    "external search is not enabled for your groups; only internal and library material was used"
+)
 PROCEDURE_KINDS = ["procedure", "test_plan", "calibration"]
 UNAVAILABLE = {
     "query_telemetry": (
         "telemetry statistics (Route C) are not available yet; numbers come from report tables"
     ),
     "inspect_visuals": "photo similarity search is not available yet; figures come from document search",
-    "external_search": "external search is not available yet; only internal and library material was used",
 }
 
 
@@ -43,6 +46,7 @@ class Plan:
     caveats: list[str] = field(default_factory=list)
     needs_physics_args: bool = False
     read_top_document: bool = False
+    external: Literal["no", "if_gap", "yes"] = "no"
 
     def add(self, tool: str, args: BaseModel | None, reason: str) -> None:
         key = (tool, args.model_dump_json() if args is not None else None)
@@ -177,8 +181,6 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
             "kept library: datasheets and papers",
         )
         plan.needs_physics_args = True
-        if analysis.external_allowed:
-            plan.note_unavailable("external_search")
     if Intent.PHYSICS_CALC in intents:
         plan.needs_physics_args = True
     if Intent.DOCUMENT_SUMMARY in intents:
@@ -205,9 +207,25 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
     for sub in analysis.raw.sub_questions:
         if sub.tool in (None, "search_documents"):
             plan.add("search_documents", _search(analysis, sub.text), f"sub-question: {sub.text}")
+    _external(plan, analysis, intents)
     if not plan.calls and not plan.needs_physics_args:
         plan.add("search_documents", _search(analysis, question), "general search")
     return plan
+
+
+def _external(plan: Plan, analysis: Analysis, intents: set[Intent]) -> None:
+    """File 07 §6: on explicit request, or for a design synthesis whose internal and library search found
+    nothing; never with an internal-only scope or for a user outside `answer.external_allowed_groups`."""
+    if analysis.raw.source_scope == SourceScope.INTERNAL_ONLY:
+        return
+    if not analysis.external_allowed:
+        if analysis.raw.external_requested:
+            plan.caveats.append(EXTERNAL_NOT_ALLOWED)
+        return
+    if analysis.raw.external_requested:
+        plan.external = "yes"
+    elif Intent.DESIGN_SYNTHESIS in intents:
+        plan.external = "if_gap"
 
 
 def read_document_call(doc_id) -> PlannedCall:
