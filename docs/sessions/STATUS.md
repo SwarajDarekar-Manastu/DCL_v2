@@ -495,3 +495,9 @@ Merged / ready: real samples trimmed per the user rule (one file per supported t
 Blocked on: S1 — one `.pptx` and one `.zip` from the registry (not in the allowlist folders)
 Needs from others: Lead — export E4–E7 into S5's `data/samples/` when convenient
 Next: telemetry suite (option b: values in git-ignored data/benchmark/) and the two halt behaviour cases
+
+## 2026-10-22 08:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: first 15 TELEMETRY_MATH golden cases + 2 HALTED_DATA_BEHAVIOR cases (TP7 Test 01, Injector 10, Injector 14): committed template without values, `telemetry_metrics.py` verification + `build`, recompute test; values in git-ignored `data/benchmark/` (option b); all 17 validate against S3's `CaseCreate`; TP7 values match the team workbook. Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: Lead — index-state precondition for the numeric cases (runs halt until SME channel-map rules) and whether S5 drafts those rules; hold-out subset to record
+Needs from others: Lead — tell S4 the suite exists (`data/benchmark/telemetry.json`); export X1/X2 samples
+Next: remaining golden categories and the 40-query retrieval set (need indexed documents and S2's engine mode)

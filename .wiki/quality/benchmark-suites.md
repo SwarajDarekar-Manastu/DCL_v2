@@ -3,10 +3,10 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `quality/benchmark-suites` |
-| Status | planned |
+| Status | in-progress |
 | Owner session | S5 |
 | Spec | docs/architecture/08_frontend_openwebui.md §5.3, §5.7 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
@@ -15,34 +15,40 @@ The 60-case golden set across categories incl. MULTILINGUAL and LIBRARY_VS_INTER
 ## Location
 
 Code:
-- `backend/tests/benchmark/suites/`
-- `backend/tests/benchmark/retrieval_set.yaml`
-- `backend/tests/benchmark/verification/`
+- `backend/tests/benchmark/suites/telemetry.template.yaml` (questions, methods, units, tolerances; no values)
+- `backend/tests/benchmark/verification/telemetry_metrics.py` (metric functions, `build`)
+- `backend/tests/benchmark/verification/README.md` (verification notes)
+- `backend/tests/benchmark/retrieval_set.yaml` (planned)
+- local, git-ignored: `data/benchmark/telemetry_sources.yaml`, `data/benchmark/telemetry.json` (values)
 
 Tests and fixtures:
-- (none yet)
+- `backend/tests/benchmark/test_telemetry_suite.py`
 
 ## Interfaces
 
 Provides:
-- suites consumed by the benchmark runner and CI
+- suites in S3's import format (`POST /benchmark/suites/{suite}/import`), built locally with values; the M10 TELEMETRY_MATH gate runs on the stack host
 
 Consumes:
-- anchors (S2)
-- benchmark UI (S3)
+- anchors (S2: `Anchor.serialize()` + doc_id)
+- benchmark UI and `CaseCreate` model (S3, `backend/benchmark/catalog.py`)
+- real samples (`quality/fixtures`)
 
 ## Workspace (files to touch when modifying this feature)
 
 Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
 
-- `backend/tests/benchmark/suites/`
+- `backend/tests/benchmark/suites/telemetry.template.yaml`
+- `backend/tests/benchmark/verification/telemetry_metrics.py`
+- `backend/tests/benchmark/verification/README.md`
+- `backend/tests/benchmark/test_telemetry_suite.py`
 - `backend/tests/benchmark/retrieval_set.yaml`
-- `backend/tests/benchmark/verification/`
 
 ## Rubric (what "done" means for this feature)
 
-- [ ] Every numeric case has an independent verification note
-- [ ] Hold-out subset recorded in DECISIONS.md
+- [x] Every numeric case has an independent verification note (15 telemetry cases; TP7 cross-checked with the team workbook)
+- [ ] Hold-out subset recorded in DECISIONS.md (proposed to the Lead)
+- [ ] Remaining 45 cases (doc lookups, code, failure/visual, standards, library/multilingual, behaviour) and the 40-query retrieval set
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log
@@ -50,6 +56,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S5 | First 15 TELEMETRY_MATH cases + 2 HALTED_DATA_BEHAVIOR cases; values local (option b); verification by telemetry_metrics.py, recompute test |
 
 ## Related
 
