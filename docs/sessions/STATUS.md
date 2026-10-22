@@ -544,3 +544,13 @@ Live Route C step 1 on the stack: routes.C enabled after S4's rebuild, then re-d
 Blocked on: nothing
 Needs from others: S4: apply 0009 on the stack DB after the merge and redeploy; an SME confirmation of S5's proposed channel maps (each confirmed rule resumes its runs through dcl.process.resume_for_rule); the telemetry workers need EmbeddingGemma's tokenizer (transformers) for index_document's token counts, or the models role exposes a token count
 Next: the review API resolve endpoint (rule creation → resume_for_rule), then the xlsx/csv/tdms adapters; A1/D/F adapter wiring for S2's routes
+## 2026-10-22 10:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: behaviour suite (6 cases: Isp with a dead thrust channel and a non-existent test plan → insufficient evidence; out of scope; clarification of "Test 01"; Moog thrust range and TP7-vs-vendor → external labelling) and `build_suites.py` (committed template + git-ignored fragments; `numeric_from` reuses telemetry values); tool names checked against the engine's ToolName. Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: indexed allowlist documents (doc lookups, code, failure/visual, multilingual, the retrieval set's gold anchors) and standards in the processing scope (STANDARDS cases)
+Needs from others: Lead — a ruling on STANDARDS cases: no ECSS/standards folder is in the allowlist, so those cases wait for M6 or a scope addition
+Next: page-cited FACT_LOOKUP and CODE cases from the exported E3–E5 documents
+## 2026-10-22 16:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: restart-resume test (`backend/tests/integration/llm_engine/engine/test_workflow_restart.py` + `_restart_worker.py`): an engine process killed inside the tool step is recovered by a new process; query analysis is replayed from the DBOS journal (asked once), the tool reruns, the run ends SUCCESS with the same trace id and the trace is saved. Engine map rubric item checked; durability note on the map.
+Blocked on: nothing
+Needs from others: S4's 07965fd (GEMINI_MODEL / GEMINI_LITE_MODEL) on main, then I switch vision, analysis, synthesis, enrichment to the settings
+Next: T6 external_search (grounding, sanitized query only, external_queries in the trace), T2 when S1's telemetry tables land, T3, Skills
