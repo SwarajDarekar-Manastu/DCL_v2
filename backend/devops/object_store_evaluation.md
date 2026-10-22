@@ -41,7 +41,7 @@ Each store ran single-node in a throwaway container on this host. `backend/devop
 
 ## Before adopting RustFS
 
-1. Make `minio-init` create the app user and its policy through RustFS's own admin API or CLI, then re-run the policy-scope test.
+1. ~~Make `minio-init` create the app user and its policy on RustFS, then re-run the policy-scope test.~~ Done 2026-10-22. The failure was only in the reply: RustFS applies `attach_policy` but answers with a payload minio-py cannot decrypt (AEAD id 2). `minio-init` now uses `policy_set` (set-user-or-group-policy) and reads the mapping back with `user_info`. Two consecutive full runs exit 0 on RustFS 1.0.3 and on the pinned MinIO build, and on both the app user writes `dcl-raw` and gets AccessDenied on a bucket outside its policy.
 2. Watch lifecycle enforcement with the real rules for a day: noncurrent versions under `_incoming/` and vision-cache expiry.
 3. Load-test it with the M6-scale object count (about 5,200 blobs plus CIR and assets) and compare latency with MinIO.
 4. Migration (before M6): stop writers, copy every bucket with `rclone sync` or `mc mirror`. Only current versions carry over, which is acceptable because no history is needed yet. Then switch `DCL_MINIO_ENDPOINT` and re-run `s3_compat_check.py` against the new store.

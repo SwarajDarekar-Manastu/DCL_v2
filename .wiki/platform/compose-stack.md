@@ -20,7 +20,7 @@ Code:
 - `backend/devops/docker/minio.Dockerfile` (RELEASE.2025-10-15T17-29-55Z, commit-checked)
 - `backend/devops/docker/libreoffice.Dockerfile` + `office_server.py` (POST /convert on 2003, one soffice run per request, recalculating profile)
 - `backend/common/office.py` (the one client: `convert(data, from_ext, to, recalc=False)`)
-- `backend/devops/minio_init.py` (buckets, versioning, lifecycle, app user; idempotent)
+- `backend/devops/minio_init.py` (buckets, versioning, lifecycle, app user via `policy_set`; idempotent; runs on MinIO and RustFS 1.0.3)
 - `backend/celery_redis/app.py` (incl. `DclTask`: delivery count, poison stop, dead-letter list), `queues.py`, `beat.py`
 - `backend/celery_redis/tasks_loadtest.py`, `backend/celery_redis/load_test.py`, `backend/devops/ci/queue_load_test.sh` (M1 queue load test)
 - `console` service: built from S3's `frontend/console/Dockerfile` (build args only)
@@ -80,6 +80,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | RustFS adoption step 1: `minio-init` sets the app policy with `policy_set` (RustFS answers `attach_policy` with AEAD id 2); full init twice + policy scope verified on RustFS 1.0.3 and MinIO |
 | 2026-10-22 | S4 | Console container on 8601 from S3's Dockerfile (msal build; args `DCL_API_BASE_URL`, `DCL_TENANT_ID`, `DCL_CONSOLE_SPA_CLIENT_ID`, `DCL_CONSOLE_API_SCOPE`) |
 | 2026-10-22 | S4 | Network exposure split: Postgres, Redis, MinIO S3 on `DCL_DATA_BIND_HOST` (default loopback); Redis `requirepass` from `DCL_REDIS_PASSWORD`, verified live on a throwaway project (NOAUTH without, PONG with, healthy) |
 | 2026-10-22 | S4 | Object-store evaluation (`backend/devops/object_store_evaluation.md`, `backend/devops/ci/s3_compat_check.py`): RustFS 1.0.3 recommended over SeaweedFS 4.48 and Garage v2.4.1 |
