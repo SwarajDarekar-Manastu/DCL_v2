@@ -56,3 +56,4 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 ## Related
 
 - `.wiki/index.md`
+- `backend/schema-and-migrations` (S1; provides the /settings API over pipeline_config)

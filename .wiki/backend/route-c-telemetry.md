@@ -68,7 +68,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 ## Rubric (what "done" means for this feature)
 
 - [ ] DuckDB reproduces SME Excel peak/steady numbers within 0.5%
-- [ ] Unknown unit or gauge/abs raises UNIT_AMBIGUITY HARD with a suggestion (HARD with header lines and stats done for LabJack; the suggestion comes with the derived rules)
+- [x] Unknown unit or gauge/abs raises UNIT_AMBIGUITY HARD with a suggestion (`suggest.py`; a unit only when a file states it, else an explicit no-suggestion; unit tests; live check after redeploy)
+- [ ] Live: an SME-confirmed channel_map rule resumes its HALTED runs (`dcl.process.resume_for_rule`)
 - [ ] Pickle files are never loaded
 - [x] Files >1M rows stream through PyArrow within the queue memory limit (live dry run: 628 MB, 3.79 M rows, 3.7 s)
 - [ ] Multiple firings in one file become sub-runs
@@ -85,6 +86,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | Live on the stack: 20 LabJack runs (4.94 M rows, 4,853 s, 256 MB raw Parquet, 1017.3 Hz, no gaps) HALTED with 160 UNIT_AMBIGUITY HARD; 0 FAILED |
 | 2026-10-22 | S1 | Live: the 20 parked C documents processed (4 config ACTIVE; DAQ CSV 22 rows → table, 115 rows → first committed run, 8 thermocouple channels, weak-t0 CONFLICT SOFT; 2 TDMS HALTED with 8 HARD each; 12 workbooks indexed as tables, 3 ACTIVE, 9 with SOFT unit flags); 0 FAILED |
 | 2026-10-22 | S1 | Adapters for .tdms, .csv, workbooks and .cfg on a shared series path; channels resolve by rule, then by the unit the file states; generic resume |
+| 2026-10-22 | S1 | `suggest.py`: every telemetry UNIT_AMBIGUITY gets `suggested_resolution` (stated raw unit 0.6, same-name sibling unit 0.5, unit in the channel name 0.4, else an explicit no-suggestion with the .cfg scaling); 5 tests |
 | 2026-10-22 | S1 | Step 2: migration 0009, .cfg evidence, normalization, t0, metrics, bounds, commit, resume from raw.parquet, retroactive pass; 39 Route C tests |
 
 ## Related
