@@ -87,7 +87,7 @@ Fork policy (revised 2026-10-21): the default remains the extension points (Pipe
 
 ### 3.1 In Open WebUI admin
 
-Model visibility per group; Pipe `Valves`; Skills attached to the model; native function calling left at default (the Pipe does not rely on Open WebUI's tool loop); per-user iframe settings documented for reviewers (same-origin **off** is fine for our embeds); one OpenAI-compatible connection to the Manastu Gemini gateway for plain chat (the only provider credentials in Open WebUI).
+Model visibility per group; Pipe `Valves`; Skills published but **not attached** to the model (attached skills with native function calling off are injected in full into every request; decided 2026-10-22; an explicit `$`-mention is forwarded as `playbook_hint` and steers the planner, nothing else does); native function calling left at default (the Pipe does not rely on Open WebUI's tool loop); per-user iframe settings documented for reviewers (same-origin **off** is fine for our embeds); one OpenAI-compatible connection to the Manastu Gemini gateway for plain chat (the only provider credentials in Open WebUI).
 
 ### 3.2 DCL Console → Settings (backed by `pipeline_config` with history)
 
