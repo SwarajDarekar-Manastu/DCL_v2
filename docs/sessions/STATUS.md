@@ -842,3 +842,9 @@ A1 batch read (27 tasks): 18 indexed (13 ACTIVE, 5 with SOFT low-confidence flag
 Blocked on: Lead/user rulings (sent): cloud_allowed for the roots; owner-password-only PDFs
 Needs from others: S1 (or Lead): the `llm_calls` table and the client's ledger hook, for cost per document
 Next: after the rulings, re-run A1 on the 27 + 6 E13 documents, report OCR engine per script and cost, then the M5 handwriting calibration on the TP7 sheets (it needs Gemini)
+
+## 2026-10-23 06:15 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: owner-password PDFs. A1 pre-flight now decrypts in memory a PDF that opens without a password, and Docling gets the decrypted bytes (`Preflight.decrypted`). PARSE_FAILURE stays only for PDFs that need a user password (file 03 §A1.1 as amended). Plan sheet skipped for this small fix.
+Blocked on: S1's re-dispatch of the A1 documents with cloud_allowed true (206e1884 and the 8 ECSS standards after this merge)
+Needs from others: S1: re-run; `llm_calls` with the client's ledger hook
+Next: OCR engine per script and cost report, then the M5 handwriting calibration on the TP7 sheets

@@ -168,3 +168,20 @@ def test_without_cloud_permission_no_triage_call_is_made():
         "signals",
         "tesseract",
     )
+
+
+def test_an_owner_password_pdf_opens_and_is_decrypted_in_memory():
+    pdf = pikepdf.open(io.BytesIO(fixture("german_datasheet")))
+    out = io.BytesIO()
+    pdf.save(
+        out,
+        encryption=pikepdf.Encryption(owner="restrict", user="", allow=pikepdf.Permissions(extract=False)),
+    )
+    locked = out.getvalue()
+    with pikepdf.open(io.BytesIO(locked)) as check:
+        assert check.is_encrypted  # restrictions only: no password needed to open
+    result = preflight(locked)
+    assert result.decrypted and result.page_count == 1 and not result.page(1).image_only
+    with pikepdf.open(io.BytesIO(result.pdf_bytes)) as clear:
+        assert not clear.is_encrypted  # Docling gets the decrypted bytes
+    assert not preflight(fixture("german_datasheet")).decrypted
