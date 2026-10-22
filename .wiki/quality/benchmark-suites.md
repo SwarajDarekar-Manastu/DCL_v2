@@ -47,7 +47,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 ## Rubric (what "done" means for this feature)
 
 - [x] Every numeric case has an independent verification note (15 telemetry cases; TP7 cross-checked with the team workbook)
-- [ ] Hold-out subset recorded in DECISIONS.md (proposed to the Lead)
+- [x] Hold-out subset recorded in DECISIONS.md (3 telemetry cases)
 - [ ] Remaining 45 cases (doc lookups, code, failure/visual, standards, library/multilingual, behaviour) and the 40-query retrieval set
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
@@ -56,6 +56,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S5 | precondition (confirmed channel map, resolved bounds cases) in every numeric case's notes; hold-out recorded by the Lead |
 | 2026-10-22 | S5 | First 15 TELEMETRY_MATH cases + 2 HALTED_DATA_BEHAVIOR cases; values local (option b); verification by telemetry_metrics.py, recompute test |
 
 ## Related

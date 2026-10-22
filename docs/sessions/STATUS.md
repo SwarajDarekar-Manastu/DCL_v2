@@ -501,3 +501,9 @@ Merged / ready: first 15 TELEMETRY_MATH golden cases + 2 HALTED_DATA_BEHAVIOR ca
 Blocked on: Lead — index-state precondition for the numeric cases (runs halt until SME channel-map rules) and whether S5 drafts those rules; hold-out subset to record
 Needs from others: Lead — tell S4 the suite exists (`data/benchmark/telemetry.json`); export X1/X2 samples
 Next: remaining golden categories and the 40-query retrieval set (need indexed documents and S2's engine mode)
+
+## 2026-10-22 09:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: proposed channel-map rules for E1–E3 in `config/rules/proposed/` (names, quantities, units, sensor ranges; status proposed, never applied until confirmed); `test_config_rules.py` (S1 loader, units, sanity-range selection); precondition in every numeric golden case's notes. Test: `uv run pytest backend/tests/unit/config_data backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: nothing
+Needs from others: S1 — keep the future config/rules loader to the top level (never `proposed/`) or add an explicit status field; SME — confirm the proposals in the Review UI
+Next: remaining golden categories and the retrieval set once allowlisted documents are indexed (S2 engine mode)

@@ -39,6 +39,7 @@ def ureg():
 
 
 def test_template_shape():
+    assert TEMPLATE["precondition"].startswith("Precondition:")
     ids = [c["case_id"] for c in CASES]
     assert len(ids) == len(set(ids))
     assert all(re.fullmatch(CASE_ID, i) for i in ids)
@@ -74,6 +75,8 @@ def test_built_suite_validates_and_matches_the_template():
     suite = json.loads(SUITE.read_text(encoding="utf-8"))
     for case in suite["cases"]:
         CaseCreate.model_validate(case)
+        if case["category"] == "TELEMETRY_MATH":
+            assert case["notes"].startswith(TEMPLATE["precondition"])
     assert [c["case_id"] for c in suite["cases"]] == [c["case_id"] for c in CASES]
 
 

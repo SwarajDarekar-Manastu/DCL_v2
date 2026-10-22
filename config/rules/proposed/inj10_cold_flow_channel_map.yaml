@@ -1,0 +1,59 @@
+# PROPOSED channel map (S5, 2026-10-22). NOT APPLIED until an SME confirms it (see README.md).
+# Source: LJStreamM.cfg channel scalings of the Injector 10 cold-flow folder; channel roles as in the
+# team's TP7 analysis workbook and the Injector 10 workbook column headers (tank, MFM, valve, chamber PT 1/2, mass flow, thrust, valve signal).
+version: 1
+rules:
+- rule_type: channel_map
+  scope:
+    scope_root: APU Injector
+    scope_folder_id: 01RDWVU4ZUFFI75KMFFJEJNIOEECPJM6RB
+  precedence: 0
+  body:
+    channels:
+      y0:
+        canonical_name: p_feed_n2_supply_bar_g
+        physical_quantity: pressure
+        unit: bar
+        gauge_or_abs: gauge
+      y1:
+        canonical_name: p_feed_mfm_inlet_bar_g
+        physical_quantity: pressure
+        unit: bar
+        gauge_or_abs: gauge
+      y2:
+        canonical_name: p_valve_inlet_bar_g
+        physical_quantity: pressure
+        unit: bar
+        gauge_or_abs: gauge
+      y3:
+        canonical_name: p_chamber_1_bar_g
+        physical_quantity: pressure
+        unit: bar
+        gauge_or_abs: gauge
+      y4:
+        canonical_name: p_chamber_2_bar_g
+        physical_quantity: pressure
+        unit: bar
+        gauge_or_abs: gauge
+      y5:
+        canonical_name: mdot_g_s
+        physical_quantity: mass_flow_rate
+        unit: g/s
+        gauge_or_abs: n/a
+        range_min: 0
+        range_max: 490
+      y6:
+        canonical_name: thrust_n
+        physical_quantity: force
+        unit: N
+        gauge_or_abs: n/a
+        sensor_tag: S-type load cell
+        range_min: 0
+        range_max: 490.33
+      y7:
+        canonical_name: valve_signal
+        physical_quantity: valve_state
+        unit: dimensionless
+        gauge_or_abs: n/a
+    ambient_condition: UNKNOWN
+  created_by: S5 proposal 2026-10-22 (SME confirmation pending)

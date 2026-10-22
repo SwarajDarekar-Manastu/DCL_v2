@@ -162,6 +162,7 @@ def build(template: dict, sources: dict) -> dict:
                 }
             ]
             team = sources.get("team_values", {}).get(case["case_id"])
+            notes = " ".join(part for part in (template.get("precondition", ""), notes) if part)
             notes += (
                 f" Verified {datetime.now():%Y-%m-%d} by telemetry_metrics.{case['method']['fn']} over the"
                 f" raw files" + (f"; team workbook value {team}." if team is not None else ".")
