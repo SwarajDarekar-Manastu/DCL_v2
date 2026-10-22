@@ -5,6 +5,9 @@ description = "Document Context Layer v2: OneDrive ingestion, processing, storag
 requires-python = ">=3.12,<3.13"
 license = "MIT"
 dependencies = [
+    "llama-index-workflows==2.25.0",
+    "llama-agents-dbos==0.7.0",
+    "dbos==2.31.1",
     "python-dotenv>=1.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
