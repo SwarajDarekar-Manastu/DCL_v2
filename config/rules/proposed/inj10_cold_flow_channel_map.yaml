@@ -3,7 +3,8 @@
 # team's TP7 analysis workbook and the Injector 10 workbook column headers (tank, MFM, valve, chamber PT 1/2, mass flow, thrust, valve signal).
 version: 1
 rules:
-- rule_type: channel_map
+- status: proposed
+  rule_type: channel_map
   scope:
     scope_root: APU Injector
     scope_folder_id: 01RDWVU4ZUFFI75KMFFJEJNIOEECPJM6RB
