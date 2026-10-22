@@ -24,6 +24,7 @@ Code:
 - `backend/tests/benchmark/verification/build_suites.py` (template + local fragments → importable suite)
 - `backend/tests/benchmark/verification/telemetry_metrics.py` (metric functions, `build`)
 - `backend/tests/benchmark/verification/README.md` (verification notes)
+- `backend/tests/benchmark/BASELINE.md` (M10 baseline: per-case classification of scored runs)
 - `backend/tests/benchmark/retrieval_set.yaml` (planned)
 - local, git-ignored: `data/benchmark/telemetry_sources.yaml`, `data/benchmark/*.local.yaml`, `data/benchmark/*.json` (values, citations)
 
@@ -70,11 +71,20 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [ ] MULTILINGUAL (waits for S1's library language check) and the 40-query retrieval set (waits for the indexed corpus)
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
+## M10 baseline (scored run 1, 2026-10-22)
+
+56 active cases (hold-outs excluded): 1 pass; 26 runner/metric bug, 15 engine error, 14 pipeline gap,
+0 gold error confirmed (the out-of-scope case is gold or metric pending its answer text). Most failures say
+nothing about answer quality yet: 38 cases errored (event loop reuse, 300 s answer timeout) and every
+scored failure but three rests on a document that is not indexed or is halted. One line per case and five
+runner findings for S2 in `backend/tests/benchmark/BASELINE.md`.
+
 ## Change log
 
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S5 | M10 baseline from scored run 1: 56 cases classified, runner findings for S2 (BASELINE.md) |
 | 2026-10-22 | S5 | standards suite (5): pressure-vessel and heat-pipe factors, NVR A/10, elevated corrosion testing, tin finish; number check accepts decimal commas |
 | 2026-10-22 | S5 | visual suite (8, incl. the CONFLICT case); image-only citations require `visual_readings.yaml` |
 | 2026-10-22 | S5 | documents suite (15) and code suite (8); `test_cited_pages_contain_the_answer` checks each answer in the cited page or source file; `verify_paths.yaml` settles shared file names |
