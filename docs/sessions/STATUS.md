@@ -566,3 +566,9 @@ Merged / ready: documents suite (12 FACT_LOOKUP + 3 FAILURE_ANALYSIS, page-cited
 Blocked on: indexing of E12 standards (STANDARDS cases); indexed corpus for CONFLICT and the retrieval set
 Needs from others: S1 — E12 globs into processing.scope
 Next: visual/handwriting cases from the exported TP7 sheets and E7 photos; multilingual cases (none in the allowlist: synthetic German/Japanese fixtures only)
+
+## 2026-10-22 13:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: visual suite (5 VISUAL handwriting reads, 2 FAILURE_ANALYSIS, 1 CONFLICT_BEHAVIOR from the TP7 preheat and de-integration sheets); image-only citations must have a recorded visual reading (local); proposals carry `status: proposed` per rule. Golden set: 54 local cases (telemetry 17, behaviour 6, documents 15, code 8, visual 8). Test: `uv run pytest backend/tests/benchmark backend/tests/unit/config_data && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: E12 standards indexed (5 STANDARDS cases); a non-English library document (MULTILINGUAL); indexed corpus (retrieval set)
+Needs from others: S1/S2 — note: the TP7 preheat sheet's printed footer says Test Plan 6 (image-only page), so the plan-id CONFLICT can only come from OCR of the footer, not from folder context
+Next: STANDARDS cases once the 8 ECSS documents are indexed; retrieval set with gold anchors

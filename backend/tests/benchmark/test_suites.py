@@ -144,6 +144,16 @@ def test_cited_pages_contain_the_answer(case):
     if not SAMPLES.is_dir():
         pytest.skip("data/samples/ not exported locally")
     joined = " ".join(_cited_text(c) for c in case["spec"]["expected_citations"]).casefold()
+    if not joined.strip():
+        # Image-only pages: no text layer to search; S5's visual reading must be on record.
+        readings_path = bs.LOCAL / "visual_readings.yaml"
+        readings = (
+            yaml.safe_load(readings_path.read_text(encoding="utf-8")) if readings_path.is_file() else {}
+        )
+        assert (readings or {}).get(case["case_id"]), (
+            f"{case['case_id']}: image-only citation without a recorded reading"
+        )
+        return
     for numeric in case["spec"].get("expected_numeric", []):
         assert any(f in joined for f in _number_forms(numeric["value"])), (case["case_id"], numeric["value"])
     for entity in case["spec"].get("expected_entities", []):
