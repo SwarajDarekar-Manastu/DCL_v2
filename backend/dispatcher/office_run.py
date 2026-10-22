@@ -42,14 +42,17 @@ BuildPdf = Callable[..., ProcessedDocument]
 
 
 def default_build() -> BuildPdf:
-    """S2's entry point with the production vision service (Docling is imported in the parse image only)."""
+    """S2's entry point with the production vision service (Docling is imported in the parse image only).
+    One gateway client per worker; the vision service is built per document so the per-capability
+    safety setting (``vision.extraction_safety`` in pipeline_config) is read fresh."""
     from backend.llm_engine.gemini_client import GeminiClient
-    from backend.llm_engine.vision.service import VisionService, vision_cache
+    from backend.llm_engine.vision.service import VisionService, extraction_safety_from, vision_cache
     from backend.routes.a1_office.route import process_pdf
 
-    vision = VisionService(GeminiClient(), vision_cache())
+    client, cache = GeminiClient(), vision_cache()
 
-    def build(pdf_bytes: bytes, **kwargs: Any) -> ProcessedDocument:
+    def build(pdf_bytes: bytes, *, session: Session, **kwargs: Any) -> ProcessedDocument:
+        vision = VisionService(client, cache, extraction_safety=extraction_safety_from(session))
         return process_pdf(pdf_bytes, vision=vision, **kwargs)
 
     return build
@@ -107,6 +110,7 @@ def process_a1_document(
     )
     processed = build(
         _read(minio, blob.minio_uri),
+        session=session,
         blob_sha256=blob.sha256,
         file_name=item.name,
         folder=FolderContext.model_validate(document.folder_context),

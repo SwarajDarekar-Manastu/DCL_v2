@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/06_review_flags_and_halt_policy.md; 05 §4.5 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
@@ -16,7 +16,8 @@ Flag models with deterministic fingerprints and case keys, staged payloads for h
 
 Code:
 - `backend/review/api_models.py` (published: queue, case detail, resolutions, rules, dry-run models)
-- `backend/api/review.py` (routes of file 08 §4.4 with their models and roles; 501 until the M2 tables)
+- `backend/api/review.py` (routes of file 08 §4.4, reviewer role; cases, detail, assign, resolve, reject, rules list/create/deactivate are live; dry-run, undo and simulate answer 501)
+- `backend/review/cases.py` (case grouping and derived status, queue filters and impact/age/severity sort, detail with locations and siblings, `resolve_case` (operator rule: the request's or a file-scoped channel_map from `set_unit`), `reject_case` (QUARANTINED, mark_junk quarantines locations), `assign_case`, `create_rule`/`deactivate_rule`, audit rows)
 - `backend/review/flags.py` (`upsert_location_flag`, `upsert_document_flag`: by fingerprint, status and resolution kept)
 - `backend/review/models.py` (planned)
 - `backend/review/rules.py` (published: `resolve()` precedence resolver, `resolve_where()` (resolver over the rules a predicate keeps, e.g. those naming one channel), `RuleScope`, `RuleTarget`, `RuleRecord`, bodies per rule_type, YAML export for `config/rules/`)
@@ -25,7 +26,7 @@ Code:
 - Flag fingerprints live on `Flag` in `backend/dispatcher/contract.py` (no separate fingerprints module)
 
 Tests and fixtures:
-- `backend/tests/unit/review/test_api_models.py`, `backend/tests/unit/review/test_rules.py`
+- `backend/tests/unit/review/test_api_models.py`, `backend/tests/unit/review/test_rules.py`, `backend/tests/unit/review/test_cases.py` (DB, `conftest.py` reuses the sync fixtures)
 - `backend/tests/integration/review/`
 
 ## Interfaces
@@ -51,6 +52,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/review/staged.py`
 - `backend/review/api_models.py`
 - `backend/api/review.py`
+- `backend/review/cases.py`
 - `backend/tests/unit/review/`
 - `backend/tests/integration/review/`
 
@@ -59,7 +61,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [ ] Re-indexing a document does not duplicate or reopen its flags
 - [ ] A folder-wide unit rule resumes every halted sibling
 - [ ] Undo re-opens the flag and removes the overlay on rebuild
-- [ ] Every human action writes audit_events
+- [x] Every human action writes audit_events (assign, resolve, reject, rule create/deactivate; `test_cases.py`)
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log
@@ -72,6 +74,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | S1 | Rules precedence resolver, typed rule bodies, YAML export format (publish-first item 4); 19 tests |
 | 2026-10-22 | S1 | Validation gate and staged payload (`staged.py`); `resolve_where` |
 | 2026-10-22 | S1 | `ExportedRule.status` (operator / proposed, default proposed), `load_rules_dir` (top level only, operator rules only); `ChannelMapEntry.open_threshold`; quantities typed |
+| 2026-10-22 | S1 | Review API live: queue, detail, resolve with operator rules and resume_for_rule, reject, assign, rules; 13 DB tests |
 
 ## Related
 

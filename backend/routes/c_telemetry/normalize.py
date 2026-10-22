@@ -285,16 +285,21 @@ def _samples(ms: float, dt_ms: float) -> int:
     return max(1, int(round(ms / dt_ms))) if dt_ms > 0 else 1
 
 
+ONSET_FRACTION = 0.1  # coarse data: the rise starts where the slope first exceeds this share of the threshold
+
+
 def _sustained_rise(t_ms: np.ndarray, x: np.ndarray, threshold_per_s: float) -> tuple[int, float] | None:
-    """Index of the first sample whose smoothed slope stays above ``threshold`` for 20 ms, and the
-    steepest slope in the following 20 ms."""
+    """Index of the first sample whose smoothed slope stays above ``threshold`` for 20 ms (at least two
+    samples), and the steepest slope in that window. On coarse data (20 ms shorter than two samples, e.g. a
+    2 Hz logger) the index moves back to the first sample of the rise whose slope is still above
+    ``ONSET_FRACTION * threshold``: t0 marks where the rise begins, not its steep part."""
     if len(x) < 3:
         return None
     dt_ms = float(np.median(np.diff(t_ms)))
     smooth = _moving_mean(x, _samples(T0_SMOOTH_MS, dt_ms))
     slope = np.gradient(smooth, t_ms / 1000.0)
     above = slope > threshold_per_s
-    window = _samples(T0_SUSTAIN_MS, dt_ms)
+    window = max(2, _samples(T0_SUSTAIN_MS, dt_ms))
     if window > len(above):
         return None
     runs = np.convolve(above.astype(np.int32), np.ones(window, dtype=np.int32), mode="valid")
@@ -302,7 +307,11 @@ def _sustained_rise(t_ms: np.ndarray, x: np.ndarray, threshold_per_s: float) -> 
     if not len(hits):
         return None
     start = int(hits[0])
-    return start, float(slope[start : start + window].max())
+    peak = float(slope[start : start + window].max())
+    if T0_SUSTAIN_MS < 2 * dt_ms:
+        while start > 0 and slope[start - 1] > ONSET_FRACTION * threshold_per_s:
+            start -= 1
+    return start, peak
 
 
 def detect_t0(

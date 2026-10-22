@@ -762,3 +762,24 @@ Merged / ready:
 Blocked on: local login end to end and dev-token removal wait for S1's 0010 and S4's redeploy (the Lead will say when). The cost estimate in the preview waits for S1's llm_calls price ledger.
 Needs from others: S1: migration 0010 (users, `user` audit type).
 Next: end-to-end local login and dev-token removal when told; otherwise idle.
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready (merge requested):
+- Review API (c82b518), reviewer role, over `backend/review/cases.py`:
+  - `GET /review/cases`: open cases by default, with every Console filter; sort by impact (halted files in the same folder), age or severity; open HARD/SOFT totals.
+  - `GET /review/cases/{key}`: flags with evidence, suggestions and allowed actions; locations with folder ids; siblings.
+  - `POST` assign, resolve and reject; rules list, create and deactivate.
+  - A telemetry `set_unit` writes an operator channel_map rule (the request's, else one scoped to the file) and starts `resume_for_rule` for every HALTED match.
+  - Every action writes `audit_events`. Dry run, undo and simulate still answer 501.
+- Migration 0010 `users` (f0c0ca4 and the follow-up commit): the columns S3's store uses. `roles` text[] has a CHECK that each element is viewer, reviewer or admin; `email` is lower-case (CHECK) and unique. The model is `backend.postgres.models.User` and the enum `UserRole`. `audit_events.entity_type` gains `user`. My first-admin bootstrap was removed because S3's `auth.py` already has `ensure_bootstrap_admin`.
+- S2 notes: A1 builds its VisionService per document with `extraction_safety_from(session)` (80c8b2c). Telemetry t0 on coarse data (f44bb9c): the sustain test now needs at least 2 samples, and t0 is the rise onset. On a synthetic 2 Hz rise starting at 20 s, the old code gave 26.5 s and the new code gives 20 s. kHz data is unchanged, and weak confidence still raises the CONFLICT SOFT.
+- Library language/DOI check (14545d7, `backend/sync/language_check.py`). Over the 814 landed library PDFs: 733 English, 54 undetermined, 19 with no text layer, 108 with a DOI on pages 1–2, and 8 non-English, each confirmed by reading the first-page text:
+  - ISP Tech: 2 German patents.
+  - Staged Vapour Ignition: 3 Chinese, 1 Japanese and 1 Korean patents.
+  - Valves/Electromagnetic: 1 Russian paper.
+  The TSV is in git-ignored `data/library_languages.tsv` on my worktree. Choosing the MULTILINGUAL folder is S5's call under the delegated allowlist; Staged Vapour Ignition alone covers zh/ja/ko.
+- Live (S4's redeploy): `routes.A1.enabled` set through the audited settings path. Dispatch released 27 A1 PDFs; the 6 non-PDFs stay WAITING. The 22 HALTED Route C documents were resumed and are still HALTED, now with suggestions on every unit flag. The M2 live check passes 7 of 8; the TP7 footer CONFLICT waits for A1 to finish (3 of 27 done so far, about 5 minutes per PDF on CPU; Tesseract OSD errors on one datasheet for S2 to look at).
+Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest -q`: 1,700 tests, 0 failures, 73 skipped, plus 10 new language-check tests.
+Blocked on: nothing
+Needs from others: S3: regenerate `api_schema.d.ts` (review routes live, `Suggestion.resolution` nullable); users store emails must be lower-case (S3 lowercases on create; keep it on update). S5: pick the MULTILINGUAL folder from the 8.
+Next: report the A1 counts and the M2 TP7 check when the A1 batch ends
