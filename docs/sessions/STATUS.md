@@ -585,6 +585,26 @@ Blocked on: nothing
 Needs from others: S1 / Lead: seed `answer.external_allowed_groups` (e.g. the `dcl-external-search` group name the Pipe sends) and `answer.proprietary_terms`; until then nobody goes external. New key `answer.external_search_enabled` (kill switch, default on) for file 05's key list.
 Next: A1 transcribe_page v2 with furniture + test-plan CONFLICT (Lead confirmed), then T3, T2, Skills
 
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: frontend/openwebui/install_functions.py with a README. It creates or updates and activates both functions, sets the valves (ENGINE_URL http://api:8200, CONSOLE_URL from DCL_CONSOLE_BASE_URL, secret from DCL_PIPE_SHARED_SECRET) and attaches the actions to manastu_engine.main only. It is idempotent, has a dry run, and is tested against a fake of the v0.12.3 admin routes. Also the Console container (frontend/console/Dockerfile and nginx.conf, SPA fallback for deep links, /healthz; image built and checked), and sign-in now returns to the requested deep link.
+Blocked on: syncing with main. The app refuses the merge because main changes .claude/launch.json and the repository origin is not yet confirmed by the user (Help › Troubleshooting › Review Pinned Git Origins).
+Needs from others: S4 to wire the Console container into compose (build args VITE_*, a published port matching DCL_CONSOLE_BASE_URL, healthcheck /healthz) and to tell me when Open WebUI is up; the user to create the Open WebUI admin account and API key, then run the install script. Lead: the decision on the dev-only backend sign-in (option b) is with the user.
+Next: verify the install against the running Open WebUI once the admin account exists.
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready (merge requested, 029d022, merges clean into main):
+- Route C adapters for .tdms, .csv, workbooks and .cfg, so the remaining 20 parked C documents can move. All use a shared series path: channels resolve by operator rule, then by the unit the file itself states (header cell, TDMS unit_string), else HARD UNIT_AMBIGUITY.
+- TDMS: when units are missing, the units of the sibling DAQ CSV export are attached as evidence.
+- CSV: 100 rows or more becomes a series, otherwise a table.
+- Workbooks: LibreOffice recalculation when needed, blocks becoming tables with row nodes, a SOFT CONFLICT for formula errors, and time-series blocks becoming runs.
+- Configuration files become config documents.
+- Resume now works for any single series run, rebuilt from schema.json and raw.parquet.
+- Commit: token counts come from the models role (POST /tokenize/count); a clean run is parked when the role is unreachable. A test-plan id read from the content that differs from the folder keeps both ids and raises a CONFLICT SOFT.
+- seed-config writes answer.external_allowed_groups and answer.external_search_enabled, on first start only.
+Test: `uv run pytest` (1,376 passed).
+Blocked on: the app refuses to sync this worktree with main because main changes a protected file (.claude/launch.json) and the repository origin is not confirmed. The branch still merges clean.
+Needs from others: Lead: merge; S4: redeploy, then I re-dispatch on the stack and report the counts; S5: a "Deg C" alias in config/units.txt (NI's spelling; the TDMS adapter maps it locally meanwhile)
+Next: live run of the 20 parked C documents; A1/D/F adapter wiring for S2's routes
+
 ## 2026-10-22 21:00 — DCL S2 ML — claude/infallible-swartz-58c96b
 Merged / ready: A1 page furniture and the test-plan CONFLICT (file 03 §A1.3 as amended): `transcribe_page.v2` returns printed headers/footers as `furniture` (live-checked on S5's fixtures: the DOI paper's running head and the German datasheet's footer land in furniture, not in the body); `plan_conflicts` raises CONFLICT SOFT for a plan id in furniture or page-1 text that differs from the folder's (folder value stays). A Gemini error on `transcribe_page` now keeps the OCR text with LOW_CONFIDENCE SOFT instead of failing the document; seen live: a first wording of v2 got `block_reason=SAFETY` on the HTP paper, the neutral wording passes 3/3.
 Blocked on: nothing

@@ -15,8 +15,14 @@ Deterministic path from .dat/.tdms/.csv/.xlsx/.npy to normalized Parquet, teleme
 ## Location
 
 Code:
+- `backend/routes/c_telemetry/series.py` (the shared time-series path: `SeriesSource` (header lines, columns, stated units, batches), `resolve_channels` (operator rule → unit stated by the file → unresolved), `entry_from_unit`, `process_series`, `source_from_schema` for resume, run keys for several runs per file)
+- `backend/routes/c_telemetry/tdms.py` (C.2: largest group, time from a time channel / `wf_increment` / `ScanRate`, `unit_string` incl. NI spellings, properties as header lines)
+- `backend/routes/c_telemetry/delimited.py` (C.3: encoding, delimiter, decimal comma, preamble, footer, header units, time column incl. clock times; ≥ 100 rows → series, else table)
+- `backend/routes/c_telemetry/workbook.py` (C.4: cached values, LibreOffice recalculation via S4's `office.convert`, islands, captions, merged/hidden sheets, percent, formula-error CONFLICT, time-series islands → runs)
+- `backend/routes/c_telemetry/tables.py` (HTML table node + row children with the header repeated; units from headers, units rows or a Unit column; SOFT `UNIT_AMBIGUITY` except dimensionless headers; `table_document`)
+- `backend/routes/c_telemetry/config_file.py` (`.cfg`/`.ini`: INI, JSON, key=value → `config` document)
 - `backend/routes/c_telemetry/labjack.py` (LJStreamM layout: `parse_header`, `can_handle`, `is_voltage`, `read_batches` in Arrow batches)
-- `backend/routes/c_telemetry/run.py` (`process_labjack`: raw Parquet, streaming stats + quantiles, time base (actual rate, gaps, duplicates), channel resolution through `channel_map` rules, `UNIT_AMBIGUITY` HARD per unresolved channel, `schema.json` + `stats.json` in `dcl-cir/{sha}/C/v1/`, run summary node; `run_uuid_for(sha)` = uuid5)
+- `backend/routes/c_telemetry/run.py` (LabJack wrapper over the series path; `process_labjack`: raw Parquet, streaming stats + quantiles, time base (actual rate, gaps, duplicates), channel resolution through `channel_map` rules, `UNIT_AMBIGUITY` HARD per unresolved channel, `schema.json` + `stats.json` in `dcl-cir/{sha}/C/v1/`, run summary node; `run_uuid_for(sha)` = uuid5)
 - `backend/routes/c_telemetry/ljstream_cfg.py` (folder LJStreamM `.cfg`: scan rate, per-channel scaling equations, `linear()`; evidence only, it states no unit)
 - `backend/routes/c_telemetry/normalize.py` (`plan_channel` → SI affine conversion, scaling/expression (arithmetic over `val` only), gauge kept + `*_bar_abs` when the ambient is known, valve `open_threshold` → 0/1; `normalize_run` → `normalized.parquet` with `t_rel_ms`, `t_from_ignition_ms`; `detect_t0` (pressure slope 20 ms, valve edge, temperature slope; confidence); `three_tier_metrics` (peak, 50 ms rolling peak, steady mean + window); saturation; S5's sanity ranges (first match))
 - `backend/routes/c_telemetry/pipeline.py` (`process_document(session, minio, doc_id, indexer)`: primary blob, folder context, folder `.cfg`, rule target, rules, sanity ranges and `telemetry.*` config, gate (stale channel flags AUTO_RESOLVED), index + commit; `resume_document` from `raw.parquet` + `schema.json` header; `halted_documents_for_rule`)
@@ -29,7 +35,7 @@ Code:
 
 Tests and fixtures:
 - `backend/tests/unit/common/test_units.py`
-- `backend/tests/unit/routes/c_telemetry/` (`test_labjack.py`, `test_ljstream_cfg.py`, `test_normalize.py` (synthetic firing); `test_run.py` with MinIO; `test_pipeline.py` with PostgreSQL + MinIO incl. commit and resume; synthetic LJStreamM in `conftest.py`)
+- `backend/tests/unit/routes/c_telemetry/` (`test_adapters.py` (CSV, TDMS, workbooks, configs on synthetic files in the corpus layouts), `test_pipeline_adapters.py` (all kinds through dispatch and commit), `test_labjack.py`, `test_ljstream_cfg.py`, `test_normalize.py` (synthetic firing); `test_run.py` with MinIO; `test_pipeline.py` with PostgreSQL + MinIO incl. commit and resume; synthetic LJStreamM in `conftest.py`)
 - `backend/tests/fixtures/route_c/`
 
 ## Interfaces
@@ -77,6 +83,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | S1 | Quantity vocabulary + fits_quantity(); entity/alias/fact enums for S2 |
 | 2026-10-22 | S1 | Step 1, LabJack .dat/.dat_fail: raw Parquet, stats, channel_map lookup, UNIT_AMBIGUITY HARD, halt with staged payload, `dcl.process.route_c`; 11 tests |
 | 2026-10-22 | S1 | Live on the stack: 20 LabJack runs (4.94 M rows, 4,853 s, 256 MB raw Parquet, 1017.3 Hz, no gaps) HALTED with 160 UNIT_AMBIGUITY HARD; 0 FAILED |
+| 2026-10-22 | S1 | Adapters for .tdms, .csv, workbooks and .cfg on a shared series path; channels resolve by rule, then by the unit the file states; generic resume |
 | 2026-10-22 | S1 | Step 2: migration 0009, .cfg evidence, normalization, t0, metrics, bounds, commit, resume from raw.parquet, retroactive pass; 39 Route C tests |
 
 ## Related

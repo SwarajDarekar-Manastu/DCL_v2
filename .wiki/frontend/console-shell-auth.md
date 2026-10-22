@@ -22,6 +22,7 @@ Code:
 - `frontend/console/src/lib/components/shell/` (`NavBar.svelte`, `RoleGate.svelte`)
 - `frontend/console/src/routes/+layout.svelte`, `+layout.ts`, `+page.svelte`, placeholder pages `review/ benchmark/ entities/ settings/ ops/ audit/`
 - `backend/api/auth.py`, `backend/api/ws.py`
+- `frontend/console/Dockerfile`, `nginx.conf`, `.dockerignore` (node build → nginx; every route served by index.html so chat deep links resolve; `/healthz`; immutable cache for `/_app/immutable/`; VITE_* as build arguments). S4 wires it into compose.
 
 Tests and fixtures:
 - `frontend/console/tests/` (config, roles, api_endpoint, msal, session, NavBar, RoleGate)
@@ -41,6 +42,8 @@ Consumes:
 
 Role rule: any authenticated user of the tenant is `viewer`; `dcl-reviewers` adds `reviewer`; `dcl-admins` adds `reviewer` and `admin`. Roles always come from the server (`/auth/me`), never from the client token. Tokens with group overage are refused with 403. Nav visibility: Review and Audit need reviewer, Settings needs admin, the rest viewer.
 
+After a redirect sign-in MSAL returns to the page that asked for it (`navigateToLoginRequestUrl`, `redirectStartPage`), so a citation opened while signed out lands on that citation.
+
 Dev mode: `VITE_AUTH_MODE=dev` (roles from `VITE_DEV_ROLES`) works only under the Vite dev server; the backend has no bypass.
 
 ## Workspace (files to touch when modifying this feature)
@@ -54,6 +57,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `frontend/console/src/lib/auth/`
 - `frontend/console/src/lib/components/shell/`
 - `frontend/console/src/routes/{+layout.svelte,+layout.ts,+page.svelte}`
+- `frontend/console/{Dockerfile,nginx.conf,.dockerignore}`
 - `backend/api/auth.py`
 - `backend/api/ws.py`
 - `frontend/console/tests/`
@@ -82,6 +86,7 @@ Known: `npm audit` reports a low-severity advisory in `cookie` (pulled in by Sve
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S3 | Console container (Dockerfile, nginx SPA fallback); sign-in returns to the requested page |
 | 2026-10-21 | S3 | Shell, MSAL login, server role mapping, `/auth/me`, `/ws` with Redis bridge, tests |
 
 ## Related

@@ -7,7 +7,8 @@ never the YAML (file 02 §4).
 
 ``sanity_ranges`` is one key holding S5's ``config/sanity_ranges.yaml`` mapping, seeded the same way.
 
-CLI: ``python -m backend.postgres.pipeline_config seed-config [--reseed]`` (gate + sanity ranges;
+CLI: ``python -m backend.postgres.pipeline_config seed-config [--reseed]`` (gate + sanity ranges + answer
+external-search defaults;
 ``seed-gate`` seeds the gate only). Uses DCL_DATABASE_URL.
 """
 
@@ -121,6 +122,19 @@ def seed_sanity_ranges(session: Session, reseed: bool = False, path: Path = SANI
     )
 
 
+ANSWER_DEFAULTS: dict[str, Any] = {
+    "answer.external_allowed_groups": ["dcl-external-search"],
+    "answer.external_search_enabled": True,  # kill switch for external search (S2, Lead 2026-10-22)
+}
+
+
+def seed_answer_defaults(session: Session) -> list[str]:
+    """The answer engine's external-search keys (file 05 key list). First start only, never re-seeded:
+    ``--reseed`` must not turn the kill switch back on after an admin turned it off.
+    ``answer.proprietary_terms`` is written only after the user confirms S5's draft, not here."""
+    return [key for key, value in ANSWER_DEFAULTS.items() if seed_key(session, key, value, "Lead 2026-10-22")]
+
+
 def sanity_ranges(session: Session) -> dict[str, Any]:
     """S5's sanity ranges mapping (``version``, ``ranges[]``) as seeded; raises if not seeded."""
     return get(session, SANITY_RANGES)
@@ -162,8 +176,10 @@ def main(argv: list[str]) -> int:
     engine = create_engine(normalize_url(os.environ["DCL_DATABASE_URL"]))
     with Session(engine) as session:
         written = seed_gate(session, load_gate_yaml(), reseed=reseed)
-        if argv[0] == "seed-config" and seed_sanity_ranges(session, reseed=reseed):
-            written.append(SANITY_RANGES)
+        if argv[0] == "seed-config":
+            if seed_sanity_ranges(session, reseed=reseed):
+                written.append(SANITY_RANGES)
+            written += seed_answer_defaults(session)
         session.commit()
     print(f"wrote {len(written)} keys" + (f": {', '.join(written)}" if written else ""))
     return 0

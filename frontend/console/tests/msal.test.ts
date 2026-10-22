@@ -42,7 +42,12 @@ describe('createMsalAuth', () => {
 	it('configures MSAL for the Console app registration', () => {
 		const { seen } = client(fakePca());
 		expect(seen()).toMatchObject({
-			auth: { clientId: 'client-1', authority: 'https://login.microsoftonline.com/tenant-1', redirectUri: 'https://console/' },
+			auth: {
+				clientId: 'client-1',
+				authority: 'https://login.microsoftonline.com/tenant-1',
+				redirectUri: 'https://console/',
+				navigateToLoginRequestUrl: true
+			},
 			cache: { cacheLocation: 'sessionStorage' }
 		});
 	});
@@ -52,7 +57,10 @@ describe('createMsalAuth', () => {
 		const { auth } = client(pca);
 		expect(await auth.init()).toBeNull();
 		await auth.login();
-		expect(pca.loginRedirect).toHaveBeenCalledWith({ scopes: ['api://dcl-console-api/access_as_user'] });
+		expect(pca.loginRedirect).toHaveBeenCalledWith({
+			scopes: ['api://dcl-console-api/access_as_user'],
+			redirectStartPage: globalThis.location.href
+		});
 	});
 
 	it('completes the redirect, activates the account and gets tokens silently', async () => {

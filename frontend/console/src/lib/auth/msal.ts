@@ -29,7 +29,9 @@ export function createMsalAuth(auth: ConsoleConfig['auth'], factory: PcaFactory 
 			clientId: auth.clientId,
 			authority: auth.authority,
 			redirectUri: auth.redirectUri,
-			postLogoutRedirectUri: auth.redirectUri
+			postLogoutRedirectUri: auth.redirectUri,
+			// After sign-in, return to the page that asked for it (e.g. a citation deep link from chat).
+			navigateToLoginRequestUrl: true
 		},
 		cache: { cacheLocation: 'sessionStorage' }
 	});
@@ -45,7 +47,7 @@ export function createMsalAuth(auth: ConsoleConfig['auth'], factory: PcaFactory 
 			return account ? account.name || account.username : null;
 		},
 		async login() {
-			await pca.loginRedirect({ scopes });
+			await pca.loginRedirect({ scopes, redirectStartPage: globalThis.location?.href });
 		},
 		async logout() {
 			await pca.logoutRedirect({ account: account ?? undefined });
