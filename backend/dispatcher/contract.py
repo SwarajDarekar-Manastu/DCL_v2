@@ -528,7 +528,9 @@ class Suggestion(_Model):
     """A proposed resolution (file 06 §5): deterministic heuristics first, else one Gemini proposal.
     Applied automatically only when ``confidence >= 0.9`` and a matching rule exists."""
 
-    resolution: Resolution
+    resolution: Resolution | None = Field(
+        default=None, description="None: no proposal; the rationale says why (an explicit 'no suggestion')"
+    )
     confidence: float = Field(ge=0, le=1)
     rationale: str = ""
     proposed_by: Literal["heuristic", "rule", "llm"] = "heuristic"

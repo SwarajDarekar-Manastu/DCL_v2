@@ -52,6 +52,7 @@ from backend.routes.c_telemetry.ljstream_cfg import parse_ljstream_cfg
 from backend.routes.c_telemetry.normalize import NormalizeConfig, sanity_ranges_from
 from backend.routes.c_telemetry.run import PARSER_VERSION, FolderConfig, RunInputs, labjack_source
 from backend.routes.c_telemetry.series import SeriesSource, process_series, slug, source_from_schema
+from backend.routes.c_telemetry.suggest import with_suggestion
 from backend.routes.c_telemetry.tables import header_unit, table_document, unit_flags
 from backend.routes.c_telemetry.tdms import tdms_source
 from backend.routes.c_telemetry.workbook import island_source, read_workbook
@@ -206,6 +207,7 @@ def process_document(
             raise ValueError(f"no Route C adapter accepts {item.name}")
         adapter_name = adapter.name
         processed = _build(adapter_name, session, minio, store, item, inputs, series_args)
+    processed = processed.model_copy(update={"flags": [with_suggestion(f) for f in processed.flags]})
     _apply_fields(document, processed)
     result: GateResult = gate(session, cir, document, processed, stale=_route_c_flag)
     plan = None
