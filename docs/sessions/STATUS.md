@@ -531,3 +531,9 @@ Merged / ready: `open_threshold: 2.5` on the valve channel of the three proposed
 Blocked on: S1's ab00628 reaching main
 Needs from others: Lead — merge order S1 ab00628, then this branch
 Next: idle until indexed documents and S2's engine mode exist
+
+## 2026-10-22 10:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: behaviour suite (6 cases: Isp with a dead thrust channel and a non-existent test plan → insufficient evidence; out of scope; clarification of "Test 01"; Moog thrust range and TP7-vs-vendor → external labelling) and `build_suites.py` (committed template + git-ignored fragments; `numeric_from` reuses telemetry values); tool names checked against the engine's ToolName. Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: indexed allowlist documents (doc lookups, code, failure/visual, multilingual, the retrieval set's gold anchors) and standards in the processing scope (STANDARDS cases)
+Needs from others: Lead — a ruling on STANDARDS cases: no ECSS/standards folder is in the allowlist, so those cases wait for M6 or a scope addition
+Next: page-cited FACT_LOOKUP and CODE cases from the exported E3–E5 documents

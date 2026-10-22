@@ -10,13 +10,20 @@ results are company test data, so they never enter the public repository (DECISI
 | `backend/tests/benchmark/verification/telemetry_metrics.py` | yes | the metric functions and the `build` command |
 | `data/benchmark/telemetry_sources.yaml` | no | run key → raw file under `data/samples/`; the team's workbook values for cross-checks |
 | `data/benchmark/telemetry.json` | no | the importable suite with values (S3's import format) |
+| `backend/tests/benchmark/suites/<suite>.template.yaml` | yes | every other suite (behaviour, …): questions, behaviours, tools |
+| `backend/tests/benchmark/verification/build_suites.py` | yes | merges each template with its local fragments |
+| `data/benchmark/<suite>.local.yaml`, `data/benchmark/<suite>.json` | no | citations naming company files; the built suite |
 
 Build the suite (needs the E1–E3 samples, see `backend/tests/fixtures/README.md`):
 
 ```bash
 uv run python backend/tests/benchmark/verification/telemetry_metrics.py build
+uv run python backend/tests/benchmark/verification/build_suites.py
 uv run pytest backend/tests/benchmark
 ```
+
+`build_suites.py` runs after the telemetry build: a case with `numeric_from: <telemetry case>`
+reuses that measured value instead of retyping it.
 
 The test recomputes every value from the raw files and requires agreement with the team's own
 analysis workbook within the case tolerance where one exists. Import into the Console with

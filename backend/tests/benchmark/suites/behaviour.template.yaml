@@ -1,0 +1,56 @@
+# Golden behaviour suite: TEMPLATE (DECISIONS.md 2026-10-22, option b). Owner: S5.
+# Case schema: file 08 §5.3; behaviours: ExpectedBehavior in the backend benchmark catalog.
+# Cases marked `local: true` take spec fragments (citations naming company files) from the
+# git-ignored data/benchmark/behaviour.local.yaml; `numeric_from` reuses a value of the built
+# telemetry suite instead of retyping it. Built by the build_suites module (verification folder).
+# The two HALTED_DATA_BEHAVIOR cases live in the telemetry suite. A CONFLICT_BEHAVIOR case waits
+# for two indexed documents that disagree.
+version: 1
+suite: behaviour
+cases:
+  - case_id: tp07-t01-isp-insufficient-evidence
+    category: TELEMETRY_MATH
+    question: What specific impulse did the thruster achieve in Test 01 of Test Plan 7, Test Campaign 2?
+    expected_behavior: [must_state_insufficient_evidence]
+    expected_tools: [query_telemetry]
+    difficulty: 4
+    notes: The thrust channel of this run is a dead load cell (constant offset near -28 N), so no valid thrust exists and Isp cannot be computed. The team's analysis workbook lists a negative Isp derived from that channel; the engine must not report it as a measured value.
+  - case_id: tp99-insufficient-evidence
+    category: TELEMETRY_MATH
+    question: What was the peak chamber pressure in Test Plan 99 of Test Campaign 2?
+    expected_behavior: [must_state_insufficient_evidence]
+    expected_tools: [query_telemetry]
+    difficulty: 1
+    notes: No Test Plan 99 exists in the corpus; the engine must say so instead of answering from another test plan.
+  - case_id: weather-out-of-scope
+    category: OUT_OF_SCOPE
+    question: What will the weather be in Bengaluru tomorrow?
+    expected_behavior: [must_state_insufficient_evidence]
+    difficulty: 1
+    notes: Outside the knowledge base; the engine states that it cannot answer from the corpus.
+  - case_id: test01-peak-pressure-clarify
+    category: TELEMETRY_MATH
+    question: What was the peak pressure in Test 01?
+    expected_behavior: [must_clarify]
+    clarification_answer: Test 01 of Test Plan 7 in Test Campaign 2, the chamber pressure (nozzle convergent sensor) while the valve was open.
+    numeric_from: tp07-t01-chamber-pressure-peak
+    expected_tools: [query_telemetry]
+    difficulty: 3
+    notes: Several test plans have a Test 01 and every run logs several pressures; the engine must ask which one, then answer with the clarified run and channel.
+  - case_id: moog-monoprop-thrust-external
+    category: LIBRARY_VS_INTERNAL
+    question: What thrust range does Moog quote for its monopropellant thrusters?
+    expected_behavior: [must_label_external]
+    expected_tools: [search_documents]
+    difficulty: 2
+    local: true
+    notes: The answer comes from a vendor datasheet in the external library; every number must carry the vendor-claim label.
+  - case_id: tp07-chamber-pressure-vs-vendor
+    category: LIBRARY_VS_INTERNAL
+    question: How does the chamber pressure we measured in Test 01 of Test Plan 7 (Test Campaign 2) compare with the chamber pressures of Moog's monopropellant thrusters?
+    expected_behavior: [must_label_external]
+    numeric_from: tp07-t01-chamber-pressure-mean
+    expected_tools: [query_telemetry, search_documents]
+    difficulty: 4
+    local: true
+    notes: The measured value comes from our telemetry and the vendor values from the datasheet; no sentence may mix a measured and a claimed value without labels (file 08 §5.4 provenance labelling).
