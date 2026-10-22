@@ -248,6 +248,32 @@ class LlmCallRecord:
     usage_estimated: bool = False
 
 
+class HarmCategory(StrEnum):
+    DANGEROUS_CONTENT = "HARM_CATEGORY_DANGEROUS_CONTENT"
+    HARASSMENT = "HARM_CATEGORY_HARASSMENT"
+    HATE_SPEECH = "HARM_CATEGORY_HATE_SPEECH"
+    SEXUALLY_EXPLICIT = "HARM_CATEGORY_SEXUALLY_EXPLICIT"
+
+
+class HarmBlockThreshold(StrEnum):
+    """Thresholds a caller may set. BLOCK_NONE and OFF are left out: filters are relaxed, never off."""
+
+    BLOCK_LOW_AND_ABOVE = "BLOCK_LOW_AND_ABOVE"
+    BLOCK_MEDIUM_AND_ABOVE = "BLOCK_MEDIUM_AND_ABOVE"
+    BLOCK_ONLY_HIGH = "BLOCK_ONLY_HIGH"
+
+
+@dataclass(frozen=True)
+class SafetySetting:
+    category: HarmCategory
+    threshold: HarmBlockThreshold
+
+
+EXTRACTION_SAFETY: tuple[SafetySetting, ...] = (
+    SafetySetting(HarmCategory.DANGEROUS_CONTENT, HarmBlockThreshold.BLOCK_ONLY_HIGH),
+)
+
+
 @dataclass(frozen=True)
 class GenerateRequest:
     """Everything an adapter needs to build one wire request."""
@@ -264,6 +290,7 @@ class GenerateRequest:
     max_output_tokens: int | None = None
     cached_content: str | None = None
     google_search: bool = False
+    safety_settings: tuple[SafetySetting, ...] = ()
 
 
 @dataclass(frozen=True)

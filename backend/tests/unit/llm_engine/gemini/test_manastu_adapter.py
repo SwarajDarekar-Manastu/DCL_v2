@@ -12,6 +12,7 @@ from backend.config import Settings, ThinkingLevel
 from backend.llm_engine.gemini_adapters import ADAPTERS, GeminiNativeAdapter, drops_temperature
 from backend.llm_engine.gemini_client import CircuitBreaker, GeminiClient
 from backend.llm_engine.gemini_types import (
+    EXTRACTION_SAFETY,
     BudgetExhausted,
     CallContext,
     Capabilities,
@@ -19,6 +20,7 @@ from backend.llm_engine.gemini_types import (
     GatewayError,
     GatewayUnavailable,
     GenerateRequest,
+    HarmBlockThreshold,
     Image,
     Message,
     Pdf,
@@ -440,3 +442,36 @@ def test_google_search_needs_its_capability_and_a_gemini_style_gateway():
         client(Gateway(recorded("plain")), style="openai").generate_sync(
             model=MODEL, messages=[Message.user("q")], context=CTX, google_search=True
         )
+
+
+async def test_safety_settings_are_sent_only_when_asked():
+    gw = Gateway(recorded("plain"), recorded("plain"))
+    c = client(gw)
+    await c.generate(model=MODEL, messages=[Message.user("q")], context=CTX)
+    await c.generate(
+        model=MODEL, messages=[Message.user("q")], context=CTX, safety_settings=EXTRACTION_SAFETY
+    )
+    assert "safety_settings" not in gw.bodies[0].get("config", {})
+    assert gw.bodies[1]["config"]["safety_settings"] == [
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
+    ]
+
+
+def test_native_adapter_puts_safety_settings_at_the_top_level():
+    body = GeminiNativeAdapter().build(
+        native_request(safety_settings=EXTRACTION_SAFETY), Capabilities.all(), False
+    )
+    assert body["safetySettings"] == [
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
+    ]
+    assert "safetySettings" not in body.get("generationConfig", {})
+
+
+def test_safety_settings_are_refused_by_the_openai_style_and_cannot_switch_filters_off():
+    gw = Gateway(recorded("plain"))
+    with pytest.raises(Exception, match="safety_settings"):
+        client(gw, style="openai").generate_sync(
+            model=MODEL, messages=[Message.user("q")], context=CTX, safety_settings=EXTRACTION_SAFETY
+        )
+    assert gw.requests == []
+    assert {"BLOCK_NONE", "OFF"}.isdisjoint(t.value for t in HarmBlockThreshold)

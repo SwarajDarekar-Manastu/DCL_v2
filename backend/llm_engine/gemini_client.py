@@ -274,6 +274,7 @@ class GeminiClient:
             messages=tuple(messages),
             schema=schema,
             tools=tuple(options.pop("tools", None) or ()),
+            safety_settings=tuple(options.pop("safety_settings", None) or ()),
             thinking=options.pop("thinking", None) or self._default_thinking,
             include_thoughts=self._default_include_thoughts if include_thoughts is None else include_thoughts,
             **options,
@@ -476,8 +477,10 @@ class GeminiClient:
         **options: Any,
     ) -> GenerateResult:
         """Options: tools, tool_choice, thinking, include_thoughts, media_resolution, temperature,
-        max_output_tokens, cached_content, google_search (only with an already-sanitized query: the model
-        writes the Google queries from the whole prompt; they come back in result.grounding.queries)."""
+        max_output_tokens, cached_content, safety_settings (none sent by default; extraction capabilities
+        pass gemini_types.EXTRACTION_SAFETY when their config flag is on), google_search (only with an
+        already-sanitized query: the model writes the Google queries from the whole prompt; they come
+        back in result.grounding.queries)."""
         call = self._prepare(model, messages, context, schema, False, **options)
         async with self._limits.async_(model):
             response = await self._apost(call)
