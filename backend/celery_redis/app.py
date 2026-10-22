@@ -36,6 +36,7 @@ TASK_MODULES = (
     "backend.celery_redis.tasks_process",
     "backend.celery_redis.tasks_embed",
     "backend.celery_redis.tasks_review",
+    "backend.benchmark.tasks",
 )
 
 

@@ -823,3 +823,8 @@ Merged / ready: POST /benchmark/runs now sends dcl.benchmark.start(run_id) after
 Blocked on: the live run-page check waits for S4 to register the benchmark tasks (the Lead will say).
 Needs from others: S4: workers load backend.benchmark.tasks.
 Next: check the run page against a real run when told.
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c-bench
+Merged / ready: c50df0a on claude/gifted-hofstadter-0bec1c-bench (from main 5ce1602): backend.benchmark.tasks in TASK_MODULES, beat benchmark-sweep every 60 s on io_light. Test: uv run pytest 1378 passed, 305 skipped
+Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
+Needs from others: Lead — merge; then I redeploy beat and io_light from main
+Next: redeploy beat and worker-io-light after the merge
