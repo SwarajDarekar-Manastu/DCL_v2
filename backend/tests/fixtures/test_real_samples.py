@@ -38,9 +38,16 @@ def schema(with_path: bool) -> dict:
         "additionalProperties": False,
         "properties": {
             "version": {"const": 1},
-            "samples": {"type": "array", "minItems": 1, "items": {
-                "type": "object", "required": list(props), "additionalProperties": False,
-                "properties": props}},
+            "samples": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "required": list(props),
+                    "additionalProperties": False,
+                    "properties": props,
+                },
+            },
         },
     }
 
@@ -90,8 +97,9 @@ def test_full_manifest_matches_the_template():
     full = load(FULL)
     jsonschema.validate(full, schema(with_path=True))
     # Several paths may share one blob (identical files); the template has one row per blob.
-    assert {(s["entry"], s["sha256"], s["size_bytes"]) for s in full["samples"]} == \
-        {(s["entry"], s["sha256"], s["size_bytes"]) for s in template()}
+    assert {(s["entry"], s["sha256"], s["size_bytes"]) for s in full["samples"]} == {
+        (s["entry"], s["sha256"], s["size_bytes"]) for s in template()
+    }
 
 
 @pytest.mark.parametrize("sample", template(), ids=lambda s: f"{s['entry']}:{s['sha256'][:12]}")
