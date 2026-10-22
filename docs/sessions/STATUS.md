@@ -690,3 +690,16 @@ Merged / ready (4 commits on main d9a720b): network split + Redis password (d2da
 Blocked on: nothing
 Needs from others: Lead — merge; add `DCL_DATA_BIND_HOST`, `DCL_REDIS_PASSWORD`, `DCL_CONSOLE_SPA_CLIENT_ID`, `DCL_CONSOLE_API_SCOPE` to file 01 §7.1; S2 — wire the per-capability flag to `safety_settings=EXTRACTION_SAFETY`
 Next: redeploy from main after the merge; RustFS step 2 (one-day lifecycle watch) and step 3 (M6-scale load test)
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: the Console redesign, reviewed and merged into this branch (a fast-forward from worktree-agent-a84765e1105962288), plus review fixes.
+- Run status tones now come from an exhaustive map over the five run statuses, replacing the word matching.
+- Viewer overlay regions are keyboard-focusable buttons.
+- console-shell-auth map now names Sidebar + TopBar.
+- The redesign changes nothing in API calls, routes, auth, config.ts, live.svelte.ts or the backend. Its only build change is the Tailwind plugin in vite.config.ts.
+- Live check on 8600 with the dev sign-in: every page renders against the real API, and the viewer shows a real document with its fallback notice. Ops shows the live (empty) failed-task list.
+- Not checkable live: queue rows and the case view. On main, `/review/cases` answers 501 ("review tables arrive in M2"), so these rest on the component tests.
+- Tests: Console check 0 errors, vitest 107, build ok; backend pytest exit 0.
+Blocked on: Settings (S1's settings API); live review data needs S1's review API on main.
+Needs from others: S1: review and settings APIs.
+Next: the viewer should use the `table` view for table documents (a real engineering_table document showed its HTML table markup in the text view, escaped); Settings once S1's API is on main.
