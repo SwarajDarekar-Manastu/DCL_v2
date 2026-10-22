@@ -9,7 +9,7 @@
 | **Action function** | A button under each assistant message; can open dialogs, return an `HTMLResponse` that renders as a Rich UI embed | "Show trace", "Add to benchmark", "Report an issue with this answer" |
 | **Filter function** | `inlet/outlet/stream` hooks | attach user groups and policy (external search allowed, strict numbers) to the request; strip oversized attachments |
 | **Tools / OpenAPI tool servers / MCP (Streamable HTTP)** | External functions the model can call; OpenAPI is the preferred path | Optional: expose read-only DCL tools (`catalog_lookup`, `query_telemetry`) as an OpenAPI server so *other* models in Open WebUI can use them; not needed for the main Pipe |
-| **Skills** | Markdown playbooks, `$`-mentionable, toggleable per chat, or attached to a model with lazy `view_skill` loading (needs native function calling) | The playbooks of file 07 §5 are published as Skills attached to the engine model, so users can read/edit the procedure and toggle one explicitly |
+| **Skills** | Markdown playbooks, `$`-mentionable, toggleable per chat, or attached to a model with lazy `view_skill` loading (needs native function calling) | The playbooks of file 07 §5 are published as Skills, not attached to the engine model (decided 2026-10-22); users read or `$`-mention one, and an explicit mention steers the planner |
 | **Rich UI embedding** | HTML or URLs rendered in an iframe; `postMessage` for height (`iframe:height`) and prompt submission (`input:prompt:submit`); per-user "allow same-origin"/"allow forms" settings | Console mini-views inside chat (a review case card, a trace timeline) |
 | **Artifacts key-value store** | `/api/artifacts/{store,get,list,delete}`, personal/shared scopes, JSON ≤ 1 MB | Not used for system data (PostgreSQL is the store); may hold per-user UI preferences |
 | **Evaluations** | Arena / A-B / ELO leaderboard from thumbs feedback | Kept for model-vs-model comparisons; **not** a golden-set regression tool, hence our Benchmark UI |
@@ -87,7 +87,7 @@ Fork policy (revised 2026-10-21): the default remains the extension points (Pipe
 
 ### 3.1 In Open WebUI admin
 
-Model visibility per group; Pipe `Valves`; Skills attached to the model; native function calling left at default (the Pipe does not rely on Open WebUI's tool loop); per-user iframe settings documented for reviewers (same-origin **off** is fine for our embeds); one OpenAI-compatible connection to the Manastu Gemini gateway for plain chat (the only provider credentials in Open WebUI).
+Model visibility per group; Pipe `Valves`; Skills published but **not attached** to the model (attached skills with native function calling off are injected in full into every request; decided 2026-10-22; an explicit `$`-mention is forwarded as `playbook_hint` and steers the planner, nothing else does); native function calling left at default (the Pipe does not rely on Open WebUI's tool loop); per-user iframe settings documented for reviewers (same-origin **off** is fine for our embeds); one OpenAI-compatible connection to the Manastu Gemini gateway for plain chat (the only provider credentials in Open WebUI).
 
 ### 3.2 DCL Console → Settings (backed by `pipeline_config` with history)
 

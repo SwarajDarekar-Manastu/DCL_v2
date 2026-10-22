@@ -10,6 +10,17 @@ type Schemas = components['schemas'];
 
 /** backend/api/auth.py */
 export type ConsoleUser = Schemas['ConsoleUser'];
+export type LoginResponse = Schemas['LoginResponse'];
+export type ConfigEntry = Schemas['ConfigEntry'];
+export type ConfigChange = Schemas['Change'];
+export type ConfigBatch = Schemas['ChangeBatch'];
+export type ConfigImpact = Schemas['ImpactView'];
+export type ConfigPreview = Schemas['PreviewResponse'];
+export type ConfigApplied = Schemas['ApplyResponse'];
+export type ConfigRollback = Schemas['RollbackRequest'];
+export type LocalAccount = Schemas['UserView'];
+export type LocalAccountCreate = Schemas['UserCreate'];
+export type LocalAccountUpdate = Schemas['UserUpdate'];
 
 /** backend/api/viewer.py */
 export type ViewerPayload = Schemas['ViewerPayload'];
@@ -99,7 +110,9 @@ export interface LiveEvent {
 export class ApiError extends Error {
 	constructor(
 		readonly status: number,
-		readonly detail: string
+		readonly detail: string,
+		/** Per-field reasons from a 422 body `{"detail": {"errors": {key: reason}}}` (settings API) */
+		readonly errors: Record<string, string> = {}
 	) {
 		super(`${status}: ${detail}`);
 	}
@@ -111,6 +124,8 @@ interface ApiWiring {
 	baseUrl: string;
 	wsUrl: string;
 	getToken: () => Promise<string>;
+	/** Called once per 401 answer, before the ApiError is thrown (local sign-in ends the session). */
+	onUnauthorized?: () => void;
 	fetch: typeof globalThis.fetch;
 	WebSocket: typeof globalThis.WebSocket;
 }
@@ -130,9 +145,9 @@ function wired(): ApiWiring {
 	return wiring;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, signedIn = true): Promise<T> {
 	const w = wired();
-	const headers: Record<string, string> = { Authorization: `Bearer ${await w.getToken()}` };
+	const headers: Record<string, string> = signedIn ? { Authorization: `Bearer ${await w.getToken()}` } : {};
 	if (body !== undefined) headers['Content-Type'] = 'application/json';
 	const response = await w.fetch(w.baseUrl + path, {
 		method,
@@ -141,18 +156,37 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 	});
 	if (!response.ok) {
 		let detail = response.statusText;
+		let errors: Record<string, string> = {};
 		try {
 			const payload = await response.json();
 			if (typeof payload?.detail === 'string') detail = payload.detail;
+			else if (payload?.detail?.errors && typeof payload.detail.errors === 'object') {
+				errors = payload.detail.errors as Record<string, string>;
+				detail = Object.entries(errors)
+					.map(([key, reason]) => `${key}: ${reason}`)
+					.join('; ');
+			}
 		} catch {
 			// non-JSON error body: keep the status text
 		}
-		throw new ApiError(response.status, detail);
+		if (response.status === 401 && signedIn) w.onUnauthorized?.();
+		throw new ApiError(response.status, detail, errors);
 	}
 	return (await response.json()) as T;
 }
 
 // ---------------------------------------------------------------- routes
+
+/** POST /auth/login (backend/api/auth.py): local accounts; sent without a bearer token */
+export function login(email: string, password: string): Promise<LoginResponse> {
+	return request<LoginResponse>('POST', '/auth/login', { email, password }, false);
+}
+
+/** GET/POST/PATCH /auth/users (admin): local accounts */
+export const listAccounts = () => request<LocalAccount[]>('GET', '/auth/users');
+export const createAccount = (body: LocalAccountCreate) => request<LocalAccount>('POST', '/auth/users', body);
+export const updateAccount = (userId: string, body: LocalAccountUpdate) =>
+	request<LocalAccount>('PATCH', `/auth/users/${encodeURIComponent(userId)}`, body);
 
 /** GET /auth/me (backend/api/auth.py) */
 export function getMe(): Promise<ConsoleUser> {
@@ -189,6 +223,15 @@ export function listAudit(filters: AuditFilters = {}): Promise<AuditPage> {
 	const text = q.toString();
 	return request<AuditPage>('GET', `/audit${text ? `?${text}` : ''}`);
 }
+
+// ---------------------------------------------------------------- settings (backend/api/settings.py, S1)
+
+/** GET /settings?prefix (admin): current value and version of every key */
+export const listSettings = (prefix = '') => request<{ items: ConfigEntry[] }>('GET', `/settings${query({ prefix: prefix || undefined })}`);
+export const settingHistory = (key: string) => request<{ items: ConfigEntry[] }>('GET', `/settings/${encodeURIComponent(key)}/history`);
+export const previewSettings = (body: ConfigBatch) => request<ConfigPreview>('POST', '/settings/preview', body);
+export const applySettings = (body: ConfigBatch) => request<ConfigApplied>('PUT', '/settings', body);
+export const rollbackSettings = (body: ConfigRollback) => request<ConfigApplied>('POST', '/settings/rollback', body);
 
 // ---------------------------------------------------------------- ops (backend/api/ops.py)
 

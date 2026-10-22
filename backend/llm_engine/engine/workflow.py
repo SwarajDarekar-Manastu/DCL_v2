@@ -62,7 +62,10 @@ class EngineDeps:
     save_trace: Callable[[dict], None] = lambda trace: None
     telemetry_connect: Callable[[], Any] | None = None  # DuckDB connection that reads the stored Parquet URIs
     presign: Callable[[str], str] | None = None  # MinIO URI → presigned GET (15 min)
-    fetch_asset: Callable[[str], bytes] | None = None  # MinIO URI → bytes (T3 relook)
+    fetch_asset: Callable[[str], bytes] | None = None
+    put_asset: Callable[[str, bytes], str] | None = (
+        None  # dcl-assets key, PNG → s3:// URI (T2 plots)  # MinIO URI → bytes (T3 relook)
+    )
 
 
 class Emit(Event):
@@ -176,6 +179,7 @@ class AnswerWorkflow(Workflow):
             trace_id=ev.trace_id,
         )
         _step(ctx, ev.trace_id, "analysis", "query_analysis", "Understanding the question", True)
+        analysis = playbooks.apply_hint(analysis, ev.get("playbook_hint"))
         if analysis.chitchat:
             return await self._chitchat(ctx, ev, analysis, started)
         if analysis.raw.clarification.needed and analysis.raw.clarification.question:
@@ -342,7 +346,11 @@ class AnswerWorkflow(Workflow):
                 return catalog_lookup(session, call.args)
             if call.tool == telemetry_tools.NAME:
                 return telemetry_tools.query_telemetry(
-                    session, call.args, connect=self.deps.telemetry_connect
+                    session,
+                    call.args,
+                    connect=self.deps.telemetry_connect,
+                    put_asset=self.deps.put_asset,
+                    presign=self.deps.presign,
                 )
             if call.tool == visual_tools.NAME:
                 return visual_tools.inspect_visuals(
@@ -459,7 +467,7 @@ class AnswerWorkflow(Workflow):
         caveats: list[str] | None = None,
         citations: list[Source] | None = None,
     ) -> StopEvent:
-        for embed in photo_strips(results):
+        for embed in [*plot_embeds(results), *photo_strips(results)]:
             _emit(ctx, trace_id, embed)
         _tokens(ctx, trace_id, markdown)
         for n, source in enumerate(citations or [], start=1):
@@ -508,7 +516,15 @@ class AnswerWorkflow(Workflow):
         trace = {
             "trace_id": trace_id,
             "query_analysis": dump_analysis(analysis),
-            "tool_calls": [{"tool": r.tool, "call_id": r.call_id, "warnings": r.warnings} for r in results],
+            "tool_calls": [
+                {
+                    "tool": r.tool,
+                    "call_id": r.call_id,
+                    "warnings": r.warnings,
+                    "display": r.display[:TRACE_DISPLAY],
+                }
+                for r in results
+            ],
             "retrieved": [s.model_dump(mode="json") for r in results for s in r.provenance],
             "claims": [c.model_dump() for c in draft.claims] if draft else [],
             "citations": [s.model_dump(mode="json") for s in citations or []],
@@ -533,6 +549,7 @@ class AnswerWorkflow(Workflow):
         return StopEvent(result=done)
 
 
+TRACE_DISPLAY = 4000  # characters of each tool's display kept in the trace (benchmark drilldown)
 IMG_STYLE = "width:160px;height:120px;object-fit:cover"
 
 
@@ -546,6 +563,23 @@ def _photo_cell(visual: dict) -> str:
         f'<img src="{thumb}" alt="{alt}" style="{IMG_STYLE}"></a>'
         f'<figcaption style="font:12px sans-serif">{caption}</figcaption></figure>'
     )
+
+
+def plot_embeds(results: list[ToolResult]) -> list[dict]:
+    """One `plot` embed (presigned PNG link) per T2 plot."""
+    return [
+        {
+            "type": "embed",
+            "embed_id": f"plot-{result.call_id}-{i}",
+            "kind": "plot",
+            "url": plot["url"],
+            "alt": plot["alt"],
+            "height": 360,
+        }
+        for result in results
+        if result.tool == telemetry_tools.NAME and isinstance(result.result, dict)
+        for i, plot in enumerate(result.result.get("plots", []))
+    ]
 
 
 def photo_strips(results: list[ToolResult]) -> list[dict]:

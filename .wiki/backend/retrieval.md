@@ -56,6 +56,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-23 | S2 | A candidate whose passage and parent have no locator is skipped with a warning naming the document, instead of failing the whole search (seen live on Route C table rows); 1 DB test |
 | 2026-10-22 | S2 | Retrieval-lab endpoint for S3 |
 | 2026-10-22 | S2 | Hybrid search: exact/HNSW dense leg, per-language BM25 (pg_search 0.26.2), RRF, parent collapse, rerank with margin and fallback, near-duplicate collapse; 11 DB tests; BM25 DDL sent to S1 |
 

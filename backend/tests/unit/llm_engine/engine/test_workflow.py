@@ -448,14 +448,14 @@ def test_visual_lookup_runs_t3_looks_again_and_streams_a_photo_strip(searches, m
     assert any(s.get("tool") == "inspect_visuals" and s["done"] for s in of(events, "step"))
 
 
-MEASURED = "Run TP07_T04 · chamber_pressure → p_chamber_1_bar_g (bar g, gauge): peak_50ms 12.38 bar g"
+MEASURED = "Run TP07_T04 · chamber_pressure → p_chamber_1_bar_g (barg, gauge): peak_50ms 12.38 barg"
 
 
 def test_telemetry_question_runs_t2_with_extracted_arguments(searches, monkeypatch):
     searches(report_hit)
     t2_calls = []
 
-    def fake_telemetry(session, args, *, connect):
+    def fake_telemetry(session, args, *, connect, put_asset, presign):
         t2_calls.append(args)
         source = Source(
             doc_id=REPORT, label="Run TP07_T04 (measured telemetry)", provenance=Provenance.MEASURED
@@ -471,9 +471,9 @@ def test_telemetry_question_runs_t2_with_extracted_arguments(searches, monkeypat
         telemetry_args=[{"channels": ["chamber_pressure"], "metrics": ["peak_50ms"]}],
         synthesis=[
             {
-                "answer_markdown": "The 50 ms peak chamber pressure was 12.38 bar g [1].",
+                "answer_markdown": "The 50 ms peak chamber pressure was 12.38 barg [1].",
                 "claims": [
-                    {"text": "peak 12.38 bar g", "kind": "numeric", "evidence_ids": ["E1"]},
+                    {"text": "peak 12.38 barg", "kind": "numeric", "evidence_ids": ["E1"]},
                 ],
             }
         ],
@@ -500,3 +500,64 @@ def test_telemetry_question_without_a_quantity_skips_t2(searches, monkeypatch):
     )
     _, done, traces = run(client, "Which runs of TP7 had a sensor fault?")
     assert "query_telemetry" not in [c["tool"] for c in traces[0]["tool_calls"]]
+
+
+def test_plot_embeds_fit_the_wire_contract():
+    from backend.api.engine import EmbedEvent
+
+    result = ToolResult(
+        tool="query_telemetry",
+        result={"runs": [], "plots": [{"url": "https://minio.test/p.png", "alt": "Run TP07_T04: thrust_n"}]},
+        display="x",
+    )
+    [embed] = wf.plot_embeds([result])
+    event = TypeAdapter(EmbedEvent).validate_python(embed)
+    assert event.kind == "plot" and event.url == "https://minio.test/p.png" and event.html is None
+
+
+def test_a_mentioned_playbook_adds_its_intent(searches, monkeypatch):
+    searches(report_hit)
+    seen = []
+    monkeypatch.setattr(
+        wf.visual_tools,
+        "inspect_visuals",
+        lambda session, args, **kw: (
+            seen.append(args) or ToolResult(tool="inspect_visuals", result={}, display="none")
+        ),
+    )
+    client = Client(
+        query_analysis=[FACT],
+        synthesis=[SYNTH, SYNTH],
+        verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]}] * 2,
+    )
+    _, _, traces = run(client, "What chamber pressure did TP7 run 4 reach?", playbook_hint="visual_lookup")
+    assert seen and "visual_lookup" in traces[0]["query_analysis"]["raw"]["intents"]
+    assert traces[0]["query_analysis"]["raw"]["intents"][0] == "fact_lookup"
+
+
+def test_the_hint_must_be_an_intent():
+    from pydantic import ValidationError
+
+    from backend.api.engine import AnswerOptions
+
+    assert AnswerOptions(playbook_hint="telemetry_metric").playbook_hint == "telemetry_metric"
+    with pytest.raises(ValidationError):
+        AnswerOptions(playbook_hint="drop_tables")
+
+
+def test_benchmark_answers_take_the_chat_path_and_mock_makes_no_network_call(searches, monkeypatch):
+    from backend.benchmark.runner import workflow_answer
+
+    async def no_network(*args, **kwargs):
+        raise AssertionError("benchmark mock mode must not reach the network")
+
+    monkeypatch.setattr(external_tools, "resolve_redirect", no_network)
+    monkeypatch.setattr(external_tools, "arxiv", no_network)
+    searches(report_hit)
+    client = external_client(["fact_lookup"], synthesis=SYNTH)
+    logged = []
+    answer = workflow_answer(deps(client, logged, ALLOWED))  # the benchmark caller is in the allowed group
+    done, trace = asyncio.run(answer("Search the web for catalyst preheat", "", "mock"))
+    assert done["mode"] == "answered" and trace is logged[0]  # captured and still logged like chat
+    assert trace["external_queries"][0]["provider"] == "mock"
+    assert "external_search" not in client.purposes  # no grounded Gemini search either

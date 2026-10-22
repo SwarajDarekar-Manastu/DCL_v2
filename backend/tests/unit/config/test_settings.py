@@ -452,45 +452,6 @@ def test_model_ids_default_in_every_environment(monkeypatch):
     assert load_settings(env_file=None).gemini_lite_model == "gemini-3.5-flash-lite"
 
 
-DEV_TOKEN = "d" * 40
-
-
-def test_console_dev_auth_defaults_off_with_all_roles():
-    settings = load_settings(env_file=None)
-    assert settings.console_dev_auth is False and settings.console_dev_token is None
-    assert settings.console_dev_roles == ["viewer", "reviewer", "admin"]
-
-
-def test_console_dev_auth_works_in_dev_with_a_long_token(monkeypatch):
-    set_env(
-        monkeypatch,
-        {
-            "DCL_CONSOLE_DEV_AUTH": "true",
-            "DCL_CONSOLE_DEV_TOKEN": DEV_TOKEN,
-            "DCL_CONSOLE_DEV_ROLES": "viewer, reviewer",
-        },
-    )
-    settings = load_settings(env_file=None)
-    assert settings.console_dev_auth is True and settings.console_dev_roles == ["viewer", "reviewer"]
-    assert DEV_TOKEN not in repr(settings)
-
-
-@pytest.mark.parametrize("env", ["staging", "prod"])
-def test_console_dev_auth_is_refused_outside_dev(monkeypatch, env):
-    set_env(monkeypatch, {"DCL_ENV": env, "DCL_CONSOLE_DEV_AUTH": "true", "DCL_CONSOLE_DEV_TOKEN": DEV_TOKEN})
-    with pytest.raises(ConfigError, match="DCL_CONSOLE_DEV_AUTH=true is allowed only with DCL_ENV=dev"):
-        load_settings(env_file=None)
-
-
-@pytest.mark.parametrize("token", [None, "short-token"])
-def test_console_dev_auth_needs_a_long_token(monkeypatch, token):
-    monkeypatch.setenv("DCL_CONSOLE_DEV_AUTH", "true")
-    if token:
-        monkeypatch.setenv("DCL_CONSOLE_DEV_TOKEN", token)
-    with pytest.raises(ConfigError, match="DCL_CONSOLE_DEV_TOKEN of 32\\+ chars"):
-        load_settings(env_file=None)
-
-
 def test_console_spa_build_names_are_optional_and_read(monkeypatch):
     settings = load_settings(env_file=None)
     assert settings.console_spa_client_id is None and settings.console_api_scope is None

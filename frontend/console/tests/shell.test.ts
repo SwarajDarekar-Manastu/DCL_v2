@@ -7,6 +7,7 @@ describe('breadcrumbs', () => {
 		expect(breadcrumbs('/')).toEqual([{ label: 'Home' }]);
 		expect(breadcrumbs('/review')).toEqual([{ label: 'Review' }]);
 		expect(breadcrumbs('/review/rules')).toEqual([{ label: 'Review', href: '/review' }, { label: 'Rules' }]);
+		expect(documentTitle('/settings/users')).toBe('Users · Settings · DCL Console');
 		expect(breadcrumbs('/settings/gate')).toEqual([{ label: 'Settings', href: '/settings' }, { label: 'Gate' }]);
 		expect(breadcrumbs('/benchmark/suites/core%20suite')).toEqual([
 			{ label: 'Benchmark', href: '/benchmark' },

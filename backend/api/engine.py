@@ -37,6 +37,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 from backend.api.auth import CurrentUser
 from backend.config import ConfigError, Group, get_settings
 from backend.indexing.retrieval import Scope, SearchFilters, SearchResult, search
+from backend.llm_engine.engine.analysis import Intent
 from backend.llm_engine.engine.tools import Provenance
 
 MAX_CLOCK_SKEW_S = 300
@@ -80,6 +81,11 @@ class AnswerOptions(BaseModel):
     show_debug_trace: bool = False
     max_embeds: int = Field(default=6, ge=0, le=20)
     benchmark: BenchmarkMode | None = None
+    playbook_hint: Intent | None = Field(
+        default=None,
+        description="the intent of a playbook Skill the user $-mentioned (front matter `dcl-playbook`); "
+        "the planner adds it to the analysed intents",
+    )
 
 
 class AnswerRequest(BaseModel):
@@ -358,15 +364,15 @@ def _external_policy(session) -> Any:
     )
 
 
-def _asset_access(settings) -> tuple[Any, Any]:
-    """(presign, fetch) over MinIO for T3; (None, None) when the stack has no MinIO configured."""
-    from backend.storage.minio import client_from_settings, parse_uri, presign_get
+def _asset_access(settings) -> tuple[Any, Any, Any]:
+    """(presign, fetch, put_asset) over MinIO for T2 plots and T3; all None without MinIO configured."""
+    from backend.storage.minio import ASSETS, BucketStore, client_from_settings, parse_uri, presign_get
 
     try:
         client = client_from_settings(settings)
     except ConfigError as exc:
-        log.warning("T3 runs without image links: %s", exc)
-        return None, None
+        log.warning("T2 plots and T3 image links are off: %s", exc)
+        return None, None, None
 
     def fetch(uri: str) -> bytes:
         bucket, key = parse_uri(uri)
@@ -377,7 +383,12 @@ def _asset_access(settings) -> tuple[Any, Any]:
             response.close()
             response.release_conn()
 
-    return (lambda uri: presign_get(client, uri)), fetch
+    assets = BucketStore(client, ASSETS)
+    return (
+        (lambda uri: presign_get(client, uri)),
+        fetch,
+        (lambda key, data: assets.put(key, data, content_type="image/png")),
+    )
 
 
 def _telemetry_connect(settings) -> Any:
@@ -413,34 +424,43 @@ def _telemetry_connect(settings) -> Any:
     return connect
 
 
+def engine_deps(settings) -> Any:
+    """The workflow's process-level clients (Gemini, models, database, MinIO, DuckDB); shared with the
+    benchmark runner so a benchmark answer takes the same code path as chat."""
+    if settings.models_url is None:
+        raise ConfigError("DCL_MODELS_URL is required by the Answer Engine")
+    from backend.llm_engine.engine.workflow import EngineDeps
+    from backend.llm_engine.enrichment.entities import index_from_db
+    from backend.llm_engine.gemini_client import GeminiClient
+    from backend.llm_engine.local_models import ModelsClient
+
+    models = ModelsClient(base_url=str(settings.models_url))
+    presign, fetch_asset, put_asset = _asset_access(settings)
+    return EngineDeps(
+        gemini=GeminiClient(settings),
+        session_factory=_session_factory(),
+        embed_query=lambda q: models.embed_queries([q])[0],
+        rerank=models.rerank,
+        alias_index=index_from_db,
+        viewer_url=_viewer_url,
+        save_trace=_log_trace,
+        external_policy=_external_policy,
+        presign=presign,
+        fetch_asset=fetch_asset,
+        put_asset=put_asset,
+        telemetry_connect=_telemetry_connect(settings),
+    )
+
+
 async def start_engine() -> None:
     """Build the workflow with its process-level clients and launch DBOS (decision H8). Idempotent."""
     async with _ENGINE_LOCK:
         if "workflow" in _ENGINE:
             return
         settings = get_settings()
-        if settings.models_url is None:
-            raise ConfigError("DCL_MODELS_URL is required by the Answer Engine")
-        from backend.llm_engine.engine.workflow import AnswerWorkflow, EngineDeps, build_runtime
-        from backend.llm_engine.enrichment.entities import index_from_db
-        from backend.llm_engine.gemini_client import GeminiClient
-        from backend.llm_engine.local_models import ModelsClient
+        from backend.llm_engine.engine.workflow import AnswerWorkflow, build_runtime
 
-        models = ModelsClient(base_url=str(settings.models_url))
-        presign, fetch_asset = _asset_access(settings)
-        deps = EngineDeps(
-            gemini=GeminiClient(settings),
-            session_factory=_session_factory(),
-            embed_query=lambda q: models.embed_queries([q])[0],
-            rerank=models.rerank,
-            alias_index=index_from_db,
-            viewer_url=_viewer_url,
-            save_trace=_log_trace,
-            external_policy=_external_policy,
-            presign=presign,
-            fetch_asset=fetch_asset,
-            telemetry_connect=_telemetry_connect(settings),
-        )
+        deps = engine_deps(settings)
         database_url = settings.stack_database_url().get_secret_value().replace("+psycopg", "")
         runtime = build_runtime(database_url)
         workflow = AnswerWorkflow(deps, runtime=runtime, workflow_name="answer", timeout=ANSWER_TIMEOUT_S)
@@ -500,6 +520,7 @@ async def answer(
                 external_mode=request.options.benchmark.external_search
                 if request.options.benchmark
                 else None,
+                playbook_hint=request.options.playbook_hint,
             )
             async for payload in ordered(handler.stream_events()):
                 yield to_sse(EVENTS.validate_python(payload))

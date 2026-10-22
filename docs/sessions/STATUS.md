@@ -746,3 +746,90 @@ Merged / ready: redeploy from main 4924253: migrate to 0010 (users table present
 Blocked on: time. The RustFS step 2 lifecycle watch is due by 2026-10-24 00:00Z
 Needs from others: Lead — when to recreate cpu_parse (after S1's batch drains), and whether to rebuild the console from 4924253
 Next: lifecycle_watch.py check after 2026-10-24 00:00Z, then the merge request (f7fdefb, step 3, httpfs 80ccc4b, step 2)
+## 2026-10-23 00:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: T2 plot embed. With `plot=true`, T2 renders one PNG per run (Matplotlib Agg, a panel per channel over time from ignition, window shaded, peak marked). It writes the PNG to `dcl-assets` at `plots/{run_uuid}/{sha16}.png` through `put_asset` (the same question overwrites the same key), and the stream carries a `plot` embed frame with the presigned URL. `start_engine` wires `put_asset` from MinIO. Live: plot rendered from the stack's committed run.
+Blocked on: nothing
+Needs from others: Lead: the `plots/{run_uuid}/…png` key prefix for file 05's dcl-assets layout (answer-time only, no `assets` row). S1, through the Lead: `office_run.default_build()` should pass `extraction_safety=extraction_safety_from(session)` to VisionService. Observation for S1: on the stack's committed thermocouple run, t0 lands at the temperature peak (detection at 2 Hz); the rise starts about 11 s earlier.
+Next: Skills for Open WebUI
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready (step 2 of 3, code complete): local password sign-in.
+- POST /auth/login: argon2id, HS256 JWT. Wrong password, unknown and inactive accounts get the same 401; 5 failures per minute per email answer 429.
+- Every request re-reads the account, so deactivation and role changes apply to existing tokens at once.
+- Admin routes /auth/users: create, set roles, deactivate, reset password. The last active admin is kept.
+- The bootstrap admin is created while `users` is empty.
+- Console: local mode is the default, with a login form, the token in sessionStorage and a Users page under Settings. MSAL stays dormant.
+- Tests: backend pytest exit 0 (10 new), Console check 0 errors, vitest 124, build ok.
+Blocked on: the live end-to-end login, and with it the dev-token removal, needs S1's `users` model and migration 0010.
+Needs from others: S1: `backend.postgres.models.User` with the agreed columns, plus migration 0010. S4: a redeploy after the merge.
+Next: step 3, Settings over S1's /settings API, while waiting for 0010.
+## 2026-10-23 01:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Open WebUI Skills. `frontend/openwebui/skills/` holds 13 playbook `SKILL.md` files, one per file 07 §5 row except chit-chat. Each has front matter (`name`, `description`, `intents`, `tools`). `test_skills.py` builds the planner's plan for each skill and fails when the tools drift; I broke one skill on purpose to check it fails. `publish_skills.py` is idempotent: it creates or updates `dcl-<folder>`, active and readable by every user, with a dry run, and never prints the key. Live on a disposable Open WebUI v0.12.3 container (since removed): 13 created, a second run made 13 updates, and the public read grant reads back.
+Blocked on: a Lead ruling (question sent)
+Needs from others: Lead: should the skills be attached to `manastu_engine.main` (file 08 §1 says attached), and should a toggled skill steer the planner? Details in the message.
+Next: idle until the ruling
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- Step 3: the Settings pages edit pipeline_config over S1's /settings API. Typed editors, then Preview showing impacts (counts, bytes, extensions), then Apply with a reason and the versions the editor saw. 422 reasons show per key; a 409 reloads the current values. Each key has its history with Restore.
+- Live on the stack: an edit of gate.junk_names was applied and then restored. Both writes are audited.
+- Account changes now write audit_events (entity_type `user`; Lead ruling).
+- Tests: Console check 0 errors, vitest 137, build ok; backend pytest exit 0.
+Blocked on: local login end to end and dev-token removal wait for S1's 0010 and S4's redeploy (the Lead will say when). The cost estimate in the preview waits for S1's llm_calls price ledger.
+Needs from others: S1: migration 0010 (users, `user` audit type).
+Next: end-to-end local login and dev-token removal when told; otherwise idle.
+
+## 2026-10-23 02:15 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: playbook hint (ruling (c), my side). `AnswerOptions.playbook_hint` is an `Intent` or null. Each SKILL.md has `dcl-playbook: <intent>` in its front matter, also published as the tag `dcl-playbook:<intent>`. `playbooks.apply_hint` adds the hinted intent to the analysed ones; a chit-chat reading gives way to it.
+Blocked on: nothing
+Needs from others: S3 (M9): map `chat_context.mentioned_skill_ids` (`dcl-<folder>`) to the hint, either from the skill's `dcl-playbook:` tag or from the front matter; send only one hint (the first mentioned).
+Next: benchmark runner, metrics, judge (file 08 §5, M10)
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready (merge requested):
+- Review API (c82b518), reviewer role, over `backend/review/cases.py`:
+  - `GET /review/cases`: open cases by default, with every Console filter; sort by impact (halted files in the same folder), age or severity; open HARD/SOFT totals.
+  - `GET /review/cases/{key}`: flags with evidence, suggestions and allowed actions; locations with folder ids; siblings.
+  - `POST` assign, resolve and reject; rules list, create and deactivate.
+  - A telemetry `set_unit` writes an operator channel_map rule (the request's, else one scoped to the file) and starts `resume_for_rule` for every HALTED match.
+  - Every action writes `audit_events`. Dry run, undo and simulate still answer 501.
+- Migration 0010 `users` (f0c0ca4 and the follow-up commit): the columns S3's store uses. `roles` text[] has a CHECK that each element is viewer, reviewer or admin; `email` is lower-case (CHECK) and unique. The model is `backend.postgres.models.User` and the enum `UserRole`. `audit_events.entity_type` gains `user`. My first-admin bootstrap was removed because S3's `auth.py` already has `ensure_bootstrap_admin`.
+- S2 notes: A1 builds its VisionService per document with `extraction_safety_from(session)` (80c8b2c). Telemetry t0 on coarse data (f44bb9c): the sustain test now needs at least 2 samples, and t0 is the rise onset. On a synthetic 2 Hz rise starting at 20 s, the old code gave 26.5 s and the new code gives 20 s. kHz data is unchanged, and weak confidence still raises the CONFLICT SOFT.
+- Library language/DOI check (14545d7, `backend/sync/language_check.py`). Over the 814 landed library PDFs: 733 English, 54 undetermined, 19 with no text layer, 108 with a DOI on pages 1–2, and 8 non-English, each confirmed by reading the first-page text:
+  - ISP Tech: 2 German patents.
+  - Staged Vapour Ignition: 3 Chinese, 1 Japanese and 1 Korean patents.
+  - Valves/Electromagnetic: 1 Russian paper.
+  The TSV is in git-ignored `data/library_languages.tsv` on my worktree. Choosing the MULTILINGUAL folder is S5's call under the delegated allowlist; Staged Vapour Ignition alone covers zh/ja/ko.
+- Live (S4's redeploy): `routes.A1.enabled` set through the audited settings path. Dispatch released 27 A1 PDFs; the 6 non-PDFs stay WAITING. The 22 HALTED Route C documents were resumed and are still HALTED, now with suggestions on every unit flag. The M2 live check passes 7 of 8; the TP7 footer CONFLICT waits for A1 to finish (3 of 27 done so far, about 5 minutes per PDF on CPU; Tesseract OSD errors on one datasheet for S2 to look at).
+Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest -q`: 1,700 tests, 0 failures, 73 skipped, plus 10 new language-check tests.
+Blocked on: nothing
+Needs from others: S3: regenerate `api_schema.d.ts` (review routes live, `Suggestion.resolution` nullable); users store emails must be lower-case (S3 lowercases on create; keep it on update). S5: pick the MULTILINGUAL folder from the 8.
+Next: report the A1 counts and the M2 TP7 check when the A1 batch ends
+
+## 2026-10-22 17:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: MULTILINGUAL set chosen by file name from S1's language check: 6 library patents as E13 (zh ×3, ja, ko from Staged Vapour Ignition; de ×1 from ISP Tech); path globs sent to the Lead for S1's processing.scope
+Blocked on: E13 indexed (Lead confirms), then the 6 remaining golden cases (library and multilingual)
+Needs from others: S1: add the E13 globs to processing.scope
+Next: idle until the Lead confirms E13 is indexed
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- Local login proven live on the stack. The first login bootstrapped the admin. A reviewer created on the Users page signed in, opened the real queue and a halted case, and the live channel was on. That reviewer got 403 on admin routes and 401 right after deactivation, and the audit rows were written.
+- The dev-token sign-in is removed everywhere in S3 code, and from config.py and .env.example (Lead request). The dev server runs with VITE_AUTH_MODE=local and no token.
+- Tests: Console check 0 errors, vitest 136, build ok.
+Blocked on: nothing. The merge needs the Lead to drop docs/architecture/01 line 216 (the dev sign-in names) in the same merge; until then 2 env-contract tests fail.
+Needs from others: Lead: that manual row, and the three names out of the stack .env.
+Next: idle until messaged.
+## 2026-10-23 04:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: benchmark runner, metrics and judge (`backend/benchmark/{metrics,judge,runner,tasks}.py`, prompt `benchmark/judge.v1`, map `backend/benchmark-runner`).
+- The runner claims a queued run and snapshots the model config, pipeline version and ACTIVE document count. It answers each case through `AnswerWorkflow` in process, with external search mocked: no network, checked by a test.
+- It scores each case per file 08 §5.4, classifies failures, writes `benchmark_results`, keeps the aggregate current and publishes `run` progress and finished events.
+- A cancelled run stops between cases. A redelivered run resumes only the cases without a result.
+- Celery on io_light, one task per case (soft limit 300 s): `dcl.benchmark.start`, `dcl.benchmark.case`, and `dcl.benchmark.sweep` (starts queued runs; re-enqueues the cases of a run whose Redis heartbeat expired).
+- Also in this merge:
+  - Retrieval no longer fails a whole search on a node without a locator; it skips the node with a warning. Seen live: Route C table and table_row nodes (503 rows) carry no page, line, time or cells.
+  - T2 pressure units are now `barg`/`bara`, because pint read "bar g" as bar·gram.
+  - `engine_deps(settings)` is shared by the API and the runner.
+- Live: one benchmark answer went through the stack (Gemini, models, DB), was scored and its citations resolved to file names (76 s).
+Blocked on: nothing
+Needs from others: S4: add `backend.benchmark.tasks` to `TASK_MODULES` and a beat entry `dcl.benchmark.sweep` every 60 s on io_light. Optional: a queue with a longer soft limit if 300 s per case proves short (one live answer took 76 s). S1: Route C `table`/`table_row` nodes need a locator (`sheet_name` + `cell_range`, or `line_start` for CSV rows); until then they cannot be cited. S3 (optional): send `dcl.benchmark.start` on `POST /benchmark/runs` so a run starts without waiting up to a minute for the sweep.
+Next: idle until messaged

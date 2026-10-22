@@ -1,6 +1,6 @@
 // The one place that reads VITE_* variables and shapes the Console's backend access and auth (file 08 §7).
 
-export type AuthMode = 'msal' | 'dev';
+export type AuthMode = 'local' | 'msal';
 
 export interface ConsoleConfig {
 	apiBaseUrl: string;
@@ -12,8 +12,6 @@ export interface ConsoleConfig {
 		apiScope: string;
 		authority: string;
 		redirectUri: string;
-		/** Dev-only sign-in token, set by vite.config.ts under the dev server only */
-		devToken: string;
 	};
 }
 
@@ -29,16 +27,9 @@ function str(env: Env, name: string): string {
 export function buildConfig(env: Env, origin: string): ConsoleConfig {
 	const apiBaseUrl = (str(env, 'VITE_API_BASE_URL') || origin).replace(/\/+$/, '');
 	const wsUrl = apiBaseUrl.replace(/^http/, 'ws') + '/ws';
-	const mode = (str(env, 'VITE_AUTH_MODE') || 'msal') as AuthMode;
-	if (mode !== 'msal' && mode !== 'dev') {
-		throw new ConfigError(`VITE_AUTH_MODE must be "msal" or "dev", got "${mode}"`);
-	}
-	if (mode === 'dev' && env.DEV !== true) {
-		throw new ConfigError('VITE_AUTH_MODE=dev is only allowed under the Vite dev server');
-	}
-	const devToken = str(env, 'VITE_DEV_TOKEN');
-	if (mode === 'dev' && !devToken) {
-		throw new ConfigError('VITE_AUTH_MODE=dev needs DCL_CONSOLE_DEV_TOKEN in the repository .env (dev sign-in)');
+	const mode = (str(env, 'VITE_AUTH_MODE') || 'local') as AuthMode;
+	if (mode !== 'local' && mode !== 'msal') {
+		throw new ConfigError(`VITE_AUTH_MODE must be "local" or "msal", got "${mode}"`);
 	}
 	const tenantId = str(env, 'VITE_ENTRA_TENANT_ID');
 	const clientId = str(env, 'VITE_ENTRA_CLIENT_ID');
@@ -62,8 +53,7 @@ export function buildConfig(env: Env, origin: string): ConsoleConfig {
 			clientId,
 			apiScope,
 			authority: `https://login.microsoftonline.com/${tenantId}`,
-			redirectUri: origin + '/',
-			devToken
+			redirectUri: origin + '/'
 		}
 	};
 }
