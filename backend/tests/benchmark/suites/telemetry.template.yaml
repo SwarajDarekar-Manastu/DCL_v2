@@ -1,0 +1,188 @@
+# Golden telemetry suite: TEMPLATE without measured values (DECISIONS.md 2026-10-22, option b).
+# Owner: S5. Case schema: file 08 §5.3; import format: S3's POST /benchmark/suites/{suite}/import.
+# Values are computed by backend/tests/benchmark/verification/telemetry_metrics.py from the raw
+# runs in data/samples/ and written, with the run → file map, to the git-ignored data/benchmark/.
+#
+# Channel map of the LabJack streams (y-columns; from the stream config scaling and the team's
+# Test 01 analysis workbook, SME confirmation pending): y0 N2 supply pressure (barg), y1 pressure
+# before the mass-flow meter (barg), y2 pressure before the thruster valve (barg), y3 nozzle
+# convergent / chamber exit pressure (barg), y4 unscaled in TP7 (broken scaling), y5 mass flow
+# (g/s), y6 thrust load cell (N), y7 valve signal (0-5 V; open above 2.5 V).
+#
+# Precondition (Lead ruling 2026-10-22): Route C halts these runs until channel-map rules exist
+# (the stream header has no units). S5's proposed rules are in config/rules/proposed/ and apply
+# only once an SME or the user confirms them. TELEMETRY_MATH cases assume that state plus the
+# SME's decision on the bounds cases (dead TP7 thrust channel, negative cold-flow chamber
+# pressure); the two HALTED_DATA_BEHAVIOR cases describe the state before that decision.
+version: 1
+suite: telemetry
+precondition: "Precondition: answerable only after the SME confirms the channel-map rule for this run's folder (proposal in config/rules/proposed/) and resolves the run's open bounds cases; before that the run is HALTED."
+cases:
+  # ---- TP7 (Test Campaign 2, Test Plan 7), Test 01, hot firing; cross-checked with the team's analysis workbook
+  - case_id: tp07-t01-valve-open-duration
+    category: TELEMETRY_MATH
+    question: How long was the thruster valve open during Test 01 of Test Campaign 2, Test Plan 7?
+    metric: valve_open_duration
+    unit: s
+    tolerance_pct: 0.5
+    decimals: 2
+    method: {fn: valve_open_duration, run: tp07_test01}
+    expected_tools: [query_telemetry]
+    difficulty: 1
+  - case_id: tp07-t01-chamber-pressure-mean
+    category: TELEMETRY_MATH
+    question: What was the mean chamber pressure (nozzle convergent sensor) while the valve was open in Test 01 of Test Plan 7, Test Campaign 2?
+    metric: chamber_pressure_mean_valve_open
+    unit: barg
+    tolerance_pct: 1.0
+    decimals: 2
+    method: {fn: window_mean, run: tp07_test01, channel: y3}
+    expected_tools: [query_telemetry]
+    difficulty: 2
+  - case_id: tp07-t01-chamber-pressure-peak
+    category: TELEMETRY_MATH
+    question: What was the peak chamber pressure (nozzle convergent sensor) during the firing of Test 01, Test Plan 7, Test Campaign 2?
+    metric: chamber_pressure_max_valve_open
+    unit: barg
+    tolerance_pct: 1.0
+    decimals: 2
+    method: {fn: window_max, run: tp07_test01, channel: y3}
+    expected_tools: [query_telemetry]
+    difficulty: 2
+  - case_id: tp07-t01-mass-flow-mean
+    category: TELEMETRY_MATH
+    question: What was the mean propellant mass flow rate while the valve was open in Test 01 of Test Plan 7 (Test Campaign 2)?
+    metric: mass_flow_mean_valve_open
+    unit: g/s
+    tolerance_pct: 1.0
+    decimals: 2
+    method: {fn: window_mean, run: tp07_test01, channel: y5}
+    expected_tools: [query_telemetry]
+    difficulty: 2
+  - case_id: tp07-t01-mass-flow-peak
+    category: TELEMETRY_MATH
+    question: What was the maximum mass flow rate recorded while the valve was open in Test 01 of Test Plan 7, Test Campaign 2?
+    metric: mass_flow_max_valve_open
+    unit: g/s
+    tolerance_pct: 1.0
+    decimals: 2
+    method: {fn: window_max, run: tp07_test01, channel: y5}
+    expected_tools: [query_telemetry]
+    difficulty: 2
+  - case_id: tp07-t01-supply-pressure-mean
+    category: TELEMETRY_MATH
+    question: What was the mean nitrogen supply pressure during the firing of Test 01, Test Plan 7, Test Campaign 2?
+    metric: supply_pressure_mean_valve_open
+    unit: barg
+    tolerance_pct: 1.0
+    decimals: 2
+    method: {fn: window_mean, run: tp07_test01, channel: y0}
+    expected_tools: [query_telemetry]
+    difficulty: 2
+  - case_id: tp07-t01-valve-inlet-pressure-peak
+    category: TELEMETRY_MATH
+    question: What was the highest pressure just upstream of the thruster valve while it was open in Test 01 of Test Plan 7, Test Campaign 2?
+    metric: valve_inlet_pressure_max_valve_open
+    unit: barg
+    tolerance_pct: 1.0
+    decimals: 2
+    method: {fn: window_max, run: tp07_test01, channel: y2}
+    expected_tools: [query_telemetry]
+    difficulty: 3
+  - case_id: tp07-t01-throughput-valve-open
+    category: TELEMETRY_MATH
+    question: How much propellant flowed through the thruster while the valve was open in Test 01 of Test Plan 7, Test Campaign 2 (mass flow integrated over the valve-open window)?
+    metric: propellant_throughput_valve_open
+    unit: g
+    tolerance_pct: 1.0
+    decimals: 1
+    method: {fn: window_integral, run: tp07_test01, channel: y5}
+    expected_tools: [query_telemetry]
+    difficulty: 3
+    notes: The team workbook's "Through put" integrates the whole record (noise and tail included), not the valve-open window; this case asks for the valve-open window explicitly.
+  - case_id: tp07-t01-chamber-pressure-rise-t90
+    category: TELEMETRY_MATH
+    question: In Test 01 of Test Plan 7, Test Campaign 2, how long after the valve opened did the chamber pressure first reach 90% of its valve-open mean?
+    metric: chamber_pressure_rise_time_90
+    unit: s
+    tolerance_pct: 10.0
+    decimals: 3
+    method: {fn: rise_time, run: tp07_test01, channel: y3, fraction: 0.9}
+    expected_tools: [query_telemetry]
+    difficulty: 4
+  - case_id: tp07-t01-t4-max-firing
+    category: TELEMETRY_MATH
+    question: What was the maximum temperature at thermocouple T4 (chamber wall, 40 mm from the flange) while the valve was open in Test 01 of Test Plan 7, Test Campaign 2?
+    metric: t4_temperature_max_valve_open
+    unit: degC
+    tolerance_pct: 0.5
+    decimals: 1
+    method: {fn: temperature_max_valve_open, run: tp07_test01, logger: tp07_test01_thermocouples, sensor: T4}
+    expected_tools: [query_telemetry]
+    difficulty: 3
+  - case_id: tp07-t01-t4-preheat
+    category: TELEMETRY_MATH
+    question: What was the preheat temperature at thermocouple T4 (chamber wall, 40 mm from the flange) when the valve opened in Test 01 of Test Plan 7, Test Campaign 2?
+    metric: t4_temperature_at_valve_open
+    unit: degC
+    tolerance_pct: 0.5
+    decimals: 1
+    method: {fn: temperature_at_valve_open, run: tp07_test01, logger: tp07_test01_thermocouples, sensor: T4}
+    expected_tools: [query_telemetry]
+    difficulty: 3
+  - case_id: tp07-t01-t3-soak-20s
+    category: TELEMETRY_MATH
+    question: What was the soak temperature at thermocouple T3 (chamber wall, 10 mm from the flange) 20 seconds after the valve closed in Test 01 of Test Plan 7, Test Campaign 2?
+    metric: t3_temperature_20s_after_close
+    unit: degC
+    tolerance_pct: 0.5
+    decimals: 1
+    method: {fn: temperature_after_close, run: tp07_test01, logger: tp07_test01_thermocouples, sensor: T3, seconds: 20}
+    expected_tools: [query_telemetry]
+    difficulty: 4
+  # ---- Injector 10 cold-flow test (29-12-2025); own Python only (the team workbook covers other runs)
+  - case_id: inj10-t01-mass-flow-mean
+    category: TELEMETRY_MATH
+    question: What was the mean mass flow rate while the valve was open in the first 8 bar run of the Injector 10 cold-flow test of 29 December 2025?
+    metric: mass_flow_mean_valve_open
+    unit: g/s
+    tolerance_pct: 1.0
+    decimals: 2
+    method: {fn: window_mean, run: inj10_test01, channel: y5}
+    expected_tools: [query_telemetry]
+    difficulty: 2
+  - case_id: inj10-t02-valve-open-duration
+    category: TELEMETRY_MATH
+    question: How long was the valve open in the second 8 bar run of the Injector 10 cold-flow test of 29 December 2025?
+    metric: valve_open_duration
+    unit: s
+    tolerance_pct: 0.5
+    decimals: 2
+    method: {fn: valve_open_duration, run: inj10_test02}
+    expected_tools: [query_telemetry]
+    difficulty: 1
+  # ---- Injector 14 flow test without mesh (13-01-2026), failed run
+  - case_id: inj14-t03-fail-mfm-pressure-mean
+    category: TELEMETRY_MATH
+    question: In the failed 4 bar run (Test 03) of the Injector 14 flow test without mesh, what was the mean pressure before the mass-flow meter while the valve was open?
+    metric: mfm_inlet_pressure_mean_valve_open
+    unit: barg
+    tolerance_pct: 1.0
+    decimals: 2
+    method: {fn: window_mean, run: inj14_test03_fail, channel: y1}
+    expected_tools: [query_telemetry]
+    difficulty: 3
+    notes: The run is stored as .dat_Fail; supply pressure was about 4.2 barg but the pressure before the meter stayed near 1.9 barg, which is what makes the run a failure.
+  # ---- halt behaviour (Lead ruling: the expected outcome is a halt with the right flag, not a number)
+  - case_id: tp07-t01-thrust-halted
+    category: HALTED_DATA_BEHAVIOR
+    question: What thrust did the thruster produce during Test 01 of Test Plan 7, Test Campaign 2?
+    expected_behavior: [must_mention_halted_case]
+    difficulty: 3
+    notes: The thrust load-cell channel (y6) reads a constant offset near -28 N with no response to the firing; Route C raises UNIT_AMBIGUITY HARD (bounds 0-200 N, file 03 §C.1 step 4) and halts the run. The engine must name the open review case and give no thrust value.
+  - case_id: inj14-t01-chamber-pressure-halted
+    category: HALTED_DATA_BEHAVIOR
+    question: What was the chamber pressure during the first 2 bar run of the Injector 14 flow test without mesh?
+    expected_behavior: [must_mention_halted_case]
+    difficulty: 3
+    notes: Both chamber pressure channels (y3, y4) read about -30 bar, outside the chamber bound 0-150 bar; Route C raises UNIT_AMBIGUITY HARD and halts the run. The engine must name the open review case and give no chamber pressure.

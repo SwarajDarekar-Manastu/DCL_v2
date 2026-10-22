@@ -1,5 +1,5 @@
 {
-  "probed_at": "2026-10-21T19:39:18+00:00",
+  "probed_at": "2026-10-21T21:10:51+00:00",
   "model": "gemini-3.8-flash",
   "api_style": {
     "configured": "manastu",
@@ -30,11 +30,11 @@
   "baseline": {
     "plain_chat": {
       "status": "supported",
-      "evidence": "reply 'OK'; tokens in/out 7/75"
+      "evidence": "reply 'OK'; tokens in/out 7/60"
     },
     "lite_model": {
       "status": "supported",
-      "evidence": "reply 'OK'; tokens in/out 7/37"
+      "evidence": "reply 'OK'; tokens in/out 7/1"
     },
     "request_id": {
       "status": "supported",
@@ -56,7 +56,7 @@
     },
     "thinking_level": {
       "status": "supported",
-      "evidence": "thinking tokens low=168 high=468"
+      "evidence": "thinking tokens low=168 high=373"
     },
     "include_thoughts": {
       "status": "supported",
@@ -81,6 +81,10 @@
     "stream_usage": {
       "status": "inconclusive",
       "evidence": "total only (162); split estimated"
+    },
+    "google_search": {
+      "status": "supported",
+      "evidence": "1 queries, 2 web sources"
     },
     "context_cache": {
       "status": "inconclusive",

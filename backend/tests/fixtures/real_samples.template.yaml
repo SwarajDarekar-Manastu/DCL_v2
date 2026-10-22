@@ -1,0 +1,29 @@
+# Real corpus samples: committed TEMPLATE without file names (the repository is public).
+# Rule (user, 2026-10-22): one file per supported type, chosen from registry metadata by
+# extension and file name only, plus the telemetry runs the benchmark cases need.
+# X1 (.pptx) and X2 (.zip) lie outside the allowlist; S1 picked them from registry metadata only.
+# The full manifest with paths lives in the git-ignored data/samples/real_samples.yaml.
+# Copies live in data/samples/<entry>/ (export procedure in README.md); test_real_samples.py
+# finds each sample in its entry directory by sha256 and checks the size.
+version: 1
+samples:
+  - {entry: E3, sha256: "893562b2af7f31e14ad3bd4c98c7d8892649be2ebbec3007a79d8c4600bc7473", size_bytes: 55031, route: A1, purpose: "one PDF (A1)"}
+  - {entry: E5, sha256: "81c4d961117e4651028fdc47375b4e2f07160e6a53a7e58a342708ffe9c0a1cc", size_bytes: 53328, route: A1, purpose: "one DOCX (A1.9)"}
+  - {entry: E5, sha256: "423ea5d28ae997f7ea47707b1e1644f303ce7b22f20003f1f577e4749215695f", size_bytes: 22032, route: C, purpose: "one XLSX, risk matrix (C.4)"}
+  - {entry: E3, sha256: "b09d526761c9f025ea6f42c851178bceca87aff740caa2b7c7a59143af0f88b6", size_bytes: 9373, route: A2, purpose: "one LaTeX master (A2)"}
+  - {entry: E3, sha256: "e8651522c90418882a2fa7496b16c797a0d4e0a3cdef2876d912d30188acafd5", size_bytes: 269, route: A2, purpose: "one report-section JSON (A2.1)"}
+  - {entry: E1, sha256: "3055077a130553b16102632dd9b1bd8b7fe5c1a68dc4654ec1d7e65de8d8e8dc", size_bytes: 16259, route: B, purpose: "one Python script (B)"}
+  - {entry: E3, sha256: "59eee31e056c127c8e93342ad217ec71beb6f58e79db1f68581325c90d6dfd8d", size_bytes: 659, route: C, purpose: "one LabJack stream config (C.0)"}
+  - {entry: E3, sha256: "600dbb76afed71c6ffed1b2e84eeaf0b9941107645c5422165143995cb6bbfe1", size_bytes: 15307, route: C, purpose: "one LabVIEW TDMS (C.2)"}
+  - {entry: E7, sha256: "9a338cbe4c211712b55d5312ce894d61ef2ecabd73751b912adbce24bb35d748", size_bytes: 989478, route: D, purpose: "one HEIC photo (D)"}
+  - {entry: E4, sha256: "8759ae040c8f2eab85569ab72d83d527cf55be97b6b3a46e37697a8f69fecbed", size_bytes: 50141, route: D, purpose: "one PNG (D, photo-vs-plot classifier)"}
+  - {entry: E3, sha256: "f94c0d53c148cd48121601ca7c539aadd402347a03b8ba9102186d0a163fd063", size_bytes: 3731659, route: F, purpose: "one MP4 (F)"}
+  - {entry: E6, sha256: "e39e439b55bacf71936cd1cc07abaf2e9ca346f23e83662cf05cb78d6a6f4a48", size_bytes: 32699, route: E, purpose: "one draw.io diagram, Rev C (E)"}
+  - {entry: E3, sha256: "4344da58280d5969eacfdc240e4e317ef910195021725f43f0cdc317f0c6510b", size_bytes: 9879921, route: C, purpose: "TP7 Test 01 run for the telemetry cases; also the .dat type"}
+  - {entry: E3, sha256: "11a8be6e3362dcb172ff7eb44ca02fc29d93faa8a77983807b0ec5d71552e2c9", size_bytes: 12833, route: C, purpose: "TP7 Test 01 thermocouples for the telemetry cases; also the .csv type"}
+  - {entry: E1, sha256: "667d0f42918c3b3a6cd805f7ab4c912592efb8d7396a15bf45d645cc9af61f4d", size_bytes: 7108638, route: C, purpose: "Injector 10 cold-flow run for the telemetry cases"}
+  - {entry: E1, sha256: "4e55b35fc4847def338c3d6e712678e0402278e5d140794506418c48a52c5970", size_bytes: 32332216, route: C, purpose: "Injector 10 cold-flow run for the telemetry cases"}
+  - {entry: E2, sha256: "eed824bbc36cad221b0934354b11533508832b7b288c059d3a0f358600bb043e", size_bytes: 7008663, route: C, purpose: "Injector 14 run for the negative chamber pressure behaviour case"}
+  - {entry: E2, sha256: "f5c26d2e4447c8152d8e75453500410df7bd38c96ee1a61da50dae15fdb411ea", size_bytes: 7382050, route: C, purpose: "Injector 14 failed run for the telemetry cases; also the .dat_fail type"}
+  - {entry: X1, sha256: "47fc39e9756bf6ae1dbea9999385f510d8bf5a8173c816192ae352069b0c80fe", size_bytes: 3863237, route: A1, purpose: "one PPTX (A1.10)"}
+  - {entry: X2, sha256: "f63918c9815eef4b58bef12faa0298a45610b21d5a9a10ef01c7ed67abd20807", size_bytes: 428790, route: G, purpose: "one ZIP archive (G)"}

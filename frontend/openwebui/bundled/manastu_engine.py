@@ -301,6 +301,7 @@ PROVENANCE_LABEL = {
     "vendor_claim": "vendor claim",
     "literature": "literature",
     "web": "web",
+    "calculation": "calculation",  # physics calculator results (RocketCEA, nozzle sizing), file 07 §5
 }
 # Open WebUI sizes an embed iframe from this message (file 08 §1, Rich UI embedding).
 HEIGHT_SCRIPT = (

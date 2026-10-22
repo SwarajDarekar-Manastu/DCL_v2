@@ -112,7 +112,7 @@ Every row states what the component does here, why it was chosen, and the verifi
 |------|-------|----------|-------|
 | Reasoning, synthesis, tool use | `gemini-3.8-flash` | thinking `high` for synthesis, `low` for extraction; structured output on; function calling on | 1,048,576 in / 65,536 out |
 | Enrichment (entities, summaries, numeric bounds) | `gemini-3.8-flash` | thinking `low`, JSON schema response, **Batch API** for backfills (50% cost) | — |
-| Cheap triage (page type, chunk classification, listwise rerank fallback) | `gemini-3.5-flash-lite` | thinking minimal/low | Fastest, cheapest current model |
+| Cheap triage (page type, chunk classification, listwise rerank fallback) | `gemini-3.1-flash-lite` | thinking minimal/low | Fastest, cheapest current model |
 | Vision (handwriting, plots, photos, schematics, table fallback) | `gemini-3.8-flash` | `media_resolution` high for handwriting crops, medium for photos | Request bboxes when grounding is needed |
 | Embeddings | **EmbeddingGemma 2** (`google/embeddinggemma-2`), local service, **768 dims** | document side: `title: {title} \| text: {content}`; query side: `task: search result \| query: {q}`; images as raw input | Open weights (Apache 2.0); 270M text core + 170M vision encoder; 8,192-token input; 100+ languages; bfloat16 or float32 only; Matryoshka 512/256 available; **spaces of different models are incompatible — re-embed on model change** |
 | Reranking | `bge-reranker-v2-m3` (local, CPU or small GPU) | top-50 → top-8 | Fallback: Flash-Lite listwise rerank |

@@ -9,8 +9,11 @@ Two kinds of fixtures:
 - **synthetic**: produced by `make_synthetic.py` (fictitious content only). Regenerate with
   `uv run python backend/tests/fixtures/make_synthetic.py`; the integrity test checks that
   regeneration reproduces every fixture marked `byte_stable: true`.
-- **real**: small copies of corpus files chosen from the allowlisted folders and approved by
-  the user. Nothing proprietary or export-controlled is ever copied here.
+- **real**: corpus files from the allowlisted folders. The repository is public, so real files
+  are **never committed** (DECISIONS.md 2026-10-22). They live in the git-ignored `data/samples/`.
+  The committed `real_samples.template.yaml` lists them without file names (entry, registry
+  sha256, size, route, purpose); the full manifest with paths is the git-ignored
+  `data/samples/real_samples.yaml`.
 
 Some fixtures are deliberately hostile (`c_telemetry/malicious_pickle`, `g_archives/*`). Never
 `pickle.load` a fixture and never extract an archive fixture outside a guarded test.
@@ -37,3 +40,36 @@ Some fixtures are deliberately hostile (`c_telemetry/malicious_pickle`, `g_archi
 
 These expectations are at document level. CIR snapshot comparisons are added once S1
 publishes the CIR snapshot format.
+
+## Local real samples (never committed)
+
+`real_samples.template.yaml` lists 20 files (about 73 MB). Rule (user, 2026-10-22): one file per
+supported type, chosen from registry metadata by extension and file name only (no content
+opened to choose), plus the E1–E3 telemetry runs the benchmark cases need. No allowlist folder
+holds a `.pptx` or a `.zip`, so S1 picked one of each from the registry (entries X1, X2). Copy the files
+from MinIO with S1's
+read-only export, one directory per entry. `export_blobs` reads its settings from `os.environ`,
+so the stack's `.env` must be loaded first; only an operator has it. From the main checkout:
+
+```bash
+alias export_blobs='uv run python -c "import runpy, sys; from dotenv import load_dotenv; load_dotenv(\".env\"); sys.argv[0] = \"export_blobs\"; runpy.run_module(\"backend.sync.export_blobs\", run_name=\"__main__\")"'
+export_blobs --folder-id 01RDWVU44XRPVPLV7YQRAL5CUFXNI7FPRO data/samples/E1
+export_blobs --folder-id 01RDWVU42EH7Y5QREJ4JG2L4QNOWGWUFOJ data/samples/E2
+export_blobs --folder-id 01RDWVU46OPFLY26YAGREI7G3A6ZIH5CTW data/samples/E3
+export_blobs --folder-id 01RDWVU42SMG6ALQAFJJG3LSYXU56T7OWJ data/samples/E4
+export_blobs --folder-id 01RDWVU4ZM5TFKN7MZAJELC4TBIG5UGDC7 data/samples/E5
+export_blobs --folder-id 01RDWVU43XKEVJHLVPJZCLWXDUB6B74OPS data/samples/E6
+export_blobs --folder-id 01RDWVU4YQX7G7T47P6BALUPKS3BEEP5PC data/samples/E7
+export_blobs --folder-id 01RDWVU4YJYEG5RPIXQBC37YQWKRBROYCW data/samples/X2
+```
+
+X1 is a single `.pptx` whose folder subtree is 2.1 GB, so copy just its blob: object
+`dcl-raw/47/fc/47fc39e9756bf6ae1dbea9999385f510d8bf5a8173c816192ae352069b0c80fe` to
+`data/samples/X1/<file name from the local manifest>` (for example with `mc cp` or
+`backend.storage.minio`; operator credentials).
+
+The output paths are relative to the main checkout; prefix them with another worktree's path to
+export there. The export copies whole subtrees (more files than the template; E3 includes a
+613 MB run that no test uses). `uv run pytest backend/tests/fixtures/test_real_samples.py` then
+finds every template file by sha256 in its entry directory and checks the size; entries not
+exported are skipped. `data/` is git-ignored at the repository root; never move a real sample elsewhere.

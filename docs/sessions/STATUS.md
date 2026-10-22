@@ -466,6 +466,47 @@ Merged / ready: office conversion for S1 and S2: `backend/common/office.py` `con
 Blocked on: backups questions with DCL Lead
 Needs from others: Lead — approve `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`; merge 31eb0be + this
 Next: backups once answered; MinIO replacement comparison by end of M4
+## 2026-10-22 09:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: engine tools T1 search_documents, U1 get_document, U2 catalog_lookup, T4 code and diagrams, T5 physics_calculator (`backend/llm_engine/engine/tools/`), 17 tests; one `Provenance` enum (adds `calculation`); retrieval test on migration 0004. (Route wiring now goes through S1's adapter registry in `backend/dispatcher/adapters.py`, not IMPLEMENTED_ROUTES.)
+Blocked on: nothing
+Needs from others: S1: telemetry_runs/channels and Parquet for T2; the diagram catalog shape in `.wiki/backend/answer-engine.md` for Route E; S4: whether the gateway proxies Google Search grounding for T6
+Next: T2/T3/T6, then query analysis, synthesis, entailment verifier, workflow + DBOS, /v1/answer streaming
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: Google Search grounding capability (e911384; probe re-run with the real `.env`, 9 capabilities enabled); office client (96cec91); dead letters + M1 load test (31eb0be); observability + parse image (a19ad4f) — all on this branch, merge requested
+Blocked on: backups questions with DCL Lead
+Needs from others: Lead approval of `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`
+Next: MinIO replacement evaluation, hands-on (bucket versioning, prefix lifecycle, presigned GET, DuckDB httpfs, via the same minio-py client) against pinned candidates rustfs/rustfs:1.0.3, chrislusf/seaweedfs:4.48, dxflrs/garage:v2.4.1, MinIO as baseline; written comparison to the Lead by end of M4
+
+## 2026-10-22 05:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: real samples local only (decision 2026-10-22): `backend/tests/fixtures/real_samples.yaml` (93 files of E1–E11, registry sha256), export procedure in the fixtures README (git-ignored `data/samples/<entry>/`), `test_real_samples.py` (manifest checks; local copies when present). Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend`
+Blocked on: an operator export into S5's worktree `data/samples/` (S5 has no stack credentials)
+Needs from others: DCL Lead — run the README export commands with the output under /home/ai/Desktop/Swaraj_/dcl_v2/.claude/worktrees/strange-bhaskara-1dd439/data/samples/
+Next: verify the copies, then the first 15 telemetry cases with own Python (Flash-Lite id for any model-naming case: gemini-3.1-flash-lite)
+
+## 2026-10-22 06:10 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: real-sample manifest moved to git-ignored `data/samples/real_samples.yaml`; committed `real_samples.template.yaml` (91 distinct files, no names) checked by sha256; README export wrapper loads `.env`; E1–E3 copies verified against the registry. Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend`
+Blocked on: nothing
+Needs from others: nothing now (E4–E11 export later, on request)
+Next: the first 15 telemetry cases from E1–E3 with own Python verification
+
+## 2026-10-22 07:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: real samples trimmed per the user rule (one file per supported type, chosen by extension and name only, plus the telemetry runs of the benchmark cases): 18 files, ~69 MB; README export list cut to E1–E7. Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: S1 — one `.pptx` and one `.zip` from the registry (not in the allowlist folders)
+Needs from others: Lead — export E4–E7 into S5's `data/samples/` when convenient
+Next: telemetry suite (option b: values in git-ignored data/benchmark/) and the two halt behaviour cases
+
+## 2026-10-22 08:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: first 15 TELEMETRY_MATH golden cases + 2 HALTED_DATA_BEHAVIOR cases (TP7 Test 01, Injector 10, Injector 14): committed template without values, `telemetry_metrics.py` verification + `build`, recompute test; values in git-ignored `data/benchmark/` (option b); all 17 validate against S3's `CaseCreate`; TP7 values match the team workbook. Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: Lead — index-state precondition for the numeric cases (runs halt until SME channel-map rules) and whether S5 drafts those rules; hold-out subset to record
+Needs from others: Lead — tell S4 the suite exists (`data/benchmark/telemetry.json`); export X1/X2 samples
+Next: remaining golden categories and the 40-query retrieval set (need indexed documents and S2's engine mode)
+
+## 2026-10-22 14:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Answer Engine workflow increment. Planner `backend/llm_engine/engine/playbooks.py`, `AnswerWorkflow` in `backend/llm_engine/engine/workflow.py` (analysis → plan → tools in parallel → insufficient-evidence check → synthesis + verification; chit-chat, clarification, extractive fallback; trace record), `POST /v1/answer` streams it (`backend/api/engine.py`, 503 when unconfigured or not installed). Prompts `physics_args.v1`, `chitchat.v1`. Runs under DBOSRuntime (tables in schema `dbos` of the DCL database, self-migrated). Under DBOS stream writes arrive out of order, so frames carry `seq` and `ordered()` restores them. 15 new unit tests + 1 DBOS DB test. Flash-Lite = gemini-3.1-flash-lite (a125d60, probed: MINIMAL works).
+Blocked on: nothing
+Needs from others: S4: dependency group with `llama-index-workflows==2.25.0`, `llama-agents-dbos==0.7.0`, `dbos==2.31.1`, verified together (dbos 3.0–3.3 break llama-agents-dbos 0.7.0: "Queue objects cannot be constructed directly"; workflow tests skip until installed); GEMINI_MODEL / GEMINI_LITE_MODEL settings. Lead: call `start_engine()` / `stop_engine()` from the API lifespan in `backend/main.py` (role api|all). S1: `answer_traces` table (M8) for the trace record (columns in `.wiki/backend/answer-engine.md`); until then traces are logged.
+Next: engine restart-resume test, T2 query_telemetry when S1's telemetry tables land, T6 external_search (grounding, sanitized query only), T3; Skills markdown
 
 ## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready: Route C step 1 is on main (1d7eae6). routes.C stays off on the stack until S4 confirms the worker image rebuild.
@@ -479,3 +520,14 @@ Merged / ready: nothing new
 Blocked on: nothing. The question in the entry above is withdrawn on the user's instruction: the plan and decisions stand. Channels with no stated unit stay UNIT_AMBIGUITY HARD until an operator rule resolves them (file 06). The folder's .cfg scaling is attached as evidence (file 03 §C.0/C.1). Nothing is derived from Setup.xlsx or Data format.xlsx, because not every folder has them.
 Needs from others: nothing
 Next: Route C step 2: the telemetry_runs/telemetry_channels migration (approved), .cfg scaling evidence, normalized Parquet, t0, metrics, the commit path
+## 2026-10-22 09:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: proposed channel-map rules for E1–E3 in `config/rules/proposed/` (names, quantities, units, sensor ranges; status proposed, never applied until confirmed); `test_config_rules.py` (S1 loader, units, sanity-range selection); precondition in every numeric golden case's notes. Test: `uv run pytest backend/tests/unit/config_data backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: nothing
+Needs from others: S1 — keep the future config/rules loader to the top level (never `proposed/`) or add an explicit status field; SME — confirm the proposals in the Review UI
+Next: remaining golden categories and the retrieval set once allowlisted documents are indexed (S2 engine mode)
+
+## 2026-10-22 09:40 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: `open_threshold: 2.5` on the valve channel of the three proposed channel maps (S1 field, ab00628); verification README states the full valve-open window (`valve_signal = 1`). Merge AFTER S1's ab00628: on current main the rules test fails because the field is unknown there; on S1's code all 7 rule tests pass
+Blocked on: S1's ab00628 reaching main
+Needs from others: Lead — merge order S1 ab00628, then this branch
+Next: idle until indexed documents and S2's engine mode exist

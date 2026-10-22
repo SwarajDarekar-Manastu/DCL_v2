@@ -18,24 +18,33 @@ trusts an unsigned identity. Signature = hex HMAC-SHA256 over
 `"{timestamp}\\n{user_id}\\n{email}\\n{groups}\\n{sha256_hex(body)}"`, groups comma-separated as sent.
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import time
 import uuid
 from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated, Any, Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field, TypeAdapter
 
 from backend.api.auth import CurrentUser
-from backend.config import Group, get_settings
+from backend.config import ConfigError, Group, get_settings
 from backend.indexing.retrieval import Scope, SearchFilters, SearchResult, search
+from backend.llm_engine.engine.tools import Provenance
 
 MAX_CLOCK_SKEW_S = 300
 SSE_MEDIA_TYPE = "text/event-stream"
+ANSWER_TIMEOUT_S = 300
+HISTORY_TURNS = 6
+HISTORY_CHARS = 4000
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["engine"])
 
@@ -108,17 +117,6 @@ class StepName(StrEnum):
     SYNTHESIS = "synthesis"
     VERIFICATION = "verification"
     RENDER = "render"
-
-
-class Provenance(StrEnum):
-    """Label every cited claim carries (file 07 §7)."""
-
-    MEASURED = "measured"
-    INTERNAL_REPORT = "internal_report"
-    STANDARD = "standard"
-    VENDOR_CLAIM = "vendor_claim"
-    LITERATURE = "literature"
-    WEB = "web"
 
 
 class AnswerMode(StrEnum):
@@ -223,6 +221,9 @@ AnswerEvent = Annotated[
 ]
 
 
+EVENTS = TypeAdapter(AnswerEvent)
+
+
 def to_sse(event: BaseModel) -> str:
     """One SSE frame: `event: <type>` and one JSON `data:` line (JSON never contains a raw newline)."""
     payload = event.model_dump(mode="json", exclude={"type"})
@@ -309,14 +310,139 @@ Identity = Annotated[PipeIdentity, Depends(pipe_identity)]
 # ---------------------------------------------------------------- routes
 
 
+def split_conversation(messages: list[ChatMessage]) -> tuple[str, str]:
+    """The last user message is the question; the turns before it (bounded) are the history."""
+    last = (
+        max(i for i, m in enumerate(messages) if m.role == "user")
+        if any(m.role == "user" for m in messages)
+        else len(messages) - 1
+    )
+    earlier = [m for m in messages[:last] if m.role != "system"][-HISTORY_TURNS:]
+    history = "\n".join(f"{m.role}: {m.content}" for m in earlier)[-HISTORY_CHARS:]
+    return messages[last].content, history
+
+
+# ---------------------------------------------------------------- the engine (one per API process)
+
+_ENGINE: dict[str, Any] = {}
+_ENGINE_LOCK = asyncio.Lock()
+
+
+def _viewer_url(doc_id: uuid.UUID, anchor: str | None) -> str | None:
+    base = get_settings().console_base_url
+    if base is None:
+        return None
+    return f"{str(base).rstrip('/')}/docs/{doc_id}/viewer" + (f"?anchor={quote(anchor)}" if anchor else "")
+
+
+def _log_trace(trace: dict) -> None:
+    """Until S1's `answer_traces` table exists (M8) the trace goes to the log, without the answer text."""
+    log.info(
+        "answer trace %s mode=%s tools=%s latency_ms=%s",
+        trace["trace_id"],
+        trace["mode"],
+        [c["tool"] for c in trace["tool_calls"]],
+        trace["latency_ms"],
+    )
+
+
+async def start_engine() -> None:
+    """Build the workflow with its process-level clients and launch DBOS (decision H8). Idempotent."""
+    async with _ENGINE_LOCK:
+        if "workflow" in _ENGINE:
+            return
+        settings = get_settings()
+        if settings.models_url is None:
+            raise ConfigError("DCL_MODELS_URL is required by the Answer Engine")
+        from backend.llm_engine.engine.workflow import AnswerWorkflow, EngineDeps, build_runtime
+        from backend.llm_engine.enrichment.entities import index_from_db
+        from backend.llm_engine.gemini_client import GeminiClient
+        from backend.llm_engine.local_models import ModelsClient
+
+        models = ModelsClient(base_url=str(settings.models_url))
+        deps = EngineDeps(
+            gemini=GeminiClient(settings),
+            session_factory=_session_factory(),
+            embed_query=lambda q: models.embed_queries([q])[0],
+            rerank=models.rerank,
+            alias_index=index_from_db,
+            viewer_url=_viewer_url,
+            save_trace=_log_trace,
+        )
+        database_url = settings.stack_database_url().get_secret_value().replace("+psycopg", "")
+        runtime = build_runtime(database_url)
+        workflow = AnswerWorkflow(deps, runtime=runtime, workflow_name="answer", timeout=ANSWER_TIMEOUT_S)
+        await runtime.launch()
+        _ENGINE.update(workflow=workflow, runtime=runtime, gemini=deps.gemini)
+
+
+async def stop_engine() -> None:
+    async with _ENGINE_LOCK:
+        runtime = _ENGINE.pop("runtime", None)
+        gemini = _ENGINE.pop("gemini", None)
+        _ENGINE.pop("workflow", None)
+        if runtime is not None:
+            await runtime.destroy()
+        if gemini is not None:
+            await gemini.aclose()
+
+
+async def answer_engine(identity: Identity) -> Any:
+    """FastAPI dependency: the running workflow, started on first use if the lifespan did not start it.
+
+    It depends on the identity so an unsigned request is refused before the engine is touched.
+    """
+    try:
+        await start_engine()
+    except ConfigError as exc:
+        raise HTTPException(status_code=503, detail=f"the Answer Engine is not configured: {exc}") from exc
+    except ImportError as exc:  # an API image built without the engine's dependency group
+        raise HTTPException(status_code=503, detail=f"the Answer Engine is not installed: {exc}") from exc
+    return _ENGINE["workflow"]
+
+
 @router.post(
     "/answer",
     responses={200: {"content": {SSE_MEDIA_TYPE: {}}, "description": "stream of AnswerEvent frames"}},
 )
-async def answer(request: AnswerRequest, identity: Identity):
-    raise HTTPException(
-        status_code=501, detail="the answer workflow is not built yet (file 07, milestone M8)"
-    )
+async def answer(
+    request: AnswerRequest, identity: Identity, engine: Annotated[Any, Depends(answer_engine)]
+) -> StreamingResponse:
+    """Run the Answer Engine workflow and stream its frames; a failure ends the stream with `error`."""
+    from backend.llm_engine.engine.workflow import ordered
+    from backend.llm_engine.gemini_types import GeminiError
+
+    trace_id = uuid.uuid4()
+    question, history = split_conversation(request.messages)
+
+    async def frames():
+        try:
+            handler = engine.run(
+                question=question,
+                trace_id=str(trace_id),
+                history=history,
+                groups=identity.groups,
+                user_id=identity.user_id,
+                chat_id=request.chat_id,
+                message_id=request.message_id,
+            )
+            async for payload in ordered(handler.stream_events()):
+                yield to_sse(EVENTS.validate_python(payload))
+            await handler
+        except GeminiError as exc:
+            log.warning("answer %s: Gemini unavailable: %s", trace_id, exc)
+            yield to_sse(
+                ErrorEvent(
+                    trace_id=trace_id, code="gemini_unavailable", message=str(exc)[:300], retryable=True
+                )
+            )
+        except Exception:
+            log.exception("answer %s failed", trace_id)
+            yield to_sse(
+                ErrorEvent(trace_id=trace_id, code="internal", message="the answer failed", retryable=False)
+            )
+
+    return StreamingResponse(frames(), media_type=SSE_MEDIA_TYPE)
 
 
 @router.post("/answer/{trace_id}/confirm", status_code=202)

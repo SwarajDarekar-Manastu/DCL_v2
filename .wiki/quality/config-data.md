@@ -22,7 +22,8 @@ Code:
 - `config/propellants.yaml`
 - `config/report_json_schemas.yaml`
 - `config/gate.yaml`
-- `config/rules/` (planned: waits for the S1 rules YAML schema)
+- `config/rules/proposed/` (S5 channel-map proposals for E1–E3; not applied until an SME or the user confirms; README)
+- `config/rules/*.yaml` (confirmed operator rules; none yet)
 
 Tests and fixtures:
 - `backend/tests/unit/config_data/` (conftest.py with fixtures; one `test_config_<file>.py` per file)
@@ -62,6 +63,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/tests/unit/config_data/test_config_propellants.py`
 - `backend/tests/unit/config_data/test_config_report_schemas.py`
 - `backend/tests/unit/config_data/test_config_gate.py`
+- `backend/tests/unit/config_data/test_config_rules.py`
 - `pyproject.toml` (dev dependencies only: pint, pyyaml, jsonschema, rocketcea)
 
 ## Rubric (what "done" means for this feature)
@@ -74,7 +76,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [ ] Gate rejection counts checked against the real crawl (segments build/env/backup, endings .log/.bin/.tab/.out)
 - [x] `.out` kept for `.wbpz` members via `kept_endings_by_parent_kind` (02 §4, 03 §11); 5 archive-member cases
 - [ ] SME has reviewed every entry (`sme_confirmed: true`)
-- [ ] `config/rules/` exported operator rules load against the S1 rules schema
+- [x] `config/rules/proposed/` loads with S1's `load_yaml`; names select the intended sanity ranges
+- [ ] SME confirmation of the proposed channel maps (then moved to `config/rules/`)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 Verification: `uv run pytest backend/tests/unit/config_data && uv run ruff check backend`
@@ -84,6 +87,7 @@ Verification: `uv run pytest backend/tests/unit/config_data && uv run ruff check
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S5 | proposed channel-map rules for E1–E3 in `config/rules/proposed/` (Lead ruling: never applied until confirmed); `test_config_rules.py` |
 | 2026-10-22 | S5 | `sanity_ranges.yaml`: one `<quantity>_general` range per quantity (force 0–5,000 N, temperature 0–3,500 K, mass flow 0–5 kg/s, power 0–50 kW, pressure 0–700 bar renamed `pressure_general`), the only ranges that check external facts; Route C bounds unchanged |
 | 2026-10-22 | S5 | `sanity_ranges.yaml`: feed/valve/tank 0–400 bar and general 0–700 bar pressure ranges; `checks_external_kept` (only the general range checks external facts); Route C values unchanged (Lead ruling, S2 finding) |
 | 2026-10-22 | S5 | `sanity_ranges.yaml` v2 keyed by S1's channel_map quantity + canonical-name glob, first match wins; selection cases on S1-style names |

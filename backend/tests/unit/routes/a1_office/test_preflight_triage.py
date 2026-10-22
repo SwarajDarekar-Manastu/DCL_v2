@@ -125,7 +125,7 @@ class Vision:
 
     def triage_page(self, thumbnail, *, context, doc_id=None, anchor=None):
         self.calls.append((context, anchor))
-        return VisionOutput(self.readings.pop(0), "gemini-3.5-flash-lite", "triage_page.v1", "h", False)
+        return VisionOutput(self.readings.pop(0), "gemini-3.1-flash-lite", "triage_page.v1", "h", False)
 
 
 def test_japanese_scan_goes_to_rapidocr_and_a_latin_scan_to_tesseract():

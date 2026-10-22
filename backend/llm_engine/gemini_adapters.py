@@ -24,6 +24,8 @@ from backend.llm_engine.gemini_types import (
     CapabilityUnavailable,
     GeminiError,
     GenerateRequest,
+    Grounding,
+    GroundingSource,
     Image,
     Message,
     SchemaArg,
@@ -54,6 +56,7 @@ class Parsed:
     thoughts: str | None = None
     structured: Any = None
     quota: dict[str, Any] | None = None
+    grounding: Grounding | None = None
 
 
 @dataclass
@@ -166,6 +169,8 @@ class OpenAICompatAdapter:
         return content
 
     def build(self, req: GenerateRequest, caps: Capabilities, stream: bool) -> dict[str, Any]:
+        if req.google_search:
+            raise CapabilityUnavailable(Capability.GOOGLE_SEARCH)
         messages = list(req.messages)
         body: dict[str, Any] = {"model": req.model}
         if req.schema is not None:
@@ -365,14 +370,20 @@ class ManastuGatewayAdapter:
         if system:
             config["system_instruction"] = {"parts": [{"text": "\n\n".join(system)}]}
         contents = [self._content(m, caps, req) for m in messages if m.role != "system"]
+        tools: list[dict[str, Any]] = []
         if req.tools:
             _require(caps, Capability.FUNCTION_CALLING)
             declarations = [
                 {"name": t.name, "description": t.description, "parameters": t.parameters} for t in req.tools
             ]
-            config["tools"] = [{"function_declarations": declarations}]
+            tools.append({"function_declarations": declarations})
             if req.tool_choice:
                 config["tool_config"] = {"function_calling_config": {"mode": CALLING_MODE[req.tool_choice]}}
+        if req.google_search:
+            _require(caps, Capability.GOOGLE_SEARCH)
+            tools.append({"google_search": {}})
+        if tools:
+            config["tools"] = tools
         thinking: dict[str, Any] = {}
         if req.thinking and caps.has(Capability.THINKING_LEVEL):
             thinking["thinking_level"] = str(req.thinking)
@@ -445,7 +456,20 @@ class ManastuGatewayAdapter:
             thoughts=thoughts,
             structured=payload.get("parsed"),
             quota=payload.get("quota"),
+            grounding=self._grounding(candidates[0].get("grounding_metadata")),
         )
+
+    @staticmethod
+    def _grounding(raw: dict[str, Any] | None) -> Grounding | None:
+        if not raw:
+            return None
+        sources = tuple(
+            GroundingSource(
+                title=(chunk.get("web") or {}).get("title"), uri=(chunk.get("web") or {}).get("uri")
+            )
+            for chunk in raw.get("grounding_chunks") or []
+        )
+        return Grounding(queries=tuple(raw.get("web_search_queries") or ()), sources=sources)
 
     def chunk(self, data: dict[str, Any], state: StreamState) -> str:
         data = self.normalize(data)

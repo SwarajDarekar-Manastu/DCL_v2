@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import logging
 from contextlib import asynccontextmanager
 from types import ModuleType
 
@@ -27,6 +28,8 @@ from backend.api import (
 from backend.celery_redis.queues import Queue
 from backend.common.telemetry import instrument_fastapi, register_queue_depth, setup_telemetry
 from backend.config import ConfigError, Role, get_settings
+
+log = logging.getLogger(__name__)
 
 API_ROUTERS: list[ModuleType] = [
     health,
@@ -60,9 +63,19 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(ws.redis_bridge(str(redis_url)), name="console-redis-bridge"))
         if setup_telemetry(f"dcl-{settings.role}"):
             register_queue_depth(str(redis_url), [str(q) for q in Queue])
+    engine_started = False
+    if settings.role in (Role.API, Role.ALL):
+        try:
+            await engine.start_engine()  # warm the Answer Engine so the first request is not slow
+            engine_started = True
+        except ConfigError as exc:  # the other routers still serve without the engine
+            log.warning("answer engine not started: %s", exc)
     try:
         yield
     finally:
+        if engine_started:
+            with contextlib.suppress(Exception):
+                await engine.stop_engine()
         for task in tasks:
             task.cancel()
         for task in tasks:
