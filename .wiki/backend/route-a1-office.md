@@ -38,6 +38,8 @@ Provides:
 - `convert_run(pdf_bytes, run) -> RunResult(document, page_confidence)` (CPU, TableFormer accurate, no remote services)
 - `build_structure(documents, pages, fallback_title=) -> Structure(nodes, mentions, furniture, title, references)`: one `child` node per paragraph with page and 0..1 top-left `PageBox`, `table` HTML nodes, `figure` placeholders; references → `reference` mentions on the first text node
 - `process_pdf(pdf_bytes, blob_sha256=, file_name=, folder: FolderContext, vision=, stores=Stores(put_cir, put_asset), cloud_allowed=, doc_id=, critical_field_patterns=, engine_by_script=) -> ProcessedDocument` (PARSE_FAILURE HARD document on a failed pre-flight)
+- `plan_conflicts(folder, furniture_by_page, first_page_text) -> list[Flag]` (`metadata.py`, file 03 §A1.3 as amended 2026-10-22): the dispatcher's plan patterns over page furniture (Docling's headers and footers; `transcribe_page.v2`'s `furniture` for transcribed pages) and page-1 text; an id other than the folder's raises `CONFLICT` SOFT `{subject: test_plan_id, a: folder value and its source, b: printed value, page, line}` once per id; the folder value stays `test_plan_id`
+- A Gemini error on `transcribe_page` (a safety block on propellant chemistry, an outage) keeps the OCR text and raises `LOW_CONFIDENCE_EXTRACTION` SOFT for the page (pass `transcribe_failed`) instead of failing the document
 - CIR under `dcl-cir/{sha256}/A1/v1/`: `docling/{first}-{last}.json`, `pages/{n}.txt`, `pages/{n}.meta.json`, `page_hashes.json`; assets `pages/{sha}/{page:04d}.png` (150 dpi), `figures/…`, `crops/…` (300 dpi)
 - OCR: Tesseract script models (`Latin`, `Cyrillic`, `Devanagari`, `Arabic`) and RapidOCR in S4's parse image
 
@@ -67,6 +69,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | Page furniture kept for the plan extractor (`transcribe_page.v2`), test-plan `CONFLICT` from furniture / page-1 text, blocked transcription degrades to OCR; 6 tests |
 | 2026-10-22 | S2 | Figures, tables QA, handwriting and `process_pdf` assembly; Tesseract script models; 38 tests (route tests run real Docling on S5's digital fixtures) |
 | 2026-10-22 | S2 | A1 metadata scan (origin overrides, markings, kind, tier, locale); 11 tests |
 | 2026-10-22 | S2 | Docling runs by OCR plan and the structure mapping (breadcrumbs, references as mentions, furniture, tables, figure placeholders); 15 tests, Docling ones skip without cached models |

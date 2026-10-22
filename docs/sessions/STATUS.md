@@ -621,3 +621,8 @@ Merged / ready:
 Blocked on: nothing. S4 adds console_dev_auth, console_dev_token and console_dev_roles plus the start-up refusal; auth.py reads them with a safe default (off) until then.
 Needs from others: S4 as above.
 Next: review and merge the Lead's background Console redesign branch when it arrives; Settings editing after S1's settings API.
+## 2026-10-22 21:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: A1 page furniture and the test-plan CONFLICT (file 03 §A1.3 as amended): `transcribe_page.v2` returns printed headers/footers as `furniture` (live-checked on S5's fixtures: the DOI paper's running head and the German datasheet's footer land in furniture, not in the body); `plan_conflicts` raises CONFLICT SOFT for a plan id in furniture or page-1 text that differs from the folder's (folder value stays). A Gemini error on `transcribe_page` now keeps the OCR text with LOW_CONFIDENCE SOFT instead of failing the document; seen live: a first wording of v2 got `block_reason=SAFETY` on the HTP paper, the neutral wording passes 3/3.
+Blocked on: nothing
+Needs from others: S5: the real TP7 sheet through A1 once the samples are local, to confirm the footer reaches furniture on that scan
+Next: T3 inspect_visuals, T2 query_telemetry (S1's telemetry tables), Skills

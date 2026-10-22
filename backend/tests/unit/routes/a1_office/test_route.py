@@ -190,3 +190,67 @@ def test_without_cloud_a_low_page_keeps_its_ocr_and_is_flagged(fake_vision, memo
         (FlagType.LOW_CONFIDENCE_EXTRACTION, FlagSeverity.SOFT)
     ]
     assert doc.document.test_plan_id == "TP07"
+
+
+@docling_models
+def test_a_transcribed_page_keeps_its_footer_and_a_foreign_plan_id_is_a_conflict(fake_vision, memory_store):
+    """The TP7 sheet whose printed footer says Test Plan 6 (benchmark: must present both values)."""
+    from docling_core.types.doc import DoclingDocument
+
+    name, data = fixture("japanese_scanned_page")
+
+    def convert(pdf_bytes, run, file_name):
+        return RunResult(run, DoclingDocument(name="scan"), {1: {"ocr_score": 0.3}})
+
+    vision = fake_vision(
+        triage_page=triage("scanned_printed", "en", "latin"),
+        transcribe_page={
+            "markdown": "Injector cold flow\n\nFlow 12.1 g/s",
+            "language": "en",
+            "confidence": 0.7,
+            "furniture": ["Test Campaign 2 - Test Plan 6", "Sheet 3"],
+        },
+    )
+    doc = process_pdf(
+        data,
+        blob_sha256=SHA,
+        file_name=name,
+        folder=folder("APS", "Test Campaign 2/TP7/Handwritten", name),
+        vision=vision,
+        stores=stores(memory_store),
+        convert=convert,
+    )
+    assert doc.document.test_plan_id == "TP07"  # the folder value stays until a reviewer resolves it
+    conflicts = [f for f in doc.flags if f.flag_type == FlagType.CONFLICT]
+    assert [(c.evidence.a.value, c.evidence.b.value) for c in conflicts] == [("TP07", "TP06")]
+    assert conflicts[0].severity == FlagSeverity.SOFT and conflicts[0].anchor.page == 1
+    assert all("Test Plan 6" not in n.content for n in doc.nodes)  # furniture is not body text
+
+
+@docling_models
+def test_a_blocked_transcription_keeps_the_ocr_and_flags_the_page(fake_vision, memory_store):
+    """A Gemini refusal (safety block, outage) must not fail the document."""
+    from docling_core.types.doc import DoclingDocument
+
+    from backend.llm_engine.gemini_types import GeminiError
+
+    name, data = fixture("japanese_scanned_page")
+
+    def convert(pdf_bytes, run, file_name):
+        return RunResult(run, DoclingDocument(name="scan"), {1: {"ocr_score": 0.3}})
+
+    def blocked(kwargs):
+        raise GeminiError("no candidates returned (block_reason=SAFETY)")
+
+    vision = fake_vision(triage_page=triage("scanned_printed", "en", "latin"), transcribe_page=blocked)
+    doc = process_pdf(
+        data,
+        blob_sha256=SHA,
+        file_name=name,
+        folder=folder("APS", "Test Campaign 2/TP7", name),
+        vision=vision,
+        stores=stores(memory_store),
+        convert=convert,
+    )
+    low = [f for f in doc.flags if f.flag_type == FlagType.LOW_CONFIDENCE_EXTRACTION]
+    assert [f.anchor.page for f in low] == [1] and low[0].severity == FlagSeverity.SOFT

@@ -81,7 +81,7 @@ TASKS: dict[VisionCapability, Task] = {
         "triage_page.v1", PageTriage, FLASH_LITE, "low", ThinkingLevel.MINIMAL
     ),
     VisionCapability.TRANSCRIBE_PAGE: Task(
-        "transcribe_page.v1", PageTranscription, FLASH, "high", ThinkingLevel.LOW
+        "transcribe_page.v2", PageTranscription, FLASH, "high", ThinkingLevel.LOW
     ),
     VisionCapability.TRANSCRIBE_HANDWRITING: Task(
         "transcribe_handwriting.v1", HandwritingReading, FLASH, "high", ThinkingLevel.LOW
