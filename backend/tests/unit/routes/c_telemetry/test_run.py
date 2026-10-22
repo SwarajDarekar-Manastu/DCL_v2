@@ -124,7 +124,7 @@ def test_raw_parquet_stats_and_unit_flags(minio, labjack):
     cir = BucketStore(minio, CIR)
     schema = json.loads(cir.get(f"{sha}/C/v1/schema.json"))
     stats = json.loads(cir.get(f"{sha}/C/v1/stats.json"))
-    assert schema["channels"]["y0"] == {"unresolved": True}
+    assert schema["channels"]["y0"] == {"unresolved": True, "note": "the file states no unit"}
     assert (stats["rows"], stats["gaps"]) == (len(data), 1)
     assert doc.nodes[0].node_type == "run_summary" and doc.nodes[0].t_start_ms == 0
     assert "2 channels await unit confirmation" in doc.nodes[0].content
