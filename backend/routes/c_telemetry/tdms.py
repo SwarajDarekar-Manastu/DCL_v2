@@ -20,7 +20,6 @@ from backend.dispatcher.contract import SiblingUnit
 from backend.postgres.enums import TelemetrySourceFormat
 from backend.routes.c_telemetry.series import SeriesSource
 
-NI_UNITS = {"deg c": "degC", "deg f": "degF", "deg k": "K", "degc": "degC", "degf": "degF"}  # NI spellings
 TIME_NAMES = frozenset({"time", "timestamps", "timestamp", "t", "time_s", "time (s)"})
 CHUNK_ROWS = 100_000
 SKIP_PROPERTIES = frozenset({"UISettings"})
@@ -90,7 +89,7 @@ def tdms_source(path: Path, name: str, sibling_units: Sequence[SiblingUnit] = ()
         for c in data_channels:
             stated = str(c.properties.get("unit_string", "")).strip()
             if stated:
-                units[c.name] = NI_UNITS.get(stated.casefold(), stated)
+                units[c.name] = stated  # NI spellings ("Deg C") are aliases in config/units.txt
         started = _start(group.properties.get("StartTime")) or _start(
             next(
                 (
