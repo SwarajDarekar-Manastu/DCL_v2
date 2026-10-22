@@ -47,7 +47,7 @@ from backend.llm_engine.gemini_types import (
 )
 
 DEFAULT_MODEL = "gemini-3.8-flash"
-DEFAULT_LITE_MODEL = "gemini-3.5-flash-lite"
+DEFAULT_LITE_MODEL = "gemini-3.1-flash-lite"
 PDF_CODE = "4217"
 CONTEXT = CallContext(purpose="gateway_probe", prompt_version="probe-v2")
 MISSING = (404, 405)
