@@ -23,7 +23,7 @@ Tests and fixtures:
 - `backend/tests/fixtures/test_fixture_integrity.py`
 - `backend/tests/fixtures/test_real_samples.py` (template always; full manifest and copies when present, matched by sha256)
 
-Synthetic fixtures (2026-10-21): `a1_office/{rotated_scan, japanese_scanned_page, german_datasheet, doi_paper}`, `a2_source/two_latex_masters`, `c_telemetry/{headerless_csv, merged_cells_fmea, malicious_pickle, unlabeled_npy}`, `g_archives/{zip_bomb_ratio, zip_path_traversal, zip_nested_depth}`, `dispatcher/pdf_is_html`. Real samples: local only (DECISIONS.md 2026-10-22, public repository). `backend/tests/fixtures/real_samples.template.yaml` lists 91 distinct files from allowlist entries E1–E11 by registry sha256, without file names; the full manifest with paths and the copies live in the git-ignored `data/samples/`, exported read-only from MinIO by an operator (README).
+Synthetic fixtures (2026-10-21): `a1_office/{rotated_scan, japanese_scanned_page, german_datasheet, doi_paper}`, `a2_source/two_latex_masters`, `c_telemetry/{headerless_csv, merged_cells_fmea, malicious_pickle, unlabeled_npy}`, `g_archives/{zip_bomb_ratio, zip_path_traversal, zip_nested_depth}`, `dispatcher/pdf_is_html`. Real samples: local only (DECISIONS.md 2026-10-22, public repository). `backend/tests/fixtures/real_samples.template.yaml` lists 18 files (one per supported type, chosen by extension and name only, plus the telemetry runs of the benchmark cases; `.pptx` and `.zip` pending from S1) by registry sha256, without file names; the full manifest with paths and the copies live in the git-ignored `data/samples/`, exported read-only from MinIO by an operator (README).
 
 ## Interfaces
 
@@ -62,6 +62,7 @@ Verification: `uv run pytest backend/tests/fixtures && uv run ruff check backend
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S5 | real samples trimmed to one file per type by extension and name (user rule) plus the telemetry runs: 18 files |
 | 2026-10-22 | S5 | manifest moved under `data/` (file names stay private); committed template matched by sha256; `.env`-loading export wrapper; E1–E3 copies verified |
 | 2026-10-22 | S5 | real samples local only: `real_samples.yaml` manifest (93 files, registry sha256), export procedure, `test_real_samples.py` |
 | 2026-10-22 | S5 | generator pins openpyxl's standard-library writer (`OPENPYXL_LXML=False`), so regeneration is byte-stable with or without lxml (S2 finding) |

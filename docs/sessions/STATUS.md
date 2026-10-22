@@ -489,3 +489,9 @@ Merged / ready: real-sample manifest moved to git-ignored `data/samples/real_sam
 Blocked on: nothing
 Needs from others: nothing now (E4–E11 export later, on request)
 Next: the first 15 telemetry cases from E1–E3 with own Python verification
+
+## 2026-10-22 07:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: real samples trimmed per the user rule (one file per supported type, chosen by extension and name only, plus the telemetry runs of the benchmark cases): 18 files, ~69 MB; README export list cut to E1–E7. Test: `uv run pytest backend/tests/fixtures && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: S1 — one `.pptx` and one `.zip` from the registry (not in the allowlist folders)
+Needs from others: Lead — export E4–E7 into S5's `data/samples/` when convenient
+Next: telemetry suite (option b: values in git-ignored data/benchmark/) and the two halt behaviour cases
