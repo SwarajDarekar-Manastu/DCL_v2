@@ -531,3 +531,16 @@ Merged / ready: `open_threshold: 2.5` on the valve channel of the three proposed
 Blocked on: S1's ab00628 reaching main
 Needs from others: Lead — merge order S1 ab00628, then this branch
 Next: idle until indexed documents and S2's engine mode exist
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: Route C step 2 (merge requested). It adds:
+- migration 0009 for telemetry_runs and telemetry_channels;
+- the folder .cfg scaling as flag evidence;
+- normalized.parquet (SI units, t_rel_ms, t_from_ignition_ms, a separate *_bar_abs column, valve state 0/1 at open_threshold);
+- t0 per §C.6, the three-tier metrics, S5's sanity bounds, and the first commit path (backend/indexing/commit.py with S2's index_document);
+- resume of a HALTED run from its own raw.parquet, a retroactive pass per rule, and ExportedRule.status (only operator rules load).
+Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest` (1,353 passed).
+Live Route C step 1 on the stack: routes.C enabled after S4's rebuild, then re-dispatched. 20 LabJack runs processed, 0 FAILED, all 20 HALTED with 160 UNIT_AMBIGUITY HARD (8 y* channels each). That is 4,936,500 rows, 4,852.8 s of data, 256 MB of raw Parquet, 1017.3 Hz everywhere, no gaps or duplicate timestamps, and 2 FAILED_RUN (.dat_fail). The other 20 C documents (12 xlsx, 4 cfg, 2 csv, 2 tdms) stay parked for their adapters. Four TP7 phase files (Test 01 priming, main, priming_i, purging) share the label TP07_T01; the commit renames them with a CONFLICT SOFT.
+Blocked on: nothing
+Needs from others: S4: apply 0009 on the stack DB after the merge and redeploy; an SME confirmation of S5's proposed channel maps (each confirmed rule resumes its runs through dcl.process.resume_for_rule); the telemetry workers need EmbeddingGemma's tokenizer (transformers) for index_document's token counts, or the models role exposes a token count
+Next: the review API resolve endpoint (rule creation → resume_for_rule), then the xlsx/csv/tdms adapters; A1/D/F adapter wiring for S2's routes

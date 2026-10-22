@@ -20,7 +20,7 @@ Code:
 - `backend/review/flags.py` (`upsert_location_flag`, `upsert_document_flag`: by fingerprint, status and resolution kept)
 - `backend/review/models.py` (planned)
 - `backend/review/rules.py` (published: `resolve()` precedence resolver, `resolve_where()` (resolver over the rules a predicate keeps, e.g. those naming one channel), `RuleScope`, `RuleTarget`, `RuleRecord`, bodies per rule_type, YAML export for `config/rules/`)
-- `backend/review/staged.py` (validation gate: `apply_severity_policy` with `flags.severity_overrides` and `flags.strict_mode`, `gate()` upserts flags and halts on HARD with `dcl-cir/{sha}/staged.json`, `load_staged()`)
+- `backend/review/staged.py` (validation gate: `apply_severity_policy` with `flags.severity_overrides` and `flags.strict_mode`, `gate()` upserts flags, closes stale route flags as AUTO_RESOLVED, halts on HARD with `dcl-cir/{sha}/staged.json`, returns the policy-applied document; `load_staged()`)
 - `backend/review/resume.py` (planned)
 - Flag fingerprints live on `Flag` in `backend/dispatcher/contract.py` (no separate fingerprints module)
 
@@ -71,6 +71,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | S1 | FlagView typed evidence + allowed_actions; CaseLocation scope values; rule body interim shape |
 | 2026-10-21 | S1 | Rules precedence resolver, typed rule bodies, YAML export format (publish-first item 4); 19 tests |
 | 2026-10-22 | S1 | Validation gate and staged payload (`staged.py`); `resolve_where` |
+| 2026-10-22 | S1 | `ExportedRule.status` (operator / proposed, default proposed), `load_rules_dir` (top level only, operator rules only); `ChannelMapEntry.open_threshold`; quantities typed |
 
 ## Related
 
