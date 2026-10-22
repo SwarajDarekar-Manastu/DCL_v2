@@ -685,3 +685,8 @@ Merged / ready: the Review case view shows S1's unit_telemetry evidence `note` (
 Blocked on: Settings editing (S1's settings API).
 Needs from others: S1: settings API.
 Next: Settings once S1's API is on main; review the Console redesign branch when it arrives.
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready (4 commits on main d9a720b): network split + Redis password (d2da4e4: Postgres/Redis/MinIO S3 on `DCL_DATA_BIND_HOST`, Redis `requirepass` from `DCL_REDIS_PASSWORD` carried in every in-stack URL, loader refuses a `DCL_REDIS_URL` without it; empty password = today's behaviour); Console container on 8601 (218c011, S3's Dockerfile, msal build, `DCL_CONSOLE_SPA_CLIENT_ID`/`DCL_CONSOLE_API_SCOPE` in loader and .env.example); `safety_settings` pass-through (30caf39, `EXTRACTION_SAFETY`, default off, live gateway call accepted); RustFS step 1 (c978013, `minio-init` uses `policy_set`; full init twice + policy scope green on RustFS 1.0.3 and MinIO). Test: `uv run pytest` 1269 passed, 244 skipped
+Blocked on: nothing
+Needs from others: Lead — merge; add `DCL_DATA_BIND_HOST`, `DCL_REDIS_PASSWORD`, `DCL_CONSOLE_SPA_CLIENT_ID`, `DCL_CONSOLE_API_SCOPE` to file 01 §7.1; S2 — wire the per-capability flag to `safety_settings=EXTRACTION_SAFETY`
+Next: redeploy from main after the merge; RustFS step 2 (one-day lifecycle watch) and step 3 (M6-scale load test)

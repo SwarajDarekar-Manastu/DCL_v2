@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S4 |
 | Spec | docs/architecture/01_system_overview_and_tech_stack.md §7.1 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-22 |
 
 ## Purpose
 
@@ -32,7 +32,9 @@ Provides:
 - `Settings.stack_database_url()`: `DCL_DATABASE_URL` when set, else `postgresql+psycopg://user:pass@postgres:5432/dcl`
 - Dev defaults only when `DCL_ENV=dev`: `redis_url`, `minio_endpoint`, `models_url`, `api_base_url`, `console_base_url`, `console_allowed_origins`; staging/prod need explicit values
 - `DCL_ROLE` (deprecated alias `ROLE`, warning logged); `GEMINI_GATEWAY_KEY` with legacy alias `DCL_GEMINI_API_KEY`
-- Load-time refusals: `GOOGLE_API_KEY` present, `AIza…` in either gateway-key name, placeholders, bad `DCL_ENV`/`DCL_PERMISSION_OPTION`/`DCL_AUTH_MODE`/`GEMINI_BACKEND`, malformed values, non-Fernet `DCL_TOKEN_CACHE_KEY`, folder lists of different length
+- `data_bind_host` (`DCL_DATA_BIND_HOST`, default 127.0.0.1, compose only); `redis_password` (`DCL_REDIS_PASSWORD`, secret): when set, `DCL_REDIS_URL` must carry it and the dev default includes it
+- `console_spa_client_id` (`DCL_CONSOLE_SPA_CLIENT_ID`), `console_api_scope` (`DCL_CONSOLE_API_SCOPE`): Console build args, optional, empty until Entra registration
+- Load-time refusals: `GOOGLE_API_KEY` present, `AIza…` in either gateway-key name, placeholders, bad `DCL_ENV`/`DCL_PERMISSION_OPTION`/`DCL_AUTH_MODE`/`GEMINI_BACKEND`, malformed values, a `DCL_REDIS_URL` without the set `DCL_REDIS_PASSWORD`, non-Fernet `DCL_TOKEN_CACHE_KEY`, folder lists of different length
 - Attribute names used by others: S3 `tenant_id`, `console_api_audience`, `console_group_{reviewers,admins,external_search}`, `console_allowed_origins`, `redis_url`; S1 `token_cache_key`, `test_outside_drive_id`
 - Manual-sync tests: `.env.example` and the loader must cover every name of file 01 §7.1
 - Not yet: `pipeline_config` typed access (needs S1's DB session)
@@ -64,6 +66,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S4 | Repository skeleton of file 10 §2: packages, `backend/main.py` mounting routers by `ROLE`, stub routers, `pyproject.toml`/`uv.lock`, `.env.example` (names only), `.gitignore` data patterns anchored to the root so `backend/postgres/models/` is tracked |
 | 2026-10-21 | S4 | Wiring and Console names, `DCL_ENV` dev defaults, `DCL_ROLE`, key alias + `AIza` refusal, DB URL composition, S1's token-cache key and outside drive id; tests that `.env.example` and the loader match file 01 §7.1 |
+| 2026-10-22 | S4 | `DCL_CONSOLE_SPA_CLIENT_ID`, `DCL_CONSOLE_API_SCOPE` (approved 2026-10-22) |
+| 2026-10-22 | S4 | `DCL_DATA_BIND_HOST`, `DCL_REDIS_PASSWORD` (Lead decision 2026-10-22, network exposure); URL/password consistency refusal |
 | 2026-10-21 | S4 | Full env contract loader: typed settings, load-time refusals, `require(Group)`, refusal tests; real `.env` loads (Gemini group incomplete: `GEMINI_BACKEND`, `GEMINI_GATEWAY_URL` absent) |
 
 ## Related
