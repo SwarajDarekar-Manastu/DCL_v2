@@ -16,7 +16,7 @@ All services of file 01 §6 in compose project `dcl-v2`: ParadeDB pg17, Redis, M
 
 Code:
 - `backend/devops/compose.yaml`, `backend/devops/compose.dev.yaml`
-- `backend/devops/docker/backend.Dockerfile` (targets `backend`, `models` (CUDA torch), `parse` (CPU torch, Docling, RapidOCR, Tesseract scripts); builder stage compiles deps)
+- `backend/devops/docker/backend.Dockerfile` (DuckDB httpfs pre-installed for user `app` in `backend`; targets `backend`, `models` (CUDA torch), `parse` (CPU torch, Docling, RapidOCR, Tesseract scripts); builder stage compiles deps)
 - `backend/devops/docker/minio.Dockerfile` (RELEASE.2025-10-15T17-29-55Z, commit-checked)
 - `backend/devops/docker/libreoffice.Dockerfile` + `office_server.py` (POST /convert on 2003, one soffice run per request, recalculating profile)
 - `backend/common/office.py` (the one client: `convert(data, from_ext, to, recalc=False)`)
@@ -69,6 +69,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] Queue memory limits match file 10 §4 (unit test; dev override only lowers them)
 - [x] M1 queue load test (2026-10-22, throwaway project): 5,002 tasks accounted for, routing correct on all six queues, 233 transient failures retried, 52 permanent + 2 OOM tasks dead-lettered, worker kills only in telemetry_stream, no container restart
 - [x] No `.env` or key file in the backend image (integration test)
+- [x] DuckDB httpfs loads with no network in the backend image (integration test, 2026-10-22)
 - [x] Observability services added (2026-10-22)
 - [x] Parse image: Docling + RapidOCR and Tesseract (Latin, Cyrillic, Devanagari, Arabic, OSD) OCR a scanned page correctly (2026-10-22)
 - [x] Console SPA added (2026-10-22: builds from compose, healthy, deep links 200, no secret value in the image)
@@ -80,6 +81,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | DuckDB httpfs baked into the backend image (`~/.duckdb` of user `app`, +26 MB); `LOAD httpfs` verified in a `--network none` container, the pre-change image fails the same test |
 | 2026-10-22 | S4 | RustFS step 3: M6-scale load test (`backend/devops/ci/object_store_load.py`), 20,800 objects, 0 errors on RustFS and MinIO, RustFS writes about 2× slower at p50, reads equal; step 2 lifecycle watch seeded (`lifecycle_watch.py`, container `dcl-s4-rustfs-watch`), due 2026-10-24 00:00Z |
 | 2026-10-22 | S4 | RustFS adoption step 1: `minio-init` sets the app policy with `policy_set` (RustFS answers `attach_policy` with AEAD id 2); full init twice + policy scope verified on RustFS 1.0.3 and MinIO |
 | 2026-10-22 | S4 | Console container on 8601 from S3's Dockerfile (msal build; args `DCL_API_BASE_URL`, `DCL_TENANT_ID`, `DCL_CONSOLE_SPA_CLIENT_ID`, `DCL_CONSOLE_API_SCOPE`) |

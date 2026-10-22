@@ -94,3 +94,21 @@ def test_every_worker_answers_ping():
             f"celery -A backend.celery_redis.app inspect ping --timeout 10 -d {queue}@$HOSTNAME",
         )
         assert "pong" in result.stdout, service
+
+
+def test_duckdb_httpfs_loads_without_network():
+    image = containers_image("api")
+    probe = (
+        "import duckdb; c = duckdb.connect(); c.execute('INSTALL httpfs; LOAD httpfs');"
+        "q = \"select loaded from duckdb_extensions() where extension_name = 'httpfs'\";"
+        "print(c.execute(q).fetchone()[0])"
+    )
+    result = docker(
+        "run", "--rm", "--network", "none", "--entrypoint", "python", image, "-c", probe, check=False
+    )
+    assert result.returncode == 0, result.stderr[-500:]
+    assert result.stdout.strip() == "True"
+
+
+def containers_image(service: str) -> str:
+    return next(c["Image"] for c in containers() if c["Service"] == service)

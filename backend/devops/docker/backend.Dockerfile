@@ -30,9 +30,11 @@ WORKDIR /app
 
 FROM runtime AS backend
 COPY --from=deps-backend /opt/venv /opt/venv
+USER app
+# DuckDB httpfs for T2's s3:// Parquet reads, installed for the runtime user (~/.duckdb), so no download at runtime.
+RUN python -c "import duckdb; duckdb.execute('INSTALL httpfs')"
 COPY backend ./backend
 COPY config ./config
-USER app
 EXPOSE 8200
 CMD ["python", "-m", "backend.main"]
 
