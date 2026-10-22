@@ -10,6 +10,10 @@ this document deleted first), entity mentions, numeric facts, the telemetry cata
 - A document with an open HARD flag is refused (``HaltedDocument``): HALTED documents have no rows.
 - Run labels are unique: a label already used by another document's run gets a ``_2``, ``_3`` suffix and
   a SOFT ``CONFLICT`` (file 03 §C.1 step 9).
+- A test-plan id the route read from the content that differs from the folder-derived id is not settled
+  silently: both are kept in ``metadata_sources.test_plan_ids`` and a SOFT test-plan ``CONFLICT`` is raised
+  (Lead 2026-10-22: TP7 sheets printed "Test Plan 6"); ``documents.test_plan_id`` keeps the folder value
+  until a reviewer chooses.
 
 Review overlays (operator resolutions re-applied on rebuild, file 04 §7) are not applied here yet.
 """
@@ -170,6 +174,21 @@ def _label_conflict(wanted: str, used: str) -> Flag:
     )
 
 
+def _test_plan_conflict(folder_id: str, content_id: str) -> Flag:
+    return Flag(
+        flag_type=FlagType.CONFLICT,
+        severity=FlagSeverity.SOFT,
+        anchor=FlagAnchor(content_sha256=hashlib.sha256(b"test_plan_id").hexdigest()[:16]),
+        evidence=ConflictEvidence(
+            subject="test plan id",
+            a=ConflictSide(label="folder", value=folder_id, provenance="folder path"),
+            b=ConflictSide(
+                label="content", value=content_id, provenance="read from the document by the route"
+            ),
+        ),
+    )
+
+
 def commit_document(
     session: Session,
     document: Document,
@@ -204,6 +223,18 @@ def commit_document(
             renamed[run.run_uuid] = label
             result.renamed_runs[run.run_label] = label
             upsert_document_flag(session, doc_id, _label_conflict(run.run_label, label), str(processed.route))
+
+    content_plan = processed.document.test_plan_id
+    if content_plan and document.test_plan_id and content_plan.casefold() != document.test_plan_id.casefold():
+        upsert_document_flag(
+            session, doc_id, _test_plan_conflict(document.test_plan_id, content_plan), str(processed.route)
+        )
+        sources_ids = {"folder": document.test_plan_id, "content": content_plan}
+    elif content_plan and not document.test_plan_id:
+        document.test_plan_id = content_plan
+        sources_ids = {"content": content_plan}
+    else:
+        sources_ids = None
 
     soft = [f for f in _open_flags(session, doc_id) if f.severity == FlagSeverity.SOFT]
     status = DocumentStatus.ACTIVE_WITH_SOFT_FLAGS if soft else DocumentStatus.ACTIVE
@@ -370,6 +401,8 @@ def commit_document(
     document.indexed_at = now or datetime.now(UTC)
     sources = dict(document.metadata_sources or {})
     sources.pop(PROCESSED_MARK, None)
+    if sources_ids:
+        sources["test_plan_ids"] = sources_ids
     if plan.warnings:
         sources["index_warnings"] = plan.warnings[:50]
     document.metadata_sources = sources

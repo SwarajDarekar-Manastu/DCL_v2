@@ -339,3 +339,34 @@ def test_a_clean_run_is_parked_when_the_models_role_is_unreachable(session, mini
     document = session.get(Document, release.doc_id)
     assert (outcome.status, document.status) == ("WAITING_FOR_ROUTE", "WAITING_FOR_ROUTE")
     assert document.metadata_sources[PROCESSED_MARK]["uri"].endswith("/C/v1/processed.json")
+
+
+def test_a_content_test_plan_id_that_differs_from_the_folder_is_kept_with_a_conflict(session, minio):
+    from backend.indexing.commit import commit_document
+
+    _seed(session, minio, {"TP12_T01.dat": labjack_bytes(rows=200)[0]})
+    pipeline_config.set_value(session, "routes.C.enabled", True, "test")
+    _all_mapped_rule(session)
+    session.commit()
+    (release,) = dispatch(session, minio, section_file_sets=()).to_process
+    process_document(session, minio, release.doc_id)  # no indexer: parked with processed.json
+    session.commit()
+    document = session.get(Document, release.doc_id)
+    processed = ProcessedDocument.model_validate_json(
+        BucketStore(minio, "dcl-cir").get(
+            document.metadata_sources[PROCESSED_MARK]["uri"].split("dcl-cir/")[1]
+        )
+    )
+    printed = processed.model_copy(
+        update={"document": processed.document.model_copy(update={"test_plan_id": "TP06"})}
+    )
+    plan = _fake_indexer(session, printed, document.doc_id, False)
+    result = commit_document(session, document, printed, plan, 1)
+    session.commit()
+    assert result.status == "ACTIVE_WITH_SOFT_FLAGS"
+    assert document.test_plan_id == "TP12"
+    assert document.metadata_sources["test_plan_ids"] == {"folder": "TP12", "content": "TP06"}
+    (flag,) = session.scalars(
+        select(ReviewFlag).where(ReviewFlag.doc_id == document.doc_id, ReviewFlag.flag_type == "CONFLICT")
+    ).all()
+    assert (flag.evidence["a"]["value"], flag.evidence["b"]["value"]) == ("TP12", "TP06")
