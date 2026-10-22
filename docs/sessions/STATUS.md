@@ -718,3 +718,9 @@ Merged / ready: the Console redesign, reviewed and merged into this branch (a fa
 Blocked on: Settings (S1's settings API); live review data needs S1's review API on main.
 Needs from others: S1: review and settings APIs.
 Next: the viewer should use the `table` view for table documents (a real engineering_table document showed its HTML table markup in the text view, escaped); Settings once S1's API is on main.
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: redeploys from main 799f67b (whole stack: Redis requirepass on, NOAUTH from the host without the password, Console on 8601, 11 stack tests green) and 9a20edc (api, beat, six workers; `dcl.process.route_a1` registered on cpu_parse). On the branch, not yet requested: `DCL_AUTH_SECRET` checks (f7fdefb, 32+ chars; required outside dev for roles api/all, accepted by the Lead); RustFS step 3 load test (0 errors on RustFS and MinIO at 20,800 objects; RustFS writes about 2× slower at p50, reads equal, listings 3–7× slower; acceptable for M6). Test: `uv run pytest` 1297 passed, 278 skipped
+Blocked on: time. The RustFS step 2 lifecycle watch (`dcl-s4-rustfs-watch`, seeded 2026-10-22 07:53Z) is due by 2026-10-24 00:00Z
+Needs from others: nothing
+Next: after 2026-10-24 00:00Z run `lifecycle_watch.py check`, record the result, then one merge request for f7fdefb + steps 2 and 3
