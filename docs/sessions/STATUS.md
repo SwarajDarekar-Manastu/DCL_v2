@@ -848,3 +848,8 @@ Merged / ready: owner-password PDFs. A1 pre-flight now decrypts in memory a PDF 
 Blocked on: S1's re-dispatch of the A1 documents with cloud_allowed true (206e1884 and the 8 ECSS standards after this merge)
 Needs from others: S1: re-run; `llm_calls` with the client's ledger hook
 Next: OCR engine per script and cost report, then the M5 handwriting calibration on the TP7 sheets
+## 2026-10-22 21:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: M10 baseline from scored run 1 (`backend/tests/benchmark/BASELINE.md`, summary on `.wiki/quality/benchmark-suites.md`): 56 cases, 1 pass; 26 runner/metric bug, 15 engine error, 14 pipeline gap, 0 confirmed gold error. Five runner findings for S2 (null class on 38 errored cases, RETRIEVAL_MISS unreachable without gold anchors, must_label_external web-only, insufficient-evidence check mode-only, halted data hidden as SYNTHESIS_ERROR). Hold-outs not reported
+Blocked on: E13 indexed (MULTILINGUAL and library cases)
+Needs from others: S2: the runner findings; Lead: is the TP12 report PDF among the 18 indexed A1 PDFs (2 cases depend on it); the weather case's answer text (gold or metric)
+Next: idle until messaged
