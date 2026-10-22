@@ -13,7 +13,8 @@ components, theming and accessibility only: no route, API call, auth logic, `api
 | Rules | `/review/rules` | reviewer (deactivate: admin) | rules table, simulate, RuleForm |
 | Docs viewer | `/docs/{id}/viewer?anchor=` | viewer | page render + bbox overlays, image, table, code, text, fallback notice, MetaPanel, translate |
 | Benchmark | `/benchmark`, `/suites/[s]`, `/cases/[id]`, `/runs/[id]`, `/compare`, `/retrieval` | viewer (edit: reviewer) | suites, runs, CaseEditor, results + ResultDrilldown, compare, RetrievalLab |
-| Entities, Ops | `/entities`, `/ops` | viewer | placeholders until their APIs exist |
+| Entities | `/entities` | viewer | placeholder until its API exists |
+| Ops | `/ops` | viewer (failed tasks: admin) | FailedTasks table; sync, queues and cost still to come |
 | Settings | `/settings/[section]` | admin | SectionMenu + section panel |
 | Audit | `/audit` | reviewer | URL filters, AuditTimeline |
 
@@ -74,4 +75,4 @@ purpose (keyboard, form semantics and the existing tests); they wear the `.field
   backend's status set.
 - `.wiki/frontend/console-shell-auth.md` still names `NavBar.svelte` (now `Sidebar.svelte` +
   `TopBar.svelte`); the wiki is outside this change's scope.
-- The Entities and Ops pages remain placeholders.
+- Entities is a placeholder; Ops shows only failed tasks so far.
