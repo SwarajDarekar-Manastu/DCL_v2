@@ -165,6 +165,10 @@ class Settings(BaseSettings):
     grafana_admin_password: SecretStr | None = _env("DCL_GRAFANA_ADMIN_PASSWORD", default=None)
     grafana_port: Port = _env("DCL_GRAFANA_PORT", default=3300)
     openwebui_port: Port = _env("DCL_OPENWEBUI_PORT", default=8300)
+    auth_secret: SecretStr | None = _env("DCL_AUTH_SECRET", default=None)
+    auth_token_ttl_hours: int = _env("DCL_AUTH_TOKEN_TTL_HOURS", default=12)
+    bootstrap_admin_email: str | None = _env("DCL_BOOTSTRAP_ADMIN_EMAIL", default=None)
+    bootstrap_admin_password: SecretStr | None = _env("DCL_BOOTSTRAP_ADMIN_PASSWORD", default=None)
 
     redis_url: str | None = _env("DCL_REDIS_URL", default=None)
     redis_password: SecretStr | None = _env("DCL_REDIS_PASSWORD", default=None)
