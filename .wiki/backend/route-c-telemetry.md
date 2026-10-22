@@ -83,6 +83,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | S1 | Quantity vocabulary + fits_quantity(); entity/alias/fact enums for S2 |
 | 2026-10-22 | S1 | Step 1, LabJack .dat/.dat_fail: raw Parquet, stats, channel_map lookup, UNIT_AMBIGUITY HARD, halt with staged payload, `dcl.process.route_c`; 11 tests |
 | 2026-10-22 | S1 | Live on the stack: 20 LabJack runs (4.94 M rows, 4,853 s, 256 MB raw Parquet, 1017.3 Hz, no gaps) HALTED with 160 UNIT_AMBIGUITY HARD; 0 FAILED |
+| 2026-10-22 | S1 | Live: the 20 parked C documents processed (4 config ACTIVE; DAQ CSV 22 rows → table, 115 rows → first committed run, 8 thermocouple channels, weak-t0 CONFLICT SOFT; 2 TDMS HALTED with 8 HARD each; 12 workbooks indexed as tables, 3 ACTIVE, 9 with SOFT unit flags); 0 FAILED |
 | 2026-10-22 | S1 | Adapters for .tdms, .csv, workbooks and .cfg on a shared series path; channels resolve by rule, then by the unit the file states; generic resume |
 | 2026-10-22 | S1 | Step 2: migration 0009, .cfg evidence, normalization, t0, metrics, bounds, commit, resume from raw.parquet, retroactive pass; 39 Route C tests |
 

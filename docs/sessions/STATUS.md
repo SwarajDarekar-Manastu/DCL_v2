@@ -637,3 +637,15 @@ Merged / ready: dev-only Console sign-in settings (`console_dev_auth`, `console_
 Blocked on: nothing
 Needs from others: Lead — merge; S3 — Console Dockerfile on main (a9b26db) for the compose wiring
 Next: redeploy workers from main b9cf8f2 for S1; switch the running Portainer to the compose service; Console service wiring
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: the 20 parked Route C documents ran on the stack (S4's redeploy from 69dd28a) and match the dry-reading expectation. There were 0 FAILED, and all indexed documents are embedded (models role and /tokenize/count working).
+- 4 .cfg became ACTIVE config documents.
+- DAQami CSV with 22 rows became an ACTIVE table: 22 row nodes.
+- DAQami CSV with 115 rows is the first committed telemetry run: 115 rows at 2 Hz over 57 s, 8 thermocouple channels (333–1,226 K) in telemetry_channels. Its t0 came from a temperature slope at 25.5 s with confidence 0.35, which raised a CONFLICT SOFT per §C.6.
+- 2 TDMS files are HALTED with 8 UNIT_AMBIGUITY HARD each (AI0–AI7 have an empty unit_string; the CSV units are evidence).
+- 12 workbooks became table documents: 3 ACTIVE and 9 ACTIVE_WITH_SOFT_FLAGS (numeric columns that state no unit). Their kinds are 7 engineering_table, 4 test_plan and 1 risk_assessment.
+Route C on the stack: 22 HALTED (20 LabJack, 2 TDMS), 7 ACTIVE, 11 ACTIVE_WITH_SOFT_FLAGS.
+Blocked on: nothing
+Needs from others: an SME confirmation of channel maps (S5's proposals) to resume the 22 HALTED runs
+Next: the settings API for S3, then the library PDF language check
