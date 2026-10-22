@@ -41,7 +41,8 @@ M2_M4_TABLES = {
     "telemetry_runs",
     "telemetry_channels",
 }
-EXPECTED_TABLES = M1_TABLES | M2_M4_TABLES
+AUTH_TABLES = {"users"}  # local password RBAC (migration 0010)
+EXPECTED_TABLES = M1_TABLES | M2_M4_TABLES | AUTH_TABLES
 
 # Every ✓ column of file 05 and the enum it must follow.
 CHECKED_COLUMNS: dict[tuple[str, str], type[StrEnum]] = {
@@ -95,6 +96,8 @@ OTHER_CHECKS = {
     "ck_documents_staged_when_halted",
     "ck_document_relations_symmetric_order",
     "ck_review_flags_doc_or_location",
+    "ck_users_roles",  # array containment, tested in test_users.py
+    "ck_users_email_lower",
 }
 
 FK_WITHOUT_INDEX_SQL = (Path(__file__).parent / "fk_without_index.sql").read_text()
