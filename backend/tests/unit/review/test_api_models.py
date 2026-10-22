@@ -10,6 +10,8 @@ from pydantic import TypeAdapter, ValidationError
 from backend.api import auth, review
 from backend.dispatcher.contract import ALLOWED_ACTIONS, MapColumns, Resolution, SetUnit
 from backend.postgres.enums import FlagType
+from backend.postgres.session import get_session
+from backend.review import cases
 from backend.review.api_models import FlagResolution, ResolveRequest, allowed_actions_for, check_actions
 
 FLAG = uuid.UUID("00000000-0000-4000-8000-0000000000f1")
@@ -106,6 +108,7 @@ def _app(*roles: auth.ConsoleRole) -> TestClient:
     app.include_router(review.router)
     user = auth.ConsoleUser(oid="o", name="n", email="r@manastuspace.com", roles=list(roles))
     app.dependency_overrides[auth.current_user] = lambda: user
+    app.dependency_overrides[get_session] = lambda: object()
     return TestClient(app)
 
 
@@ -117,17 +120,20 @@ def test_every_review_route_is_published_with_its_response_model():
         assert ok["content"]["application/json"]["schema"]["$ref"].endswith(f"/{model}"), (method, path)
 
 
-def test_reviewer_gets_501_until_the_tables_exist():
+def test_undo_dry_run_and_simulate_answer_501_until_built():
     client = _app(auth.ConsoleRole.REVIEWER)
-    response = client.get("/review/cases", params={"severity": "HARD", "sort": "age"})
-    assert response.status_code == 501
     assert client.post("/review/cases/doc:4/undo").status_code == 501
+    assert client.post(f"/review/rules/{FLAG}/simulate").status_code == 501
 
 
-def test_viewer_cannot_use_review_routes_and_reviewers_may_deactivate_rules():
+def test_viewer_cannot_use_review_routes_and_reviewers_may_deactivate_rules(monkeypatch):
+    def missing(session, rule_id, actor):
+        raise cases.CaseNotFound(f"rule {rule_id}")
+
+    monkeypatch.setattr(cases, "deactivate_rule", missing)
     assert _app(auth.ConsoleRole.VIEWER).get("/review/cases").status_code == 403
     assert _app(auth.ConsoleRole.VIEWER).post(f"/review/rules/{FLAG}/deactivate").status_code == 403
-    assert _app(auth.ConsoleRole.REVIEWER).post(f"/review/rules/{FLAG}/deactivate").status_code == 501
+    assert _app(auth.ConsoleRole.REVIEWER).post(f"/review/rules/{FLAG}/deactivate").status_code == 404
 
 
 def test_allowed_actions_hide_admin_only_actions_from_reviewers():
