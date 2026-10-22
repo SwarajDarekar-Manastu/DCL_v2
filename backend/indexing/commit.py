@@ -18,12 +18,15 @@ this document deleted first), entity mentions, numeric facts, the telemetry cata
 Review overlays (operator resolutions re-applied on rebuild, file 04 §7) are not applied here yet.
 """
 
+import dataclasses
 import hashlib
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
+from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -189,6 +192,27 @@ def _test_plan_conflict(folder_id: str, content_id: str) -> Flag:
     )
 
 
+def strip_nul(value: Any) -> Any:
+    """``value`` with every NUL character removed from its strings, at any depth (pydantic models,
+    dataclasses, lists, tuples, dicts). PostgreSQL text and jsonb refuse NUL (DECISIONS 2026-10-22)."""
+    if isinstance(value, str):
+        return value.replace("\x00", "") if "\x00" in value else value
+    if isinstance(value, BaseModel):
+        return value.model_copy(
+            update={name: strip_nul(getattr(value, name)) for name in type(value).model_fields}
+        )
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        changes = {f.name: strip_nul(getattr(value, f.name)) for f in dataclasses.fields(value) if f.init}
+        return dataclasses.replace(value, **changes)
+    if isinstance(value, list):
+        return [strip_nul(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(strip_nul(v) for v in value)
+    if isinstance(value, dict):
+        return {strip_nul(k): strip_nul(v) for k, v in value.items()}
+    return value
+
+
 def commit_document(
     session: Session,
     document: Document,
@@ -197,6 +221,7 @@ def commit_document(
     pipeline_version: int,
     now: datetime | None = None,
 ) -> CommitResult:
+    processed, plan = strip_nul(processed), strip_nul(plan)
     if processed.has_hard_flags or any(
         f.severity == FlagSeverity.HARD for f in _open_flags(session, document.doc_id)
     ):
