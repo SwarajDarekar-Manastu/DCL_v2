@@ -554,3 +554,9 @@ Merged / ready: restart-resume test (`backend/tests/integration/llm_engine/engin
 Blocked on: nothing
 Needs from others: S4's 07965fd (GEMINI_MODEL / GEMINI_LITE_MODEL) on main, then I switch vision, analysis, synthesis, enrichment to the settings
 Next: T6 external_search (grounding, sanitized query only, external_queries in the trace), T2 when S1's telemetry tables land, T3, Skills
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: E12 on the stack, per the Lead's revised ruling. processing.scope now holds the 11 folder ids plus 8 ECSS path globs, one file each. The first, whole-folder E12 dispatch (141 WAITING A1 documents, before the correction arrived) was undone: 133 untouched documents were removed, with no flags and nothing derived, and the 8 standards stay. A re-dispatch creates nothing. Stack documents: A1 33, A2 23, B 4, C 40 (20 HALTED, 20 waiting for adapters), D 84, E 2, F 4.
+Blocked on: nothing
+Needs from others: nothing new
+Next: as in the entry above
