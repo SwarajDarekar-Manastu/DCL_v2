@@ -460,3 +460,9 @@ Merged / ready: engine tools T1 search_documents, U1 get_document, U2 catalog_lo
 Blocked on: nothing
 Needs from others: S1: telemetry_runs/channels and Parquet for T2; the diagram catalog shape in `.wiki/backend/answer-engine.md` for Route E; S4: whether the gateway proxies Google Search grounding for T6
 Next: T2/T3/T6, then query analysis, synthesis, entailment verifier, workflow + DBOS, /v1/answer streaming
+
+## 2026-10-22 14:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Answer Engine workflow increment. Planner `backend/llm_engine/engine/playbooks.py`, `AnswerWorkflow` in `backend/llm_engine/engine/workflow.py` (analysis → plan → tools in parallel → insufficient-evidence check → synthesis + verification; chit-chat, clarification, extractive fallback; trace record), `POST /v1/answer` streams it (`backend/api/engine.py`, 503 when unconfigured or not installed). Prompts `physics_args.v1`, `chitchat.v1`. Runs under DBOSRuntime (tables in schema `dbos` of the DCL database, self-migrated). Under DBOS stream writes arrive out of order, so frames carry `seq` and `ordered()` restores them. 15 new unit tests + 1 DBOS DB test. Flash-Lite = gemini-3.1-flash-lite (a125d60, probed: MINIMAL works).
+Blocked on: nothing
+Needs from others: S4: dependency group with `llama-index-workflows==2.25.0`, `llama-agents-dbos==0.7.0`, `dbos==2.31.1`, verified together (dbos 3.0–3.3 break llama-agents-dbos 0.7.0: "Queue objects cannot be constructed directly"; workflow tests skip until installed); GEMINI_MODEL / GEMINI_LITE_MODEL settings. Lead: call `start_engine()` / `stop_engine()` from the API lifespan in `backend/main.py` (role api|all). S1: `answer_traces` table (M8) for the trace record (columns in `.wiki/backend/answer-engine.md`); until then traces are logged.
+Next: engine restart-resume test, T2 query_telemetry when S1's telemetry tables land, T6 external_search (grounding, sanitized query only), T3; Skills markdown
