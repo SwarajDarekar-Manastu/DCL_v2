@@ -55,4 +55,5 @@ Written by `DCL Lead` only. Newest at the bottom. Each entry names the sessions 
 | 2026-10-22 | **User:** Console redesign with Vercel Geist (fonts, spacing, dark mode) and shadcn-svelte components, done by one background agent in a single pass (research → feature map → plan → refactor), no iteration loop; S3 reviews and merges the result | S3 | user |
 | 2026-10-22 | **User:** the Open WebUI container stays in M9; the install script and valves (S3) are ready for it. Not pulled forward | S3, S4 | user |
 | 2026-10-22 | `answer.proprietary_terms` draft lives in git-ignored `data/config/`, never under `config/` (public repo) | S5 | Lead |
+| 2026-10-22 | Gemini safety blocks (block_reason=SAFETY) occur on propellant-chemistry pages with some prompt wordings; prompts use neutral wording, and a refused or failed `transcribe_page` keeps the page's OCR text with `LOW_CONFIDENCE` SOFT instead of failing the document. S4 reviews gateway safety settings if blocks recur in the live run | S2, S4 | S2 fe53dd2 |
 
