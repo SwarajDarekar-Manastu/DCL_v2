@@ -7,13 +7,23 @@ scanned runs OCR the full page. Picture description through Docling's remote API
 to VisionService (A1.6) so prompts and schemas are ours and logged. Runs execute on CPU (the GPU belongs to
 the models role, decision H12).
 
+Docling converters are cached per OCR plan in the worker process: building one loads the layout, table,
+formula and code models (2–5 s on CPU), which a document with many alternating digital and scanned runs
+used to pay per run.
+
+Docling runs Tesseract's orientation detection (OSD, `--psm 0`) on every OCR'd page and logs an ERROR when
+the page has too few characters for it; OCR then proceeds with our explicit script model and orientation 0,
+so `QuietOsd` logs that one case as INFO. Other OSD failures stay errors. Rotation comes from triage.
+
 Second pass (A1.3): a scanned page whose `ocr_score` stays below 0.6 is converted again with EasyOCR when
 its script is Latin; a page that is still low goes whole to `transcribe_page` (Gemini, any script).
 """
 
 import io
+import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any
 
 from backend.routes.a1_office.triage import PageDecision
@@ -120,10 +130,32 @@ def pipeline_options(ocr: OcrPlan | None):
     return options
 
 
+DOCLING_TESSERACT_LOGGER = "docling.models.stages.ocr.tesseract_ocr_cli_model"
+CONVERTER_CACHE = 3  # text layer + the scanned plans of one document; each holds its own models
+
+
+class QuietOsd(logging.Filter):
+    """Docling's "OSD failed … Too few characters" on a near-empty page is expected: log it as INFO."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno == logging.ERROR and record.getMessage().startswith("OSD failed"):
+            if "Too few characters" in record.getMessage():
+                record.levelno, record.levelname = logging.INFO, "INFO"
+        return True
+
+
+def quiet_osd() -> None:
+    logger = logging.getLogger(DOCLING_TESSERACT_LOGGER)
+    if not any(isinstance(f, QuietOsd) for f in logger.filters):
+        logger.addFilter(QuietOsd())
+
+
+@lru_cache(maxsize=CONVERTER_CACHE)
 def _converter(ocr: OcrPlan | None):
     from docling.datamodel.base_models import InputFormat
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
+    quiet_osd()
     return DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options(ocr))}
     )

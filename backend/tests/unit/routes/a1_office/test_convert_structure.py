@@ -162,3 +162,27 @@ def test_datasheet_table_is_one_html_node_and_boxes_are_top_left_fractions(conve
             assert 0 <= box.x0 <= box.x1 <= 1 and 0 <= box.y0 <= box.y1 <= 1
     title_text = next(n for n in sheet.nodes if n.node_type is NodeType.CHILD)
     assert title_text.bboxes[0].y0 < table.bboxes[0].y0  # text above the table, top-left origin
+
+
+def test_docling_osd_failure_on_a_near_empty_page_is_logged_as_info_only():
+    import logging
+
+    from backend.routes.a1_office.convert import QuietOsd
+
+    def record(stderr: bytes) -> logging.LogRecord:
+        return logging.LogRecord(
+            "docling",
+            logging.ERROR,
+            "x",
+            1,
+            "OSD failed (doc %s, page: %s):\n %s",
+            ("a.pdf", 0, stderr),
+            None,
+        )
+
+    sparse = record(
+        b"Estimating resolution as 698\nToo few characters. Skipping this page\nError during processing.\n"
+    )
+    assert QuietOsd().filter(sparse) and sparse.levelno == logging.INFO and sparse.levelname == "INFO"
+    other = record(b"Error opening data file osd.traineddata")
+    assert QuietOsd().filter(other) and other.levelno == logging.ERROR
