@@ -734,3 +734,9 @@ Merged / ready: (1) per-capability extraction safety flag (9b4e3f1): `pipeline_c
 Blocked on: nothing
 Needs from others: Lead: new `pipeline_config` key `vision.extraction_safety` for file 05's key list (S1 seeds nothing; absent = off). S4: the API image has DuckDB without the httpfs extension; `INSTALL httpfs` downloads it on first use, so please bake it into the image for offline hosts. The Matplotlib plot embed of T2 is not built (no matplotlib dependency); `plot=true` returns a warning.
 Next: Skills for Open WebUI
+
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: on the branch for the single merge request after the watch check: DuckDB httpfs baked into the backend image (no-network LOAD test passes on the new image, fails on the current one), plus f7fdefb and the step 3 results. Branch synced with main 3afecef
+Blocked on: time. The RustFS step 2 lifecycle watch is due by 2026-10-24 00:00Z
+Needs from others: nothing
+Next: after 2026-10-24 00:00Z run `lifecycle_watch.py check`, then the merge request (the api and workers need a rebuild from main after it for httpfs)
