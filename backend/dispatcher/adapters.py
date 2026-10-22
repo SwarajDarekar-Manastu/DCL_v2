@@ -1,9 +1,10 @@
 """The route adapter registry (file 03 §1.4, file 06 §3 ``UNSUPPORTED_FORMAT``).
 
-A route is implemented file kind by file kind: Route C starts with LabJack ``.dat``, so a ``.xlsx``
-typed C stays ``WAITING_FOR_ROUTE`` until its adapter lands. A document is sent to processing when its
-route is enabled (``routes.<X>.enabled``) and an adapter of that route accepts its primary file. When the
-registry gains an adapter, the next dispatch releases the parked documents it accepts.
+A route is implemented file kind by file kind (Route C: LabJack ``.dat``, ``.tdms``, ``.csv``, workbooks,
+configuration files); a file no adapter of its route accepts stays ``WAITING_FOR_ROUTE``. A document is
+sent to processing when its route is enabled (``routes.<X>.enabled``) and an adapter of that route accepts
+its primary file. When the registry gains an adapter, the next dispatch releases the parked documents it
+accepts.
 """
 
 from collections.abc import Callable
@@ -11,7 +12,7 @@ from dataclasses import dataclass
 
 from backend.celery_redis.queues import Queue
 from backend.postgres.enums import Route
-from backend.routes.c_telemetry import labjack
+from backend.routes.c_telemetry import config_file, delimited, labjack, tdms, workbook
 
 
 @dataclass(frozen=True)
@@ -23,8 +24,13 @@ class Adapter:
     can_handle: Callable[[bytes, str], bool]
 
 
+_C = ("dcl.process.route_c", Queue.TELEMETRY_STREAM)
 ADAPTERS: tuple[Adapter, ...] = (
-    Adapter("labjack_dat", Route.C, "dcl.process.route_c", Queue.TELEMETRY_STREAM, labjack.can_handle),
+    Adapter("labjack_dat", Route.C, *_C, labjack.can_handle),
+    Adapter("tdms", Route.C, *_C, tdms.can_handle),
+    Adapter("delimited", Route.C, *_C, delimited.can_handle),
+    Adapter("workbook", Route.C, *_C, workbook.can_handle),
+    Adapter("config_file", Route.C, *_C, config_file.can_handle),
 )
 
 
