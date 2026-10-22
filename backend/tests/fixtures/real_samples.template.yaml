@@ -1,7 +1,7 @@
 # Real corpus samples: committed TEMPLATE without file names (the repository is public).
 # Rule (user, 2026-10-22): one file per supported type, chosen from registry metadata by
 # extension and file name only, plus the telemetry runs the benchmark cases need.
-# Pending: one .pptx and one .zip (not in the allowlist folders; chosen from the registry by S1).
+# X1 (.pptx) and X2 (.zip) lie outside the allowlist; S1 picked them from registry metadata only.
 # The full manifest with paths lives in the git-ignored data/samples/real_samples.yaml.
 # Copies live in data/samples/<entry>/ (export procedure in README.md); test_real_samples.py
 # finds each sample in its entry directory by sha256 and checks the size.
@@ -25,3 +25,5 @@ samples:
   - {entry: E1, sha256: "4e55b35fc4847def338c3d6e712678e0402278e5d140794506418c48a52c5970", size_bytes: 32332216, route: C, purpose: "Injector 10 cold-flow run for the telemetry cases"}
   - {entry: E2, sha256: "eed824bbc36cad221b0934354b11533508832b7b288c059d3a0f358600bb043e", size_bytes: 7008663, route: C, purpose: "Injector 14 run for the negative chamber pressure behaviour case"}
   - {entry: E2, sha256: "f5c26d2e4447c8152d8e75453500410df7bd38c96ee1a61da50dae15fdb411ea", size_bytes: 7382050, route: C, purpose: "Injector 14 failed run for the telemetry cases; also the .dat_fail type"}
+  - {entry: X1, sha256: "47fc39e9756bf6ae1dbea9999385f510d8bf5a8173c816192ae352069b0c80fe", size_bytes: 3863237, route: A1, purpose: "one PPTX (A1.10)"}
+  - {entry: X2, sha256: "f63918c9815eef4b58bef12faa0298a45610b21d5a9a10ef01c7ed67abd20807", size_bytes: 428790, route: G, purpose: "one ZIP archive (G)"}

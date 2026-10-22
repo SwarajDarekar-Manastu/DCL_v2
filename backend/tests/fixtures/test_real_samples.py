@@ -22,7 +22,7 @@ SAMPLES = REPO / "data" / "samples"
 FULL = SAMPLES / "real_samples.yaml"
 ROUTES = ["A1", "A2", "B", "C", "D", "E", "F", "G"]
 ITEM = {
-    "entry": {"type": "string", "pattern": "^E([1-9]|1[0-9])$"},
+    "entry": {"type": "string", "pattern": "^(E([1-9]|1[0-9])|X[1-9])$"},
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "size_bytes": {"type": "integer", "minimum": 1},
     "route": {"enum": ROUTES},
@@ -79,7 +79,7 @@ def test_template_has_no_file_names_and_is_valid():
     jsonschema.validate(data, schema(with_path=False))
     keys = [(s["entry"], s["sha256"]) for s in data["samples"]]
     assert len(keys) == len(set(keys))
-    assert {s["route"] for s in data["samples"]} >= {"A1", "A2", "B", "C", "D", "E", "F"}
+    assert {s["route"] for s in data["samples"]} >= {"A1", "A2", "B", "C", "D", "E", "F", "G"}
 
 
 def test_no_real_sample_or_manifest_is_tracked_by_git():
