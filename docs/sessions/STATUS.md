@@ -466,3 +466,10 @@ Merged / ready: office conversion for S1 and S2: `backend/common/office.py` `con
 Blocked on: backups questions with DCL Lead
 Needs from others: Lead — approve `DCL_OFFICE_URL`, `DCL_GRAFANA_ADMIN_PASSWORD`, `DCL_GRAFANA_PORT`; merge 31eb0be + this
 Next: backups once answered; MinIO replacement comparison by end of M4
+
+## 2026-10-22 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready: Route C step 1 is on main (1d7eae6). routes.C stays off on the stack until S4 confirms the worker image rebuild.
+Blocked on: Lead / SME decision. The approved channel_map derivation from "Data format.xlsx" cannot be done. That workbook is a template for the report's summary metrics, for example "Feedline Pressure - Before Firing (Bar) [Gauge]" and "AUC Mean Thrust (N)". It never names a LabJack channel. Setup.xlsx lists the instruments, also without channels. The folder's LJStreamM.cfg (file 03 §C.0) carries only the scaling per channel, for example `y=a*24.943-12.385`. The y* columns in the .dat already have it applied, which I verified on real data. No file in E1–E11 gives a channel's quantity or unit. The slopes do match Setup.xlsx: y0–y2 are about 25 bar/V (100 bar sensor, 0.5–4.5 V), y3–y4 are 2.995 bar/V (30 bar sensor, 0–10 V) and y6 is 50.044 N/V (the load cell, per the TP37 spec). y5 (120·v + 0.721) and y7 (10·v) match no listed instrument.
+Question: (A, recommended) The .cfg scaling and these slope matches go into each UNIT_AMBIGUITY flag as evidence and suggested resolutions. The flags stay HARD, and one operator rule per folder or root in the Review Console resolves all its runs. No derived rule claims a unit that no file states. Or (B): the SME supplies the y0–y7 assignment per rig (canonical name, quantity, unit, gauge/abs), which I load as operator rules. Or both: B for the known rigs, A for everything else.
+Needs from others: Lead: choose A, B or both; for B, the SME's channel table
+Next: on the answer: the telemetry_runs/telemetry_channels migration (approved), normalized Parquet, t0, metrics, the commit path
