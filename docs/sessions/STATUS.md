@@ -747,3 +747,13 @@ Merged / ready (step 2 of 3, code complete): local password sign-in.
 Blocked on: the live end-to-end login, and with it the dev-token removal, needs S1's `users` model and migration 0010.
 Needs from others: S1: `backend.postgres.models.User` with the agreed columns, plus migration 0010. S4: a redeploy after the merge.
 Next: step 3, Settings over S1's /settings API, while waiting for 0010.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- Step 3: the Settings pages edit pipeline_config over S1's /settings API. Typed editors, then Preview showing impacts (counts, bytes, extensions), then Apply with a reason and the versions the editor saw. 422 reasons show per key; a 409 reloads the current values. Each key has its history with Restore.
+- Live on the stack: an edit of gate.junk_names was applied and then restored. Both writes are audited.
+- Account changes now write audit_events (entity_type `user`; Lead ruling).
+- Tests: Console check 0 errors, vitest 137, build ok; backend pytest exit 0.
+Blocked on: local login end to end and dev-token removal wait for S1's 0010 and S4's redeploy (the Lead will say when). The cost estimate in the preview waits for S1's llm_calls price ledger.
+Needs from others: S1: migration 0010 (users, `user` audit type).
+Next: end-to-end local login and dev-token removal when told; otherwise idle.
