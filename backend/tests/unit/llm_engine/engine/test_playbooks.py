@@ -2,7 +2,7 @@
 
 from backend.indexing.retrieval import Scope
 from backend.llm_engine.engine.analysis import QueryAnalysis, resolve
-from backend.llm_engine.engine.playbooks import UNAVAILABLE, build_plan
+from backend.llm_engine.engine.playbooks import build_plan
 from backend.llm_engine.enrichment.entities import AliasIndex
 
 
@@ -11,14 +11,17 @@ def plan_for(**raw):
     return build_plan("question", analysis)
 
 
-def test_telemetry_without_route_c_falls_back_to_report_tables_and_says_so():
+def test_telemetry_asks_for_t2_arguments_and_cross_checks_report_tables():
     plan = plan_for(intents=["telemetry_metric"], test_plan_ids=["TP7"])
     tools = [c.tool for c in plan.calls]
+    assert plan.needs_telemetry_args is True
     assert tools == ["catalog_lookup", "search_documents", "search_documents"]
     assert plan.calls[0].args.test_plan_id == "TP07"
     assert plan.calls[1].args.scope == Scope.TABLES_ONLY
     assert plan.calls[1].args.filters.test_plan_ids == ["TP07"]
-    assert plan.caveats == [UNAVAILABLE["query_telemetry"]]
+    assert plan.caveats == []
+    assert plan_for(intents=["failure_investigation"], test_plan_ids=["TP7"]).needs_telemetry_args
+    assert not plan_for(intents=["failure_investigation"]).needs_telemetry_args
 
 
 def test_failure_investigation_searches_reports_figures_and_diagram_neighbors():
