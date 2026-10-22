@@ -34,8 +34,10 @@ Tests and fixtures:
 
 Provides:
 - Healthy stack: `docker compose --env-file .env -f backend/devops/compose.yaml -f backend/devops/compose.dev.yaml up -d --build --wait`
-- Host ports on `DCL_BIND_HOST`: 5435 PostgreSQL (`DCL_DB_PORT`), 6381 Redis, 9100 MinIO, 9101 MinIO console, 8500 models, 8200 API
-- In-network URLs set per container: `postgres:5432/dcl_v2`, `redis:6379/0`, `minio:9000`, `models:8500`
+- Host ports on `DCL_DATA_BIND_HOST` (default 127.0.0.1): 5435 PostgreSQL (`DCL_DB_PORT`), 6381 Redis, 9100 MinIO S3
+- Host ports on `DCL_BIND_HOST` (UIs and API): 9101 MinIO console, 8500 models, 8200 API, 3300 Grafana, 9443/9000 Portainer (dev)
+- Redis `requirepass` from `DCL_REDIS_PASSWORD` (empty = no password); compose puts it into every in-stack `DCL_REDIS_URL`
+- In-network URLs set per container: `postgres:5432/dcl_v2`, `redis://[:password@]redis:6379/0`, `minio:9000`, `models:8500`
 - Dead letters: every final task failure and every task whose worker died `MAX_DELIVERIES` (3) times lands in the Redis list `dcl:dead_letter` (newest first, capped 10,000); read with `backend.celery_redis.app.dead_letters(limit)` for the Console "Failed tasks" page
 - M1 load test: `backend/devops/ci/queue_load_test.sh [--project dcl-v2] --tasks 5000`
 - Celery: `backend.celery_redis.app.app`, queues `Queue.*`, pools `POOLS`; task modules `backend/celery_redis/tasks_*.py` are included when present; `dcl.ping`
@@ -76,6 +78,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S4 | Network exposure split: Postgres, Redis, MinIO S3 on `DCL_DATA_BIND_HOST` (default loopback); Redis `requirepass` from `DCL_REDIS_PASSWORD`, verified live on a throwaway project (NOAUTH without, PONG with, healthy) |
 | 2026-10-22 | S4 | Object-store evaluation (`backend/devops/object_store_evaluation.md`, `backend/devops/ci/s3_compat_check.py`): RustFS 1.0.3 recommended over SeaweedFS 4.48 and Garage v2.4.1 |
 | 2026-10-22 | S4 | Office conversion service + client (unoserver dropped: inline and path-based xlsx loads fail on LibreOffice 7.4); verified rtf/doc→docx, docx→pdf, xls→xlsx, xlsx recalculation (stale 999 → 81), FMEA fixture → pdf |
 | 2026-10-22 | S4 | Dead-letter list and poison-task stop (`DclTask`), M1 queue load test harness (passed), 24 h lifecycle on `dcl-exports/uploads/` |

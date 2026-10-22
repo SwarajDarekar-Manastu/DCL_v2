@@ -11,7 +11,9 @@ docker compose -p dcl-v2 down            # keeps volumes
 ```
 
 - Every `up` first runs two one-shot jobs: `minio-init` (buckets, versioning on dcl-raw and dcl-cir, lifecycle, the application user) and `migrate` (`alembic upgrade head`). Both are idempotent and must show `Exited (0)`.
-- Host ports on `DCL_BIND_HOST`: PostgreSQL `DCL_DB_PORT` (5435 on the dev host), Redis 6381, MinIO API 9100, MinIO console `DCL_MINIO_CONSOLE_PORT` (9101), models 8500, API 8200.
+- Host ports on `DCL_DATA_BIND_HOST` (default 127.0.0.1, keep it there): PostgreSQL `DCL_DB_PORT` (5435 on the dev host), Redis 6381, MinIO API 9100.
+- Host ports on `DCL_BIND_HOST` (0.0.0.0 for LAN access): MinIO console `DCL_MINIO_CONSOLE_PORT` (9101), models 8500, API 8200, Grafana `DCL_GRAFANA_PORT` (3300), Console 8601, Portainer 9443/9000 (dev).
+- Redis password: when `DCL_REDIS_PASSWORD` is set, Redis runs with `requirepass` and compose puts it into every in-stack `DCL_REDIS_URL`. The host-side `DCL_REDIS_URL` in `.env` must then read `redis://:<password>@127.0.0.1:6381/0`; the loader refuses a URL without it. Changing the password: edit both lines, then `up -d` (Redis and every backend service restart). `redis-cli -a "$DCL_REDIS_PASSWORD"` for manual checks.
 - `.env` holds host-side URLs for operator CLIs (`127.0.0.1:5435`, …). Compose sets the in-network URLs per container (`postgres:5432`, `redis:6379`, `minio:9000`, `models:8500`). Credentials are interpolated into URLs and must be URL-safe.
 - Only `worker-io-light` mounts `DCL_TOKEN_DIR` (read-write). In dev it runs as uid 1001, the owner of that directory.
 - Running from a worktree, which has no `.env` of its own: `export DCL_ENV_FILE=/home/ai/Desktop/Swaraj_/dcl_v2/.env` and pass the same path to `--env-file`.

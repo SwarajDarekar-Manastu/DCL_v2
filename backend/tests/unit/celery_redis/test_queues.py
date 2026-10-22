@@ -87,7 +87,7 @@ def test_dev_override_only_lowers_limits():
 
 
 IN_NETWORK = {
-    "DCL_REDIS_URL": "redis://redis:6379/0",
+    "DCL_REDIS_URL": "redis://${DCL_REDIS_PASSWORD:+:}${DCL_REDIS_PASSWORD:-}${DCL_REDIS_PASSWORD:+@}redis:6379/0",
     "DCL_MINIO_ENDPOINT": "http://minio:9000",
     "DCL_MODELS_URL": "http://models:8500",
     "DCL_OFFICE_URL": "http://libreoffice:2003",
@@ -120,7 +120,9 @@ def test_token_dir_is_mounted_only_into_the_sync_worker():
 def test_published_host_ports_follow_the_lead_allocation():
     services = compose("compose.yaml")["services"]
     ports = [port for svc in services.values() for port in svc.get("ports", [])]
-    published = {re.fullmatch(r"\$\{DCL_BIND_HOST:-127\.0\.0\.1\}:(.+):\d+", port).group(1) for port in ports}
+    published = {
+        re.fullmatch(r"\$\{DCL_(?:DATA_)?BIND_HOST:-127\.0\.0\.1\}:(.+):\d+", port).group(1) for port in ports
+    }
     assert published == {
         "${DCL_DB_PORT:-5435}",
         "6381",
@@ -130,11 +132,12 @@ def test_published_host_ports_follow_the_lead_allocation():
         "8200",
         "${DCL_GRAFANA_PORT:-3300}",
     }
+    data_ports = {name: svc["ports"] for name, svc in services.items() if name in ("postgres", "redis")}
     assert all(
-        p.startswith("${DCL_BIND_HOST:-127.0.0.1}:")
-        for svc in services.values()
-        for p in svc.get("ports", [])
+        p.startswith("${DCL_DATA_BIND_HOST:-127.0.0.1}:") for ports_ in data_ports.values() for p in ports_
     )
+    assert services["minio"]["ports"][0].startswith("${DCL_DATA_BIND_HOST:-127.0.0.1}:9100:")
+    assert services["minio"]["ports"][1].startswith("${DCL_BIND_HOST:-127.0.0.1}:")
 
 
 def test_celery_app_declares_every_queue_and_safe_defaults():

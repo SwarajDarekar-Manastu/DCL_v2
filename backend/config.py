@@ -15,7 +15,7 @@ from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 
 from dotenv import dotenv_values
 from pydantic import (
@@ -167,6 +167,8 @@ class Settings(BaseSettings):
     openwebui_port: Port = _env("DCL_OPENWEBUI_PORT", default=8300)
 
     redis_url: str | None = _env("DCL_REDIS_URL", default=None)
+    redis_password: SecretStr | None = _env("DCL_REDIS_PASSWORD", default=None)
+    data_bind_host: str = _env("DCL_DATA_BIND_HOST", default="127.0.0.1")
     minio_endpoint: AnyHttpUrl | None = _env("DCL_MINIO_ENDPOINT", default=None)
     minio_access_key: str | None = _env("DCL_MINIO_ACCESS_KEY", default=None)
     minio_secret_key: SecretStr | None = _env("DCL_MINIO_SECRET_KEY", default=None)
@@ -196,6 +198,9 @@ class Settings(BaseSettings):
         if str(data.get("DCL_ENV") or Environment.DEV).strip().lower() == Environment.DEV:
             for name, value in DEV_DEFAULTS.items():
                 data.setdefault(name, value)
+            redis_password = data.get("DCL_REDIS_PASSWORD")
+            if redis_password and data["DCL_REDIS_URL"] == DEV_DEFAULTS["DCL_REDIS_URL"]:
+                data["DCL_REDIS_URL"] = f"redis://:{quote(redis_password, safe='')}@redis:6379/0"
         for name in COMMA_LISTS:
             value = data.get(name)
             if isinstance(value, str):
@@ -230,6 +235,16 @@ class Settings(BaseSettings):
             if len(token) < DEV_TOKEN_MIN_LENGTH:
                 raise ValueError(
                     f"DCL_CONSOLE_DEV_AUTH=true needs DCL_CONSOLE_DEV_TOKEN of {DEV_TOKEN_MIN_LENGTH}+ chars"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _redis_url_carries_the_password(self) -> "Settings":
+        if self.redis_password and self.redis_url and not self.redis_url.startswith("unix://"):
+            given = urlsplit(self.redis_url).password
+            if given is None or unquote(given) != self.redis_password.get_secret_value():
+                raise ValueError(
+                    "DCL_REDIS_URL must carry DCL_REDIS_PASSWORD (redis://:<password>@host:port/db)"
                 )
         return self
 
