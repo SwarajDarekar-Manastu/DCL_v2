@@ -788,3 +788,9 @@ Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest -q`: 
 Blocked on: nothing
 Needs from others: S3: regenerate `api_schema.d.ts` (review routes live, `Suggestion.resolution` nullable); users store emails must be lower-case (S3 lowercases on create; keep it on update). S5: pick the MULTILINGUAL folder from the 8.
 Next: report the A1 counts and the M2 TP7 check when the A1 batch ends
+
+## 2026-10-22 17:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: MULTILINGUAL set chosen by file name from S1's language check: 6 library patents as E13 (zh ×3, ja, ko from Staged Vapour Ignition; de ×1 from ISP Tech); path globs sent to the Lead for S1's processing.scope
+Blocked on: E13 indexed (Lead confirms), then the 6 remaining golden cases (library and multilingual)
+Needs from others: S1: add the E13 globs to processing.scope
+Next: idle until the Lead confirms E13 is indexed
