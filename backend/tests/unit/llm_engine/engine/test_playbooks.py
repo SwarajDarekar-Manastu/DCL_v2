@@ -25,7 +25,9 @@ def test_failure_investigation_searches_reports_figures_and_diagram_neighbors():
     plan = plan_for(intents=["failure_investigation"], hardware_items=["Injector 14"])
     kinds = [c.args.filters.doc_kinds for c in plan.calls if c.tool == "search_documents"]
     assert ["test_report", "failure_report"] in kinds
-    assert any(c.tool == "search_documents" and c.args.scope == Scope.FIGURES_ONLY for c in plan.calls)
+    [photos] = [c for c in plan.calls if c.tool == "inspect_visuals"]
+    assert photos.args.kinds == ["hardware_photo"] and photos.args.relook_question is None
+    assert "INJ14" in photos.args.components or "Injector 14" in photos.args.components
     [diagram] = [c for c in plan.calls if c.tool == "inspect_code_and_diagrams"]
     assert diagram.args.mode == "diagram_neighbors" and diagram.args.from_tag == "INJ14"
 
@@ -62,3 +64,11 @@ def test_external_search_follows_the_policy():
     assert internal.external == "no"
     refused = external_plan(["eng"], intents=["fact_lookup"], external_requested=True)
     assert refused.external == "no" and any("not enabled for your groups" in c for c in refused.caveats)
+
+
+def test_visual_lookup_plans_inspect_visuals_with_a_relook():
+    plan = plan_for(intents=["visual_lookup"], test_plan_ids=["TP7"])
+    [visuals] = [c for c in plan.calls if c.tool == "inspect_visuals"]
+    assert visuals.args.test_plan_ids == ["TP07"]
+    assert visuals.args.relook_question == "question"
+    assert not any("photo similarity" in c for c in plan.caveats)

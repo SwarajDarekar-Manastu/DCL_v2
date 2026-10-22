@@ -16,7 +16,7 @@
 	import { session } from '$lib/auth/session.svelte';
 	import ResultDrilldown from '$lib/components/benchmark/ResultDrilldown.svelte';
 	import { compareHref, runHref, suiteHref } from '$lib/components/benchmark/links';
-	import { byCategory, failureCounts, ribbon } from '$lib/components/benchmark/run_view';
+	import { byCategory, failureCounts, isActive, POLL_MS, ribbon, runProgress } from '$lib/components/benchmark/run_view';
 	import { Button } from '$lib/components/ui/button';
 	import Notice from '$lib/components/shell/Notice.svelte';
 	import Page from '$lib/components/shell/Page.svelte';
@@ -33,12 +33,14 @@
 	let comparison = $state<RunComparison | null>(null);
 	let open = $state<string | null>(null);
 	let error = $state('');
+	let tick = $state(0);
 	let canRun = $derived(hasRole(session.user?.roles ?? [], 'reviewer'));
 
 	const describe = (e: unknown) => (e instanceof ApiError ? e.detail : String(e));
 
 	$effect(() => {
 		const id = runId;
+		void tick;
 		const event = live.lastRunEvent;
 		if (event && event.key !== id && data) return;
 		getRun(id)
@@ -62,6 +64,13 @@
 			.catch(() => (comparison = null));
 	});
 
+	$effect(() => {
+		if (!data || !isActive(data.run.status)) return;
+		const timer = setTimeout(() => (tick += 1), POLL_MS);
+		return () => clearTimeout(timer);
+	});
+
+	let progress = $derived(data && isActive(data.run.status) ? runProgress(data.run, data.results) : null);
 	let caseMap = $derived(new Map(cases.map((c) => [c.case_id, c])));
 	let items = $derived(data ? ribbon(data.run.aggregate, comparison?.base.aggregate ?? null) : []);
 	let failures = $derived(data ? failureCounts(data.results) : []);
@@ -108,6 +117,17 @@
 
 			{#if error}<Notice tone="error" class="mb-4">{error}</Notice>{/if}
 			{#if run.status === 'queued'}<Notice tone="info" class="mb-4">Waiting for the benchmark runner.</Notice>{/if}
+			{#if progress}
+				<p class="text-muted-foreground mb-4 flex items-center gap-3 text-[13px]">
+					<progress
+						class="[&::-moz-progress-bar]:bg-foreground [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-foreground h-1.5 w-64 overflow-hidden rounded-full"
+						value={progress.done}
+						max={progress.total || 1}
+						aria-label="Run progress"
+					></progress>
+					<span class="num">{progress.label}</span>
+				</p>
+			{/if}
 
 			<div class="mb-4 flex flex-wrap items-end gap-3">
 				{#if others.length}

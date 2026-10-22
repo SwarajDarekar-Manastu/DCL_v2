@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byCategory, failureCounts, numericChecks, ribbon } from '../../src/lib/components/benchmark/run_view';
+import { byCategory, failureCounts, isActive, numericChecks, ribbon, runProgress, runRequest } from '../../src/lib/components/benchmark/run_view';
 import { compareHref, splitList, viewerHref } from '../../src/lib/components/benchmark/links';
 import { result } from './fixtures';
 
@@ -49,5 +49,25 @@ describe('results dashboard helpers', () => {
 		expect(viewerHref('d-1', 'cells:Run 1!A1:D20:')).toBe('/docs/d-1/viewer?anchor=cells%3ARun%201!A1%3AD20%3A');
 		expect(compareHref('a', 'b')).toBe('/benchmark/compare?base=a&head=b');
 		expect(splitList(' a, ,b ,c')).toEqual(['a', 'b', 'c']);
+	});
+});
+
+describe('run progress', () => {
+	it('counts results against the case snapshot', () => {
+		const run = { case_versions: { a: 1, b: 3, c: 1, d: 2 } };
+		expect(runProgress(run, [result({ case_id: 'a' }), result({ case_id: 'b' })])).toEqual({ done: 2, total: 4, label: '2 of 4 cases' });
+		expect(runProgress({ case_versions: {} }, [])).toEqual({ done: 0, total: 0, label: '0 of 0 cases' });
+	});
+
+	it('keeps polling only while the run can still change', () => {
+		expect(['queued', 'running', 'completed', 'failed', 'cancelled'].map((s) => isActive(s as never))).toEqual([true, true, false, false, false]);
+	});
+});
+
+describe('run requests', () => {
+	it('runs every active case unless a subset is picked', () => {
+		expect(runRequest('telemetry')).toEqual({ suite: 'telemetry' });
+		expect(runRequest('telemetry', ['c', 'a'], ['a', 'b', 'c'])).toEqual({ suite: 'telemetry', case_ids: ['a', 'c'] });
+		expect(runRequest('telemetry', ['tp07-t04-peak'])).toEqual({ suite: 'telemetry', case_ids: ['tp07-t04-peak'] });
 	});
 });

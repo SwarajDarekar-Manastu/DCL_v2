@@ -649,3 +649,44 @@ Route C on the stack: 22 HALTED (20 LabJack, 2 TDMS), 7 ACTIVE, 11 ACTIVE_WITH_S
 Blocked on: nothing
 Needs from others: an SME confirmation of channel maps (S5's proposals) to resume the 22 HALTED runs
 Next: the settings API for S3, then the library PDF language check
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- Benchmark runs (file 08 §5.5): the suite page runs all active cases or a picked subset; the case editor has "Run this case now"; a queued or running run page shows a progress bar and re-reads the run every 5 s until the status is final, so it works whether or not S2's runner publishes websocket `run` events. No API change.
+- `.wiki/frontend/m9-pilot-walkthrough.md`: the M9 acceptance criteria as browser steps with pass conditions, operator preconditions and the SQL checks.
+- Tests: npm run check 0 errors, npx vitest run 94 passed, npm run build ok, uv run pytest -q exit 0.
+Blocked on: Settings editing (backend/api/settings.py is still S1's stub). The "Failed tasks" Ops page needs a `GET /ops/failed-tasks` route over `dead_letters()`; file 10 §2 puts ops routes in S1's `backend/api/sync.py`, which is a stub. Owner question sent to the Lead.
+Needs from others: S1: settings API; Lead: owner of the failed-tasks route.
+Next: the Failed tasks page once the route owner is decided; Settings editing once S1's API is on main; review the Console redesign branch when it arrives.
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- `GET /ops/failed-tasks?limit=100` (admin, 1–500) in the new `backend/api/ops.py` (Lead ruling). It reads S4's `dead_letters()` newest first and imports the Celery app only when the route runs. Malformed entries are skipped, and Redis down answers 503. No retry.
+- The router is registered in `backend/main.py` for the api role; this is the Lead-accepted change of two list entries.
+- The Console Ops page has a "Failed tasks" section (admin only, Refresh, empty state). New map page `frontend/ops-page`.
+- The live read against the stack's Redis works; the list is currently empty.
+- Tests: backend `uv run pytest -q` exit 0 (5 new route tests); Console check 0 errors, vitest 97, build ok.
+Blocked on: Settings editing (S1's settings API).
+Needs from others: S1: settings API. Regenerated types show S1's new `note` on unit_telemetry evidence; the Review UI does not display it yet (next small S3 task).
+Next: show the evidence `note` in the unit pane; Settings once S1's API is on main; review the Console redesign branch when it arrives.
+## 2026-10-22 22:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: T3 `inspect_visuals` (`backend/llm_engine/engine/tools/visuals.py`, prompt `vision/relook.v1`): T1 hybrid search restricted to the node types of the requested kinds, optional RRF with an image-embedding kNN from `similar_to_asset_id` (reference excluded), presigned web + thumb URLs (15 min) and the containing document, no node ids. Relook sends the top ≤ 4 images with the question and returns an answer-time observation (`source: relook`, `persisted: false`), nothing written. The planner uses T3 for visual lookups (with relook) and failure investigations (damage photos); the stream carries a `photo_strip` embed. `start_engine` wires MinIO presign/fetch; without MinIO, T3 returns readings without links. Live relook check on the gateway passed.
+Blocked on: nothing
+Needs from others: S4: the gateway client's per-capability `safety_settings` pass-through (DECISIONS 2026-10-22) is not on main yet; I wire the flag for the extraction capabilities once it lands
+Next: T2 query_telemetry over `telemetry_runs`/`telemetry_channels`, then Skills for Open WebUI
+## 2026-10-22 16:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: read-only M2 acceptance checks for Route C and the TP7 footer CONFLICT check (`backend/tests/acceptance/m2_state.py`, `test_m2_acceptance.py`, M2.md). Route C status counts 22/7/11 and status ⇔ open-flag consistency; every .dat/.tdms is a committed run or a HALTED UNIT_AMBIGUITY HARD case with evidence (1b) and a suggested_resolution (1c); one committed csv run whose normalized Parquet (MinIO GET) and telemetry_channels are in canonical SI; no duplicate (doc_id, fingerprint). TP7: A1 document in a TP07 folder with CONFLICT SOFT on page 1, side a TP07 from folder[n]/filename, side b TP06 from page-1 furniture "Test Campaign 2 - Test Plan 6", test_plan_id stays TP07. 11 seeded-DB proofs (good passes, bad fails). Test: `DCL_TEST_DATABASE_URL=<disposable> uv run pytest -q` (exit 0); live: `DCL_ACCEPTANCE=1 DCL_DATABASE_URL=… DCL_MINIO_ENDPOINT=… DCL_MINIO_ACCESS_KEY=… DCL_MINIO_SECRET_KEY=… uv run pytest backend/tests/acceptance/test_m2_acceptance.py -v`
+Blocked on: nothing
+Needs from others: expected live failures, for the owners: TP7 check needs Route A1 in the dispatcher's adapter table (S1) and the sheet processed; 1c fails until Route C fills `suggested_resolution` on UNIT_AMBIGUITY (S1, file 06 §5); A1 persists page furniture only inside the CONFLICT evidence, not in the CIR (S2, informational)
+Next: idle until messaged (MULTILINGUAL and the retrieval set parked)
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: the Review case view shows S1's unit_telemetry evidence `note` (why a mapped channel cannot be used) under the channel heading, only when it is non-empty; EvidencePane component tests. Console check 0 errors, vitest 99, build ok; backend pytest exit 0.
+Blocked on: Settings editing (S1's settings API).
+Needs from others: S1: settings API.
+Next: Settings once S1's API is on main; review the Console redesign branch when it arrives.
+## 2026-10-22 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready (4 commits on main d9a720b): network split + Redis password (d2da4e4: Postgres/Redis/MinIO S3 on `DCL_DATA_BIND_HOST`, Redis `requirepass` from `DCL_REDIS_PASSWORD` carried in every in-stack URL, loader refuses a `DCL_REDIS_URL` without it; empty password = today's behaviour); Console container on 8601 (218c011, S3's Dockerfile, msal build, `DCL_CONSOLE_SPA_CLIENT_ID`/`DCL_CONSOLE_API_SCOPE` in loader and .env.example); `safety_settings` pass-through (30caf39, `EXTRACTION_SAFETY`, default off, live gateway call accepted); RustFS step 1 (c978013, `minio-init` uses `policy_set`; full init twice + policy scope green on RustFS 1.0.3 and MinIO). Test: `uv run pytest` 1269 passed, 244 skipped
+Blocked on: nothing
+Needs from others: Lead — merge; add `DCL_DATA_BIND_HOST`, `DCL_REDIS_PASSWORD`, `DCL_CONSOLE_SPA_CLIENT_ID`, `DCL_CONSOLE_API_SCOPE` to file 01 §7.1; S2 — wire the per-capability flag to `safety_settings=EXTRACTION_SAFETY`
+Next: redeploy from main after the merge; RustFS step 2 (one-day lifecycle watch) and step 3 (M6-scale load test)

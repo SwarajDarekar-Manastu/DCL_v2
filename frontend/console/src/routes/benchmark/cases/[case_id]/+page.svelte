@@ -8,13 +8,15 @@
 		caseHistory,
 		createBenchmarkCase,
 		retireCase,
+		startRun,
 		type BenchmarkCase
 	} from '$lib/api_endpoint';
 	import { hasRole } from '$lib/auth/roles';
 	import { session } from '$lib/auth/session.svelte';
 	import CaseEditor from '$lib/components/benchmark/CaseEditor.svelte';
 	import { emptyForm, formFromCase, toContent, type CaseForm } from '$lib/components/benchmark/case_form';
-	import { caseHref, suiteHref } from '$lib/components/benchmark/links';
+	import { caseHref, runHref, suiteHref } from '$lib/components/benchmark/links';
+	import { runRequest } from '$lib/components/benchmark/run_view';
 	import { Button } from '$lib/components/ui/button';
 	import Notice from '$lib/components/shell/Notice.svelte';
 	import Page from '$lib/components/shell/Page.svelte';
@@ -70,6 +72,19 @@
 		}
 	}
 
+	async function runNow(suite: string) {
+		busy = true;
+		error = '';
+		try {
+			const created = await startRun(runRequest(suite, [caseId]));
+			await goto(runHref(created.run_id));
+		} catch (e) {
+			error = describe(e);
+		} finally {
+			busy = false;
+		}
+	}
+
 	const save = () =>
 		isNew
 			? act(() => createBenchmarkCase({ ...toContent(form), case_id: newId.trim(), status: 'active' }), 'Case created.')
@@ -82,6 +97,9 @@
 			{#if form.suite}<Button variant="outline" size="sm" href={suiteHref(form.suite)}>Suite {form.suite}</Button>{/if}
 			{#if latest && canEdit && latest.status === 'draft'}
 				<Button size="sm" disabled={busy} onclick={() => act(() => approveCase(caseId), 'Approved.')}>Approve draft</Button>
+			{/if}
+			{#if latest && canEdit && latest.status === 'active'}
+				<Button size="sm" disabled={busy} onclick={() => runNow(latest.suite)}>Run this case now</Button>
 			{/if}
 			{#if latest && canEdit && latest.status !== 'retired'}
 				<Button variant="destructive" size="sm" disabled={busy} onclick={() => act(() => retireCase(caseId), 'Retired.')}>Retire</Button>

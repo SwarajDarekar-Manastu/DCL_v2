@@ -287,6 +287,34 @@ def test_redis_url_scheme_is_checked(monkeypatch):
         load_settings(env_file=None)
 
 
+REDIS_PASSWORD = "R3dis-Only-Url-Safe-Value-42"
+
+
+def test_redis_password_must_be_carried_by_the_url(monkeypatch):
+    set_env(monkeypatch, {"DCL_REDIS_PASSWORD": REDIS_PASSWORD, "DCL_REDIS_URL": "redis://127.0.0.1:6381/0"})
+    with pytest.raises(ConfigError, match="DCL_REDIS_URL must carry DCL_REDIS_PASSWORD") as err:
+        load_settings(env_file=None)
+    assert REDIS_PASSWORD not in str(err.value)
+    monkeypatch.setenv("DCL_REDIS_URL", "redis://:wrong@127.0.0.1:6381/0")
+    with pytest.raises(ConfigError, match="DCL_REDIS_URL"):
+        load_settings(env_file=None)
+    monkeypatch.setenv("DCL_REDIS_URL", f"redis://:{REDIS_PASSWORD}@127.0.0.1:6381/0")
+    settings = load_settings(env_file=None)
+    assert settings.redis_url == f"redis://:{REDIS_PASSWORD}@127.0.0.1:6381/0"
+    assert REDIS_PASSWORD not in repr(settings.redis_password)
+
+
+def test_dev_default_redis_url_carries_the_password(monkeypatch):
+    monkeypatch.setenv("DCL_REDIS_PASSWORD", REDIS_PASSWORD)
+    assert load_settings(env_file=None).redis_url == f"redis://:{REDIS_PASSWORD}@redis:6379/0"
+
+
+def test_data_bind_host_defaults_to_loopback(monkeypatch):
+    assert load_settings(env_file=None).data_bind_host == "127.0.0.1"
+    monkeypatch.setenv("DCL_DATA_BIND_HOST", "10.0.0.5")
+    assert load_settings(env_file=None).data_bind_host == "10.0.0.5"
+
+
 def test_minio_group_needs_the_access_key_pair_even_in_dev(monkeypatch):
     with pytest.raises(ConfigError, match="DCL_MINIO_ACCESS_KEY, DCL_MINIO_SECRET_KEY"):
         load_settings(env_file=None).require(Group.MINIO)
@@ -461,3 +489,18 @@ def test_console_dev_auth_needs_a_long_token(monkeypatch, token):
         monkeypatch.setenv("DCL_CONSOLE_DEV_TOKEN", token)
     with pytest.raises(ConfigError, match="DCL_CONSOLE_DEV_TOKEN of 32\\+ chars"):
         load_settings(env_file=None)
+
+
+def test_console_spa_build_names_are_optional_and_read(monkeypatch):
+    settings = load_settings(env_file=None)
+    assert settings.console_spa_client_id is None and settings.console_api_scope is None
+    set_env(
+        monkeypatch,
+        {
+            "DCL_CONSOLE_SPA_CLIENT_ID": "1b2c3d4e-0000-4000-8000-000000000001",
+            "DCL_CONSOLE_API_SCOPE": "api://dcl/access",
+        },
+    )
+    settings = load_settings(env_file=None)
+    assert settings.console_spa_client_id == "1b2c3d4e-0000-4000-8000-000000000001"
+    assert settings.console_api_scope == "api://dcl/access"

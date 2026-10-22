@@ -27,6 +27,7 @@
 				? ` · looks like ${evidence.quantity_guess}`
 				: ''}
 		</h4>
+		{#if evidence.note}<p class="bg-warn-bg border-warn-border m-0 rounded-md border px-3 py-1.5 text-[13px]" role="note">{evidence.note}</p>{/if}
 		{#if evidence.header_lines.length}
 			<pre class="code-block m-0 max-h-40" aria-label="File header">{#each evidence.header_lines as line, i (i)}<span
 						class={line.includes(evidence.channel) ? 'hit bg-warn-bg text-warn -mx-1 rounded-sm px-1 font-semibold' : ''}>{line}

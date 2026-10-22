@@ -44,6 +44,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `frontend/benchmark-ui` | in-progress | S3 | [Benchmark UI (suites, cases, runs, results, drilldown, compare, retrieval lab)](frontend/benchmark-ui.md) |
 | `frontend/openwebui-pipe` | in-progress | S3 | [Open WebUI Pipe (engine model, event mapping)](frontend/openwebui-pipe.md) |
 | `frontend/openwebui-actions-skills` | in-progress | S3 | [Open WebUI Actions, Filter and Skills publication](frontend/openwebui-actions-skills.md) |
+| `frontend/ops-page` | in-progress | S3 | [Ops page (failed tasks; sync, queues and cost to follow)](frontend/ops-page.md) |
 | `platform/compose-stack` | in-progress | S4 | [Docker Compose stack with GPU model services](platform/compose-stack.md) |
 | `platform/env-contract` | in-progress | S4 | [Environment contract loader and .env.example](platform/env-contract.md) |
 | `platform/gemini-gateway-client` | in-progress | S4 | [Gemini gateway client and capability probe](platform/gemini-gateway-client.md) |

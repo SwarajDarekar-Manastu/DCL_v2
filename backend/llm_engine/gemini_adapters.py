@@ -171,6 +171,8 @@ class OpenAICompatAdapter:
     def build(self, req: GenerateRequest, caps: Capabilities, stream: bool) -> dict[str, Any]:
         if req.google_search:
             raise CapabilityUnavailable(Capability.GOOGLE_SEARCH)
+        if req.safety_settings:
+            raise GeminiError("safety_settings need the manastu or gemini API style")
         messages = list(req.messages)
         body: dict[str, Any] = {"model": req.model}
         if req.schema is not None:
@@ -397,6 +399,10 @@ class ManastuGatewayAdapter:
             config["max_output_tokens"] = req.max_output_tokens
         if req.cached_content and caps.has(Capability.CONTEXT_CACHE):
             config["cached_content"] = req.cached_content
+        if req.safety_settings:
+            config["safety_settings"] = [
+                {"category": str(s.category), "threshold": str(s.threshold)} for s in req.safety_settings
+            ]
         return contents, config
 
     def build(self, req: GenerateRequest, caps: Capabilities, stream: bool) -> dict[str, Any]:
@@ -497,7 +503,13 @@ class ManastuGatewayAdapter:
 
 
 OPAQUE_KEYS = frozenset({"response_json_schema", "parameters", "args", "response", "parsed"})
-GENERATION_CONFIG_TOP_LEVEL = ("system_instruction", "tools", "tool_config", "cached_content")
+GENERATION_CONFIG_TOP_LEVEL = (
+    "system_instruction",
+    "tools",
+    "tool_config",
+    "cached_content",
+    "safety_settings",
+)
 
 
 def _camel(name: str) -> str:
