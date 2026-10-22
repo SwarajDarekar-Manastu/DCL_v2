@@ -842,3 +842,27 @@ A1 batch read (27 tasks): 18 indexed (13 ACTIVE, 5 with SOFT low-confidence flag
 Blocked on: Lead/user rulings (sent): cloud_allowed for the roots; owner-password-only PDFs
 Needs from others: S1 (or Lead): the `llm_calls` table and the client's ledger hook, for cost per document
 Next: after the rulings, re-run A1 on the 27 + 6 E13 documents, report OCR engine per script and cost, then the M5 handwriting calibration on the TP7 sheets (it needs Gemini)
+
+## 2026-10-23 06:15 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: owner-password PDFs. A1 pre-flight now decrypts in memory a PDF that opens without a password, and Docling gets the decrypted bytes (`Preflight.decrypted`). PARSE_FAILURE stays only for PDFs that need a user password (file 03 §A1.1 as amended). Plan sheet skipped for this small fix.
+Blocked on: S1's re-dispatch of the A1 documents with cloud_allowed true (206e1884 and the 8 ECSS standards after this merge)
+Needs from others: S1: re-run; `llm_calls` with the client's ledger hook
+Next: OCR engine per script and cost report, then the M5 handwriting calibration on the TP7 sheets
+## 2026-10-22 21:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: M10 baseline from scored run 1 (`backend/tests/benchmark/BASELINE.md`, summary on `.wiki/quality/benchmark-suites.md`): 56 cases, 1 pass; 26 runner/metric bug, 15 engine error, 14 pipeline gap, 0 confirmed gold error. Five runner findings for S2 (null class on 38 errored cases, RETRIEVAL_MISS unreachable without gold anchors, must_label_external web-only, insufficient-evidence check mode-only, halted data hidden as SYNTHESIS_ERROR). Hold-outs not reported
+Blocked on: E13 indexed (MULTILINGUAL and library cases)
+Needs from others: S2: the runner findings; Lead: is the TP12 report PDF among the 18 indexed A1 PDFs (2 cases depend on it); the weather case's answer text (gold or metric)
+Next: idle until messaged
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: the Benchmark pages now match S2's real runner output.
+- Checked against the six real runs.
+- The aggregate and metric keys match the runner's; recall was never shown before.
+- Runner errors are their own outcome, and a running run's pass rate says how much is scored so far.
+- The drilldown follows score_case.
+- Compare counts only cases scored in both runs and warns about cross-suite comparisons.
+- A whitespace bug in four components is fixed.
+- Tests: Console 138, backend pytest exit 0, compare integration tests pass on a scratch DB.
+Blocked on: nothing.
+Needs from others: S2 (via the Lead): 38 of 56 real results are runner errors, either "RuntimeError: <asyncio.locks.Event> is bound to a different event loop" (likely the lru_cached RunnerDeps reused across asyncio.run calls in tasks.py) or a 300 s WorkflowTimeoutError. Answered cases took about 225 to 236 s.
+Next: idle.

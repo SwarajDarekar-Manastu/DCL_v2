@@ -172,6 +172,7 @@ def test_compare_finds_newly_failing_and_passing(session):
     assert comparison.newly_passing == []
     assert comparison.aggregate_delta == {"pass_rate": -0.667, "recall_at_8": -0.3}
     assert comparison.config_diff == {"model_config.reranker": {"base": "bge-reranker-v2-m3", "head": None}}
+    assert (comparison.not_scored, comparison.only_in_base, comparison.only_in_head) == ([], [], [])
     assert run_results(session, head.run_id).results[1].failure_class == "RERANK_MISS"
     summary = next(s for s in list_suites(session) if s.suite == "telemetry")
     assert summary.cases_by_status == {"active": 3}
@@ -194,3 +195,38 @@ def test_export_import_round_trip(session):
     assert [c.version for c in list_cases(session, suite="telemetry").items] == [1, 2, 1]
     with pytest.raises(Problem):
         import_suite(session, "other", SuiteImport(cases=[case("a")]), "x")
+
+
+def test_compare_counts_only_cases_scored_in_both_runs(session):
+    for cid in ("a", "b", "c", "d", "e"):
+        create_case(session, case(cid), "x")
+    base = BenchmarkRun(
+        suite="telemetry", status="completed", case_versions={"a": 1, "b": 1, "c": 1, "d": 1}, aggregate={}
+    )
+    head = BenchmarkRun(
+        suite="telemetry", status="completed", case_versions={"a": 1, "b": 1, "c": 1, "e": 1}, aggregate={}
+    )
+    session.add_all([base, head])
+    session.flush()
+    error = {"error": "WorkflowTimeoutError: Operation timed out after 300.0 seconds"}
+    rows = [
+        (base, "a", True, None, {}),
+        (base, "b", False, None, error),  # the runner could not score it
+        (base, "c", True, None, {}),
+        (base, "d", True, None, {}),
+        (head, "a", False, "RETRIEVAL_MISS", {}),
+        (head, "b", False, "SYNTHESIS_ERROR", {}),
+        (head, "c", False, None, error),
+        (head, "e", False, "TOOL_MISROUTE", {}),  # new in head: not a regression
+    ]
+    session.add_all(
+        BenchmarkResult(run_id=r.run_id, case_id=c, case_version=1, passed=p, failure_class=f, metrics=m)
+        for r, c, p, f, m in rows
+    )
+    session.flush()
+
+    comparison = compare_runs(session, base.run_id, head.run_id)
+    assert [d.case_id for d in comparison.newly_failing] == ["a"]
+    assert [d.case_id for d in comparison.not_scored] == ["b", "c"]
+    assert comparison.still_failing == [] and comparison.newly_passing == []
+    assert (comparison.only_in_base, comparison.only_in_head) == (["d"], ["e"])
