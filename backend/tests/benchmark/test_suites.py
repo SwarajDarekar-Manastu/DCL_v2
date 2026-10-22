@@ -97,7 +97,7 @@ def _number_forms(value: float) -> set[str]:
         forms.add(str(int(value)))
     else:
         forms.add(repr(float(value)))
-    return forms
+    return forms | {f.replace(".", ",") for f in forms}  # decimal-comma documents (ECSS)
 
 
 def _cited_cases():

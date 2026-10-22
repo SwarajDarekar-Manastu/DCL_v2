@@ -572,3 +572,9 @@ Merged / ready: visual suite (5 VISUAL handwriting reads, 2 FAILURE_ANALYSIS, 1 
 Blocked on: E12 standards indexed (5 STANDARDS cases); a non-English library document (MULTILINGUAL); indexed corpus (retrieval set)
 Needs from others: S1/S2 — note: the TP7 preheat sheet's printed footer says Test Plan 6 (image-only page), so the plan-id CONFLICT can only come from OCR of the footer, not from folder context
 Next: STANDARDS cases once the 8 ECSS documents are indexed; retrieval set with gold anchors
+
+## 2026-10-22 14:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: standards suite (5 STANDARDS cases from the E12 ECSS standards: E-ST-32-02C pressure-vessel and heat-pipe factors, E-ST-35-06C NVR A/10, E-ST-35-10C elevated corrosion-test conditions, Q-ST-70C tin finish), each answer found on its cited page; number check accepts decimal commas. Golden set: 59 local cases. Test: `uv run pytest backend/tests/benchmark && uv run ruff check backend && uv run ruff format --check backend`
+Blocked on: S1's library language/DOI check (MULTILINGUAL), indexed corpus (retrieval set with gold anchors)
+Needs from others: nothing new
+Next: idle on MULTILINGUAL and the retrieval set until their inputs exist (Lead ruling)

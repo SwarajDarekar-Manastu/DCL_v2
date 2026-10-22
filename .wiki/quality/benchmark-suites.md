@@ -20,6 +20,7 @@ Code:
 - `backend/tests/benchmark/suites/documents.template.yaml` (page-cited FACT_LOOKUP, FAILURE_ANALYSIS)
 - `backend/tests/benchmark/suites/code.template.yaml` (CODE)
 - `backend/tests/benchmark/suites/visual.template.yaml` (handwritten sheets: VISUAL, FAILURE_ANALYSIS, CONFLICT_BEHAVIOR)
+- `backend/tests/benchmark/suites/standards.template.yaml` (STANDARDS, E12 ECSS)
 - `backend/tests/benchmark/verification/build_suites.py` (template + local fragments → importable suite)
 - `backend/tests/benchmark/verification/telemetry_metrics.py` (metric functions, `build`)
 - `backend/tests/benchmark/verification/README.md` (verification notes)
@@ -51,6 +52,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/tests/benchmark/suites/documents.template.yaml`
 - `backend/tests/benchmark/suites/code.template.yaml`
 - `backend/tests/benchmark/suites/visual.template.yaml`
+- `backend/tests/benchmark/suites/standards.template.yaml`
 - `backend/tests/benchmark/verification/build_suites.py`
 - `backend/tests/benchmark/test_telemetry_suite.py`
 - `backend/tests/benchmark/test_suites.py`
@@ -64,7 +66,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [ ] CONFLICT_BEHAVIOR case (needs two indexed documents that disagree)
 - [x] 12 FACT_LOOKUP + 3 FAILURE_ANALYSIS (TP-23, TP12 reports) and 8 CODE cases; every answer found in the cited page or file by a test
 - [x] Visual suite: 5 VISUAL + 2 FAILURE_ANALYSIS from the handwritten TP7 sheets, 1 CONFLICT_BEHAVIOR (folder says TP7, sheet footer says TP6); image-only answers need a recorded visual reading
-- [ ] STANDARDS (E12 globs, after indexing), MULTILINGUAL and the 40-query retrieval set
+- [x] 5 STANDARDS cases from the E12 ECSS standards, page-verified (decimal-comma aware)
+- [ ] MULTILINGUAL (waits for S1's library language check) and the 40-query retrieval set (waits for the indexed corpus)
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
 ## Change log
@@ -72,6 +75,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S5 | standards suite (5): pressure-vessel and heat-pipe factors, NVR A/10, elevated corrosion testing, tin finish; number check accepts decimal commas |
 | 2026-10-22 | S5 | visual suite (8, incl. the CONFLICT case); image-only citations require `visual_readings.yaml` |
 | 2026-10-22 | S5 | documents suite (15) and code suite (8); `test_cited_pages_contain_the_answer` checks each answer in the cited page or source file; `verify_paths.yaml` settles shared file names |
 | 2026-10-22 | S5 | behaviour suite (6 cases) and the generic suite builder; tool names checked against the engine's ToolName |
