@@ -9,6 +9,7 @@ workbook values kept beside it.
 import importlib.util
 import json
 import re
+import typing
 from pathlib import Path
 
 import pint
@@ -16,6 +17,7 @@ import pytest
 import yaml
 
 from backend.benchmark.catalog import CASE_ID, CaseCreate
+from backend.llm_engine.engine.analysis import ToolName
 from backend.postgres.enums import BenchmarkCategory
 
 HERE = Path(__file__).resolve().parent
@@ -62,6 +64,7 @@ def test_numeric_case_method_and_unit(case, ureg):
     assert case["tolerance_pct"] > 0 and isinstance(case["decimals"], int)
     ureg.Quantity(1, case["unit"])  # parses with the project registry
     assert case["expected_tools"] == ["query_telemetry"]  # file 08 §5.3
+    assert set(case["expected_tools"]) <= set(typing.get_args(ToolName))  # the engine's tool names
 
 
 SUITE = tm.SUITE_OUT
