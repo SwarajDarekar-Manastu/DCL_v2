@@ -1,4 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
@@ -12,7 +13,7 @@ export default defineConfig(({ command, mode }) => {
 	const stack = loadEnv(mode, '../..', 'DCL_CONSOLE_DEV_');
 	const devToken = serving ? local.VITE_DEV_TOKEN || stack.DCL_CONSOLE_DEV_TOKEN || '' : '';
 	return {
-		plugins: [sveltekit(), svelteTesting()],
+		plugins: [tailwindcss(), sveltekit(), svelteTesting()],
 		define: { 'import.meta.env.VITE_DEV_TOKEN': JSON.stringify(devToken) },
 		test: {
 			environment: 'jsdom',

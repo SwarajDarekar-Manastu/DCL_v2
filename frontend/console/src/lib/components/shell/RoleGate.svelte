@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import LockIcon from '@lucide/svelte/icons/lock';
 	import { hasRole, type ConsoleRole } from '$lib/auth/roles';
 
 	interface Props {
@@ -14,18 +15,13 @@
 {#if hasRole(roles, role)}
 	{@render children()}
 {:else}
-	<section class="denied" role="alert">
-		<h2>Not available</h2>
-		<p>This page needs the <strong>{role}</strong> role. Ask a DCL admin to add you to the matching Entra ID group.</p>
+	<section class="mx-auto mt-16 max-w-md px-6 text-center" role="alert">
+		<span class="bg-muted text-muted-foreground mx-auto mb-4 flex size-10 items-center justify-center rounded-full" aria-hidden="true">
+			<LockIcon class="size-5" />
+		</span>
+		<h2 class="m-0 text-base">Not available</h2>
+		<p class="text-muted-foreground mt-1">
+			This page needs the <strong class="text-foreground font-medium">{role}</strong> role. Ask a DCL admin to add you to the matching Entra ID group.
+		</p>
 	</section>
 {/if}
-
-<style>
-	.denied {
-		max-width: 36rem;
-		margin: 3rem auto;
-		padding: 1.5rem;
-		border: 1px solid var(--border);
-		border-radius: 0.5rem;
-	}
-</style>
