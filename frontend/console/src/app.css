@@ -270,7 +270,8 @@
 		font-synthesis-weight: none;
 		text-rendering: optimizeLegibility;
 	}
-	a {
+	/* Inline text links only; buttons rendered as <a> (data-slot) keep their own colors. */
+	a:not([data-slot]) {
 		@apply text-link underline-offset-4 hover:underline;
 	}
 	h1,
@@ -318,7 +319,7 @@
 @layer components {
 	/* Native text input, select and textarea; matches the shadcn-svelte Input component. */
 	.field {
-		@apply border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 h-8 w-full min-w-0 rounded-lg border bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50;
+		@apply border-input text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 h-8 w-full min-w-0 rounded-lg border bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50;
 	}
 	select.field {
 		@apply cursor-pointer appearance-none bg-no-repeat pr-7;
@@ -338,5 +339,69 @@
 	}
 	.num {
 		font-variant-numeric: tabular-nums;
+	}
+
+	/*
+	 * Dense data table (Geist table pattern): 32px header, muted 12px column labels, hairline row
+	 * dividers, hover tint. The header sticks under the top bar (--sticky-top, set on <main>) or,
+	 * inside .table-scroll, to the top of that scroll box.
+	 */
+	.data-table {
+		@apply w-full border-separate border-spacing-0 text-sm;
+	}
+	.data-table th {
+		@apply bg-background text-muted-foreground sticky z-10 h-8 border-b px-3 text-left align-middle text-xs font-medium whitespace-nowrap;
+		top: var(--sticky-top, 0px);
+	}
+	.data-table td {
+		@apply border-b px-3 py-2 align-top;
+	}
+	.data-table tbody tr:last-child td {
+		@apply border-b-0;
+	}
+	.data-table tbody tr {
+		@apply transition-colors;
+	}
+	.data-table tbody tr:hover {
+		@apply bg-muted/60;
+	}
+	.data-table th.num,
+	.data-table td.num {
+		@apply text-right;
+	}
+	.table-scroll {
+		@apply overflow-auto;
+		--sticky-top: 0px;
+		max-height: min(70vh, calc(100vh - 14rem));
+	}
+
+	/* Bordered surface for a group of content; .panel-header is its title row. */
+	.panel {
+		@apply bg-card text-card-foreground rounded-lg border;
+	}
+	.panel-header {
+		@apply flex min-h-10 items-center justify-between gap-3 border-b px-4 py-2;
+	}
+	.panel-title {
+		@apply m-0 text-sm font-semibold;
+	}
+	.panel-body {
+		@apply p-4;
+	}
+
+	/* Key/value list (metadata, case facts): label column in muted 12px, value in body text. */
+	.kv {
+		@apply m-0 grid grid-cols-[minmax(7rem,auto)_1fr] gap-x-4 gap-y-1.5 text-sm;
+	}
+	.kv dt {
+		@apply text-muted-foreground text-xs leading-5;
+	}
+	.kv dd {
+		@apply m-0 min-w-0 break-words;
+	}
+
+	/* Small uppercase section label inside panels and forms. */
+	.eyebrow {
+		@apply text-muted-foreground m-0 text-[11px] font-medium tracking-wide uppercase;
 	}
 }

@@ -33,6 +33,5 @@
 		{#if tone === 'error'}<CircleAlertIcon class="size-3.5" />{:else if tone === 'success'}<CircleCheckIcon class="size-3.5" />{:else if tone === 'warning'}<TriangleAlertIcon
 				class="size-3.5"
 			/>{:else}<InfoIcon class="size-3.5" />{/if}
-	</span>
-	<span>{@render children()}</span>
+	</span><span>{@render children()}</span>
 </p>

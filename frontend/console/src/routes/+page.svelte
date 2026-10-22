@@ -16,7 +16,7 @@
 	};
 </script>
 
-<div class="mx-auto w-full max-w-[1400px] p-6">
+<div class="mx-auto w-full max-w-[1400px] px-6 pt-5 pb-10">
 	<PageHeader title="Welcome, {session.user?.name}" description="Pick an area to work in." />
 	<ul class="m-0 grid list-none grid-cols-2 gap-3 p-0 xl:grid-cols-3">
 		{#each items as item (item.href)}

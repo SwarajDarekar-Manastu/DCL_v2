@@ -62,6 +62,11 @@
 	</main>
 {:else if session.user}
 	<Tooltip.Provider delayDuration={300}>
+		<a
+			href="#main"
+			class="bg-primary text-primary-foreground sr-only z-50 rounded-md px-3 py-2 no-underline focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+			>Skip to content</a
+		>
 		<div class="flex min-h-screen">
 			<Sidebar
 				user={session.user}
@@ -72,7 +77,7 @@
 			/>
 			<div class="flex min-w-0 flex-1 flex-col">
 				<TopBar pathname={page.url.pathname} />
-				<main id="main" class="flex min-w-0 flex-1 flex-col">
+				<main id="main" tabindex="-1" class="flex min-w-0 flex-1 flex-col outline-none [--sticky-top:3rem]">
 					{@render children()}
 				</main>
 			</div>
