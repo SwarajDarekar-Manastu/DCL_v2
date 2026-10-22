@@ -794,3 +794,12 @@ Merged / ready: MULTILINGUAL set chosen by file name from S1's language check: 6
 Blocked on: E13 indexed (Lead confirms), then the 6 remaining golden cases (library and multilingual)
 Needs from others: S1: add the E13 globs to processing.scope
 Next: idle until the Lead confirms E13 is indexed
+
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready:
+- Local login proven live on the stack. The first login bootstrapped the admin. A reviewer created on the Users page signed in, opened the real queue and a halted case, and the live channel was on. That reviewer got 403 on admin routes and 401 right after deactivation, and the audit rows were written.
+- The dev-token sign-in is removed everywhere in S3 code, and from config.py and .env.example (Lead request). The dev server runs with VITE_AUTH_MODE=local and no token.
+- Tests: Console check 0 errors, vitest 136, build ok.
+Blocked on: nothing. The merge needs the Lead to drop docs/architecture/01 line 216 (the dev sign-in names) in the same merge; until then 2 env-contract tests fail.
+Needs from others: Lead: that manual row, and the three names out of the stack .env.
+Next: idle until messaged.

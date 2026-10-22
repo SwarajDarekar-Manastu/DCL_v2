@@ -69,7 +69,8 @@
 
 	async function create(event: SubmitEvent) {
 		event.preventDefault();
-		await run(() => createAccount({ ...draft, email: draft.email.trim() }), `Account ${draft.email.trim()} created.`);
+		const email = draft.email.trim().toLowerCase(); // stored lower-case (users.email CHECK)
+		await run(() => createAccount({ ...draft, email }), `Account ${email} created.`);
 		if (!error) draft = { email: '', display_name: '', roles: ['viewer'], password: '' };
 	}
 

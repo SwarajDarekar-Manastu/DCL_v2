@@ -43,8 +43,7 @@ PLACEHOLDER = re.compile(
     r"|your[-_ ].*|fill[-_ ]?me|fill[-_ ]?in|none|null)\s*$",
     re.IGNORECASE,
 )
-COMMA_LISTS = ("DCL_FOLDER_IDS", "DCL_FOLDER_PATHS", "DCL_CONSOLE_ALLOWED_ORIGINS", "DCL_CONSOLE_DEV_ROLES")
-DEV_TOKEN_MIN_LENGTH = 32
+COMMA_LISTS = ("DCL_FOLDER_IDS", "DCL_FOLDER_PATHS", "DCL_CONSOLE_ALLOWED_ORIGINS")
 DEV_DEFAULTS: dict[str, str] = {
     "DCL_REDIS_URL": "redis://redis:6379/0",
     "DCL_MINIO_ENDPOINT": "http://minio:9000",
@@ -192,11 +191,6 @@ class Settings(BaseSettings):
     console_allowed_origins: CommaList = _env("DCL_CONSOLE_ALLOWED_ORIGINS", default_factory=list)
     console_spa_client_id: str | None = _env("DCL_CONSOLE_SPA_CLIENT_ID", default=None)
     console_api_scope: str | None = _env("DCL_CONSOLE_API_SCOPE", default=None)
-    console_dev_auth: bool = _env("DCL_CONSOLE_DEV_AUTH", default=False)
-    console_dev_token: SecretStr | None = _env("DCL_CONSOLE_DEV_TOKEN", default=None)
-    console_dev_roles: CommaList = _env(
-        "DCL_CONSOLE_DEV_ROLES", default_factory=lambda: ["viewer", "reviewer", "admin"]
-    )
 
     @model_validator(mode="before")
     @classmethod
@@ -231,18 +225,6 @@ class Settings(BaseSettings):
             if len(raw) != 32:
                 raise ValueError("must be a Fernet key (32 bytes, url-safe base64)")
         return value
-
-    @model_validator(mode="after")
-    def _console_dev_auth_only_in_dev(self) -> "Settings":
-        if self.console_dev_auth:
-            if self.env is not Environment.DEV:
-                raise ValueError("DCL_CONSOLE_DEV_AUTH=true is allowed only with DCL_ENV=dev")
-            token = self.console_dev_token.get_secret_value() if self.console_dev_token else ""
-            if len(token) < DEV_TOKEN_MIN_LENGTH:
-                raise ValueError(
-                    f"DCL_CONSOLE_DEV_AUTH=true needs DCL_CONSOLE_DEV_TOKEN of {DEV_TOKEN_MIN_LENGTH}+ chars"
-                )
-        return self
 
     @model_validator(mode="after")
     def _redis_url_carries_the_password(self) -> "Settings":

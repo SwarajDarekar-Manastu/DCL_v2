@@ -3,7 +3,7 @@
 import { ApiError, configureApi, getMe, type ConsoleUser } from '$lib/api_endpoint';
 import { getConfig, type AuthMode, type ConsoleConfig } from '$lib/config';
 import { createLocalAuth, type LocalAuthClient } from './local';
-import { createDevAuth, createMsalAuth, type AuthClient } from './msal';
+import { createMsalAuth, type AuthClient } from './msal';
 
 export type SessionStatus = 'loading' | 'signed_out' | 'signed_in' | 'error';
 
@@ -54,7 +54,6 @@ export const session = new Session();
 
 function clientFor(config: ConsoleConfig): AuthClient {
 	if (config.auth.mode === 'local') return createLocalAuth();
-	if (config.auth.mode === 'dev') return createDevAuth(config.auth.devToken);
 	return createMsalAuth(config.auth);
 }
 

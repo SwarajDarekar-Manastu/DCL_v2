@@ -79,7 +79,6 @@ def client(local, auth_config, key_resolver):
     app.dependency_overrides[auth.get_local_auth] = lambda: local
     app.dependency_overrides[auth.get_auth_config] = lambda: auth_config
     app.dependency_overrides[auth.get_key_resolver] = lambda: key_resolver
-    app.dependency_overrides[auth.get_dev_auth] = lambda: None
     return TestClient(app)
 
 

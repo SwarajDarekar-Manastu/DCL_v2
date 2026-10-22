@@ -65,16 +65,3 @@ export function createMsalAuth(auth: ConsoleConfig['auth'], factory: PcaFactory 
 		}
 	};
 }
-
-/**
- * Dev-only sign-in (Vite dev server only, enforced in config.ts): sends the dev token the backend accepts
- * when DCL_ENV=dev and DCL_CONSOLE_DEV_AUTH=true. The user and roles come from GET /auth/me.
- */
-export function createDevAuth(token: string): AuthClient {
-	return {
-		init: async () => 'Dev sign-in',
-		login: async () => {},
-		logout: async () => {},
-		getToken: async () => token
-	};
-}

@@ -111,15 +111,29 @@ def test_publish_event_writes_the_channel():
     assert Event.model_validate_json(payload).data == {"done": 4}
 
 
-def test_dev_token_opens_the_socket(client, monkeypatch):
-    from backend.api.auth import ConsoleRole, DevAuth
+def test_local_token_opens_the_socket(client):
+    import uuid
 
-    client.app.dependency_overrides[auth.get_dev_auth] = lambda: DevAuth(
-        token="d" * 40, roles=[ConsoleRole.REVIEWER]
+    from backend.api.auth import ConsoleRole, LocalAuth, LocalUser, LoginLimiter, issue_token
+
+    user = LocalUser(
+        user_id=uuid.uuid4(),
+        email="asha@manastuspace.com",
+        display_name="Asha",
+        password_hash="unused",
+        roles=[ConsoleRole.VIEWER, ConsoleRole.REVIEWER],
     )
+
+    class OneUser:
+        def get(self, user_id):
+            return user if user_id == user.user_id else None
+
+    local = LocalAuth(secret="s" * 40, ttl_s=3600, store=OneUser(), limiter=LoginLimiter())
+    client.app.dependency_overrides[auth.get_local_auth] = lambda: local
+    token, _ = issue_token(user, local)
     with client.websocket_connect("/ws") as socket:
-        socket.send_json({"type": "auth", "token": "d" * 40})
+        socket.send_json({"type": "auth", "token": token})
         ready = socket.receive_json()
-        assert ready["type"] == "ready" and ready["user"]["oid"] == "dev-sign-in"
+        assert ready["type"] == "ready" and ready["user"]["email"] == "asha@manastuspace.com"
         socket.send_json({"type": "subscribe", "topics": ["case"]})
         assert socket.receive_json() == {"type": "subscribed", "topics": ["case"]}

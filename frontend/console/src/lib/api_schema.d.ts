@@ -792,6 +792,8 @@ export interface components {
              * @default 6
              */
             max_embeds: number;
+            /** @description the intent of a playbook Skill the user $-mentioned (front matter `dcl-playbook`); the planner adds it to the analysed intents */
+            playbook_hint?: components["schemas"]["Intent"] | null;
             /**
              * Show Debug Trace
              * @default false
@@ -947,7 +949,7 @@ export interface components {
          * AuditEntityType
          * @enum {string}
          */
-        AuditEntityType: "flag" | "case" | "rule" | "entity" | "config" | "benchmark_case" | "document";
+        AuditEntityType: "flag" | "case" | "rule" | "entity" | "config" | "benchmark_case" | "document" | "user";
         /** AuditItem */
         AuditItem: {
             /** Action */
@@ -1968,6 +1970,11 @@ export interface components {
             /** Versioned */
             versioned: number;
         };
+        /**
+         * Intent
+         * @enum {string}
+         */
+        Intent: "telemetry_metric" | "run_comparison" | "fact_lookup" | "procedure_lookup" | "failure_investigation" | "standards_compliance" | "code_walkthrough" | "diagram_traversal" | "design_synthesis" | "document_summary" | "navigational" | "physics_calc" | "visual_lookup" | "chitchat_or_out_of_scope";
         /**
          * JsonSchemaEvidence
          * @description SCHEMA_UNKNOWN on a JSON file.
