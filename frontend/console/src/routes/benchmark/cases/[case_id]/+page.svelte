@@ -15,7 +15,11 @@
 	import CaseEditor from '$lib/components/benchmark/CaseEditor.svelte';
 	import { emptyForm, formFromCase, toContent, type CaseForm } from '$lib/components/benchmark/case_form';
 	import { caseHref, suiteHref } from '$lib/components/benchmark/links';
+	import { Button } from '$lib/components/ui/button';
+	import Notice from '$lib/components/shell/Notice.svelte';
+	import Page from '$lib/components/shell/Page.svelte';
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
+	import ToneBadge from '$lib/components/shell/ToneBadge.svelte';
 
 	let caseId = $derived(page.params.case_id ?? '');
 	let isNew = $derived(caseId === 'new');
@@ -28,6 +32,7 @@
 	let canEdit = $derived(hasRole(session.user?.roles ?? [], 'reviewer'));
 	let latest = $derived(history[0] ?? null);
 
+	const statusTone = (status: string) => (status === 'active' ? 'ok' : status === 'draft' ? 'warn' : 'neutral');
 	const describe = (e: unknown) => (e instanceof ApiError ? e.detail : String(e));
 
 	$effect(() => {
@@ -72,63 +77,62 @@
 </script>
 
 <RoleGate roles={session.user?.roles ?? []} role="viewer">
-	<nav class="crumbs"><a href="/benchmark">Benchmark</a> › {#if form.suite}<a href={suiteHref(form.suite)}>{form.suite}</a> ›{/if} {isNew ? 'New case' : caseId}</nav>
-	{#if latest}
-		<p class="status">
-			Version {latest.version} · <strong>{latest.status}</strong> · by {latest.created_by} · {latest.created_at.slice(0, 10)}
-			{#if latest.source_trace_id}· from chat trace <code>{latest.source_trace_id}</code>{/if}
-			{#if canEdit && latest.status === 'draft'}<button type="button" disabled={busy} onclick={() => act(() => approveCase(caseId), 'Approved.')}>Approve draft</button>{/if}
-			{#if canEdit && latest.status !== 'retired'}<button type="button" disabled={busy} onclick={() => act(() => retireCase(caseId), 'Retired.')}>Retire</button>{/if}
-		</p>
-	{/if}
-	{#if error}<p class="error" role="alert">{error}</p>{/if}
-	{#if notice}<p class="notice" role="status">{notice}</p>{/if}
+	<Page title={isNew ? 'New case' : caseId} width="narrow">
+		{#snippet actions()}
+			{#if form.suite}<Button variant="outline" size="sm" href={suiteHref(form.suite)}>Suite {form.suite}</Button>{/if}
+			{#if latest && canEdit && latest.status === 'draft'}
+				<Button size="sm" disabled={busy} onclick={() => act(() => approveCase(caseId), 'Approved.')}>Approve draft</Button>
+			{/if}
+			{#if latest && canEdit && latest.status !== 'retired'}
+				<Button variant="destructive" size="sm" disabled={busy} onclick={() => act(() => retireCase(caseId), 'Retired.')}>Retire</Button>
+			{/if}
+		{/snippet}
+		{#snippet below()}
+			{#if latest}
+				<p class="text-muted-foreground m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+					<span>Version <span class="num text-foreground font-mono">{latest.version}</span></span>
+					<ToneBadge tone={statusTone(latest.status)}>{latest.status}</ToneBadge>
+					<span>by {latest.created_by}</span>
+					<span class="num">{latest.created_at.slice(0, 10)}</span>
+					{#if latest.source_trace_id}<span>from chat trace <code>{latest.source_trace_id}</code></span>{/if}
+				</p>
+			{/if}
+		{/snippet}
 
-	{#if canEdit}
-		<CaseEditor
-			bind:form
-			caseId={isNew ? newId : null}
-			onCaseId={(v) => (newId = v)}
-			{busy}
-			submitLabel={isNew ? 'Create case' : 'Save as new version'}
-			onSubmit={save}
-		/>
-	{:else if latest}
-		<pre>{JSON.stringify(latest, null, 2)}</pre>
-	{/if}
+		{#if error}<Notice tone="error" class="mb-4">{error}</Notice>{/if}
+		{#if notice}<Notice tone="success" class="mb-4">{notice}</Notice>{/if}
 
-	{#if history.length > 1}
-		<h2>History</h2>
-		<ol class="history">
-			{#each history as v (v.version)}
-				<li>v{v.version} · {v.status} · {v.created_by} · {v.created_at.slice(0, 16).replace('T', ' ')} · {v.question}</li>
-			{/each}
-		</ol>
-	{/if}
+		{#if canEdit}
+			<CaseEditor
+				bind:form
+				caseId={isNew ? newId : null}
+				onCaseId={(v) => (newId = v)}
+				{busy}
+				submitLabel={isNew ? 'Create case' : 'Save as new version'}
+				onSubmit={save}
+			/>
+		{:else if latest}
+			<pre class="code-block">{JSON.stringify(latest, null, 2)}</pre>
+		{/if}
+
+		{#if history.length > 1}
+			<section class="panel mt-6" aria-labelledby="history-title">
+				<div class="panel-header"><h2 id="history-title" class="panel-title">History</h2></div>
+				<table class="data-table" aria-label="Versions">
+					<thead><tr><th>Version</th><th>Status</th><th>By</th><th>When</th><th>Question</th></tr></thead>
+					<tbody>
+						{#each history as v (v.version)}
+							<tr>
+								<td class="num font-mono">v{v.version}</td>
+								<td><ToneBadge tone={statusTone(v.status)}>{v.status}</ToneBadge></td>
+								<td>{v.created_by}</td>
+								<td class="num text-muted-foreground whitespace-nowrap">{v.created_at.slice(0, 16).replace('T', ' ')}</td>
+								<td>{v.question}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</section>
+		{/if}
+	</Page>
 </RoleGate>
-
-<style>
-	.crumbs,
-	.status {
-		font-size: 0.85rem;
-	}
-	.status button {
-		margin-left: 0.5rem;
-		font: inherit;
-		font-size: 0.8rem;
-		padding: 0.15rem 0.6rem;
-		cursor: pointer;
-	}
-	.error {
-		color: var(--hard);
-	}
-	.notice {
-		color: var(--ok);
-	}
-	h2 {
-		font-size: 1rem;
-	}
-	.history {
-		font-size: 0.82rem;
-	}
-</style>
