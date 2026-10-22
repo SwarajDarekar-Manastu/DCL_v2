@@ -63,6 +63,7 @@ Consumes:
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | `transcribe_page.v2`: printed headers, footers and margin codes in `furniture` (not the body); v1 said to skip them. Wording kept neutral: an earlier draft ("they identify the document") was blocked with `block_reason=SAFETY` on a propellant paper |
 | 2026-10-22 | S2 | `classify_image` capability for Route D (file 03 §8 step 3) |
 | 2026-10-22 | S2 | `vision_cache()` on S1's BucketStore; tests moved to an adapter-neutral fake client (S4's gateway adapters change the wire format) |
 | 2026-10-21 | S2 | Schemas, nine v1 prompt files, prompt loader, VisionService with cache and ledger context; 23 tests on a mock gateway |
