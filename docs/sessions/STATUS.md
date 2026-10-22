@@ -649,3 +649,9 @@ Route C on the stack: 22 HALTED (20 LabJack, 2 TDMS), 7 ACTIVE, 11 ACTIVE_WITH_S
 Blocked on: nothing
 Needs from others: an SME confirmation of channel maps (S5's proposals) to resume the 22 HALTED runs
 Next: the settings API for S3, then the library PDF language check
+
+## 2026-10-22 16:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: read-only M2 acceptance checks for Route C and the TP7 footer CONFLICT check (`backend/tests/acceptance/m2_state.py`, `test_m2_acceptance.py`, M2.md). Route C status counts 22/7/11 and status ⇔ open-flag consistency; every .dat/.tdms is a committed run or a HALTED UNIT_AMBIGUITY HARD case with evidence (1b) and a suggested_resolution (1c); one committed csv run whose normalized Parquet (MinIO GET) and telemetry_channels are in canonical SI; no duplicate (doc_id, fingerprint). TP7: A1 document in a TP07 folder with CONFLICT SOFT on page 1, side a TP07 from folder[n]/filename, side b TP06 from page-1 furniture "Test Campaign 2 - Test Plan 6", test_plan_id stays TP07. 11 seeded-DB proofs (good passes, bad fails). Test: `DCL_TEST_DATABASE_URL=<disposable> uv run pytest -q` (exit 0); live: `DCL_ACCEPTANCE=1 DCL_DATABASE_URL=… DCL_MINIO_ENDPOINT=… DCL_MINIO_ACCESS_KEY=… DCL_MINIO_SECRET_KEY=… uv run pytest backend/tests/acceptance/test_m2_acceptance.py -v`
+Blocked on: nothing
+Needs from others: expected live failures, for the owners: TP7 check needs Route A1 in the dispatcher's adapter table (S1) and the sheet processed; 1c fails until Route C fills `suggested_resolution` on UNIT_AMBIGUITY (S1, file 06 §5); A1 persists page furniture only inside the CONFLICT evidence, not in the CIR (S2, informational)
+Next: idle until messaged (MULTILINGUAL and the retrieval set parked)
