@@ -67,6 +67,7 @@ Consumes:
 | 20 | High thinking is expensive (one primality question used ~21k thinking tokens) | caller guidance | documented |
 | 21 | Batch API | — | not exposed by the gateway (probe: endpoint missing); flag off |
 | 22 | Explicit context caches (`POST /caches`) | — | endpoint present, not exercised; flag off until first use |
+| 23 | Google Search grounding: the model writes the Google queries from the whole prompt, so send only an already-sanitized query in a grounded call; queries and sources come back in `result.grounding` for the trace; source URIs are Vertex AI Search redirect links | `google_search=True` | done, verified live |
 
 ## Workspace (files to touch when modifying this feature)
 
@@ -93,6 +94,7 @@ Consumes:
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S4 | Client and probe against the OpenAI-compatible shape; every capability behind a flag |
 | 2026-10-21 | S4 | Types, flags and errors moved to `gemini_types.py` |
+| 2026-10-22 | S4 | Google Search grounding behind `Capability.GOOGLE_SEARCH` (`google_search=True`, `result.grounding`); probe re-run with the real `.env` |
 | 2026-10-22 | S4 | Provider adapters (Manastu default, native, OpenAI); production checklist implemented; tests on recordings from the real gateway; probe with discovery and style detection; capabilities file from a real run |
 
 ## Related

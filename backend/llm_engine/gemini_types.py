@@ -25,6 +25,7 @@ class Capability(StrEnum):
     STREAM_USAGE = "stream_usage"
     CONTEXT_CACHE = "context_cache"
     BATCH = "batch"
+    GOOGLE_SEARCH = "google_search"
 
 
 class CapabilityStatus(StrEnum):
@@ -184,6 +185,20 @@ class Usage:
 
 
 @dataclass(frozen=True)
+class GroundingSource:
+    title: str | None
+    uri: str | None
+
+
+@dataclass(frozen=True)
+class Grounding:
+    """Google Search grounding: the queries the model sent to Google and the web sources it cited."""
+
+    queries: tuple[str, ...]
+    sources: tuple[GroundingSource, ...]
+
+
+@dataclass(frozen=True)
 class GenerateResult:
     text: str
     parsed: Any
@@ -195,6 +210,7 @@ class GenerateResult:
     latency_ms: int
     thoughts: str | None = None
     quota: dict[str, Any] | None = None
+    grounding: Grounding | None = None
 
 
 @dataclass(frozen=True)
@@ -247,6 +263,7 @@ class GenerateRequest:
     temperature: float | None = None
     max_output_tokens: int | None = None
     cached_content: str | None = None
+    google_search: bool = False
 
 
 @dataclass(frozen=True)
