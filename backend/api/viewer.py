@@ -20,9 +20,11 @@ The Console page calls GET /docs/{doc_id}/viewer?anchor=…[&translate=true] and
 `document_only`.
 """
 
+import re
 from collections.abc import Callable
 from datetime import date
 from enum import StrEnum
+from html.parser import HTMLParser
 from typing import Annotated, Any, Literal
 from urllib.parse import quote
 from uuid import UUID
@@ -30,7 +32,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from minio import Minio
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.api.assets import get_minio
@@ -174,11 +176,112 @@ class ViewerPayload(BaseModel):
 PresignFn = Callable[[str], str]
 CODE_NODES = {"code_symbol", "module_header", "config"}
 TIME_NODES = {"transcript_window", "video_event"}
+TABLE_NODE, TABLE_ROW_NODE = "table", "table_row"
+A1_CELL = re.compile(r"\$?([A-Za-z]{1,3})\$?(\d+)")
 RESOLUTION_MESSAGE = {
     ResolutionStatus.EXACT: "",
     ResolutionStatus.PAGE_FALLBACK: "The cited passage changed after re-indexing; showing where it was.",
     ResolutionStatus.DOCUMENT_ONLY: "The cited location is no longer in this document; showing its start.",
 }
+
+
+class _TableCells(HTMLParser):
+    """Cell text of an HTML table (Route C stores tables as HTML); markup never reaches the payload."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.rows: list[list[str]] = []
+        self.header_rows = 0
+        self._in_head = False
+        self._cell: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "thead":
+            self._in_head = True
+        elif tag == "tr":
+            self.rows.append([])
+            self.header_rows += self._in_head
+        elif tag in ("td", "th") and self.rows:
+            self._cell = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "thead":
+            self._in_head = False
+        elif tag in ("td", "th") and self._cell is not None:
+            self.rows[-1].append(" ".join("".join(self._cell).split()))
+            self._cell = None
+
+    def handle_data(self, data: str) -> None:
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+def _a1(cell: str) -> tuple[int, int] | None:
+    """'B3' → (row 2, col 1), 0-based."""
+    match = A1_CELL.fullmatch(cell.strip())
+    if not match:
+        return None
+    col = 0
+    for ch in match.group(1).upper():
+        col = col * 26 + ord(ch) - 64
+    return int(match.group(2)) - 1, col - 1
+
+
+def _cell_box(cell_range: str) -> tuple[int, int, int, int] | None:
+    first, _, last = cell_range.partition(":")
+    a, b = _a1(first), _a1(last or first)
+    if a is None or b is None:
+        return None
+    return min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])
+
+
+def table_view(
+    content: str,
+    sheet_name: str | None,
+    table_range: str | None,
+    cited_range: str | None = None,
+    cited_row: int | None = None,
+) -> TableView | None:
+    """A table node's HTML as plain cell rows. `cited_range` (A1, sheet coordinates) is shifted by the table's
+    top-left; `cited_row` is the 0-based data row. None when the content holds no table."""
+    parser = _TableCells()
+    parser.feed(content)
+    rows = [r for r in parser.rows if r]
+    if not rows:
+        return None
+    width = max(len(r) for r in rows)
+    highlight = None
+    table_box = _cell_box(table_range) if table_range else None
+    origin = table_box[:2] if table_box else (0, 0)
+    cited = _cell_box(cited_range) if cited_range else None
+    if cited:
+        highlight = (cited[0] - origin[0], cited[1] - origin[1], cited[2] - origin[0], cited[3] - origin[1])
+    elif cited_row is not None:
+        row = parser.header_rows + cited_row
+        highlight = (row, 0, row, width - 1)
+    return TableView(sheet_name=sheet_name, header_rows=parser.header_rows, rows=rows, highlight=highlight)
+
+
+def _table_view_for(session: Session, node: DocumentNode, anchor: Anchor | None) -> TableView | None:
+    table, cited_row = node, None
+    if node.node_type == TABLE_ROW_NODE:
+        if node.parent_node_id is None:
+            return None
+        parent = session.get(DocumentNode, node.parent_node_id)
+        if parent is None or parent.node_type != TABLE_NODE:
+            return None
+        table = parent
+        cited_row = session.scalar(
+            select(func.count())
+            .select_from(DocumentNode)
+            .where(
+                DocumentNode.parent_node_id == parent.node_id,
+                DocumentNode.node_type == TABLE_ROW_NODE,
+                DocumentNode.ordinal < node.ordinal,
+            )
+        )
+    cited_range = anchor.cell_range if anchor and anchor.sheet_name == table.sheet_name else None
+    return table_view(table.content, table.sheet_name, table.cell_range, cited_range, cited_row)
 
 
 class DocumentNotFound(LookupError):
@@ -235,7 +338,7 @@ def _view(
     boxes: list[Region],
     anchor: Anchor | None,
     presign: PresignFn,
-) -> PageView | ImageView | CodeView | TextView | VideoView:
+) -> PageView | ImageView | TableView | CodeView | TextView | VideoView:
     render = _page_render(session, blob_sha256, page_no or 1)
     if render and render.width and render.height:
         page_text = "\n\n".join(n.content for n in nodes)
@@ -249,6 +352,10 @@ def _view(
             text=page_text,
         )
     first = nodes[0] if nodes else None
+    if first and first.node_type in (TABLE_NODE, TABLE_ROW_NODE):
+        table = _table_view_for(session, first, anchor)
+        if table is not None:
+            return table
     if first and first.node_type in CODE_NODES:
         lines = first.content.splitlines() or [""]
         start = first.line_start or 1

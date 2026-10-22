@@ -26,11 +26,6 @@ EXTERNAL_NOT_ALLOWED = (
     "external search is not enabled for your groups; only internal and library material was used"
 )
 PROCEDURE_KINDS = ["procedure", "test_plan", "calibration"]
-UNAVAILABLE = {
-    "query_telemetry": (
-        "telemetry statistics (Route C) are not available yet; numbers come from report tables"
-    ),
-}
 
 
 @dataclass(frozen=True)
@@ -45,6 +40,7 @@ class Plan:
     calls: list[PlannedCall] = field(default_factory=list)
     caveats: list[str] = field(default_factory=list)
     needs_physics_args: bool = False
+    needs_telemetry_args: bool = False
     read_top_document: bool = False
     external: Literal["no", "if_gap", "yes"] = "no"
 
@@ -52,10 +48,6 @@ class Plan:
         key = (tool, args.model_dump_json() if args is not None else None)
         if all((c.tool, c.args.model_dump_json() if c.args is not None else None) != key for c in self.calls):
             self.calls.append(PlannedCall(tool, args, reason))
-
-    def note_unavailable(self, tool: str) -> None:
-        if UNAVAILABLE[tool] not in self.caveats:
-            self.caveats.append(UNAVAILABLE[tool])
 
 
 def _origins(analysis: Analysis) -> list[str]:
@@ -112,7 +104,7 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
     if intents == {Intent.CHITCHAT}:
         return plan
     if intents & {Intent.TELEMETRY_METRIC, Intent.RUN_COMPARISON}:
-        plan.note_unavailable("query_telemetry")
+        plan.needs_telemetry_args = True
         plan.add(
             "catalog_lookup",
             CatalogArgs(test_plan_id=(analysis.test_plan_ids or [None])[0]),
@@ -121,7 +113,7 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
         plan.add(
             "search_documents",
             _search(analysis, question, scope=Scope.TABLES_ONLY),
-            "report tables with the values",
+            "report tables to cross-check the measured values",
         )
         plan.add("search_documents", _search(analysis, question), "report text about the runs")
     if intents & {Intent.FACT_LOOKUP, Intent.PROCEDURE_LOOKUP}:
@@ -132,6 +124,7 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
             "search_documents", _search(analysis, question, doc_kinds=kinds), "the passages that state it"
         )
     if Intent.FAILURE_INVESTIGATION in intents:
+        plan.needs_telemetry_args |= bool(analysis.test_plan_ids or analysis.test_run_ids)
         plan.add("search_documents", _search(analysis, question, doc_kinds=FAILURE_KINDS), "failure reports")
         plan.add(
             "inspect_visuals", _visuals(analysis, question, kinds=["hardware_photo"]), "photos of the damage"
@@ -216,7 +209,7 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
         if sub.tool in (None, "search_documents"):
             plan.add("search_documents", _search(analysis, sub.text), f"sub-question: {sub.text}")
     _external(plan, analysis, intents)
-    if not plan.calls and not plan.needs_physics_args:
+    if not plan.calls and not plan.needs_physics_args and not plan.needs_telemetry_args:
         plan.add("search_documents", _search(analysis, question), "general search")
     return plan
 

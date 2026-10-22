@@ -61,9 +61,9 @@ class FakeClient:
 
 @pytest.fixture
 def make_service():
-    def build(*readings, image_input=True):
+    def build(*readings, image_input=True, **service_options):
         client = FakeClient(*readings, image_input=image_input)
         cache = MemoryCache()
-        return VisionService(client, cache), client, cache
+        return VisionService(client, cache, **service_options), client, cache
 
     return build

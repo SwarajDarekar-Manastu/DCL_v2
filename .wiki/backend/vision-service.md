@@ -26,7 +26,7 @@ Tests and fixtures:
 ## Interfaces
 
 Provides:
-- `VisionService(client: GeminiClient, cache=vision_cache())` with `triage_page`, `transcribe_page`, `transcribe_handwriting`, `read_table_image`, `digitize_plot`, `read_schematic`, `inspect_hardware_photo`, `describe_slide`, `video_timeline`, `classify_image` (Route D, Flash-Lite); each takes `Image` parts, keyword context, `doc_id`, `anchor` and returns `VisionOutput(reading, model, prompt_version, input_sha256, cached)`
+- `VisionService(client: GeminiClient, cache=vision_cache(), *, extraction_safety=extraction_safety_from(session))` with `triage_page`, `transcribe_page`, `transcribe_handwriting`, `read_table_image`, `digitize_plot`, `read_schematic`, `inspect_hardware_photo`, `describe_slide`, `video_timeline`, `classify_image` (Route D, Flash-Lite); each takes `Image` parts, keyword context, `doc_id`, `anchor` and returns `VisionOutput(reading, model, prompt_version, input_sha256, cached)`
 - Schemas in `vision/schemas.py`: `PageTriage`, `PageTranscription`, `HandwritingReading`, `TableReading`, `PlotReading`, `SchematicReading`, `HardwarePhotoReading`, `SlideReading`, `VideoTimeline`; boxes are `box_2d` [ymin, xmin, ymax, xmax] 0–1000, top-left
 - Cache key `_vision_cache/{model}/{prompt_version}/{input_sha256}.json` in `dcl-cir`; a hit makes no gateway call and no ledger row
 - Prompt files: system text, `--- user ---`, `$variable` template; version = file stem; changing a prompt = new file + new pin in `TASKS`
@@ -36,6 +36,8 @@ Consumes:
 - `backend/registry-and-blobs` (S1): `BucketStore` on `dcl-cir` from `backend/storage/minio.py` (`vision_cache()`)
 
 ## Behavior that callers rely on
+
+- Safety settings: off unless `vision.extraction_safety` is set; the constructor takes the parsed set (`extraction_safety_from(session)` reads it), so whoever builds the service in a worker passes it
 
 - `CapabilityUnavailable` while the gateway's image flag is off (until S4's probe runs); `BudgetExhausted` means retry later; `StructuredOutputError` is never cached.
 - Handwriting: an illegible reading carries no value and confidence ≤ 0.5; a `value_number` that `value_raw` does not state is dropped.
@@ -62,6 +64,7 @@ Consumes:
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-22 | S2 | Extraction safety flag: `pipeline_config` `vision.extraction_safety` (`true` or a list; default off) makes the seven extraction capabilities (transcribe_page, transcribe_handwriting, read_table_image, digitize_plot, read_schematic, describe_slide, video_timeline) send `EXTRACTION_SAFETY`; triage, photo and classify never do; unknown names refused |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S2 | `transcribe_page.v2`: printed headers, footers and margin codes in `furniture` (not the body); v1 said to skip them. Wording kept neutral: an earlier draft ("they identify the document") was blocked with `block_reason=SAFETY` on a propellant paper |
 | 2026-10-22 | S2 | `classify_image` capability for Route D (file 03 §8 step 3) |

@@ -380,6 +380,39 @@ def _asset_access(settings) -> tuple[Any, Any]:
     return (lambda uri: presign_get(client, uri)), fetch
 
 
+def _telemetry_connect(settings) -> Any:
+    """T2's DuckDB connections: httpfs with a MinIO secret, so `s3://dcl-telemetry/…` URIs read in place."""
+    from urllib.parse import urlsplit
+
+    try:
+        settings.require(Group.MINIO)
+    except ConfigError as exc:
+        log.warning("T2 runs without the telemetry store: %s", exc)
+        return None
+    endpoint = urlsplit(str(settings.minio_endpoint))
+    secure = bool(settings.minio_secure or endpoint.scheme == "https")
+    secret = [
+        settings.minio_access_key,
+        settings.minio_secret_key.get_secret_value(),
+        endpoint.netloc,
+        secure,
+    ]
+
+    def connect():
+        import duckdb
+
+        con = duckdb.connect()
+        con.execute("INSTALL httpfs; LOAD httpfs;")
+        con.execute(
+            "CREATE SECRET dcl_minio (TYPE s3, KEY_ID ?, SECRET ?, ENDPOINT ?, URL_STYLE 'path', USE_SSL ?, "
+            "REGION 'us-east-1')",
+            secret,
+        )
+        return con
+
+    return connect
+
+
 async def start_engine() -> None:
     """Build the workflow with its process-level clients and launch DBOS (decision H8). Idempotent."""
     async with _ENGINE_LOCK:
@@ -406,6 +439,7 @@ async def start_engine() -> None:
             external_policy=_external_policy,
             presign=presign,
             fetch_asset=fetch_asset,
+            telemetry_connect=_telemetry_connect(settings),
         )
         database_url = settings.stack_database_url().get_secret_value().replace("+psycopg", "")
         runtime = build_runtime(database_url)
