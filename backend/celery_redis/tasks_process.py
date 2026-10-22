@@ -1,6 +1,7 @@
 """Phase 2 tasks. ``dcl.process.dispatch`` turns landed blobs inside ``processing.scope`` into documents
 (backend/dispatcher/routing.py) and enqueues every PROCESSING document on its adapter's task;
-``dcl.process.route_c`` runs Route C on ``telemetry_stream``."""
+``dcl.process.route_c`` runs Route C on ``telemetry_stream``; ``dcl.process.route_a1`` runs Route A1 (PDF)
+on ``cpu_parse``."""
 
 import uuid
 from functools import lru_cache
@@ -109,6 +110,49 @@ def resume_route_c(doc_id: str) -> dict[str, object]:
             raise
         session.commit()
     return {"doc_id": doc_id, "status": outcome.status, "hard_flags": outcome.hard_flags}
+
+
+CPU_PARSE = str(Queue.CPU_PARSE)
+
+
+@lru_cache(maxsize=1)
+def _a1_build():
+    from backend.dispatcher.office_run import default_build
+
+    return default_build()
+
+
+@app.task(
+    name="dcl.process.route_a1",
+    queue=CPU_PARSE,
+    autoretry_for=RETRYABLE,
+    retry_backoff=30,
+    max_retries=POOLS[Queue.CPU_PARSE].max_retries,
+)
+def route_a1(doc_id: str) -> dict[str, object]:
+    """One Route A1 document (PDF) through S2's ``process_pdf``, then the gate and the commit path."""
+    from backend.dispatcher.office_run import process_a1_document
+
+    minio = client_from_settings(get_settings())
+    with Session(_engine(), expire_on_commit=False) as session:
+        try:
+            outcome = process_a1_document(
+                session, minio, uuid.UUID(doc_id), _a1_build(), indexer=_indexer(minio)
+            )
+        except RETRYABLE:
+            session.rollback()
+            raise
+        except Exception as exc:
+            session.rollback()
+            _fail(session, uuid.UUID(doc_id), exc)
+            raise
+        session.commit()
+    return {
+        "doc_id": doc_id,
+        "status": outcome.status,
+        "hard_flags": outcome.hard_flags,
+        "soft_flags": outcome.soft_flags,
+    }
 
 
 @app.task(name="dcl.process.resume_for_rule", queue=IO_LIGHT)
