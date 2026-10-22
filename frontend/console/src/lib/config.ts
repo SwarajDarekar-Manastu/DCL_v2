@@ -1,6 +1,6 @@
 // The one place that reads VITE_* variables and shapes the Console's backend access and auth (file 08 §7).
 
-export type AuthMode = 'msal' | 'dev';
+export type AuthMode = 'local' | 'msal' | 'dev';
 
 export interface ConsoleConfig {
 	apiBaseUrl: string;
@@ -29,9 +29,9 @@ function str(env: Env, name: string): string {
 export function buildConfig(env: Env, origin: string): ConsoleConfig {
 	const apiBaseUrl = (str(env, 'VITE_API_BASE_URL') || origin).replace(/\/+$/, '');
 	const wsUrl = apiBaseUrl.replace(/^http/, 'ws') + '/ws';
-	const mode = (str(env, 'VITE_AUTH_MODE') || 'msal') as AuthMode;
-	if (mode !== 'msal' && mode !== 'dev') {
-		throw new ConfigError(`VITE_AUTH_MODE must be "msal" or "dev", got "${mode}"`);
+	const mode = (str(env, 'VITE_AUTH_MODE') || 'local') as AuthMode;
+	if (mode !== 'local' && mode !== 'msal' && mode !== 'dev') {
+		throw new ConfigError(`VITE_AUTH_MODE must be "local", "msal" or "dev", got "${mode}"`);
 	}
 	if (mode === 'dev' && env.DEV !== true) {
 		throw new ConfigError('VITE_AUTH_MODE=dev is only allowed under the Vite dev server');
