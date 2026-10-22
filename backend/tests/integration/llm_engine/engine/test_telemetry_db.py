@@ -264,3 +264,39 @@ def test_no_store_configured(engine, data):
             s, QueryTelemetryArgs(run_ids=["TP07_T04"], channels=["thrust"]), connect=None
         )
     assert result.result["runs"] == [] and "not configured" in " ".join(result.warnings)
+
+
+def test_plot_is_a_png_in_the_asset_store_with_a_presigned_link(engine, data):
+    stored = {}
+
+    def put_asset(key, png):
+        stored[key] = png
+        return f"s3://dcl-assets/{key}"
+
+    def ask():
+        with Session(engine) as s:
+            return query_telemetry(
+                s,
+                QueryTelemetryArgs(
+                    run_ids=["TP07_T04"],
+                    channels=["chamber_pressure", "thrust"],
+                    window_kind="valve_open",
+                    plot=True,
+                ),
+                connect=duckdb.connect,
+                put_asset=put_asset,
+                presign=lambda uri: "https://minio.test/" + uri.removeprefix("s3://"),
+            )
+
+    first, second = ask(), ask()
+    [plot] = first.result["plots"]
+    assert len(stored) == 1  # the same question overwrites the same key
+    [(key, png)] = stored.items()
+    assert key.startswith("plots/") and key.endswith(".png") and png[:8] == b"\x89PNG\r\n\x1a\n"
+    assert (
+        plot["url"] == f"https://minio.test/dcl-assets/{key}"
+        and second.result["plots"][0]["url"] == plot["url"]
+    )
+    assert "p_chamber_1_bar_g, thrust_n" in plot["alt"] and "valve open" in plot["alt"]
+    without_store = run(engine, run_ids=["TP07_T04"], channels=["thrust"], plot=True)
+    assert without_store.result["plots"] == [] and "asset store" in " ".join(without_store.warnings)

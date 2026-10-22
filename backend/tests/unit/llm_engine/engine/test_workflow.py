@@ -455,7 +455,7 @@ def test_telemetry_question_runs_t2_with_extracted_arguments(searches, monkeypat
     searches(report_hit)
     t2_calls = []
 
-    def fake_telemetry(session, args, *, connect):
+    def fake_telemetry(session, args, *, connect, put_asset, presign):
         t2_calls.append(args)
         source = Source(
             doc_id=REPORT, label="Run TP07_T04 (measured telemetry)", provenance=Provenance.MEASURED
@@ -500,3 +500,16 @@ def test_telemetry_question_without_a_quantity_skips_t2(searches, monkeypatch):
     )
     _, done, traces = run(client, "Which runs of TP7 had a sensor fault?")
     assert "query_telemetry" not in [c["tool"] for c in traces[0]["tool_calls"]]
+
+
+def test_plot_embeds_fit_the_wire_contract():
+    from backend.api.engine import EmbedEvent
+
+    result = ToolResult(
+        tool="query_telemetry",
+        result={"runs": [], "plots": [{"url": "https://minio.test/p.png", "alt": "Run TP07_T04: thrust_n"}]},
+        display="x",
+    )
+    [embed] = wf.plot_embeds([result])
+    event = TypeAdapter(EmbedEvent).validate_python(embed)
+    assert event.kind == "plot" and event.url == "https://minio.test/p.png" and event.html is None

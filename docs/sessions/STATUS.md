@@ -729,3 +729,9 @@ Merged / ready: (1) per-capability extraction safety flag (9b4e3f1): `pipeline_c
 Blocked on: nothing
 Needs from others: Lead: new `pipeline_config` key `vision.extraction_safety` for file 05's key list (S1 seeds nothing; absent = off). S4: the API image has DuckDB without the httpfs extension; `INSTALL httpfs` downloads it on first use, so please bake it into the image for offline hosts. The Matplotlib plot embed of T2 is not built (no matplotlib dependency); `plot=true` returns a warning.
 Next: Skills for Open WebUI
+
+## 2026-10-23 00:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: T2 plot embed. With `plot=true`, T2 renders one PNG per run (Matplotlib Agg, a panel per channel over time from ignition, window shaded, peak marked). It writes the PNG to `dcl-assets` at `plots/{run_uuid}/{sha16}.png` through `put_asset` (the same question overwrites the same key), and the stream carries a `plot` embed frame with the presigned URL. `start_engine` wires `put_asset` from MinIO. Live: plot rendered from the stack's committed run.
+Blocked on: nothing
+Needs from others: Lead: the `plots/{run_uuid}/…png` key prefix for file 05's dcl-assets layout (answer-time only, no `assets` row). S1, through the Lead: `office_run.default_build()` should pass `extraction_safety=extraction_safety_from(session)` to VisionService. Observation for S1: on the stack's committed thermocouple run, t0 lands at the temperature peak (detection at 2 Hz); the rise starts about 11 s earlier.
+Next: Skills for Open WebUI
