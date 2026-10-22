@@ -254,3 +254,24 @@ def test_a_blocked_transcription_keeps_the_ocr_and_flags_the_page(fake_vision, m
     )
     low = [f for f in doc.flags if f.flag_type == FlagType.LOW_CONFIDENCE_EXTRACTION]
     assert [f.anchor.page for f in low] == [1] and low[0].severity == FlagSeverity.SOFT
+
+
+def test_nul_bytes_from_a_text_layer_never_reach_the_commit(fake_vision, memory_store):
+    from backend.routes.a1_office.route import without_nul
+
+    name, data = fixture("german_datasheet")
+    doc = process_pdf(
+        data,
+        blob_sha256=SHA,
+        file_name=name,
+        folder=folder("APS - Library", "Vendor brochures/DE", name, SourceOrigin.EXTERNAL_KEPT),
+        vision=fake_vision(triage_page=triage(language="de")),
+        stores=stores(memory_store),
+    )
+    assert without_nul(doc) is doc  # nothing to clean: the same object
+    dirty = doc.model_copy(
+        update={"nodes": [doc.nodes[0].model_copy(update={"content": "Schub\x00 12\x00 N"}), *doc.nodes[1:]]}
+    )
+    clean = without_nul(dirty)
+    assert clean.nodes[0].content == "Schub 12 N" and clean.nodes[1:] == doc.nodes[1:]
+    assert "\x00" not in clean.model_dump_json()

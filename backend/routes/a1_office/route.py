@@ -58,6 +58,24 @@ class Stores:
     put_asset: Callable[[str, bytes], str]
 
 
+def _strip_nul(value):
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, dict):
+        return {k: _strip_nul(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_strip_nul(v) for v in value]
+    return value
+
+
+def without_nul(processed: ProcessedDocument) -> ProcessedDocument:
+    """PostgreSQL text cannot hold NUL bytes, which some PDF text layers carry (seen live on an Elsevier
+    paper: the commit failed); they carry no meaning, so every string of the output drops them."""
+    data = processed.model_dump(mode="json")
+    cleaned = _strip_nul(data)
+    return processed if cleaned == data else ProcessedDocument.model_validate(cleaned)
+
+
 def _failed(
     blob_sha256: str, file_name: str, failure: PreflightFailure, data: bytes, cir_uri: str
 ) -> ProcessedDocument:
@@ -296,17 +314,19 @@ def process_pdf(
         stores.put_cir(f"pages/{page_no}.txt", page_text.get(page_no, "").encode("utf-8"))
     stores.put_cir("page_hashes.json", json.dumps(hashes).encode())
 
-    return ProcessedDocument(
-        blob_sha256=blob_sha256,
-        route=Route.A1,
-        parser_version=PARSER_VERSION,
-        cir_uri=cir_uri,
-        document=metadata.fields,
-        nodes=nodes,
-        assets=assets,
-        mentions=structure.mentions,
-        flags=_unique_flags(flags),
-        unit_hashes=[UnitHash(unit="page", key=str(p), sha256=h) for p, h in sorted(hashes.items())],
+    return without_nul(
+        ProcessedDocument(
+            blob_sha256=blob_sha256,
+            route=Route.A1,
+            parser_version=PARSER_VERSION,
+            cir_uri=cir_uri,
+            document=metadata.fields,
+            nodes=nodes,
+            assets=assets,
+            mentions=structure.mentions,
+            flags=_unique_flags(flags),
+            unit_hashes=[UnitHash(unit="page", key=str(p), sha256=h) for p, h in sorted(hashes.items())],
+        )
     )
 
 

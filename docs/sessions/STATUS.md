@@ -817,3 +817,18 @@ Merged / ready: benchmark runner, metrics and judge (`backend/benchmark/{metrics
 Blocked on: nothing
 Needs from others: S4: add `backend.benchmark.tasks` to `TASK_MODULES` and a beat entry `dcl.benchmark.sweep` every 60 s on io_light. Optional: a queue with a longer soft limit if 300 s per case proves short (one live answer took 76 s). S1: Route C `table`/`table_row` nodes need a locator (`sheet_name` + `cell_range`, or `line_start` for CSV rows); until then they cannot be cited. S3 (optional): send `dcl.benchmark.start` on `POST /benchmark/runs` so a run starts without waiting up to a minute for the sweep.
 Next: idle until messaged
+
+## 2026-10-23 05:30 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready:
+- 69e28b5: the A1 OSD error on doc 1539b6b4 is benign. Docling runs Tesseract orientation detection on every OCR'd page, fails on near-empty pages ("Too few characters") and then OCRs with our explicit script model anyway. It is now logged as INFO; other OSD failures stay errors.
+- Same commit: Docling converters are cached per OCR plan, because the log showed 25 pipeline rebuilds for one document. Measured in the parse worker: 13.1 s → 2.1 s per text-layer run, 5.9 s → 3.7 s per Tesseract run; peak memory 2.2 GB with two converters.
+- NUL fix: A1 strips NUL bytes from its output. Doc 206e1884 (j.ijheatmasstransfer) FAILED in the commit with "PostgreSQL text fields cannot contain NUL".
+A1 batch read (27 tasks): 18 indexed (13 ACTIVE, 5 with SOFT low-confidence flags), 8 HALTED, 1 FAILED. The 6 E13 patents are not in `documents` yet.
+- All 8 ECSS standards (E12) are HALTED as PARSE_FAILURE "encrypted". They open without a password: owner-password restrictions only.
+- `sync_roots.cloud_allowed` is false on all four roots, so the batch made no Gemini call at all. That means no triage, so no language, script or rotation: every `documents.language` is null and one title is upside-down text. It also means no figure or handwriting reading and no transcribe_page; cost per document is 0.
+- OCR therefore ran Tesseract Latin on every image-only page (56 OCR nodes against 2323 printed ones).
+- There is no `llm_calls` table on the stack and no LLM metrics in Prometheus, so cost per document cannot be measured even once Gemini runs.
+- Durations: 0.05 s (halted) to 1190 s (420 pages); an 8-page paper took 687 s (formula and code enrichment on CPU).
+Blocked on: Lead/user rulings (sent): cloud_allowed for the roots; owner-password-only PDFs
+Needs from others: S1 (or Lead): the `llm_calls` table and the client's ledger hook, for cost per document
+Next: after the rulings, re-run A1 on the 27 + 6 E13 documents, report OCR engine per script and cost, then the M5 handwriting calibration on the TP7 sheets (it needs Gemini)
