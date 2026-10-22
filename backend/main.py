@@ -19,6 +19,7 @@ from backend.api import (
     entities,
     health,
     models,
+    ops,
     review,
     settings,
     sync,
@@ -43,6 +44,7 @@ API_ROUTERS: list[ModuleType] = [
     assets,
     audit,
     benchmark,
+    ops,
     ws,
 ]
 MODEL_ROUTERS: list[ModuleType] = [health, models]
