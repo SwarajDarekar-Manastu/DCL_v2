@@ -27,6 +27,7 @@ EMBEDDING_MODEL_TAG = "embeddinggemma-2@768"
 EMBEDDING_DIM = 768
 EMBEDDING_CONTEXT_TOKENS = 8192
 MAX_EMBED_TEXT_TOKENS = 8000
+MAX_TOKENIZE_ITEMS = 1024  # per `/tokenize/count` request; ModelsClient.count_tokens splits larger lists
 RERANKER_MODEL_ID = "BAAI/bge-reranker-v2-m3"
 RERANKER_MAX_LENGTH = 512
 QUERY_PREFIX = "task: search result | query: "
@@ -277,6 +278,14 @@ class ModelsClient:
 
         payload = {"images_b64": [base64.b64encode(raw).decode("ascii") for raw in images]}
         return self._post("/embed/image", payload)["vectors"]
+
+    def count_tokens(self, texts: list[str]) -> list[int]:
+        """EmbeddingGemma token counts from the models role (workers never import transformers)."""
+        counts: list[int] = []
+        for start in range(0, len(texts), MAX_TOKENIZE_ITEMS):
+            batch = texts[start : start + MAX_TOKENIZE_ITEMS]
+            counts += self._post("/tokenize/count", {"texts": batch})["counts"]
+        return counts
 
     def rerank(self, query: str, passages: list[str]) -> RerankResult:
         body = self._post("/rerank", {"query": query, "passages": passages})

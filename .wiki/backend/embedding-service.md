@@ -27,7 +27,8 @@ Provides:
 - `POST /embed/text` `{kind: document|query, items: [{text, title?}]}` (≤ 256 items) → `{model: "embeddinggemma-2@768", dim: 768, vectors}`
 - `POST /embed/image` `{images_b64: [...]}` (≤ 32) → same response
 - `GET /models/health` → `{embedding_model, reranker_model, dim, device, dtype}`; the first call loads both models (use it as the compose healthcheck)
-- Python: `ModelsClient(base_url=settings.models_url).embed_documents(texts, titles)`, `.embed_queries(queries)`, `.embed_images(bytes_list)`; raises `ModelServerUnavailable` (connection, timeout, 5xx) or `ModelRequestRejected` (4xx)
+- `POST /tokenize/count` `{texts: [str]}` (≤ 1024 texts, empty strings allowed) → `{model: "embeddinggemma-2@768", counts: [int]}`: EmbeddingGemma tokenizer on CPU, no special tokens, the same count the chunker uses; never loads the weights; 503 when the tokenizer cannot load. Workers size chunks with it instead of importing transformers (DECISIONS 2026-10-22)
+- Python: `ModelsClient(base_url=settings.models_url).embed_documents(texts, titles)`, `.embed_queries(queries)`, `.embed_images(bytes_list)`, `.count_tokens(texts)` (any length; split into requests of 1024); raises `ModelServerUnavailable` (connection, timeout, 5xx) or `ModelRequestRejected` (4xx)
 - Python: `count_tokens(texts)` with the model's own tokenizer, CPU only (for the chunker)
 - Document input `title: {title} | text: {text}` (`title: none` without title); query input `task: search result | query: {q}`; images raw
 
@@ -69,6 +70,7 @@ Consumes:
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-22 | S2 | `POST /tokenize/count` and `ModelsClient.count_tokens` for S1's workers |
 | 2026-10-22 | S2 | Unit tests run without torch (dtype check before import, CUDA OOM recognized by name, torch-free fakes); only `test_gpu_models.py` needs torch |
 | 2026-10-21 | S2 | Built `local_models.py`, `/embed/text`, `/embed/image`, `/models/health`, `ModelsClient`; GPU throughput measured |
 
