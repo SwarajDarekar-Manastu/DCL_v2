@@ -6,10 +6,12 @@ first committed page past its budget and re-enqueues itself, resuming from the p
 Beat schedules live in ``backend/celery_redis/beat.py`` (S4).
 """
 
+import json
 import logging
 import time
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from functools import lru_cache
 
@@ -253,3 +255,57 @@ def renew_subscriptions() -> dict[str, str]:
             client.close()
         session.commit()
     return outcome
+
+
+SIGN_IN_KEY = "sync:sign_in"
+SIGN_IN_TTL_S = 1800
+
+
+def _sign_in_state(redis_client, **state) -> None:
+    redis_client.set(SIGN_IN_KEY, json.dumps(state), ex=SIGN_IN_TTL_S)
+
+
+@app.task(name="dcl.sync.sign_in", queue=IO_LIGHT, soft_time_limit=1000, time_limit=1060)
+def sign_in() -> str:
+    """Console "start device-code sign-in" (file 08 §3.2 Sources): runs where the token cache lives
+    (io_light) and reports the code, then the outcome, in Redis for ``GET /sync/sign-in``."""
+    from backend.sync.auth import AuthError
+
+    redis_client = _redis()
+    tokens = TokenProvider.create(GraphAuthConfig.from_settings(get_settings()))
+
+    def on_flow(flow: dict) -> None:
+        expires = datetime.now(UTC) + timedelta(seconds=int(flow.get("expires_in", 900)))
+        _sign_in_state(
+            redis_client,
+            state="pending",
+            user_code=flow["user_code"],
+            verification_uri=flow.get("verification_uri"),
+            expires_at=expires.isoformat(),
+            detail=None,
+        )
+
+    try:
+        account = tokens.sign_in(
+            show=lambda message: log.info("device-code sign-in started"), on_flow=on_flow
+        )
+    except AuthError as exc:
+        _sign_in_state(
+            redis_client,
+            state="failed",
+            user_code=None,
+            verification_uri=None,
+            expires_at=None,
+            detail=str(exc),
+        )
+        raise
+    _sign_in_state(
+        redis_client,
+        state="signed_in",
+        user_code=None,
+        verification_uri=None,
+        expires_at=None,
+        detail=account,
+    )
+    _tokens.cache_clear()  # the workers' provider reloads the new cache
+    return account
