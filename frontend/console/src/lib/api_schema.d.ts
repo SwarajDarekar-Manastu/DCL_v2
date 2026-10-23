@@ -370,6 +370,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search */
+        get: operations["search_entities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/entities/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Merge */
+        post: operations["merge_entities_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/entities/split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Split */
+        post: operations["split_entities_split_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -661,6 +712,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sync/process-everything": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Process Everything
+         * @description Empty ``processing.scope`` (= everything) through the settings path: versioned, audited, previewed.
+         */
+        post: operations["process_everything_sync_process_everything_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync/redispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Redispatch Preview */
+        get: operations["redispatch_preview_sync_redispatch_get"];
+        put?: never;
+        /**
+         * Redispatch
+         * @description Re-run every committed document of ``route`` (after a parser or configuration change).
+         */
+        post: operations["redispatch_sync_redispatch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync/roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Roots */
+        get: operations["list_roots_sync_roots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync/sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sign In State */
+        get: operations["sign_in_state_sync_sign_in_get"];
+        put?: never;
+        /** Start Sign In */
+        post: operations["start_sign_in_sync_sign_in_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sync/webhook": {
         parameters: {
             query?: never;
@@ -856,8 +983,31 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Feedback */
+        /**
+         * Feedback
+         * @description Appended to `answer_traces.feedback` in one statement; `wrong_unit` also opens a SOFT CONFLICT.
+         */
         post: operations["feedback_v1_traces__trace_id__feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/translate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Translate
+         * @description The viewer's Translate toggle without `content_en`: per page or passage, cached by content hash.
+         */
+        post: operations["translate_v1_translate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -889,6 +1039,15 @@ export interface components {
             status: string;
             /** Title */
             title: string;
+        };
+        /** AliasView */
+        AliasView: {
+            /** Alias */
+            alias: string;
+            /** Alias Key */
+            alias_key: string;
+            /** Created By */
+            created_by: string;
         };
         /**
          * AmbientCondition
@@ -1710,6 +1869,39 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** EntityPage */
+        EntityPage: {
+            /** Items */
+            items: components["schemas"]["EntityView"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * EntityType
+         * @enum {string}
+         */
+        EntityType: "subsystem" | "component" | "material" | "propellant" | "catalyst" | "sensor_tag" | "part_number" | "test_id" | "standard_clause" | "person_role" | "organization" | "vendor" | "product" | "tool_software" | "equation" | "failure_mode";
+        /** EntityView */
+        EntityView: {
+            /** Aliases */
+            aliases: components["schemas"]["AliasView"][];
+            /** Canonical Key */
+            canonical_key: string;
+            /** Canonical Name */
+            canonical_name: string;
+            /** Created By */
+            created_by: string;
+            /** Documents */
+            documents: number;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Mentions */
+            mentions: number;
+            type: components["schemas"]["EntityType"];
+        };
         /** Exclude */
         Exclude: {
             /**
@@ -2235,6 +2427,20 @@ export interface components {
              */
             superseded_doc_id: string;
         };
+        /** MergeRequest */
+        MergeRequest: {
+            /**
+             * Source Entity Ids
+             * @description entities folded into the target
+             */
+            source_entity_ids: string[];
+            /**
+             * Target Entity Id
+             * Format: uuid
+             * @description the entity that stays
+             */
+            target_entity_id: string;
+        };
         /** OneDriveLocation */
         OneDriveLocation: {
             /** Path */
@@ -2358,6 +2564,22 @@ export interface components {
             line_start?: number | null;
             /** Page */
             page?: number | null;
+        };
+        /** RedispatchPreview */
+        RedispatchPreview: {
+            /** Documents */
+            documents: number;
+            route: components["schemas"]["Route"];
+            /** Sample */
+            sample: string[];
+        };
+        /** RedispatchResult */
+        RedispatchResult: {
+            /** Redispatched */
+            redispatched: number;
+            route: components["schemas"]["Route"];
+            /** Started */
+            started: boolean;
         };
         /**
          * Region
@@ -2484,6 +2706,58 @@ export interface components {
             versions: {
                 [key: string]: number;
             };
+        };
+        /** RootCounts */
+        RootCounts: {
+            /** By Status */
+            by_status: {
+                [key: string]: number;
+            };
+            /** Download Failed */
+            download_failed: number;
+            /** Held By Scope */
+            held_by_scope: number;
+            /** Items */
+            items: number;
+            /** Landed */
+            landed: number;
+            /** Pending Download */
+            pending_download: number;
+            /** Waiting Dispatch */
+            waiting_dispatch: number;
+        };
+        /** RootError */
+        RootError: {
+            /** Error */
+            error: string;
+            /** Path */
+            path: string | null;
+        };
+        /** RootView */
+        RootView: {
+            /** Auth Status */
+            auth_status: string;
+            /** Cloud Allowed */
+            cloud_allowed: boolean;
+            counts: components["schemas"]["RootCounts"];
+            /** Crawl In Progress */
+            crawl_in_progress: boolean;
+            /** Default Source Origin */
+            default_source_origin: string;
+            /** Kept Current By */
+            kept_current_by: string;
+            /** Last Delta At */
+            last_delta_at: string | null;
+            /** Last Full Crawl At */
+            last_full_crawl_at: string | null;
+            /** Recent Errors */
+            recent_errors: components["schemas"]["RootError"][];
+            /** Root Name */
+            root_name: string;
+            /** Status */
+            status: string;
+            /** Subscription Expires At */
+            subscription_expires_at: string | null;
         };
         /**
          * Route
@@ -2862,6 +3136,19 @@ export interface components {
             /** Unit */
             unit: string;
         };
+        /** SignInState */
+        SignInState: {
+            /** Detail */
+            detail?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
+            /** State */
+            state: string;
+            /** User Code */
+            user_code?: string | null;
+            /** Verification Uri */
+            verification_uri?: string | null;
+        };
         /** Skip */
         Skip: {
             /**
@@ -2869,6 +3156,24 @@ export interface components {
              * @enum {string}
              */
             action: "skip";
+        };
+        /** SplitRequest */
+        SplitRequest: {
+            /**
+             * Alias Keys
+             * @description aliases that move to the new entity
+             */
+            alias_keys: string[];
+            /**
+             * Canonical Name
+             * @description the new entity's canonical name
+             */
+            canonical_name: string;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
         };
         /**
          * Suggestion
@@ -3007,6 +3312,13 @@ export interface components {
             external_queries: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Gemini
+             * @description llm_calls of this answer: calls (purpose, model, latency_ms, tokens), total_ms, share
+             */
+            gemini?: {
+                [key: string]: unknown;
+            };
             /** Latency Ms */
             latency_ms: number | null;
             /** Message Id */
@@ -3037,6 +3349,61 @@ export interface components {
             verifier_result: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** TranslateRequest */
+        TranslateRequest: {
+            /**
+             * Anchor
+             * @description a passage: <kind>:<value>:<content_sha256>
+             */
+            anchor?: string | null;
+            /**
+             * Doc Id
+             * Format: uuid
+             */
+            doc_id: string;
+            /**
+             * Page No
+             * @description a page; or
+             */
+            page_no?: number | null;
+            /**
+             * Target Language
+             * @default en
+             */
+            target_language: string;
+        };
+        /** TranslateResponse */
+        TranslateResponse: {
+            /**
+             * Doc Id
+             * Format: uuid
+             */
+            doc_id: string;
+            /**
+             * Note
+             * @default Translation of the original; citations point to the original text.
+             */
+            note: string;
+            /** Page No */
+            page_no: number | null;
+            /** Passages */
+            passages: components["schemas"]["TranslatedPassage"][];
+            /** Source Language */
+            source_language: string | null;
+            /** Target Language */
+            target_language: string;
+            /** Translated Text */
+            translated_text: string;
+        };
+        /** TranslatedPassage */
+        TranslatedPassage: {
+            /** Cached */
+            cached: boolean;
+            /** Original */
+            original: string;
+            /** Translated */
+            translated: string;
         };
         /** UndoResponse */
         UndoResponse: {
@@ -4106,6 +4473,106 @@ export interface operations {
             };
         };
     };
+    search_entities_get: {
+        parameters: {
+            query?: {
+                query?: string;
+                type?: components["schemas"]["EntityType"] | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_entities_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    split_entities_split_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SplitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     healthz_healthz_get: {
         parameters: {
             query?: never;
@@ -4708,6 +5175,148 @@ export interface operations {
             };
         };
     };
+    process_everything_sync_process_everything_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    redispatch_preview_sync_redispatch_get: {
+        parameters: {
+            query: {
+                route: components["schemas"]["Route"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedispatchPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redispatch_sync_redispatch_post: {
+        parameters: {
+            query: {
+                route: components["schemas"]["Route"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedispatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roots_sync_roots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootView"][];
+                };
+            };
+        };
+    };
+    sign_in_state_sync_sign_in_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInState"];
+                };
+            };
+        };
+    };
+    start_sign_in_sync_sign_in_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInState"];
+                };
+            };
+        };
+    };
     graph_webhook_sync_webhook_post: {
         parameters: {
             query?: {
@@ -5079,6 +5688,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    translate_v1_translate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranslateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslateResponse"];
                 };
             };
             /** @description Validation Error */

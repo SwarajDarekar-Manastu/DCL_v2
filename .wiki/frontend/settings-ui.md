@@ -54,6 +54,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Sources over S1's /sync routes: roots table (sign-in, webhook or poll, crawl/delta, counts, recent errors), device-code sign-in with the code shown and polled, process everything with its preview first (`SourcesPanel.svelte`); Routes: re-process by route with the count first (`RedispatchPanel.svelte`) |
 | 2026-10-23 | S3 | Settings › Prompts over S2's prompt registry (`/v1/prompts`): versions with in-use/latest markers, system and user template, side-by-side diff, run on sample (text, model, tokens, latency); read-only (`PromptsPanel.svelte`, `prompts.ts`) |
 | 2026-10-23 | S3 | Section rollback to a point in time (file 08 §3.2) |
 | 2026-10-21 | Lead | Map created from the architecture manual |

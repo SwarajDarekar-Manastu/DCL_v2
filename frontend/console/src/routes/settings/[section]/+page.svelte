@@ -1,5 +1,7 @@
 <script lang="ts">
 	import PromptsPanel from '$lib/components/settings/PromptsPanel.svelte';
+	import RedispatchPanel from '$lib/components/settings/RedispatchPanel.svelte';
+	import SourcesPanel from '$lib/components/settings/SourcesPanel.svelte';
 	import SettingsEditor from '$lib/components/settings/SettingsEditor.svelte';
 
 	let { data } = $props();
@@ -15,5 +17,7 @@
 		<dt>When a change applies</dt>
 		<dd>{section.apply}</dd>
 	</dl>
+	{#if section.id === 'sources'}<SourcesPanel />{/if}
+	{#if section.id === 'routes'}<RedispatchPanel />{/if}
 	{#if section.id === 'prompts'}<PromptsPanel />{:else}<SettingsEditor patterns={section.keys} title={section.title} />{/if}
 </div>
