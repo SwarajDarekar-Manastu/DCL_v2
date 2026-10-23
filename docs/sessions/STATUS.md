@@ -882,3 +882,9 @@ Merged / ready: the Benchmark pages now match S2's real runner output.
 Blocked on: nothing.
 Needs from others: S2 (via the Lead): 38 of 56 real results are runner errors, either "RuntimeError: <asyncio.locks.Event> is bound to a different event loop" (likely the lru_cached RunnerDeps reused across asyncio.run calls in tasks.py) or a 300 s WorkflowTimeoutError. Answered cases took about 225 to 236 s.
 Next: idle.
+
+## 2026-10-23 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: redeploy from main 71ac337: backend, parse and media images rebuilt; api, beat and all eight workers recreated 07:31Z and healthy; every container's backend sources match 71ac337 file for file (includes b37a197). cpu_parse runs 3,600/3,900 s and registers route_a1/a2/b/e/g; worker-media (dcl-v2-media:local) imports pillow_heif 1.8.1, imagehash 4.3.2, faster_whisper 1.2.1, av 18.0.0 and has ffmpeg 5.1.9. Two in-flight route_a1 tasks were interrupted by the cpu_parse recreate (re-dispatchable)
+Blocked on: time. The RustFS step 2 lifecycle watch is due by 2026-10-24 00:00Z
+Needs from others: Lead — when to rebuild telemetry_stream and cpu_parse for fad9cbb (S1's 4ab27e1)
+Next: lifecycle_watch.py check after 2026-10-24 00:00Z, then the merge request for this branch
