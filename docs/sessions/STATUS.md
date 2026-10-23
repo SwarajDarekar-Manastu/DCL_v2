@@ -1084,3 +1084,10 @@ Merged / ready: M5 crop acceptance (`backend/tests/acceptance/M5.md`, `m5_state.
 Blocked on: S1's re-dispatch and S2's crop fix (Lead says when), then I run the check and report counts
 Needs from others: Lead: stack DATABASE/MINIO credentials for the run (S5 has none), or run `m5_state.py report` from the main checkout
 Next: idle until messaged
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: import-light route modules. The dispatcher's io_light image can import `can_handle` with only the standard library and Pillow. A blocked-modules test guards it.
+- Smoke routes without samples now skip.
+- The TP12 twin xfail is removed; S2's fix makes it pass.
+Test: `uv run pytest -q` exit 0.
+Blocked on: nothing.
+Next: idle until messaged.
