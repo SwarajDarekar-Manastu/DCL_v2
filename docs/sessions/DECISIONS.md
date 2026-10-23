@@ -77,4 +77,5 @@ Written by `DCL Lead` only. Newest at the bottom. Each entry names the sessions 
 | 2026-10-23 | Open WebUI is deployed now (not M9): S4 adds the container, S3 installs the functions and skills; the user creates the first Open WebUI admin account in the browser | S3, S4 | user command |
 | 2026-10-23 | Real-time sync: Graph webhooks need a public HTTPS endpoint; on this LAN host the stack polls the delta link every 5 minutes (beat) and keeps the daily full delta; S4 evaluates a Cloudflare tunnel for true webhooks and the user decides | S1, S4 | user command |
 | 2026-10-23 | Models service must run on the GPU: compose `capabilities` gains `compute` (S2 found `/models/health` reporting cpu/float32; reranking 50 passages took 35 s on CPU vs 0.56 s on GPU) | S4 | S2 finding |
+| 2026-10-23 | Synthesis repair pass is targeted: only claims whose numbers fail verification are re-synthesised, with their evidence items only, at thinking MEDIUM; the first synthesis stays at HIGH. Measured before: 86.6 s per answer with Gemini 98 % of it, repair pass 57 s. S2 measures the same question after the change | S2 | S2 latency profile |
 
