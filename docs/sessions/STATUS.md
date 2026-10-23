@@ -963,3 +963,9 @@ Next: A1 counts and the M2 live check when the batch ends; item 6 (review dry ru
 Merged / ready: (6) the prompt registry API (file 08 §3.3) over the prompt files: list with latest/in_use/variables, show, diff, and run on sample (reviewers; one Gemini call logged as `console.prompt_preview`). Plan sheet skipped (small).
 Blocked on: nothing
 Next: (7) translation, then derived_blobs in A1.9, then the answer_traces writer
+
+## 2026-10-23 13:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: config/gate.yaml no longer lists `.c` as junk (Lead ruling after S1's finding); `.o`, `.a`, `.so` stay junk and C sources under Tier-1 environment folders are still skipped; gate tests pin all four against the documented rule and S1's gate_item. Test: `uv run pytest -q` (exit 0)
+Blocked on: nothing
+Needs from others: Lead: file 02 §4 line 127 still lists `.c` (manual amendment); `.obj` and `.d` were never in the list and I did not add them (`.obj` is also the Wavefront 3D mesh format)
+Next: idle until messaged
