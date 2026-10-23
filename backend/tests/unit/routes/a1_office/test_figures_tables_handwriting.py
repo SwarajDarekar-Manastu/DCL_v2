@@ -346,3 +346,39 @@ def test_low_confidence_is_soft_and_a_critical_field_is_hard(fake_vision, memory
 def test_signatures_are_not_transcribed(fake_vision, memory_store):
     result, vision = run_hw(fake_vision, memory_store, {}, [region(900, 100, 950, 400, kind="signature")])
     assert vision.calls == [] and [n.ref for n in result.nodes] == ["t0", "t1", "t2"]
+
+
+def test_slivers_and_table_cells_are_not_handwriting(fake_vision, memory_store):
+    import dataclasses
+
+    from backend.dispatcher.contract import PageBox, ProcessedNode
+
+    sliver = region(500, 400, 560, 408)  # 8/1000 of the width: a cell border
+    in_table = region(620, 300, 680, 500)
+    table = ProcessedNode(
+        ref="tab1",
+        ordinal=9,
+        source=NodeSource.PRINTED,
+        node_type=NodeType.TABLE,
+        content="| a | b |",
+        page_no=1,
+        bboxes=[PageBox(page_no=1, x0=0.1, y0=0.6, x1=0.9, y1=0.8)],
+    )
+    vision = fake_vision(transcribe_handwriting=lambda kw: pytest.fail("no call for a rejected candidate"))
+    decisions = [dataclasses.replace(triage([sliver, in_table])[0], has_handwriting=False)]
+    result = transcribe_regions(
+        [*LABELS, table],
+        decisions,
+        pdf_bytes=PDF,
+        blob_sha256=SHA,
+        vision=vision,
+        context="ECSS",
+        test_plan_id=None,
+        doc_id="d1",
+        cloud_allowed=True,
+        critical_field_patterns=(),
+        put_asset=memory_store("s3://dcl-assets/"),
+    )
+    reasons = [r["reason"] for r in result.rejected]
+    assert len(reasons) == 2 and "px" in reasons[0] and "table" in reasons[1]
+    assert result.assets == [] and vision.calls == []
