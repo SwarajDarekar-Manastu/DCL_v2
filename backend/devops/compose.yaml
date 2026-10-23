@@ -324,14 +324,14 @@ services:
       context: ../..
       dockerfile: backend/devops/docker/backend.Dockerfile
       target: parse
-    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "cpu_parse@%h", "--loglevel", "INFO", "--queues", "cpu_parse", "--pool", "prefork", "--concurrency", "4", "--soft-time-limit", "3600", "--time-limit", "3900", "--max-memory-per-child", "6291456"]
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "cpu_parse@%h", "--loglevel", "INFO", "--queues", "cpu_parse", "--pool", "prefork", "--concurrency", "1", "--soft-time-limit", "3600", "--time-limit", "3900", "--max-memory-per-child", "6291456"]
     healthcheck:
       <<: *worker-health
       test: ["CMD-SHELL", "celery -A backend.celery_redis.app inspect ping --timeout 10 -d cpu_parse@$$HOSTNAME"]
     deploy:
       resources:
         limits:
-          memory: 24576M
+          memory: 6144M
     volumes:
       - hf-cache:/home/app/.cache/huggingface
 
@@ -355,7 +355,7 @@ services:
       target: media
     volumes:
       - whisper-cache:/home/app/.cache/huggingface
-    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "media@%h", "--loglevel", "INFO", "--queues", "media", "--pool", "prefork", "--concurrency", "2", "--soft-time-limit", "3600", "--time-limit", "3900", "--max-memory-per-child", "2097152"]
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "media@%h", "--loglevel", "INFO", "--queues", "media", "--pool", "prefork", "--concurrency", "1", "--soft-time-limit", "3600", "--time-limit", "3900", "--max-memory-per-child", "2097152"]
     healthcheck:
       <<: *worker-health
       test: ["CMD-SHELL", "celery -A backend.celery_redis.app inspect ping --timeout 10 -d media@$$HOSTNAME"]
