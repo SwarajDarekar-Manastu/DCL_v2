@@ -866,3 +866,10 @@ Merged / ready: the Benchmark pages now match S2's real runner output.
 Blocked on: nothing.
 Needs from others: S2 (via the Lead): 38 of 56 real results are runner errors, either "RuntimeError: <asyncio.locks.Event> is bound to a different event loop" (likely the lru_cached RunnerDeps reused across asyncio.run calls in tasks.py) or a 300 s WorkflowTimeoutError. Answered cases took about 225 to 236 s.
 Next: idle.
+
+## 2026-10-23 — DCL S1 Backend — claude/competent-brahmagupta-3a5541-0011
+Merged / ready (quick merge request): migration 0011. `FailureClass` gains MISSING_DOCUMENT, INSUFFICIENT_EVIDENCE, TIMEOUT and HALTED_DATA (enum and benchmark_results CHECK; the downgrade nulls those values first). It is on its own branch cut from main, so it merges ahead of the rest of my work.
+Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest -q`: 1,688 tests, 0 errors; schema tests green. The 2 office_run failures came from this fresh venv missing the parse group (pikepdf); with it, they pass.
+Blocked on: nothing
+Needs from others: Lead: merge. S4: apply 0011 on the stack.
+Next: the A1 re-run counts and the M2 live check. Then on claude/competent-brahmagupta-3a5541: locators, NUL guard, 0012 (answer_traces, llm_calls, prices; my llm_calls migration moves from 0011 to 0012), Route A2, Route B.
