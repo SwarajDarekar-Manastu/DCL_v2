@@ -1072,3 +1072,9 @@ Live: A1 re-run in progress. ECSS-E-ST-35-06C FAILED on the cpu_parse soft time 
 Blocked on: nothing
 Needs from others: S4: cpu_parse time limit for large standards (or S2 caps formula enrichment); redeploy, after which I switch on A2/B/E/G.
 Next: A1 counts and the M2 check when the batch drains; A2/B/E/G on the stack after S4's word
+
+## 2026-10-23 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c-cpulimit
+Merged / ready: bc4e1fa on claude/gifted-hofstadter-0bec1c-cpulimit (from main c9a8a17): cpu_parse 3,600 s soft / 3,900 s hard in the pool table and both compose files. Test: uv run pytest 1470 passed, 356 skipped
+Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
+Needs from others: Lead — merge; update the cpu_parse row in file 10 §4 if it lists limits
+Next: recreate cpu_parse from main after the merge
