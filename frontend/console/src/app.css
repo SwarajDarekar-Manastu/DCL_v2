@@ -304,6 +304,21 @@
 	summary {
 		@apply cursor-pointer select-none;
 	}
+	/* Native select lists: the browser draws the option list itself and only reads these properties. Without
+	   them an option inherits the theme foreground over the browser's own list background, which in dark mode
+	   left option text close to the list colour (readable only on hover). */
+	select option,
+	select optgroup {
+		background-color: var(--popover);
+		color: var(--popover-foreground);
+	}
+	select option:checked {
+		background-color: color-mix(in oklch, var(--popover-foreground) 16%, var(--popover));
+		color: var(--popover-foreground);
+	}
+	select option:disabled {
+		color: var(--muted-foreground);
+	}
 	@media (prefers-reduced-motion: reduce) {
 		*,
 		*::before,
