@@ -66,6 +66,8 @@ media = [
     "pillow-heif==1.8.1",
     "imagehash==4.3.2",
     "faster-whisper==1.2.1",
+    # faster-whisper 1.2.1 calls av.open(metadata_errors=...), which PyAV 19 removed.
+    "av==18.0.0",
 ]
 models = [
     "torch==2.14.1",

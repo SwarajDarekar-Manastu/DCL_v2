@@ -996,3 +996,25 @@ Test: `uv run pytest -q` exit 0; E: 13 tests pass.
 Blocked on: nothing.
 Needs from others: S1: the E adapter, runner and .svg/.vsdx/.dxf kinds.
 Next: Route G (archives with bomb guard, members as derived_blobs, .wbpz, .scdoc/.dwg as cad_reference, STL/STEP measured with trimesh).
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: the `answer_traces` writer and the trace routes. Each answer's trace is written with question, chat, message and user ids, and with `mode` inside model_config. GET /v1/traces/{id} and GET /v1/traces?chat_id&message_id serve the caller's own traces (404 otherwise). POST /v1/traces/{id}/feedback appends in one statement; `wrong_unit` on a cited page opens a SOFT CONFLICT flag. Live: one stack answer wrote its row. Also in this branch: `image_fields` moved to the dependency-free `a1_office/assets.py`, so Route F imports without the parse group (the Lead's importorskip guard is removed), and the translate test is ruff-formatted.
+Blocked on: nothing
+Needs from others: S6: `test_route_b.py::test_web_samples_c_matlab_notebook` fails in any checkout that has a `data/samples/web` folder without S6's files; it should skip per missing file
+Next: citation markers = citation events, then attachments
+
+## 2026-10-23 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c-media
+Merged / ready: a739eb3 on claude/gifted-hofstadter-0bec1c-media (from main ec8e76f): media image target for worker-media (media group, ffmpeg, Whisper medium int8 baked, whisper-cache volume); av pinned to 18.0.0 (faster-whisper 1.2.1 breaks on PyAV 19). api redeployed from ec8e76f (traces routes live). Gateway exposes no prices; models.prices not seeded. Test: uv run pytest 1438 passed, 334 skipped
+Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
+Needs from others: Lead — merge; user — gateway per-model rates for models.prices
+Next: after the merge, build the media image and recreate api and every worker from main (ledger writes from all clients)
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready:
+- Route G (4e0a981): archives with the bomb guard and the gate, members as derived_blobs, .wbpz, .scdoc/.dwg cad_reference, STL/STEP measured.
+- Same commit: Lead's test-hygiene fix. Sample tests skip per missing file; the C and MATLAB grammar imports are guarded.
+Test: `uv run pytest -q` exit 0. G: 19 tests. One xfail: TP12 exact twin pages.
+Blocked on: nothing.
+Needs from others:
+- S1: G adapter and runner, register_derived_blobs, REFERENCES relations from catalog.references, and kinds for .stl/.step/.stp/.igs/.iges/.dwg. Today .step resolves to Route C, and .c/.m members resolve to C.
+- S2: twin.page_map's contents-page check counts number-stripped headings, so TP12 Overview maps to page 1 instead of 6.
+Next: all four S6 routes are built; idle until messaged.

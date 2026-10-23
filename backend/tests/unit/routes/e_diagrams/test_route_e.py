@@ -25,6 +25,15 @@ from backend.routes.e_diagrams.route import Stores, can_handle, process_diagram 
 
 SAMPLES = Path(__file__).resolve().parents[5] / "data" / "samples"
 WEB = SAMPLES / "web"
+
+
+def _sample(path: Path) -> bytes:
+    """A real or web sample's bytes; skips the test when the file is not exported in this checkout."""
+    if not path.is_file():
+        pytest.skip(f"{path} not exported locally")
+    return path.read_bytes()
+
+
 FOLDER = FolderContext(root_name="APU", breadcrumb=["APU", "Test Plan 22"], path_cached="APU/Test Plan 22")
 
 PID = """<mxfile host="test">
@@ -327,9 +336,8 @@ def test_can_handle():
 REV_C = SAMPLES / "E6" / "Test Plan 22" / "THruster config - Rev C.drawio"
 
 
-@pytest.mark.skipif(not REV_C.exists(), reason="data/samples not exported locally")
 def test_thruster_config_rev_c():
-    processed = _run(REV_C.name, REV_C.read_bytes())
+    processed = _run(REV_C.name, _sample(REV_C))
 
     assert processed.document.revision_marker == "Rev C" and len(processed.document.catalog["pages"]) == 2
     text = "\n".join(n.content for n in processed.nodes)
@@ -344,18 +352,17 @@ def test_thruster_config_rev_c():
     assert all(f.severity == FlagSeverity.SOFT for f in processed.flags)
 
 
-@pytest.mark.skipif(not WEB.exists(), reason="data/samples/web not exported locally")
 def test_web_samples_line_tags_svg_visio_dxf():
-    pid = _run("pid_1.drawio", (WEB / "drawio" / "pid_1.drawio").read_bytes())
+    pid = _run("pid_1.drawio", _sample(WEB / "drawio" / "pid_1.drawio"))
     assert {"N-OZ-301", "N-WC-303", "N-RO-302"} <= {m.surface for m in pid.mentions if m.kind == "tag"}
 
-    svg = _run("V-2.svg", (WEB / "svg" / "V-2_rocket_diagram_English_labels.svg").read_bytes())
+    svg = _run("V-2.svg", _sample(WEB / "svg" / "V-2_rocket_diagram_English_labels.svg"))
     labels = [n["label"] for n in svg.document.catalog["nodes"]]
     assert "Liquid oxygen" in labels and "Alcohol-water mixture" in labels
     assert not any("oxigén" in label for label in labels)
 
-    visio = _run("test4_connectors.vsdx", (WEB / "vsdx" / "test4_connectors.vsdx").read_bytes())
+    visio = _run("test4_connectors.vsdx", _sample(WEB / "vsdx" / "test4_connectors.vsdx"))
     assert "Shape A → Shape B (A to B)" in "\n".join(n.content for n in visio.nodes)
 
-    dxf = _run("three_layers.dxf", (WEB / "dxf" / "three_layers.dxf").read_bytes())
+    dxf = _run("three_layers.dxf", _sample(WEB / "dxf" / "three_layers.dxf"))
     assert "Layer1: 1 LWPOLYLINE; Layer2: 1 LWPOLYLINE; Layer3: 1 LWPOLYLINE" in dxf.nodes[0].content

@@ -313,6 +313,17 @@ async def pipe_identity(
 Identity = Annotated[PipeIdentity, Depends(pipe_identity)]
 
 
+def _session_factory():
+    from backend.postgres.session import engine_from_settings, session_factory
+
+    return session_factory(engine_from_settings(get_settings()))
+
+
+def db_session():
+    with _session_factory()() as session:
+        yield session
+
+
 # ---------------------------------------------------------------- routes
 
 
@@ -342,7 +353,7 @@ def _viewer_url(doc_id: uuid.UUID, anchor: str | None) -> str | None:
 
 
 def _log_trace(trace: dict) -> None:
-    """Until S1's `answer_traces` table exists (M8) the trace goes to the log, without the answer text."""
+    """Log line per answer (no answer text) and the `answer_traces` row (file 05 §4.7)."""
     log.info(
         "answer trace %s mode=%s tools=%s latency_ms=%s",
         trace["trace_id"],
@@ -350,6 +361,40 @@ def _log_trace(trace: dict) -> None:
         [c["tool"] for c in trace["tool_calls"]],
         trace["latency_ms"],
     )
+    try:
+        with _session_factory()() as session:
+            save_trace(session, trace)
+            session.commit()
+    except Exception:  # noqa: BLE001 — the answer was already streamed; a lost trace must not fail it
+        log.exception("answer trace %s could not be saved", trace["trace_id"])
+
+
+def save_trace(session, trace: dict) -> None:
+    """Insert or replace the trace row (a DBOS replay of the last step writes the same row again)."""
+    from backend.postgres.models import AnswerTrace
+
+    session.merge(
+        AnswerTrace(
+            trace_id=uuid.UUID(str(trace["trace_id"])),
+            chat_id=trace.get("chat_id"),
+            message_id=trace.get("message_id"),
+            user_id=trace.get("user_id"),
+            question=trace.get("question") or "",
+            conversation_summary=trace.get("conversation_summary"),
+            user_language=trace.get("user_language"),
+            query_analysis=trace.get("query_analysis"),
+            tool_calls=trace.get("tool_calls"),
+            retrieved=trace.get("retrieved"),
+            external_queries=trace.get("external_queries"),
+            claims=trace.get("claims"),
+            citations=trace.get("citations"),
+            verifier_result=trace.get("verifier_result"),
+            model_config_={**(trace.get("model_config") or {}), "mode": trace.get("mode")},
+            answer_markdown=trace.get("answer_markdown"),
+            latency_ms=trace.get("latency_ms"),
+        )
+    )
+    session.flush()
 
 
 def _external_policy(session) -> Any:
@@ -546,25 +591,128 @@ async def confirm(trace_id: uuid.UUID, reply: ConfirmationReply, identity: Ident
     raise HTTPException(status_code=501, detail="confirmations arrive with the workflow (M8)")
 
 
+def _trace_view(row) -> TraceView:
+    return TraceView(
+        trace_id=row.trace_id,
+        chat_id=row.chat_id,
+        message_id=row.message_id,
+        question=row.question,
+        query_analysis=row.query_analysis or {},
+        tool_calls=row.tool_calls or [],
+        retrieved=row.retrieved or [],
+        external_queries=row.external_queries or [],
+        claims=row.claims or [],
+        citations=row.citations or [],
+        verifier_result=row.verifier_result,
+        answer_markdown=row.answer_markdown or "",
+        latency_ms=row.latency_ms,
+        created_at=row.created_at.isoformat(),
+    )
+
+
+def _own_trace(session, identity: PipeIdentity, trace_id: uuid.UUID | None = None, **where) -> Any:
+    """The trace if it exists and belongs to the caller (or has no user); 404 otherwise, never 403, so
+    trace ids of other users are not confirmed."""
+    from sqlalchemy import select
+
+    from backend.postgres.models import AnswerTrace
+
+    query = select(AnswerTrace)
+    if trace_id is not None:
+        query = query.where(AnswerTrace.trace_id == trace_id)
+    for column, value in where.items():
+        query = query.where(getattr(AnswerTrace, column) == value)
+    row = session.scalars(query.order_by(AnswerTrace.created_at.desc()).limit(1)).first()
+    if row is None or (row.user_id and row.user_id != identity.user_id):
+        raise HTTPException(status_code=404, detail="no trace for this message")
+    return row
+
+
 @router.get("/traces/{trace_id}")
-async def trace(trace_id: uuid.UUID, identity: Identity) -> TraceView:
-    raise HTTPException(status_code=501, detail="answer_traces arrives with the workflow (M8)")
+def trace(trace_id: uuid.UUID, identity: Identity, session: Annotated[Any, Depends(db_session)]) -> TraceView:
+    return _trace_view(_own_trace(session, identity, trace_id))
 
 
 @router.get("/traces")
-async def trace_for_message(
+def trace_for_message(
     chat_id: Annotated[str, Query(min_length=1)],
     message_id: Annotated[str, Query(min_length=1)],
     identity: Identity,
+    session: Annotated[Any, Depends(db_session)],
 ) -> TraceView:
     """The trace of one Open WebUI message; the Show-trace Action knows chat and message ids, not the
     trace id. 404 when the message has no trace."""
-    raise HTTPException(status_code=501, detail="answer_traces arrives with the workflow (M8)")
+    return _trace_view(_own_trace(session, identity, chat_id=chat_id, message_id=message_id))
+
+
+def _unit_conflict(trace_row, report: FeedbackRequest, identity: PipeIdentity) -> Any:
+    """`wrong_unit` on a cited page: a SOFT CONFLICT flag anchored to the page and content hash (file 08
+    §2.2), so the Review queue sees it. None when the report names no citation with a page anchor."""
+    from backend.dispatcher.contract import ConflictEvidence, ConflictSide, Flag, FlagAnchor
+    from backend.postgres.enums import FlagSeverity, FlagType
+
+    citations = trace_row.citations or []
+    try:
+        cited = citations[int(report.citation_id) - 1] if report.citation_id else None
+    except (ValueError, IndexError):
+        cited = None
+    if not cited or not cited.get("doc_id") or not (cited.get("anchor") or "").startswith("page:"):
+        return None
+    _, page, digest = cited["anchor"].split(":", 2)
+    flag = Flag(
+        flag_type=FlagType.CONFLICT,
+        severity=FlagSeverity.SOFT,
+        anchor=FlagAnchor(page=int(page) if page.isdigit() else None, content_sha256=digest or None),
+        evidence=ConflictEvidence(
+            subject="unit",
+            a=ConflictSide(
+                label="reported in chat",
+                value=(report.comment or "wrong unit or extraction")[:500],
+                provenance=f"answer trace {trace_row.trace_id}, user {identity.email or identity.user_id}",
+            ),
+            b=ConflictSide(
+                label="cited passage",
+                value=cited.get("label") or cited.get("title") or "",
+                provenance=cited["anchor"],
+                doc_id=uuid.UUID(cited["doc_id"]),
+            ),
+        ),
+    )
+    return uuid.UUID(cited["doc_id"]), flag
 
 
 @router.post("/traces/{trace_id}/feedback", status_code=202)
-async def feedback(trace_id: uuid.UUID, report: FeedbackRequest, identity: Identity) -> None:
-    raise HTTPException(status_code=501, detail="answer_traces arrives with the workflow (M8)")
+def feedback(
+    trace_id: uuid.UUID,
+    report: FeedbackRequest,
+    identity: Identity,
+    session: Annotated[Any, Depends(db_session)],
+) -> None:
+    """Appended to `answer_traces.feedback` in one statement; `wrong_unit` also opens a SOFT CONFLICT."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import text as sql
+
+    from backend.review.flags import upsert_document_flag
+
+    row = _own_trace(session, identity, trace_id)
+    item = {
+        **report.model_dump(mode="json"),
+        "user_id": identity.user_id,
+        "email": identity.email,
+        "at": datetime.now(UTC).isoformat(),
+    }
+    session.execute(
+        sql(
+            "UPDATE answer_traces SET feedback = COALESCE(feedback, '[]'::jsonb) || jsonb_build_array("
+            "CAST(:item AS jsonb)) WHERE trace_id = :id"
+        ),
+        {"item": json.dumps(item), "id": trace_id},
+    )
+    if report.kind == FeedbackKind.WRONG_UNIT and (conflict := _unit_conflict(row, report, identity)):
+        doc_id, flag = conflict
+        upsert_document_flag(session, doc_id, flag, route="answer")
+    session.commit()
 
 
 # ---------------------------------------------------------------- retrieval lab (Console, file 08 §5.5)
@@ -580,17 +728,6 @@ class RetrievalLabRequest(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def _session_factory():
-    from backend.postgres.session import engine_from_settings, session_factory
-
-    return session_factory(engine_from_settings(get_settings()))
-
-
-def db_session():
-    with _session_factory()() as session:
-        yield session
-
-
 def models_client():
     from backend.llm_engine.local_models import ModelsClient
 

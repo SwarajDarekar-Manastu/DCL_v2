@@ -44,7 +44,7 @@ from backend.llm_engine.engine.tools.external import ExternalPolicy
 from backend.llm_engine.engine.tools.physics import PhysicsArgs, physics_calculator
 from backend.llm_engine.engine.tools.search import SearchDocumentsArgs, search_documents
 from backend.llm_engine.gemini_types import CallContext, GeminiError, Message
-from backend.llm_engine.model_ids import model_id
+from backend.llm_engine.model_ids import Tier, model_id
 from backend.llm_engine.prompts import load_prompt
 
 TOKEN_CHUNK = 160
@@ -169,15 +169,17 @@ class AnswerWorkflow(Workflow):
             policy = self.deps.external_policy(session)
         policy = dataclasses.replace(policy, mode=ev.get("external_mode") or policy.mode)
         groups = ev.get("groups", [])
-        await ctx.store.set(
-            "request",
-            {
-                "question": ev.question,
-                "trace_id": ev.trace_id,
-                "language": ev.get("language", "en"),
-                "external": dataclasses.asdict(policy),
-            },
-        )
+        request = {
+            "question": ev.question,
+            "trace_id": ev.trace_id,
+            "language": ev.get("language", "en"),
+            "external": dataclasses.asdict(policy),
+            "chat_id": ev.get("chat_id"),
+            "message_id": ev.get("message_id"),
+            "user_id": ev.get("user_id"),
+            "history": ev.get("history", ""),
+        }
+        await ctx.store.set("request", request)
         analysis = await analyze(
             self.deps.gemini,
             ev.question,
@@ -191,15 +193,17 @@ class AnswerWorkflow(Workflow):
         _step(ctx, ev.trace_id, "analysis", "query_analysis", "Understanding the question", True)
         analysis = playbooks.apply_hint(analysis, ev.get("playbook_hint"))
         if analysis.chitchat:
-            return await self._chitchat(ctx, ev, analysis, started)
+            return await self._chitchat(ctx, ev, analysis, started, request)
         if analysis.raw.clarification.needed and analysis.raw.clarification.question:
             text = analysis.raw.clarification.question
             if analysis.raw.clarification.options:
                 text += "\n" + "\n".join(f"- {o}" for o in analysis.raw.clarification.options)
-            return self._finish(ctx, ev.trace_id, "clarification", text, analysis, [], None, started)
+            return self._finish(
+                ctx, ev.trace_id, "clarification", text, analysis, [], None, started, request=request
+            )
         return QueryAnalyzed(analysis=dump_analysis(analysis), started=started)
 
-    async def _chitchat(self, ctx, ev, analysis: Analysis, started: float) -> StopEvent:
+    async def _chitchat(self, ctx, ev, analysis: Analysis, started: float, request: dict) -> StopEvent:
         """Small talk gets a friendly reply (mode `chitchat`); a question outside the team's material gets a
         clear refusal on the insufficient-evidence path (mode `insufficient_evidence`, Lead 2026-10-23)."""
         prompt = load_prompt("engine", CHITCHAT_PROMPT)
@@ -217,7 +221,9 @@ class AnswerWorkflow(Workflow):
         )
         reply: ChitchatReply = result.parsed
         mode = "insufficient_evidence" if reply.kind == "out_of_scope" else "chitchat"
-        return self._finish(ctx, ev.trace_id, mode, reply.reply.strip(), analysis, [], None, started)
+        return self._finish(
+            ctx, ev.trace_id, mode, reply.reply.strip(), analysis, [], None, started, request=request
+        )
 
     # ------------------------------------------------------------------ steps 2–4: plan and tools
 
@@ -412,6 +418,7 @@ class AnswerWorkflow(Workflow):
                 None,
                 ev.started,
                 caveats=ev.caveats,
+                request=request,
             )
         _step(ctx, request["trace_id"], "synthesis", "synthesis", "Writing the answer", False)
         try:
@@ -447,14 +454,19 @@ class AnswerWorkflow(Workflow):
             ev.started,
             caveats=[*ev.caveats, *draft.caveats],
             citations=draft.citations,
+            request=request,
         )
 
     def _extractive(self, ctx, request, analysis, results, ev, error: str) -> StopEvent:
         items = synthesis.evidence_items(results)[:EXTRACTIVE_PASSAGES]
-        blocks = [f"**{i.source.label if i.source else i.tool}**\n\n> {i.text[:1200]}" for i in items]
-        text = (
+        blocks = [
+            f"**{i.source.label if i.source else i.tool}** [{i.id}]\n\n> {i.text[:1200]}" for i in items
+        ]
+        text, cited = synthesis.number_citations(
             "The answer model is unavailable, so here are the most relevant passages as found:\n\n"
-            + "\n\n".join(blocks)
+            + "\n\n".join(blocks),
+            [],
+            items,
         )
         return self._finish(
             ctx,
@@ -466,7 +478,8 @@ class AnswerWorkflow(Workflow):
             None,
             ev.started,
             caveats=[*ev.caveats, f"synthesis unavailable: {error[:200]}"],
-            citations=[i.source for i in items if i.source],
+            citations=cited,
+            request=request,
         )
 
     # ------------------------------------------------------------------ render and trace
@@ -484,6 +497,7 @@ class AnswerWorkflow(Workflow):
         *,
         caveats: list[str] | None = None,
         citations: list[Source] | None = None,
+        request: dict | None = None,
     ) -> StopEvent:
         for embed in [*plot_embeds(results), *photo_strips(results)]:
             _emit(ctx, trace_id, embed)
@@ -531,8 +545,21 @@ class AnswerWorkflow(Workflow):
         }
         _emit(ctx, trace_id, done)
         _SEQUENCES.pop(trace_id, None)
+        request = request or {}
         trace = {
             "trace_id": trace_id,
+            "question": request.get("question", ""),
+            "chat_id": request.get("chat_id"),
+            "message_id": request.get("message_id"),
+            "user_id": request.get("user_id"),
+            "conversation_summary": (request.get("history") or "")[-4000:] or None,
+            "user_language": analysis.raw.language,
+            "model_config": {
+                "mode": mode,
+                "gemini_model": model_id(),
+                "gemini_lite_model": model_id(Tier.LITE),
+                "external_mode": (request.get("external") or {}).get("mode"),
+            },
             "query_analysis": dump_analysis(analysis),
             "tool_calls": [
                 {

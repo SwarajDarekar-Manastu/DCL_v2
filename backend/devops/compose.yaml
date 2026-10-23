@@ -348,6 +348,13 @@ services:
 
   worker-media:
     <<: *backend
+    image: dcl-v2-media:local
+    build:
+      context: ../..
+      dockerfile: backend/devops/docker/backend.Dockerfile
+      target: media
+    volumes:
+      - whisper-cache:/home/app/.cache/huggingface
     command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "media@%h", "--loglevel", "INFO", "--queues", "media", "--pool", "prefork", "--concurrency", "2", "--soft-time-limit", "3600", "--time-limit", "3900", "--max-memory-per-child", "2097152"]
     healthcheck:
       <<: *worker-health
@@ -400,3 +407,4 @@ volumes:
   minio-data:
   hf-cache:
   open-webui-data:
+  whisper-cache:

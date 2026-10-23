@@ -10,6 +10,7 @@ from the answer and named in the caveats.
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -255,17 +256,37 @@ def _rejected(output: SynthesisOutput, verdicts: list[Verdict], mismatches: list
     return {i: r for i, r in bad.items() if 0 <= i < len(output.claims)}
 
 
-def _citations(claims: list[Claim], items: list[Evidence]) -> list[Source]:
+MARKER = re.compile(r"\s?\[(E\d+(?:\s*,\s*E\d+)*)\]")
+
+
+def number_citations(markdown: str, claims: list[Claim], items: list[Evidence]) -> tuple[str, list[Source]]:
+    """The answer's `[E3]` / `[E1, E4]` markers become `[1]` / `[1, 2]`, numbered by first appearance and
+    matching the citation events one to one: the same source (document, anchor, label) is one number, a
+    marker whose evidence has no source is dropped, and a source only claims cite (no marker) is appended."""
     by_id = {e.id: e for e in items}
-    seen, out = set(), []
+    numbers: dict[tuple, int] = {}
+    sources: list[Source] = []
+
+    def number(eid: str) -> int | None:
+        source = by_id[eid].source if eid in by_id else None
+        if source is None:
+            return None
+        key = (source.doc_id, source.anchor, source.label)
+        if key not in numbers:
+            numbers[key] = len(sources) + 1
+            sources.append(source)
+        return numbers[key]
+
+    def replace(match: re.Match) -> str:
+        found = [number(e.strip()) for e in match.group(1).split(",")]
+        kept = list(dict.fromkeys(n for n in found if n is not None))
+        return f" [{', '.join(map(str, kept))}]" if kept else ""
+
+    text = MARKER.sub(replace, markdown)
     for claim in claims:
         for eid in claim.evidence_ids:
-            source = by_id[eid].source if eid in by_id else None
-            key = (source.doc_id, source.anchor, source.label) if source else None
-            if source and key not in seen:
-                seen.add(key)
-                out.append(source)
-    return out
+            number(eid)
+    return text, sources
 
 
 async def answer(
@@ -307,10 +328,11 @@ async def answer(
             caveats.append(f"Removed because it could not be verified against the sources: {claim.text}")
         else:
             kept.append(claim)
+    markdown, citations = number_citations(markdown, kept, items)
     return Answer(
         markdown=markdown,
         claims=kept,
-        citations=_citations(kept, items),
+        citations=citations,
         caveats=caveats,
         followups=output.followups,
         verdicts=verdicts,
