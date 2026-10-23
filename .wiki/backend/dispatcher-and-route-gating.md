@@ -15,6 +15,7 @@ Resolve the real file type from magic bytes, build folder context (test ids, sib
 ## Location
 
 Code:
+- `backend/dispatcher/runner.py` (`run_document(session, minio, doc_id, route, parser_version, build, indexer)`: the shared runner for A1, A2, D, F: location, cloud_allowed, stores, build, gate, index, commit or park; `vision_for(session)`); `office_run.py` (A1 via S2's `process_office`: PDF, Word family, slides), `source_run.py` (A2 via S6's `process_latex`/`process_json`, paths relative to the assembler's subtree), `media_run.py` (D with bursts via `process_photo`, F via `process_video` + Whisper); B (`process_code`), E (`process_diagram`) and G (`g.process` + `write_references`) in `source_run.py`; tasks `dcl.process.route_a1|a2|b|e|g` (cpu_parse), `route_d|route_f` (media)
 - `backend/dispatcher/type_resolution.py` (`resolve_type(head, name, zip_names) -> ResolvedType{kind, mime, route, by, ext_mismatch}`)
 - `backend/dispatcher/folder_context.py` (`build_folder_context`: breadcrumb, TP/T/INJ ids with source, conflicts, siblings, folder kind, origin, trust tier)
 - `backend/dispatcher/assembler.py` (`assemble`: LaTeX master + parts + PDF twin, orphan .tex, JSON section sets)
@@ -55,6 +56,10 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/dispatcher/adapters.py`
 - `backend/dispatcher/office_run.py`
 - `backend/dispatcher/location.py`
+- `backend/dispatcher/runner.py`
+- `backend/dispatcher/source_run.py`
+- `backend/dispatcher/media_run.py`
+- `backend/tests/unit/dispatcher/test_route_runners.py`
 - `backend/tests/unit/dispatcher/test_derived.py`
 - `backend/tests/unit/dispatcher/test_office_run.py`
 - `backend/celery_redis/tasks_process.py`
@@ -84,6 +89,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | Adapter registry, release of parked documents, enqueue after commit (Route C LabJack first) |
 | 2026-10-22 | S1 | Route A1 (PDF) adapter on cpu_parse with `office_run.py`; `folder_tree` public (settings previews); `Suggestion.resolution` optional (explicit no-suggestion) |
 | 2026-10-23 | S1 | `dispatch_derived` and `_new_document` (one creation path for files and derived blobs); `location.py`; contract `ProcessedDocument.derived_blobs` (`DerivedBlob`, base64 in JSON); `LowConfidenceEvidence.page_ocr_text` and `ExtractionCrop.ocr_text` for the viewer's text toggle |
+| 2026-10-23 | S1 | Shared runner; A1 on `process_office` (DOCX and slides released); adapters and tasks for A2, B, D, E, F, G (all eight routes); G members via `register_derived_blobs`, CAD references as REFERENCES; kinds for DXF/SVG/VSDX (E), STL/STEP/IGES/DWG (G), .m/.c/.h (B) |
 
 ## Related
 
