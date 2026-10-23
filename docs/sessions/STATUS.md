@@ -922,3 +922,13 @@ Merged / ready: targeted synthesis repair (DECISIONS 2026-10-23).
 - Warm query embedding on the GPU: 0.02–0.03 s (first call 0.14–0.26 s).
 Blocked on: nothing
 Next: A1.9–A1.10 office formats and the twin page map, then the queue (D/F readiness, A1 report, handwriting calibration, Gemini split, trace writer, prompt registry, translation, re-embed counts)
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: A1.9–A1.10 and A1.0.
+- `process_office` is the A1 entry for every format. Word-family files go LibreOffice → PDF → the PDF pipeline (ruling a), with tracked changes, comments, footnotes and embedded objects read from the DOCX.
+- Slides (PPTX, PPT, ODP) are read natively: one slide node per slide, chart data from the chart XML, speaker notes, `describe_slide` when graphics cover more than 25 % of the slide.
+- `twin.py` gives S6's Route A2 the page map, the page renders, and the PDF-only pages run through A1 as an appendix.
+- Live: 2 real DOCX from the corpus in the parse worker (17 pages in 122 s, 16 pages in 62 s); Apache POI's public PPTX, PPT and pie-chart samples (data/samples/web, URLs in SOURCES.md) through the stack's LibreOffice and Gemini.
+Blocked on: nothing
+Needs from others: S1: in `office_run`, build = `process_office` and lift the PDF-only gate, so the six waiting DOCX process. S6: call `twin.process_twin` from A2 for visual twins.
+Next: Routes D/F readiness on the stack, then the queue
