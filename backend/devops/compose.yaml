@@ -324,7 +324,7 @@ services:
       context: ../..
       dockerfile: backend/devops/docker/backend.Dockerfile
       target: parse
-    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "cpu_parse@%h", "--loglevel", "INFO", "--queues", "cpu_parse", "--pool", "prefork", "--concurrency", "4", "--soft-time-limit", "1800", "--time-limit", "2100", "--max-memory-per-child", "6291456"]
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "cpu_parse@%h", "--loglevel", "INFO", "--queues", "cpu_parse", "--pool", "prefork", "--concurrency", "4", "--soft-time-limit", "3600", "--time-limit", "3900", "--max-memory-per-child", "6291456"]
     healthcheck:
       <<: *worker-health
       test: ["CMD-SHELL", "celery -A backend.celery_redis.app inspect ping --timeout 10 -d cpu_parse@$$HOSTNAME"]
