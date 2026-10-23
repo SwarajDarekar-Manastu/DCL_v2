@@ -1141,3 +1141,13 @@ Merged / ready: gold for S2's document-model comparison study (DECISIONS 2026-10
 Blocked on: Lead ruling: the allowlisted LaTeX projects with PDF twins hold one display equation, not 20
 Needs from others: nothing
 Next: idle until messaged
+
+## 2026-10-23 20:15 — DCL Lead — main
+Snapshot (live stack, main 5791b3b):
+- Phase 1: 110,867 items crawled from the four roots; 5,072 LANDED (18 GB), 105,745 SKIPPED_JUNK, 26 QUARANTINED, 23 SKIPPED_EMPTY, 1 HELD_LARGE_FILE. 5-minute delta poll live; webhooks dormant (needs a public endpoint).
+- Phase 2: all eight routes enabled. A1 8 ACTIVE / 15 PROCESSING / 16 FAILED; A2 23, B 4, E 2 PROCESSING; C 7 ACTIVE, 11 ACTIVE_WITH_SOFT_FLAGS, 22 HALTED (unit confirmation); D 10 ACTIVE / 68 PROCESSING / 6 FAILED; F 1 ACTIVE_WITH_SOFT_FLAGS / 2 PROCESSING / 1 FAILED; G none in scope. Open flags: UNIT_AMBIGUITY 176 HARD + 68 SOFT, CONFLICT 9 SOFT, LOW_CONFIDENCE_EXTRACTION 1 SOFT. 3,322 nodes embedded; 4 answer traces; 713 llm_calls rows.
+- Failure analysis (worker logs): A1 16 = "GatewayError: gateway unreachable: ConnectError"; D 6 = same, plus 68 tasks refused by the open gateway circuit breaker ("GatewayUnavailable"); F 1 and 3 D tasks = SIGKILL at the 4 GiB media limit (before concurrency 1). No parsing defect among them. Cause: the host switched from wifi to mobile data; the gateway answers again (health 200) and Graph is reachable.
+- Network change: host LAN IP moved from 192.168.40.73 to 10.35.233.233. DCL_OPENWEBUI_URL and DCL_CONSOLE_ALLOWED_ORIGINS still name the old IP (localhost works); update only if LAN clients need access. Mobile data: photo and scan re-runs send images to Gemini.
+- Agents: S2 and S5 stopped with "can't reach the API server" during the switch; S1, S3, S4, S6 idle or waiting. Per the user, not re-spawned; new spawns use the `dcl-role` agent (Sonnet 5.5, xhigh).
+Blocked on: user — alert webhook rotation, gateway per-model prices, Cloudflare domain/IT approval for webhooks, Open WebUI fork question, when to resume the agents.
+Next: when the network is steady and the user resumes the agents: re-dispatch the 23 FAILED and the 68 circuit-blocked documents; cpu_parse recreate from f79effb (S4) then the full A1 re-run for the crop fixes; M5 crop report; S2's model study; benchmark run 2.
