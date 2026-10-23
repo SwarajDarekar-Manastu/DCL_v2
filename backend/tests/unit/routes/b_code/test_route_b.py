@@ -17,6 +17,15 @@ from backend.routes.b_code.route import Stores, can_handle, process_code, split_
 from backend.routes.b_code.symbols import MAX_SYMBOL_CHARS, Symbol, unit_from_name  # noqa: E402
 
 SAMPLES = Path(__file__).resolve().parents[5] / "data" / "samples"
+
+
+def _sample(path: Path) -> bytes:
+    """A real or web sample's bytes; skips the test when the file is not exported in this checkout."""
+    if not path.is_file():
+        pytest.skip(f"{path} not exported locally")
+    return path.read_bytes()
+
+
 FOLDER = FolderContext(
     root_name="APU", breadcrumb=["APU", "Tools"], path_cached="APU/Tools", test_plan_id="TP7"
 )
@@ -198,6 +207,7 @@ def test_generated_qt_file_is_tagged_and_windows_newlines_keep_lines():
 
 
 def test_c_functions_doc_comments_and_defines():
+    pytest.importorskip("tree_sitter_c")
     source = """/* CRC helpers */
 #include <stdint.h>
 #define MAX_RATE_HZ 1000
@@ -228,6 +238,7 @@ typedef struct { int pressure_kpa; } Sample;
 
 
 def test_matlab_classdef_methods_carry_the_class():
+    pytest.importorskip("tree_sitter_matlab")
     source = """classdef Nozzle < handle
   % NOZZLE sizing
   properties
@@ -308,9 +319,8 @@ CREATOR = SAMPLES / "E1" / "29122025 - Injector 10 Cold flow test" / "Test_plan_
 WEB = SAMPLES / "web"
 
 
-@pytest.mark.skipif(not CREATOR.exists(), reason="data/samples not exported locally")
 def test_test_plan_creator_every_function_is_retrievable_by_name():
-    processed = _run(CREATOR.name, CREATOR.read_bytes())
+    processed = _run(CREATOR.name, _sample(CREATOR))
     names = set(_by_name(processed))
 
     assert {"header_custom", "name_protect", "close_excel_workbook", "CBW", "f_D"} <= names
@@ -326,20 +336,21 @@ def test_test_plan_creator_every_function_is_retrievable_by_name():
     assert len(code_lines - covered) / len(code_lines) < 0.02
 
 
-@pytest.mark.skipif(not WEB.exists(), reason="data/samples/web not exported locally")
 def test_web_samples_c_matlab_notebook():
-    crc = _by_name(_run("cfe_es_crc.c", (WEB / "c" / "cfe_es_crc.c").read_bytes()))
+    pytest.importorskip("tree_sitter_c")
+    pytest.importorskip("tree_sitter_matlab")
+    crc = _by_name(_run("cfe_es_crc.c", _sample(WEB / "c" / "cfe_es_crc.c")))
     assert "CFE_ES_ComputeCRC_Algo_16_ARC" in crc
     assert (
         "0xA001" in crc["CFE_ES_ComputeCRC_Algo_16_ARC"].content.upper()
         or "CrcTable" in crc["CFE_ES_ComputeCRC_Algo_16_ARC"].content
     )
 
-    doy = _by_name(_run("dayofyear.m", (WEB / "m" / "dayofyear.m").read_bytes()))["dayofyear"]
+    doy = _by_name(_run("dayofyear.m", _sample(WEB / "m" / "dayofyear.m")))["dayofyear"]
     assert "mod(d.Year,4) == 0" in doy.content and "daysPerMonth(2) = 29" in doy.content
     assert doy.metadata["docstring"].startswith("DAYOFYEAR Converts a date string")
 
-    notebook = _run("Running_Code.ipynb", (WEB / "ipynb" / "Running_Code.ipynb").read_bytes())
+    notebook = _run("Running_Code.ipynb", _sample(WEB / "ipynb" / "Running_Code.ipynb"))
     text = "\n".join(n.content for n in notebook.nodes)
     assert "`Alt-Enter` runs the current cell and inserts a new one below." in text
     assert "`Ctrl-Enter` run the current cell and enters command mode." in text
