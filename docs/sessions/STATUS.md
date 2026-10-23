@@ -990,3 +990,9 @@ Merged / ready: config/gate.yaml no longer lists `.c` as junk (Lead ruling after
 Blocked on: nothing
 Needs from others: Lead: file 02 §4 line 127 still lists `.c` (manual amendment); `.obj` and `.d` were never in the list and I did not add them (`.obj` is also the Wavefront 3D mesh format)
 Next: idle until messaged
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: Route E. `process_diagram` reads draw.io, XSD, SVG, .vsdx and DXF into one graph in `documents.catalog`, with page summaries, component nodes, renders and a read_schematic cross-check.
+Test: `uv run pytest -q` exit 0; E: 13 tests pass.
+Blocked on: nothing.
+Needs from others: S1: the E adapter, runner and .svg/.vsdx/.dxf kinds.
+Next: Route G (archives with bomb guard, members as derived_blobs, .wbpz, .scdoc/.dwg as cad_reference, STL/STEP measured with trimesh).
