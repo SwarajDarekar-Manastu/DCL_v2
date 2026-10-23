@@ -24,7 +24,6 @@ from backend.dispatcher.contract import (
 from backend.llm_engine.gemini_types import Image
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType
 from backend.routes.a1_office.assets import image_fields
-from backend.routes.a1_office.preflight import render_crop
 
 PLOT_CLASSES = frozenset({"bar_chart", "box_plot", "line_chart", "pie_chart", "scatter_plot"})
 SCHEMATIC_CLASSES = frozenset({"engineering_drawing", "flow_chart"})
@@ -142,6 +141,10 @@ def read_figures(
         asset_ref = None
         crop = None
         if box is not None:
+            from backend.routes.a1_office.preflight import (
+                render_crop,
+            )  # pikepdf/pdfium: not in the media image
+
             crop = render_crop(pdf_bytes, box, dpi=300, pad_px=0)
             kind = AssetKind.PHOTO_IN_DOC if figure_class in PHOTO_CLASSES else AssetKind.FIGURE_CROP
             uri = put_asset(f"figures/{blob_sha256}/{node.ref}.png", crop)
