@@ -696,9 +696,12 @@ def _unit_conflict(trace_row, report: FeedbackRequest, identity: PipeIdentity) -
         evidence=ConflictEvidence(
             subject="unit",
             a=ConflictSide(
-                label="reported in chat",
+                label="chat_feedback",
                 value=(report.comment or "wrong unit or extraction")[:500],
-                provenance=f"answer trace {trace_row.trace_id}, user {identity.email or identity.user_id}",
+                provenance=(
+                    f"source chat_feedback; trace {trace_row.trace_id}; "
+                    f"user {identity.email or identity.user_id}"
+                ),
             ),
             b=ConflictSide(
                 label="cited passage",
@@ -741,7 +744,11 @@ def feedback(
     )
     if report.kind == FeedbackKind.WRONG_UNIT and (conflict := _unit_conflict(row, report, identity)):
         doc_id, flag = conflict
-        upsert_document_flag(session, doc_id, flag, route="answer")
+        route = session.execute(sql("SELECT route FROM documents WHERE doc_id = :d"), {"d": doc_id}).scalar()
+        if (
+            route is not None
+        ):  # a flag belongs to its document: the document's own route, origin in the evidence
+            upsert_document_flag(session, doc_id, flag, route=route)
     session.commit()
 
 

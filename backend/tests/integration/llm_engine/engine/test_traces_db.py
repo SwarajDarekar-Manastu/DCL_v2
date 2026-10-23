@@ -130,4 +130,7 @@ def test_the_writer_routes_and_feedback(db, client):
         assert feedback[0]["user_id"] == "u-17"
         [flag] = s.scalars(select(ReviewFlag).where(ReviewFlag.doc_id == doc_id)).all()
         assert (flag.flag_type, flag.severity, flag.anchor["page"]) == ("CONFLICT", "SOFT", 8)
-        assert flag.evidence["a"]["value"] == "bar(g) not bar(a)"
+        assert flag.evidence["a"]["value"] == "bar(g) not bar(a)" and flag.route == "A1"
+        assert flag.evidence["a"]["label"] == "chat_feedback"
+        assert f"trace {mine['trace_id']}" in flag.evidence["a"]["provenance"]
+        assert "engineer@manastuspace.com" in flag.evidence["a"]["provenance"]
