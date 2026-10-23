@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from backend.benchmark import metrics
 from backend.benchmark.catalog import CaseSpec, ExpectedBehavior
-from backend.postgres.enums import BenchmarkRunStatus, DocumentStatus
+from backend.postgres.enums import BenchmarkRunStatus, DocumentStatus, FailureClass
 from backend.postgres.models import BenchmarkCase, BenchmarkResult, BenchmarkRun, Document
 
 log = logging.getLogger(__name__)
@@ -146,6 +146,36 @@ def cited_documents(session: Session, citations: list[dict]) -> list[metrics.Cit
     return out
 
 
+def expected_documents(session: Session, spec: CaseSpec) -> tuple[set[str], list[str]]:
+    """Indexed (ACTIVE or ACTIVE_WITH_SOFT_FLAGS) documents behind the expected citations and gold anchors,
+    and the expectations no indexed document matches (the MISSING_DOCUMENT evidence)."""
+    found: set[str] = set()
+    missing: list[str] = []
+    wanted = [
+        (str(c.doc_id) if c.doc_id else None, c.file_name, c.standard_id) for c in spec.expected_citations
+    ] + [(str(g.doc_id), None, None) for g in spec.retrieval_gold_anchors]
+    for doc_id, file_name, standard_id in wanted:
+        rows = session.execute(
+            text(
+                "SELECT DISTINCT d.doc_id::text FROM documents d "
+                "LEFT JOIN document_sources ds ON ds.doc_id = d.doc_id "
+                "LEFT JOIN drive_items di ON di.blob_sha256 = ds.blob_sha256 "
+                "WHERE d.status IN ('ACTIVE', 'ACTIVE_WITH_SOFT_FLAGS') "
+                "AND (CAST(:doc AS text) IS NULL OR d.doc_id::text = :doc) "
+                "AND (CAST(:std AS text) IS NULL OR lower(d.standard_id) = lower(:std)) "
+                "AND (CAST(:name AS text) IS NULL OR lower(d.title) = lower(:name) "
+                "     OR lower(di.name) = lower(:name))"
+            ),
+            {"doc": doc_id, "std": standard_id, "name": file_name},
+        ).scalars()
+        ids = set(rows)
+        if ids:
+            found |= ids
+        else:
+            missing.append(file_name or standard_id or doc_id or "?")
+    return found, missing
+
+
 def write_result(session: Session, run_id: uuid.UUID, case: Case, outcome: dict) -> None:
     session.merge(
         BenchmarkResult(
@@ -217,6 +247,8 @@ def observed_from(done: dict, trace: dict | None, cited: list[metrics.CitedDoc])
         verdicts=verifier.get("verdicts", []),
         latency_ms=done.get("latency_ms"),
         cost=(done.get("usage") or {}).get("cost_estimate"),
+        retrieved_docs={str(s["doc_id"]) for s in trace.get("retrieved", []) if s.get("doc_id")}
+        | {c.doc_id for c in cited if c.doc_id},
     )
 
 
@@ -231,6 +263,7 @@ async def run_case(case: Case, deps: RunnerDeps) -> dict:
     with deps.session_factory() as session:
         cited = cited_documents(session, citations)
         observed = observed_from(done, trace, cited)
+        observed.expected_docs, observed.missing_documents = expected_documents(session, case.spec)
         if case.spec.retrieval_gold_anchors and deps.retrieve is not None:
             observed.retrieved_30, observed.retrieved_8, observed.rerank_margin = await asyncio.to_thread(
                 deps.retrieve, session, question
@@ -302,7 +335,10 @@ async def run_one(run_id: uuid.UUID, case_id: str, deps: RunnerDeps) -> dict | N
         outcome = await run_case(case, deps)
     except Exception as exc:  # noqa: BLE001 — one broken case is recorded, the run goes on
         log.exception("benchmark %s case %s failed", run_id, case_id)
-        outcome = {"passed": False, "metrics": {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}}
+        error = f"{type(exc).__name__}: {str(exc)[:300]}"
+        timed_out = isinstance(exc, TimeoutError) or type(exc).__name__ == "WorkflowTimeoutError"
+        failure = metrics.TIMEOUT if timed_out else FailureClass.TOOL_ERROR
+        outcome = {"passed": False, "metrics": {"error": error, "failure_class": str(failure)}}
     with deps.session_factory() as session:
         if status_of(session, run_id) != BenchmarkRunStatus.RUNNING:
             return None  # cancelled while answering: the result is dropped
@@ -352,7 +388,10 @@ async def run_benchmark(run_id: uuid.UUID, deps: RunnerDeps) -> str:
 # ---------------------------------------------------------------- production wiring
 
 
-def workflow_answer(engine) -> AnswerFn:
+ANSWER_TIMEOUT_S = 900.0  # per benchmark answer; run 1 hit the former 300 s on 14 cases
+
+
+def workflow_answer(engine, timeout_s: float = ANSWER_TIMEOUT_S) -> AnswerFn:
     """Benchmark answers through the Answer Engine's own workflow (same code path as chat), with the trace
     captured. The benchmark caller belongs to the external-search groups, and the external mode of the run
     (`mock` by default: canned results, no network) decides what T6 does."""
@@ -363,7 +402,7 @@ def workflow_answer(engine) -> AnswerFn:
         deps = dataclasses.replace(engine, save_trace=lambda t: (traces.append(t), engine.save_trace(t)))
         with engine.session_factory() as session:
             allowed = list(engine.external_policy(session).allowed_groups)
-        handler = AnswerWorkflow(deps, timeout=300).run(
+        handler = AnswerWorkflow(deps, timeout=timeout_s).run(
             question=question,
             trace_id=str(uuid.uuid4()),
             history=history,

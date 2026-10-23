@@ -56,6 +56,12 @@ CASES = [
     },
     {"case_id": "crash", "category": "FACT_LOOKUP", "question": "BOOM", "spec": {}},
     {
+        "case_id": "not-indexed",
+        "category": "FACT_LOOKUP",
+        "question": "What does the TP12 report say about the load cell?",
+        "spec": {"expected_citations": [{"file_name": "TP12 Test Report.pdf"}]},
+    },
+    {
         "case_id": "clarify-then-answer",
         "category": "TELEMETRY_MATH",
         "question": "What was the peak pressure?",
@@ -145,6 +151,9 @@ def test_a_queued_run_completes_with_results_aggregate_and_events(engine, setup)
     assert rows["tp07-mean"].trace_id == uuid.UUID(TRACE) and rows["tp07-mean"].latency_ms == 1000
     assert rows["fact-misroute"].failure_class == "TOOL_MISROUTE"
     assert rows["crash"].passed is False and "engine down" in rows["crash"].metrics["error"]
+    assert rows["crash"].failure_class == "TOOL_ERROR"
+    assert rows["not-indexed"].failure_class == "MISSING_DOCUMENT"
+    assert rows["not-indexed"].metrics["missing_documents"] == ["TP12 Test Report.pdf"]
     assert rows["clarify-then-answer"].passed  # the clarification was answered from the case
     assert rows["conflict"].passed and judged == ["must_present_both_conflicting_values"]
     assert {mode for _, mode in asked} == {"mock"}
@@ -153,10 +162,14 @@ def test_a_queued_run_completes_with_results_aggregate_and_events(engine, setup)
         assert run.status == "completed" and run.started_at and run.finished_at
         assert run.model_config == {"requested_by": "lead@test", "gemini_model": "gemini-test"}
         assert run.active_doc_count == 0
-        assert run.aggregate["cases_done"] == 5 and run.aggregate["pass_rate"] == 0.6
-        assert run.aggregate["failure_classes"] == {"TOOL_MISROUTE": 1}
+        assert run.aggregate["cases_done"] == 6 and run.aggregate["pass_rate"] == 0.5
+        assert run.aggregate["failure_classes"] == {
+            "TOOL_MISROUTE": 1,
+            "TOOL_ERROR": 1,
+            "MISSING_DOCUMENT": 1,
+        }
     progress = [d for _, e, d in events if e == "progress" and "case_id" in d]
-    assert len(progress) == 5 and progress[-1]["cases_done"] == 5
+    assert len(progress) == 6 and progress[-1]["cases_done"] == 6
     assert [e for _, e, _ in events][-1] == "finished" and events[-1][2]["status"] == "completed"
     assert catalog.run_results(Session(engine), run_id).results  # S3's view reads what the runner wrote
 
@@ -218,13 +231,13 @@ def test_the_sweep_starts_a_queued_run_once_and_resumes_a_stalled_one(engine, se
     assert tasks.sweep() == {"started": 0, "resumed": 0}  # the start lock holds while the task is queued
     assert sent == [("start", str(run_id))]
     sent.clear()
-    assert tasks.start.run(str(run_id)) == 5  # claim and one task per case
+    assert tasks.start.run(str(run_id)) == 6  # claim and one task per case
     assert [c for kind, c in sent if kind == "case"] == sorted(c["case_id"] for c in CASES)
     sent.clear()
     assert tasks.sweep() == {"started": 0, "resumed": 0}  # heartbeat alive
     fake.keys.pop(tasks.HEARTBEAT.format(run_id))  # the worker died
     assert tasks.sweep() == {"started": 0, "resumed": 1}
-    assert len(sent) == 5
+    assert len(sent) == 6
     assert tasks.case.run(str(run_id), "tp07-mean") is True
     assert tasks.case.run(str(run_id), "tp07-mean") is None  # already recorded: a duplicate does nothing
     assert runner.complete_if_done(run_id, deps) is False

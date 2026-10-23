@@ -199,3 +199,34 @@ def test_aggregate_for_the_dashboard_ribbon():
     assert summary["latency_p50_ms"] == 4200 and summary["latency_p95_ms"] == 9000
     assert summary["by_category"] == {"TELEMETRY_MATH": {"cases": 2, "passed": 1}}
     assert summary["cost_total"] == 0.03
+
+
+def test_every_failure_gets_a_class_from_the_first_scored_run():
+    fact = CaseSpec.model_validate({"expected_citations": [{"file_name": "TP12 Test Report.pdf"}]})
+    missing = answer(missing_documents=["TP12 Test Report.pdf"], citations=[])
+    assert score_case("FACT_LOOKUP", fact, missing)["failure_class"] == "MISSING_DOCUMENT"
+    nothing = answer(mode="insufficient_evidence", citations=[], expected_docs={DOC})
+    assert score_case("FACT_LOOKUP", fact, nothing)["failure_class"] == "INSUFFICIENT_EVIDENCE"
+    never_found = answer(citations=[], expected_docs={DOC}, retrieved_docs={OLD})
+    assert score_case("FACT_LOOKUP", fact, never_found)["failure_class"] == "RETRIEVAL_MISS"
+    found_not_cited = answer(citations=[], expected_docs={DOC}, retrieved_docs={DOC})
+    assert score_case("FACT_LOOKUP", fact, found_not_cited)["failure_class"] == "SYNTHESIS_ERROR"
+    expected = CaseSpec.model_validate({"expected_behavior": ["must_state_insufficient_evidence"]})
+    assert score_case("HALTED_DATA_BEHAVIOR", expected, nothing)["passed"]  # asked for: not a failure
+
+
+def test_halted_data_and_library_labels_from_the_s5_baseline():
+    halted = answer(
+        tool_warnings=["run TP07_T01 (TP07_T01.dat) is halted for review (case-unit-7)"],
+        claims=[],
+        verdicts=[],
+    )
+    assert score_case("TELEMETRY_MATH", TELEMETRY, halted)["failure_class"] == "HALTED_DATA"
+    expects = CaseSpec.model_validate({"expected_behavior": ["must_mention_halted_case"]})
+    assert score_case("HALTED_DATA_BEHAVIOR", expects, halted)["failure_class"] == "BEHAVIOR_FAIL"
+    library = CaseSpec.model_validate({"expected_behavior": ["must_label_external"]})
+    vendor = answer(
+        answer="The Moog datasheet claims 22 N (vendor claim) [1].",
+        citations=[CitedDoc(DOC, provenance="vendor_claim")],
+    )
+    assert score_case("LIBRARY_VS_INTERNAL", library, vendor)["behavior"]["passed"]

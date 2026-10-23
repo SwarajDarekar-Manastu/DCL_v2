@@ -18,7 +18,7 @@ Code:
 - `backend/benchmark/metrics.py` (pure: `Observed`, `quantities`, `numeric_exactness`, `citation_scores`, `tool_trajectory`, `retrieval_recall`, `behaviour`, `needs_judge`, `score_case`, `classify`, `aggregate`)
 - `backend/benchmark/judge.py` (`judge(client, expectation, question, answer, sources)`; prompt `backend/llm_engine/prompts/benchmark/judge.v1.md`)
 - `backend/benchmark/runner.py` (`RunnerDeps`, `start`, `run_one`, `complete_if_done`, `fail`, `run_benchmark`, `workflow_answer`, `default_deps`)
-- `backend/benchmark/tasks.py` (Celery on `io_light`: `dcl.benchmark.start`, `dcl.benchmark.case`, `dcl.benchmark.sweep`)
+- `backend/benchmark/tasks.py` (Celery on the `benchmark` queue (S4: prefork, concurrency 1, soft 950 s): `dcl.benchmark.start`, `dcl.benchmark.case`, `dcl.benchmark.sweep`)
 - `backend/api/engine.py` `engine_deps(settings)` (shared with the API's `start_engine`)
 
 Tests:
@@ -35,7 +35,10 @@ Provides:
 - Websocket topic `run`, key = run id: `progress` (start; then per case `{case_id, passed, failure_class, cases_done, cases_total, pass_rate}`), `finished` (`{status, …aggregate}`)
 - Benchmark answers: `AnswerWorkflow` in process (same code path as chat), caller groups `dcl-benchmark` + the external-allowed groups, external mode `mock` (canned results, no network); a clarification is answered once from `spec.clarification_answer` unless the case expects `must_clarify`
 - Metric rules chosen where the manual is open: tools = every expected tool called (ordered when asked), extra tools allowed; numbers read from entailed claims, units converted with pint, gauge never converts to absolute; retrieval gold found by same document and same content hash or same locator; recall@30 from a pre-rerank search (k=30), recall@8 from a reranked search (k=8), both over the question without filters; judge (Gemini) only for `must_present_both_conflicting_values` and LIBRARY_VS_INTERNAL provenance labeling, everything else deterministic
-- Failure class order: BEHAVIOR_FAIL → RETRIEVAL_MISS → RERANK_MISS → TOOL_MISROUTE → TOOL_ERROR → UNIT_ERROR → VERIFIER_FALSE_NEGATIVE → SYNTHESIS_ERROR
+- Failure class order: MISSING_DOCUMENT (an expected citation or gold anchor with no ACTIVE document, by doc_id, standard_id, title or drive item name) → HALTED_DATA (a tool reported the asked run halted for review; behaviour cases excepted) → BEHAVIOR_FAIL → RETRIEVAL_MISS (gold anchors) → RERANK_MISS → TOOL_MISROUTE → TOOL_ERROR → INSUFFICIENT_EVIDENCE (mode `insufficient_evidence` not asked for) → RETRIEVAL_MISS (no tool returned an expected document) → UNIT_ERROR → VERIFIER_FALSE_NEGATIVE → SYNTHESIS_ERROR; an engine exception is TOOL_ERROR, a timeout TIMEOUT. MISSING_DOCUMENT, INSUFFICIENT_EVIDENCE, TIMEOUT and HALTED_DATA need S1's FailureClass/CHECK update
+- `must_label_external` accepts web and external_kept library citations (vendor_claim, literature) labelled in the answer (vendor, datasheet, literature, paper, web, …)
+- Per-answer timeout `runner.ANSWER_TIMEOUT_S` = 900 s (`workflow_answer(engine, timeout_s)`)
+- Celery case tasks run their coroutines on one process-wide event loop (`tasks.run_async`); `asyncio.run` per task broke the shared gateway client on the first scored run
 
 Consumes:
 - `backend/benchmark/catalog.py` (S3: `CaseSpec`, the queued run with its case snapshot)
@@ -63,6 +66,7 @@ Consumes:
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S2 | After scored run 1 (S5 BASELINE.md): one event loop per worker process for case tasks; classes MISSING_DOCUMENT, HALTED_DATA, INSUFFICIENT_EVIDENCE, TIMEOUT, TOOL_ERROR for exceptions, RETRIEVAL_MISS without gold anchors; library labels for must_label_external; answer timeout 900 s; 3 unit tests, DB test extended |
 | 2026-10-23 | S2 | Runner, metrics, judge, Celery tasks; 17 + 2 unit, 4 DB, 1 workflow tests |
 
 ## Related

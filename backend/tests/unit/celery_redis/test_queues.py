@@ -201,7 +201,8 @@ def test_every_scheduled_task_is_registered_by_an_included_module():
     celery_app.app.loader.import_default_modules()
     scheduled = {e["task"] for e in celery_app.app.conf.beat_schedule.values()}
     assert scheduled - set(celery_app.app.tasks) == set()
-    assert celery_app.app.tasks["dcl.benchmark.sweep"].queue == "io_light"
+    for name in ("dcl.benchmark.start", "dcl.benchmark.case", "dcl.benchmark.sweep"):
+        assert celery_app.app.tasks[name].queue == "benchmark"
 
 
 def test_benchmark_tasks_without_their_own_queue_route_to_the_benchmark_queue():

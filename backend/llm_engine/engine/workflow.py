@@ -16,11 +16,12 @@ import asyncio
 import dataclasses
 import html
 import itertools
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 from workflows import Context, Workflow, step
@@ -143,6 +144,15 @@ async def ordered(events: AsyncIterator[Any]) -> AsyncIterator[dict]:
         yield pending[seq]
 
 
+CHITCHAT_PROMPT = "chitchat.v2"
+HALTED = re.compile(r"halted for review", re.IGNORECASE)  # T2/U2 warning: the answer must name the case
+
+
+class ChitchatReply(BaseModel):
+    kind: Literal["small_talk", "out_of_scope"]
+    reply: str
+
+
 class AnswerWorkflow(Workflow):
     def __init__(self, deps: EngineDeps, **kwargs):
         super().__init__(**kwargs)
@@ -190,7 +200,9 @@ class AnswerWorkflow(Workflow):
         return QueryAnalyzed(analysis=dump_analysis(analysis), started=started)
 
     async def _chitchat(self, ctx, ev, analysis: Analysis, started: float) -> StopEvent:
-        prompt = load_prompt("engine", "chitchat.v1")
+        """Small talk gets a friendly reply (mode `chitchat`); a question outside the team's material gets a
+        clear refusal on the insufficient-evidence path (mode `insufficient_evidence`, Lead 2026-10-23)."""
+        prompt = load_prompt("engine", CHITCHAT_PROMPT)
         result = await self.deps.gemini.generate(
             model=model_id(),
             messages=[
@@ -198,11 +210,14 @@ class AnswerWorkflow(Workflow):
                 Message.user(prompt.render_user(question=ev.question, language=analysis.raw.language)),
             ],
             context=CallContext(
-                purpose="engine.chitchat", prompt_version="chitchat.v1", trace_id=ev.trace_id
+                purpose="engine.chitchat", prompt_version=CHITCHAT_PROMPT, trace_id=ev.trace_id
             ),
+            schema=ChitchatReply,
             thinking=ThinkingLevel.LOW,
         )
-        return self._finish(ctx, ev.trace_id, "chitchat", result.text.strip(), analysis, [], None, started)
+        reply: ChitchatReply = result.parsed
+        mode = "insufficient_evidence" if reply.kind == "out_of_scope" else "chitchat"
+        return self._finish(ctx, ev.trace_id, mode, reply.reply.strip(), analysis, [], None, started)
 
     # ------------------------------------------------------------------ steps 2–4: plan and tools
 
@@ -235,10 +250,11 @@ class AnswerWorkflow(Workflow):
             plan.external == "if_gap" and not any(r.provenance and r.result for r in results)
         ):
             results.extend(await self._external(ctx, request))
+        halted = [w for r in results for w in r.warnings if HALTED.search(w)]
         return ToolsDone(
             analysis=ev.analysis,
             results=[r.model_dump(mode="json") for r in results],
-            caveats=plan.caveats,
+            caveats=list(dict.fromkeys([*plan.caveats, *halted])),
             started=ev.started,
         )
 
@@ -418,11 +434,13 @@ class AnswerWorkflow(Workflow):
             f"Verified {len(draft.claims)} claims",
             True,
         )
+        halted = [c for c in ev.caveats if HALTED.search(c)]
+        markdown = draft.markdown + ("\n\n" + "\n".join(f"> Note: {c}" for c in halted) if halted else "")
         return self._finish(
             ctx,
             request["trace_id"],
             "answered",
-            draft.markdown,
+            markdown,
             analysis,
             results,
             draft,
