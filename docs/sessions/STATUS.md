@@ -914,3 +914,9 @@ Latency profile (run 1: 225–236 s per answered case):
 Blocked on: S4 (through the Lead): `capabilities: [gpu]` (or `[gpu, compute, utility]`) on the models service, then recreate it. Verify `/models/health` reports `"device":"cuda","dtype":"bfloat16"`.
 Needs from others: S1's A1 re-run
 Next: re-time one live case after the GPU fix to get the Gemini share; then the OCR-per-script and cost report after S1's A1 re-run; then the handwriting calibration
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: Route A2 (9bc72fb). `process_latex` and `process_json` in `backend/routes/a2_source/route.py` take the assembler's plan (primary, parts, visual_twin as `SourceFile`) and return a `ProcessedDocument`. On E4 TP12: 163 nodes; the 11 sections and appendices A and B; 16 figure assets; refs resolved; twin page map (Overview p6, Test Setup p8). E3 JSON: section set → test_report; single section files → SCHEMA_UNKNOWN (no schema matches the creator's `{id,title,content}` shape, which S5 can add). Pandoc is replaced by pylatexenc (file 01 lists both) because the source map needs positions.
+Test: `uv sync --frozen --group parse --group dev && uv run pytest -q` exit 0; A2 tests 28 passed.
+Blocked on: nothing for A2.
+Needs from others: S1: the `dcl.process.route_a2` runner and adapters. Lead: dependency pins for A2/B/E/G.
+Next: Route B once the grammar pins are in; then E, then G.
