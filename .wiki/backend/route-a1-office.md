@@ -24,7 +24,10 @@ Code:
 - `backend/routes/a1_office/tables_qa.py` (A1.4: spans grid, units per column, QA reasons, VLM A/B with agreement, flag with both versions)
 - `backend/routes/a1_office/handwriting.py` (A1.7: regions, nearest label, transcription node after its label, SOFT/HARD by critical field)
 - `backend/routes/a1_office/route.py` (`process_pdf` → `ProcessedDocument`; second OCR pass, `transcribe_page`, page renders, CIR keys)
-- planned: visual twin and page map (A1.0), DOCX/PPTX (A1.9–A1.10), rotation fix before OCR, checkbox-state call
+- `backend/routes/a1_office/office.py` (A1.9 as amended 2026-10-23: `process_office` entry for every format; Word family → LibreOffice PDF → `process_pdf`, plus `word_extras`/`apply_word_extras`: tracked changes, comments as `annotation` mentions, footnotes appended to their paragraph's node, embedded-object list in `documents.catalog.word`)
+- `backend/routes/a1_office/slides.py` (A1.10: `read_slides`, `process_slides`; one `slide` node per slide with bullets, tables, chart series from chart XML, speaker notes; section parents from p14 sections else every 8 slides; `describe_slide` above 25 % graphic area; slide renders from the LibreOffice PDF; CIR `slides.json`)
+- `backend/routes/a1_office/twin.py` (A1.0: `page_map(headings, pages)`, `pdf_only_pages`, `process_twin(pdf, headings, source_text, …, appendix=bound process_pdf) -> TwinResult(page_map, pdf_only_pages, assets, appendix_nodes/assets/flags)`; CIR `page_map.json`, appendix CIR under `appendix/`)
+- planned: rotation fix before OCR, checkbox-state call
 
 Tests and fixtures:
 - `backend/tests/unit/routes/a1_office/` (reads S5's `backend/tests/fixtures/a1_office/`)
@@ -32,6 +35,8 @@ Tests and fixtures:
 ## Interfaces
 
 Provides:
+- `process_office(data, blob_sha256=, file_name=, stores=, vision=, convert_office=backend.common.office.convert, **process_pdf options) -> ProcessedDocument` for `.pdf`, `.docx/.doc/.rtf/.odt`, `.pptx/.ppt/.odp`; `UnsupportedOfficeFormat` otherwise (S1's dispatcher calls it instead of `process_pdf`)
+- `process_twin(...)` for Route A2 (S6): page map of A2's section headings, page renders, PDF-only pages as `Appendix (PDF-only)` nodes with real page numbers
 - `preflight(pdf_bytes) -> Preflight(page_count, repaired, pages, windows)`; `PreflightFailure.reason` (`encrypted`, `unrepairable`, `no_pages`) for the PARSE_FAILURE flag
 - `triage_pages(preflight, vision, context=, doc_id=, cloud_allowed=, engine_by_script=) -> list[PageDecision]`; `PageDecision.meta()` is the triage part of `pages/{n}.meta.json`
 - `ocr_groups(decisions)` → pages per (engine, language); `plan_runs(decisions)` → contiguous `Run`s with one OCR plan each
@@ -68,6 +73,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S2 | A1.9–A1.10 and A1.0: `process_office` (Word via LibreOffice → PDF pipeline + DOCX extras; slides native with chart XML and notes; describe_slide above 25 %); `twin.py` page map, PDF-only appendix through A1; live: 2 real DOCX (17 and 16 pages, 122 s and 62 s in the parse worker) and Apache POI's public PPTX/PPT/pie-chart samples through the stack's LibreOffice and Gemini; 6 + 3 tests |
 | 2026-10-23 | S2 | Owner-password PDFs (open without a password; the 8 ECSS standards) decrypted in memory and processed, `Preflight.decrypted`; PARSE_FAILURE only when a user password is needed (file 03 §A1.1 amended); 1 test |
 | 2026-10-23 | S2 | NUL bytes stripped from every string of the output (`without_nul`; an Elsevier paper's text layer made the commit fail); 1 test |
 | 2026-10-23 | S2 | Docling converters cached per OCR plan in the worker (measured in the parse worker: text layer 13.1 s → 2.1 s, Tesseract 5.9 s → 3.7 s per run; two converters peak 2.2 GB); Docling's OSD "Too few characters" error on near-empty scanned pages logged as INFO (OCR proceeds with the explicit script model; seen on doc 1539b6b4, the Rafael valves datasheet); 1 test |
