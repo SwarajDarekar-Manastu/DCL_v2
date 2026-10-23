@@ -262,7 +262,7 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu, utility]
+              capabilities: [gpu, compute, utility]
 
   api:
     <<: *backend

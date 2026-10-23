@@ -74,6 +74,10 @@ def test_gpu_is_reserved_only_for_models():
         if svc.get("deploy", {}).get("resources", {}).get("reservations", {}).get("devices")
     }
     assert with_gpu == {"models"}
+    (device,) = services["models"]["deploy"]["resources"]["reservations"]["devices"]
+    assert {"gpu", "compute"} <= set(device["capabilities"]), (
+        "without compute the container gets no CUDA driver"
+    )
     for name, svc in services.items():
         env = svc.get("environment") or {}
         assert "NVIDIA_VISIBLE_DEVICES" not in env, name
