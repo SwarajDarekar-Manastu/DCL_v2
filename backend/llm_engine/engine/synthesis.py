@@ -10,6 +10,7 @@ from the answer and named in the caveats.
 """
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Literal
@@ -19,13 +20,15 @@ from pydantic import BaseModel, Field
 from backend.config import ThinkingLevel
 from backend.llm_engine.engine.tools import Source, ToolResult
 from backend.llm_engine.engine.verifier import check_numeric_claim
-from backend.llm_engine.gemini_types import CallContext, Message
+from backend.llm_engine.gemini_types import CallContext, GeminiError, Message
 from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
 
+log = logging.getLogger(__name__)
 SYNTHESIS_PROMPT = "synthesis.v1"
 VERIFY_PROMPT = "verify.v1"
 REPAIR_PROMPT = "repair.v1"
+REPAIR_MAX_OUTPUT_TOKENS = 2048  # a repair is a few sentences; one stack repair ran 208 s / 4,198 tokens
 EVIDENCE_CHARS = 9000
 
 
@@ -185,16 +188,21 @@ async def _repair(
         evidence = "\n".join(f"[{e.id}] {e.text}" for e in cited)
         blocks.append(f"Claim {i}: {claim.text}\nRejected because: {reason}\nEvidence:\n<<<\n{evidence}\n>>>")
     prompt = load_prompt("engine", REPAIR_PROMPT)
-    result = await client.generate(
-        model=model_id(),
-        messages=[
-            Message.system(prompt.system.replace("$language", language)),
-            Message.user(prompt.render_user(question=question, claims="\n\n".join(blocks))),
-        ],
-        context=CallContext(purpose="engine.repair", prompt_version=REPAIR_PROMPT, trace_id=trace_id),
-        schema=Repair,
-        thinking=ThinkingLevel.MEDIUM,
-    )
+    try:
+        result = await client.generate(
+            model=model_id(),
+            messages=[
+                Message.system(prompt.system.replace("$language", language)),
+                Message.user(prompt.render_user(question=question, claims="\n\n".join(blocks))),
+            ],
+            context=CallContext(purpose="engine.repair", prompt_version=REPAIR_PROMPT, trace_id=trace_id),
+            schema=Repair,
+            thinking=ThinkingLevel.MEDIUM,
+            max_output_tokens=REPAIR_MAX_OUTPUT_TOKENS,
+        )
+    except GeminiError as exc:  # a cut or failed repair: the rejected claims are removed as before
+        log.warning("repair of %s claims failed: %s", len(rejected), exc)
+        return output, set()
     markdown, claims, changed = output.answer_markdown, list(output.claims), set()
     for fix in result.parsed.claims:
         if fix.index not in rejected or not 0 <= fix.index < len(claims) or not fix.text:
