@@ -90,6 +90,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | `suggest.py`: every telemetry UNIT_AMBIGUITY gets `suggested_resolution` (stated raw unit 0.6, same-name sibling unit 0.5, unit in the channel name 0.4, else an explicit no-suggestion with the .cfg scaling); 5 tests |
 | 2026-10-22 | S1 | Step 2: migration 0009, .cfg evidence, normalization, t0, metrics, bounds, commit, resume from raw.parquet, retroactive pass; 39 Route C tests |
 | 2026-10-23 | S1 | Stable-anchor locators on table/table_row nodes (sheet + one-row cell_range; CSV file lines); first data row of tables with a Unit column no longer dropped; one-off `dcl.process.relocate_route_c_tables`; `test_locators.py` |
+| 2026-10-23 | S1 | UNIT_AMBIGUITY evidence for the Review UI: `columns`, `column_index`, 20 `sample_rows`, `time_column`, ~200-point `series` streamed from raw.parquet (`raw_preview`, `with_preview`; under 50 KB per flag); one-off `dcl.process.refresh_halted_route_c` |
 
 ## Related
 
