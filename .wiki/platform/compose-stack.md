@@ -6,11 +6,12 @@
 | Status | in-progress |
 | Owner session | S4 |
 | Spec | docs/architecture/01_system_overview_and_tech_stack.md §6; 09 §H.1 (MinIO); 10 §3, §4 |
-| Last updated | 2026-10-22 |
+| Last updated | 2026-10-23 | S4 | `open-webui` service (ghcr.io/open-webui/open-webui:v0.12.3) on `DCL_OPENWEBUI_PORT` (8300), volume `open-webui-data`, `WEBUI_URL` from `DCL_OPENWEBUI_URL`, Ollama off; default network so the Pipe reaches `http://api:8200` |
+| 2026-10-22 |
 
 ## Purpose
 
-All services of file 01 §6 in compose project `dcl-v2`: ParadeDB pg17, Redis, MinIO built from the archived pinned tag, LibreOffice headless, the models role on the only GPU reservation, the API role, beat, one Celery worker per queue of file 10 §4 plus `benchmark` (DECISIONS 2026-10-22), and the one-shot `minio-init` and `migrate` jobs. Observability services (collector, Tempo, Prometheus, Alertmanager, Grafana) are part of it; The Console production build runs on 8601 (`console`); Open WebUI comes in M9.
+All services of file 01 §6 in compose project `dcl-v2`: ParadeDB pg17, Redis, MinIO built from the archived pinned tag, LibreOffice headless, the models role on the only GPU reservation, the API role, beat, one Celery worker per queue of file 10 §4 plus `benchmark` (DECISIONS 2026-10-22), and the one-shot `minio-init` and `migrate` jobs. Observability services (collector, Tempo, Prometheus, Alertmanager, Grafana) are part of it; The Console production build runs on 8601 (`console`); Open WebUI (`open-webui`, pinned v0.12.3, volume `open-webui-data`) runs now on 8300 (DECISIONS 2026-10-23).
 
 ## Location
 
@@ -36,7 +37,7 @@ Tests and fixtures:
 Provides:
 - Healthy stack: `docker compose --env-file .env -f backend/devops/compose.yaml -f backend/devops/compose.dev.yaml up -d --build --wait`
 - Host ports on `DCL_DATA_BIND_HOST` (default 127.0.0.1): 5435 PostgreSQL (`DCL_DB_PORT`), 6381 Redis, 9100 MinIO S3
-- Host ports on `DCL_BIND_HOST` (UIs and API): 9101 MinIO console, 8500 models, 8200 API, 3300 Grafana, 8601 Console, 9443/9000 Portainer (dev)
+- Host ports on `DCL_BIND_HOST` (UIs and API): 9101 MinIO console, 8500 models, 8200 API, 3300 Grafana, 8601 Console, 8300 Open WebUI, 9443/9000 Portainer (dev)
 - Redis `requirepass` from `DCL_REDIS_PASSWORD` (empty = no password); compose puts it into every in-stack `DCL_REDIS_URL`
 - In-network URLs set per container: `postgres:5432/dcl_v2`, `redis://[:password@]redis:6379/0`, `minio:9000`, `models:8500`
 - Dead letters: every final task failure and every task whose worker died `MAX_DELIVERIES` (3) times lands in the Redis list `dcl:dead_letter` (newest first, capped 10,000); read with `backend.celery_redis.app.dead_letters(limit)` for the Console "Failed tasks" page

@@ -72,6 +72,15 @@ Tasks are acknowledged late and rejected on worker loss, so the task returns to 
 
 The delegated token expired or was revoked. Run S1's device-code sign-in CLI from the main checkout; it writes the encrypted cache into `DCL_TOKEN_DIR`. The next `dcl.sync.token_health` run (every 15 minutes) clears the alert.
 
+## Open WebUI (open-webui)
+
+The chat UI runs on `DCL_OPENWEBUI_PORT` (8300) with its data (users, chats, functions) in the `open-webui-data` volume. The first account created in the browser becomes the admin; S3 then installs the DCL Pipe, Filter and Actions, which call the API at `http://api:8200` on the stack network. The first start downloads its small embedding model (about 1 GB, 5 to 7 minutes on a fresh volume; the health check allows 10 minutes). Set `DCL_OPENWEBUI_URL` to the address users browse to when it is not `http://localhost:8300`.
+
+```bash
+docker compose -p dcl-v2 logs --since 10m open-webui
+docker compose -p dcl-v2 exec open-webui curl -fsS http://api:8200/healthz
+```
+
 ## Benchmark worker (benchmark)
 
 `worker-benchmark` runs `dcl.benchmark.*` (S2's runner) with the Answer Engine in process: one prefork child, soft limit 950 s, hard limit 1000 s, 2 GB, child recycled past 1.5 GB. Beat sends `dcl.benchmark.sweep` to it every 60 s. A case that hits the hard limit is killed and redelivered; after `MAX_DELIVERIES` it is dead-lettered. Benchmark load never waits behind sync work on `io_light`.

@@ -139,6 +139,7 @@ def test_published_host_ports_follow_the_lead_allocation():
         "8200",
         "${DCL_GRAFANA_PORT:-3300}",
         "8601",
+        "${DCL_OPENWEBUI_PORT:-8300}",
     }
     data_ports = {name: svc["ports"] for name, svc in services.items() if name in ("postgres", "redis")}
     assert all(
@@ -213,3 +214,14 @@ def test_benchmark_tasks_without_their_own_queue_route_to_the_benchmark_queue():
     router = celery_app.app.amqp.router
     assert router.route({}, "dcl.benchmark.case")["queue"].name == "benchmark"
     assert router.route({}, "dcl.sync.delta_all")["queue"].name == "io_light"
+
+
+def test_open_webui_is_pinned_persistent_and_on_the_stack_network():
+    stack = compose("compose.yaml")
+    service = stack["services"]["open-webui"]
+    assert service["image"] == "ghcr.io/open-webui/open-webui:v0.12.3"
+    assert service["ports"] == ["${DCL_BIND_HOST:-127.0.0.1}:${DCL_OPENWEBUI_PORT:-8300}:8080"]
+    assert service["volumes"] == ["open-webui-data:/app/backend/data"]
+    assert "open-webui-data" in stack["volumes"]
+    assert "networks" not in service and "networks" not in stack["services"]["api"]
+    assert service["environment"]["WEBUI_URL"].startswith("${DCL_OPENWEBUI_URL:-")
