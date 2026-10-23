@@ -32,35 +32,56 @@ def is_office(head: bytes, name: str) -> bool:
     return b"%PDF-" in head[:1024] or name.casefold().endswith(OFFICE_EXTENSIONS[1:])
 
 
-def a2_tex(head: bytes, name: str) -> bool:
-    """S6's check, imported when called so the dispatcher never loads Route A2's parsers."""
-    from backend.routes.a2_source import route as a2
+def _route_check(module: str, check: str, head: bytes, name: str, suffixes: tuple[str, ...]) -> bool:
+    """S6's own check when its module imports here; the dispatcher runs on io_light, whose image lacks the
+    parse dependencies (lxml, …), so there the file's suffix decides and the route task (cpu_parse, with
+    everything installed) validates the content itself."""
+    import importlib
 
-    return a2.can_handle_tex(head, name)
+    try:
+        return getattr(importlib.import_module(module), check)(head, name)
+    except ImportError:
+        return name.casefold().endswith(suffixes) and (b"\x00" not in head[:4096] or suffixes == G_SUFFIXES)
+
+
+A2_TEX = (".tex",)
+A2_JSON = (".json",)
+B_SUFFIXES = (".py", ".pyw", ".c", ".h", ".m", ".md", ".markdown", ".txt", ".bat", ".cmd", ".ipynb")
+E_SUFFIXES = (".drawio", ".dio", ".xsd", ".svg", ".vsdx", ".dxf")
+G_SUFFIXES = (
+    ".stl",
+    ".step",
+    ".stp",
+    ".igs",
+    ".iges",
+    ".scdoc",
+    ".dwg",
+    ".zip",
+    ".tar",
+    ".tgz",
+    ".gz",
+    ".wbpz",
+)
+
+
+def a2_tex(head: bytes, name: str) -> bool:
+    return _route_check("backend.routes.a2_source.route", "can_handle_tex", head, name, A2_TEX)
 
 
 def a2_json(head: bytes, name: str) -> bool:
-    from backend.routes.a2_source import route as a2
-
-    return a2.can_handle_json(head, name)
+    return _route_check("backend.routes.a2_source.route", "can_handle_json", head, name, A2_JSON)
 
 
 def code(head: bytes, name: str) -> bool:
-    from backend.routes.b_code import route as b
-
-    return b.can_handle(head, name)
+    return _route_check("backend.routes.b_code.route", "can_handle", head, name, B_SUFFIXES)
 
 
 def diagram(head: bytes, name: str) -> bool:
-    from backend.routes.e_diagrams import route as e
-
-    return e.can_handle(head, name)
+    return _route_check("backend.routes.e_diagrams.route", "can_handle", head, name, E_SUFFIXES)
 
 
 def archive_cad(head: bytes, name: str) -> bool:
-    from backend.routes.g_archives import route as g
-
-    return g.can_handle(head, name)
+    return _route_check("backend.routes.g_archives.route", "can_handle", head, name, G_SUFFIXES)
 
 
 def any_file(head: bytes, name: str) -> bool:
