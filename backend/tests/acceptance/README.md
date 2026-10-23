@@ -17,3 +17,6 @@ verification command; `M<n>.md` maps every criterion to one of the two.
   only GET; without them those checks are skipped.
 - `test_m<n>_checks_on_seeded_db.py`: proves each check passes on a good state and fails on a
   bad one, on a disposable database (`DCL_TEST_DATABASE_URL`, like the schema tests).
+
+- `test_format_routes.py` (`FORMATS.md`): route-level checks over the public format samples in
+  `data/samples/web/`; local only, no stack: `uv run --group parse pytest backend/tests/acceptance/test_format_routes.py`.

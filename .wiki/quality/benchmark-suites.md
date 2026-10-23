@@ -21,17 +21,18 @@ Code:
 - `backend/tests/benchmark/suites/code.template.yaml` (CODE)
 - `backend/tests/benchmark/suites/visual.template.yaml` (handwritten sheets: VISUAL, FAILURE_ANALYSIS, CONFLICT_BEHAVIOR)
 - `backend/tests/benchmark/suites/standards.template.yaml` (STANDARDS, E12 ECSS)
-- `backend/tests/benchmark/suites/formats.template.yaml` (13 route cases over public samples for formats the corpus lacks)
 - `backend/tests/benchmark/verification/build_suites.py` (template + local fragments → importable suite)
 - `backend/tests/benchmark/verification/telemetry_metrics.py` (metric functions, `build`)
 - `backend/tests/benchmark/verification/README.md` (verification notes)
+- `backend/tests/benchmark/gold/gold.py` (schema and loader of the document-model study gold; gold local in `data/gold/`: layout, tables, equations, handwriting)
 - `backend/tests/benchmark/BASELINE.md` (M10 baseline: per-case classification of scored runs)
 - `backend/tests/benchmark/retrieval_set.yaml` (planned)
-- local, git-ignored: `data/benchmark/telemetry_sources.yaml`, `data/benchmark/*.local.yaml`, `data/benchmark/*.json` (values, citations); public samples in `data/samples/web/` with `SOURCES.md` (URL, license, sha256)
+- local, git-ignored: `data/benchmark/telemetry_sources.yaml`, `data/benchmark/*.local.yaml`, `data/benchmark/*.json` (values, citations)
 
 Tests and fixtures:
 - `backend/tests/benchmark/test_telemetry_suite.py`
 - `backend/tests/benchmark/test_suites.py`
+- `backend/tests/benchmark/gold/test_gold.py`
 
 ## Interfaces
 
@@ -69,7 +70,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] 12 FACT_LOOKUP + 3 FAILURE_ANALYSIS (TP-23, TP12 reports) and 8 CODE cases; every answer found in the cited page or file by a test
 - [x] Visual suite: 5 VISUAL + 2 FAILURE_ANALYSIS from the handwritten TP7 sheets, 1 CONFLICT_BEHAVIOR (folder says TP7, sheet footer says TP6); image-only answers need a recorded visual reading
 - [x] 5 STANDARDS cases from the E12 ECSS standards, page-verified (decimal-comma aware)
-- [x] Formats suite: 13 cases (A1 docx/pptx, B C/MATLAB/notebook, C TDMS, E draw.io/SVG/Visio/DXF, G zip/STL/STEP), each answer checked in the local public sample (Office XML text, decoded draw.io, recomputed STL extents and TDMS maxima)
+- [x] Formats cases moved to route-level acceptance (`quality/acceptance`, Lead ruling 2026-10-23); engine suites cover corpus documents only
+- [x] Document-model study gold (DECISIONS 2026-10-23): 31 pages / 318 regions, 10 hard tables / 762 cells, 3 equations (1 from .tex, 2 transcribed), 16 handwriting readings; schema validates grids and boxes
 - [ ] MULTILINGUAL (waits for S1's library language check) and the 40-query retrieval set (waits for the indexed corpus)
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
@@ -86,6 +88,8 @@ runner findings for S2 in `backend/tests/benchmark/BASELINE.md`.
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-23 | S5 | gold for S2's document-model comparison study: schema and loader committed, gold local in data/gold/ (local annotation tools in data/gold/tools/) |
+| 2026-10-23 | S5 | formats suite removed: web samples are not stack documents; its 13 cases are route-level checks in `quality/acceptance` |
 | 2026-10-23 | S5 | public format samples (data/samples/web, 21 files, SOURCES.md) and the formats suite (13 cases); cited-answer test reads Office, draw.io, SVG, STL, TDMS and archives |
 | 2026-10-22 | S5 | M10 baseline from scored run 1: 56 cases classified, runner findings for S2 (BASELINE.md) |
 | 2026-10-22 | S5 | standards suite (5): pressure-vessel and heat-pipe factors, NVR A/10, elevated corrosion testing, tin finish; number check accepts decimal commas |

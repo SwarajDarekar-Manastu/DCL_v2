@@ -1130,3 +1130,14 @@ Merged / ready: the four A1 crop defects, with S5's conventions.
 Blocked on: nothing
 Needs from others: S1 re-run of A1 (cloud on) to see the handwriting gate on ECSS p. 90 live
 Next: the document-model comparison study plan (plan sheet first, sent to the Lead before running)
+## 2026-10-23 16:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: the 13 formats cases are now route-level acceptance checks (`backend/tests/acceptance/test_format_routes.py`, `FORMATS.md`): each calls the route entry point on the local public sample (A1 process_office with local soffice, B process_code, C tdms_source, E process_diagram, G process) and asserts the values in git-ignored data/benchmark/formats.local.yaml; zip check also asserts the .DS_Store member is skipped. 13 pass locally, the docx check skips without tesseract (runs in the parse image); a mutation run fails all 13. Engine formats suite removed (template and its binary readers in test_suites.py). Test: `uv run --group parse pytest backend/tests/acceptance/test_format_routes.py`; `uv run pytest -q`
+Blocked on: nothing
+Needs from others: nothing
+Next: idle until messaged (M5 report JSON from the Lead after S2's fix and S1's re-dispatch)
+
+## 2026-10-23 19:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: gold for S2's document-model comparison study (DECISIONS 2026-10-23). Committed: schema and loader `backend/tests/benchmark/gold/gold.py` (+ `test_gold.py`: grid coverage, normalised boxes, page references). Local only in data/gold/: 31 pages with 318 region boxes over 10 classes, 10 hard tables with 762 cells, 3 equations (1 with .tex truth, 2 S5 transcriptions), 16 handwriting readings; the local annotation tools (render grid, ink-snap, overlay, ruling-line finder, cell extraction from the text layer) stay in data/gold/tools/. Test: `uv run pytest backend/tests/benchmark`
+Blocked on: Lead ruling: the allowlisted LaTeX projects with PDF twins hold one display equation, not 20
+Needs from others: nothing
+Next: idle until messaged
