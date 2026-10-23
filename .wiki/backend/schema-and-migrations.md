@@ -95,6 +95,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | Migration 0003: M2 document tables, M4 entity/fact tables, audit_events (Lead decision); HNSW indexes; pgvector dep |
 | 2026-10-23 | S1 | Migration 0011: `FailureClass` gains MISSING_DOCUMENT, INSUFFICIENT_EVIDENCE, TIMEOUT, HALTED_DATA (benchmark_results CHECK) |
 | 2026-10-23 | S1 | Migration 0012 `llm_calls` (`LlmCall`, `LlmCallStatus`) and `backend/postgres/ledger.py` `db_ledger(engine)`, the gateway client's `ledger` hook; `backend/tests/schema/test_llm_calls.py` |
+| 2026-10-23 | S1 | 0012 adds `answer_traces` (file 05; model `AnswerTrace`); prices are the `models.prices` config key (`PriceSpec`, `model_prices()` for the gateway client); settings preview estimates widening cost from priced `llm_calls` |
 
 ## Related
 

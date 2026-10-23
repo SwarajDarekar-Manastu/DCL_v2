@@ -8,9 +8,11 @@ from backend.postgres.models.ops import LlmCall, PipelineConfig
 from backend.postgres.models.registry import Blob, BlobDerivation, DriveFolder, DriveItem, Job, SyncRoot
 from backend.postgres.models.review import AuditEvent, ReviewFlag, Rule
 from backend.postgres.models.telemetry import TelemetryChannel, TelemetryRun
+from backend.postgres.models.traces import AnswerTrace
 from backend.postgres.models.users import User
 
 __all__ = [
+    "AnswerTrace",
     "Asset",
     "AuditEvent",
     "BenchmarkCase",

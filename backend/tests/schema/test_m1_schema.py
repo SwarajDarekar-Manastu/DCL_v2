@@ -42,7 +42,7 @@ M2_M4_TABLES = {
     "telemetry_channels",
 }
 AUTH_TABLES = {"users"}  # local password RBAC (migration 0010)
-LEDGER_TABLES = {"llm_calls"}  # migration 0011
+LEDGER_TABLES = {"llm_calls", "answer_traces"}  # migration 0012
 EXPECTED_TABLES = M1_TABLES | M2_M4_TABLES | AUTH_TABLES | LEDGER_TABLES
 
 # Every ✓ column of file 05 and the enum it must follow.

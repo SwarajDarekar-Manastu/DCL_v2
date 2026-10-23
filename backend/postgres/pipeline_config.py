@@ -171,6 +171,16 @@ _TEXT = TypeAdapter(str)
 _JSON = TypeAdapter(JsonValue)
 _TEXT_MAP = TypeAdapter(dict[str, str])
 _CRON = re.compile(r"^\S+( \S+){4}$")
+MODEL_PRICES = "models.prices"
+
+
+class PriceSpec(BaseModel):
+    """USD per million tokens for one model (``models.prices``; the gateway client's ``ModelPrice``)."""
+
+    input_per_mtok: float = Field(ge=0)
+    output_per_mtok: float = Field(ge=0)
+    cached_per_mtok: float = Field(default=0.0, ge=0)
+
 
 # Exact keys of file 05 §4.6 with the shape their readers expect. Secrets and endpoints are never keys.
 KEYS: dict[str, TypeAdapter] = {
@@ -194,6 +204,7 @@ KEYS: dict[str, TypeAdapter] = {
     "answer.proprietary_terms": _LIST,
     "answer.external_search_enabled": _BOOL,
     "routes.A1.ocr_engine_by_script": _TEXT_MAP,
+    MODEL_PRICES: TypeAdapter(dict[str, PriceSpec]),
 }
 FAMILIES = ("thresholds.", "chunking.", "models.")  # free-form JSON values per family
 TELEMETRY_PREFIX = "telemetry."  # Route C NormalizeConfig fields, numbers
@@ -270,7 +281,9 @@ def validate_changes(session: Session, changes: Mapping[str, Any]) -> dict[str, 
             errors[key] = "unknown key (file 05 §4.6 lists the keys; secrets and endpoints never go here)"
             continue
         try:
-            values[key] = adapter.validate_python(value, strict=True)
+            values[key] = adapter.validate_python(value, strict=key != MODEL_PRICES)
+            if key == MODEL_PRICES:
+                values[key] = {m: spec.model_dump() for m, spec in values[key].items()}
         except ValidationError as exc:
             errors[key] = "; ".join(e["msg"] for e in exc.errors())
             continue
@@ -293,6 +306,15 @@ def validate_changes(session: Session, changes: Mapping[str, Any]) -> dict[str, 
     if errors:
         raise InvalidConfig(errors)
     return values
+
+
+def model_prices(session: Session) -> dict[str, Any]:
+    """``models.prices`` as the gateway client's ``prices`` argument (``{model: ModelPrice}``); empty when
+    unset, so ``cost_estimate`` stays null rather than guessed."""
+    from backend.llm_engine.gemini_types import ModelPrice
+
+    raw = get(session, MODEL_PRICES, default={}) or {}
+    return {model: ModelPrice(**PriceSpec.model_validate(spec).model_dump()) for model, spec in raw.items()}
 
 
 def current_entries(session: Session, prefix: str = "") -> list[PipelineConfig]:
