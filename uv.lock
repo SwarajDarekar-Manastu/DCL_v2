@@ -198,6 +198,18 @@ wheels = [
 ]
 
 [[package]]
+name = "cascadio"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b4/59/e8e6cc3f2fa07a4cbd36829d5e3fdefeb6ec0c9ef8e48303ff0f0378507f/cascadio-0.1.1-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:32b6f4f2a749e99c54609a1afcf03b8e522344d84c42b69d221eaff783946f30", size = 22268234, upload-time = "2026-07-28T21:13:04.713Z" },
+    { url = "https://files.pythonhosted.org/packages/94/72/c1c0bbddf983e7beab00bb674b969bcc650650011ef156b17f993f469a8b/cascadio-0.1.1-cp312-abi3-macosx_11_0_x86_64.whl", hash = "sha256:18303485bd19dc156dce54340a5327a3971a751490833e0c4db89eae120b4a7d", size = 24480742, upload-time = "2026-07-28T21:13:06.997Z" },
+    { url = "https://files.pythonhosted.org/packages/72/f7/c7ca466cfa90ea959c16fda3812f77f472a021abf54e1f09c981235260c1/cascadio-0.1.1-cp312-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:88c0cc218f29942a98c806c4377b93c1ef57154221813cf95a1e0f352e95b96f", size = 27011399, upload-time = "2026-07-28T21:13:09.364Z" },
+    { url = "https://files.pythonhosted.org/packages/93/d1/163c6847b40650cbb2347407c7f8e79f7e735d7e4a8bca785833b2d28d17/cascadio-0.1.1-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9f17efee8ac97483984eedee315d3637f5f28375af524005bd62035d8d2546c6", size = 28350060, upload-time = "2026-07-28T21:13:11.66Z" },
+    { url = "https://files.pythonhosted.org/packages/c2/8c/3c2968a30f8f49edb24834eb7d93016b1f7f99ff2b6a063e07767dffed13/cascadio-0.1.1-cp312-abi3-win_amd64.whl", hash = "sha256:b89abd140fb84e27914535d116ffac2bd98bbf14f59436f2cbca0fdda6bf8b86", size = 16900144, upload-time = "2026-07-28T21:13:14.134Z" },
+]
+
+[[package]]
 name = "celery"
 version = "5.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -629,14 +641,24 @@ models = [
     { name = "transformers" },
 ]
 parse = [
+    { name = "cascadio" },
+    { name = "defusedxml" },
     { name = "docling" },
+    { name = "ezdxf" },
+    { name = "networkx" },
     { name = "onnxruntime" },
     { name = "pikepdf" },
+    { name = "pylatexenc" },
     { name = "pypdfium2" },
     { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'group-6-dcl-v2-parse') or (extra == 'group-6-dcl-v2-models' and extra == 'group-6-dcl-v2-parse')" },
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'group-6-dcl-v2-parse') or (extra == 'group-6-dcl-v2-models' and extra == 'group-6-dcl-v2-parse')" },
     { name = "torchvision", version = "0.29.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'group-6-dcl-v2-parse') or (extra == 'group-6-dcl-v2-models' and extra == 'group-6-dcl-v2-parse')" },
     { name = "torchvision", version = "0.29.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'group-6-dcl-v2-parse') or (extra == 'group-6-dcl-v2-models' and extra == 'group-6-dcl-v2-parse')" },
+    { name = "tree-sitter" },
+    { name = "tree-sitter-c" },
+    { name = "tree-sitter-matlab" },
+    { name = "tree-sitter-python" },
+    { name = "trimesh" },
 ]
 
 [package.metadata]
@@ -708,12 +730,22 @@ models = [
     { name = "transformers", specifier = "==5.20.2" },
 ]
 parse = [
+    { name = "cascadio", specifier = "==0.1.1" },
+    { name = "defusedxml", specifier = "==0.7.1" },
     { name = "docling", specifier = "==2.141.0" },
+    { name = "ezdxf", specifier = "==1.4.4" },
+    { name = "networkx", specifier = "==3.7" },
     { name = "onnxruntime", specifier = "==1.31.0" },
     { name = "pikepdf", specifier = "==10.17.0" },
+    { name = "pylatexenc", specifier = "==2.11" },
     { name = "pypdfium2", specifier = "==5.14.0" },
     { name = "torch", specifier = "==2.14.1", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "dcl-v2", group = "parse" } },
     { name = "torchvision", specifier = "==0.29.1", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "dcl-v2", group = "parse" } },
+    { name = "tree-sitter", specifier = "==0.26.0" },
+    { name = "tree-sitter-c", specifier = "==0.24.2" },
+    { name = "tree-sitter-matlab", specifier = "==1.3.1" },
+    { name = "tree-sitter-python", specifier = "==0.25.0" },
+    { name = "trimesh", specifier = "==5.1.1" },
 ]
 
 [[package]]
@@ -922,6 +954,29 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d3/38/af70d7ab1ae9d4da450eeec1fa3918940a5fafb9055e934af8d6eb0c2313/et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54", size = 17234, upload-time = "2024-10-25T17:25:40.039Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa", size = 18059, upload-time = "2024-10-25T17:25:39.051Z" },
+]
+
+[[package]]
+name = "ezdxf"
+version = "1.4.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fonttools" },
+    { name = "numpy" },
+    { name = "pyparsing" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5e/d7/1b7be8db364f1c4838dfc1a40ca96577aba405deabf896a4eb3aaeb15a62/ezdxf-1.4.4.tar.gz", hash = "sha256:da5a5e0e6bdbb6656f9c017b47edc7eafceb419d61a2b5de64ffb344c168e593", size = 1866886, upload-time = "2026-05-14T09:19:19.511Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/18/3d/98648d221ffa047b5ba898c8e152010861dc71a66b531dcf15053075010e/ezdxf-1.4.4-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:d723d35d08223318c17080a32a05192a1449e544dee867c9d9c6f25998fac303", size = 3563916, upload-time = "2026-05-14T09:25:32.879Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/f1/84bbaa571412f840c22deeae185e54d4a67aa52f03e1728fd8425748c548/ezdxf-1.4.4-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:6b0c73b46085521bdbd4a3e7d88998da7bec5713ba89bbb502fdeffe6b42fc7e", size = 3016857, upload-time = "2026-05-14T09:25:34.607Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/ff/f2eb77d22d26aa98abbe0961470871d8b85ef4e73e5527f544d25f958d6e/ezdxf-1.4.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ac3e83a70c1f866dd5114192a6fab6e75cc83b75e907bc08c5d94b98cce14cc0", size = 3003336, upload-time = "2026-05-14T09:25:35.947Z" },
+    { url = "https://files.pythonhosted.org/packages/65/7d/2a6ddd6beef5d9a8593078619f3920a0cd76b1db4c6a974ac37045543219/ezdxf-1.4.4-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8ebe09717ab6636bf48780eabdab51e3ab2135f7963bb52452444b6d95e03d12", size = 5788485, upload-time = "2026-05-14T09:27:32.176Z" },
+    { url = "https://files.pythonhosted.org/packages/e7/29/2094fd7719146ca7bb236be9751b5929d431f643cbab669aed89cf121883/ezdxf-1.4.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:44af248af0860fe8b1a39ca40e1cd2fa8ac37b22142b14b20c6a0caf1b50f932", size = 5816781, upload-time = "2026-05-14T09:27:13.96Z" },
+    { url = "https://files.pythonhosted.org/packages/19/8d/669b8047cca162204c53b874183d73b5f6c4b1d5d48fa1e515a32d56f5ac/ezdxf-1.4.4-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:02a097794625e9fc948e637dfe07057e98167b4fe215357a59645759fef6db3f", size = 5754006, upload-time = "2026-05-14T09:27:33.858Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/44/b753997173327250e43ae50f11f0c69016b1e78482e0bd3857c3495236e7/ezdxf-1.4.4-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:f093bd2228f5782d483aed3bd89cdb74b672b5f90c677c4125cd236ee5649151", size = 5861860, upload-time = "2026-05-14T09:27:15.758Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/99/2e81cb168e0f09adfb05fb40e5f890ff87ac2c00e98079cf09837dd76330/ezdxf-1.4.4-cp312-cp312-win_amd64.whl", hash = "sha256:3e518d9ed4dcbe525d57f14c25c5e592f82660a690fdec39b03b092e6cdc4771", size = 2963238, upload-time = "2026-05-14T09:23:47.924Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/09/5ecb6f82d35a2f4a4334d0a608fcf764827fa69dccdf5987ce309c16b6c1/ezdxf-1.4.4-py3-none-any.whl", hash = "sha256:666edda631ba717270293b734f5d58dd97a1d1aba4787187f09d0cc584645865", size = 1331217, upload-time = "2026-05-14T09:19:26.601Z" },
 ]
 
 [[package]]
@@ -3386,6 +3441,22 @@ wheels = [
 ]
 
 [[package]]
+name = "tree-sitter-matlab"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c6/04/be954b2edb5b57648d91d4412e225e361e9c37ac22ce6c45d78713a9b744/tree_sitter_matlab-1.3.1.tar.gz", hash = "sha256:91a2ab61a6179b8aec0216f18f1c1eb4e1409b768641b9c661bab434648bb54d", size = 172140, upload-time = "2026-08-26T06:47:41.047Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7f/ec/d7f27aa3dd0aed3a9bcdfd3f765d28ee4fba1b2473ca8d3e4c3f39eff78e/tree_sitter_matlab-1.3.1-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:dd080613d88e184c389a8026ff176c3b5a30cd164000ae0f121d5086794afa89", size = 86528, upload-time = "2026-08-26T06:47:19.22Z" },
+    { url = "https://files.pythonhosted.org/packages/05/ce/5e8f5fb357426ec96762a3f063e053a8fefcfde7981f1f28016068f7f2e4/tree_sitter_matlab-1.3.1-cp310-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:78f79557f6be5e98d3ba4aa76f655efaab1d5c21dea4127ccd7fe25e20415cf4", size = 116326, upload-time = "2026-08-26T06:47:20.768Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/f6/0b44ab0452eec5a3d21c33009e58a3447e93a16545d1fa6f2ab491f6c163/tree_sitter_matlab-1.3.1-cp310-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:52ada1a896da00cc6e3c918e5548e0b22dd5dcc3cf2ecf061135af45de13d74a", size = 123180, upload-time = "2026-08-26T06:47:22.128Z" },
+    { url = "https://files.pythonhosted.org/packages/76/8a/35d394daf205c758a9a0cb375638e5945c290b4200f7b80479d27479acc6/tree_sitter_matlab-1.3.1-cp310-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:14e4386c054507d55d0f5d7d88e53b990967a0ef29146fcc77af0ed5995b49e4", size = 120807, upload-time = "2026-08-26T06:47:23.46Z" },
+    { url = "https://files.pythonhosted.org/packages/7c/ea/bccd684fc87b7d4ae6b5375405c97a71518c3d1ab401cc7f29ca0b8d8cd6/tree_sitter_matlab-1.3.1-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:6a789cf1ed450965f28c476a305c407ff2f0692a336d72fd8ea86a9221b6701f", size = 115012, upload-time = "2026-08-26T06:47:24.79Z" },
+    { url = "https://files.pythonhosted.org/packages/77/6b/e0fc1b2ecd8e33c11ef82dacaa8e4f48c768bff29b987dce16206166b726/tree_sitter_matlab-1.3.1-cp310-abi3-win32.whl", hash = "sha256:bf2f24efcceb670828d4a8d82c5a551bd77e4752b0f2913d72145fc2b5380de9", size = 81100, upload-time = "2026-08-26T06:47:25.987Z" },
+    { url = "https://files.pythonhosted.org/packages/52/5b/f3151a2c407c0776a8c6d22d06bc727c813d755e3dc7cda3819f7f8ae2e9/tree_sitter_matlab-1.3.1-cp310-abi3-win_amd64.whl", hash = "sha256:505d5efdcbd1d76b7134eb7e79727265135c92f2cadbe119930604b5c65fdb46", size = 81914, upload-time = "2026-08-26T06:47:27.409Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/94/55f785a562baf807fddffe4d0208138fb73351eee2a20fd0dc3f65a795bc/tree_sitter_matlab-1.3.1-cp310-abi3-win_arm64.whl", hash = "sha256:325b4af0332ed2e13158d866245974f9f61ad817be159d5245692abaff3bb34e", size = 80980, upload-time = "2026-08-26T06:47:28.728Z" },
+]
+
+[[package]]
 name = "tree-sitter-python"
 version = "0.25.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3414,6 +3485,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/cb/f57b149d7beed1a85b8266d0c60ebe4c46e79c9ba56bc17b898e17daf88e/tree_sitter_typescript-0.23.2-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:8d4f0f9bcb61ad7b7509d49a1565ff2cc363863644a234e1e0fe10960e55aea0", size = 340245, upload-time = "2024-11-11T02:36:06.473Z" },
     { url = "https://files.pythonhosted.org/packages/8b/ab/dd84f0e2337296a5f09749f7b5483215d75c8fa9e33738522e5ed81f7254/tree_sitter_typescript-0.23.2-cp39-abi3-win_amd64.whl", hash = "sha256:3f730b66396bc3e11811e4465c41ee45d9e9edd6de355a58bbbc49fa770da8f9", size = 278015, upload-time = "2024-11-11T02:36:07.631Z" },
     { url = "https://files.pythonhosted.org/packages/9f/e4/81f9a935789233cf412a0ed5fe04c883841d2c8fb0b7e075958a35c65032/tree_sitter_typescript-0.23.2-cp39-abi3-win_arm64.whl", hash = "sha256:05db58f70b95ef0ea126db5560f3775692f609589ed6f8dd0af84b7f19f1cbb7", size = 274052, upload-time = "2024-11-11T02:36:09.514Z" },
+]
+
+[[package]]
+name = "trimesh"
+version = "5.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ab/bf/a7efaef127e0f1a228a03e5d00c04f5aeb2c25a60adb4d47003d4d0855bc/trimesh-5.1.1.tar.gz", hash = "sha256:56070be44cd97ac87544c9bd3da4b7a298c6f728e83183aeb1f3524d673d5fac", size = 874580, upload-time = "2026-10-02T21:06:07.704Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8f/f6/fb68b8c08f864ecee8f7f7ee2f1203ed5cba2335215de69e4f621eb47db5/trimesh-5.1.1-py3-none-any.whl", hash = "sha256:c5be85a3e31e9ff749f9b0aecc204e37a2cf7cca4e92cd066bb5f3d3c1127765", size = 750449, upload-time = "2026-10-02T21:06:05.958Z" },
 ]
 
 [[package]]

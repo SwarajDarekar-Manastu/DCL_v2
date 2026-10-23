@@ -45,6 +45,16 @@ dependencies = [
 
 [dependency-groups]
 parse = [
+    "pylatexenc==2.11",
+    "tree-sitter==0.26.0",
+    "tree-sitter-python==0.25.0",
+    "tree-sitter-c==0.24.2",
+    "tree-sitter-matlab==1.3.1",
+    "defusedxml==0.7.1",
+    "networkx==3.7",
+    "ezdxf==1.4.4",
+    "trimesh==5.1.1",
+    "cascadio==0.1.1",
     "pypdfium2==5.14.0",
     "pikepdf==10.17.0",
     "docling==2.141.0",
