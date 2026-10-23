@@ -315,8 +315,10 @@ FEEDBACK_KINDS = [
     ("wrong_unit", "Wrong unit or extraction"),
     ("wrong_translation", "Wrong translation"),
 ]
-REPORT_PROMPT = "Start with the number of the reason, then describe the problem:\n" + "\n".join(
-    f"{i}. {label}" for i, (_, label) in enumerate(FEEDBACK_KINDS, start=1)
+REPORT_PROMPT = (
+    "Start with the number of the reason, then describe the problem:\n"
+    + "\n".join(f"{i}. {label}" for i, (_, label) in enumerate(FEEDBACK_KINDS, start=1))
+    + "\nTo point at a source, add its number in brackets, e.g. 4 [2] the pressure is psia, not psig."
 )
 TRACE_CSS = "".join(
     [
@@ -391,6 +393,12 @@ def parse_report(text: str) -> tuple[str, str | None] | None:
         return None
     comment = match.group(2).strip()
     return FEEDBACK_KINDS[int(match.group(1)) - 1][0], comment[:4000] or None
+
+
+def cited_source(comment: str | None) -> str | None:
+    """The source a report points at: the first [n] in the comment ('the unit in [2] is psia' → '2')."""
+    match = re.search(r"\[(\d{1,3})\]", comment or "")
+    return match.group(1) if match else None
 
 
 def _e(value: Any) -> str:
@@ -560,7 +568,13 @@ class Action:
             kind, comment = parsed
             try:
                 await send_feedback(
-                    config, identity, trace["trace_id"], kind, comment, None, self.http_client
+                    config,
+                    identity,
+                    trace["trace_id"],
+                    kind,
+                    comment,
+                    cited_source(comment),
+                    self.http_client,
                 )
             except EngineError as exc:
                 await notify("error", f"The report could not be recorded: {exc.detail}")
