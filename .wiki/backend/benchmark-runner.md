@@ -18,7 +18,7 @@ Code:
 - `backend/benchmark/metrics.py` (pure: `Observed`, `quantities`, `numeric_exactness`, `citation_scores`, `tool_trajectory`, `retrieval_recall`, `behaviour`, `needs_judge`, `score_case`, `classify`, `aggregate`)
 - `backend/benchmark/judge.py` (`judge(client, expectation, question, answer, sources)`; prompt `backend/llm_engine/prompts/benchmark/judge.v1.md`)
 - `backend/benchmark/runner.py` (`RunnerDeps`, `start`, `run_one`, `complete_if_done`, `fail`, `run_benchmark`, `workflow_answer`, `default_deps`)
-- `backend/benchmark/tasks.py` (Celery on `io_light`: `dcl.benchmark.start`, `dcl.benchmark.case`, `dcl.benchmark.sweep`)
+- `backend/benchmark/tasks.py` (Celery on the `benchmark` queue (S4: prefork, concurrency 1, soft 950 s): `dcl.benchmark.start`, `dcl.benchmark.case`, `dcl.benchmark.sweep`)
 - `backend/api/engine.py` `engine_deps(settings)` (shared with the API's `start_engine`)
 
 Tests:

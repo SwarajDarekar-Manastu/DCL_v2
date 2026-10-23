@@ -1,4 +1,5 @@
-"""Celery tasks of the benchmark runner, on `io_light` (soft limit 300 s per task, so one task per case).
+"""Celery tasks of the benchmark runner, on the `benchmark` queue (prefork, one process, soft limit 950 s per
+task; one task per case).
 
 - `dcl.benchmark.start(run_id)`: claim a QUEUED run and enqueue one `dcl.benchmark.case` per pending case.
 - `dcl.benchmark.case(run_id, case_id)`: answer, score and record one case; the last one completes the run.
@@ -27,8 +28,8 @@ from backend.celery_redis.queues import Queue
 from backend.postgres.enums import BenchmarkRunStatus
 from backend.postgres.models import BenchmarkRun
 
-IO_LIGHT = str(Queue.IO_LIGHT)
-STALE_AFTER = timedelta(minutes=15)
+BENCHMARK = str(Queue.BENCHMARK)
+STALE_AFTER = timedelta(minutes=30)  # longer than one case may take (hard limit 1000 s)
 START_LOCK = "dcl:benchmark:start:{}"
 START_LOCK_S = 600
 HEARTBEAT = "dcl:benchmark:alive:{}"
@@ -57,7 +58,7 @@ def _deps() -> runner.RunnerDeps:
     return runner.default_deps()
 
 
-@app.task(name="dcl.benchmark.start", queue=IO_LIGHT)
+@app.task(name="dcl.benchmark.start", queue=BENCHMARK)
 def start(run_id: str) -> int:
     deps = _deps()
     try:
@@ -71,14 +72,14 @@ def start(run_id: str) -> int:
     return len(pending or [])
 
 
-@app.task(name="dcl.benchmark.case", queue=IO_LIGHT)
+@app.task(name="dcl.benchmark.case", queue=BENCHMARK)
 def case(run_id: str, case_id: str) -> bool | None:
     outcome = run_async(runner.run_one(uuid.UUID(run_id), case_id, _deps()))
     _beat(run_id)
     return None if outcome is None else bool(outcome["passed"])
 
 
-@app.task(name="dcl.benchmark.sweep", queue=IO_LIGHT)
+@app.task(name="dcl.benchmark.sweep", queue=BENCHMARK)
 def sweep() -> dict[str, int]:
     deps = _deps()
     started = resumed = 0
