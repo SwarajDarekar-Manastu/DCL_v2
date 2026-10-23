@@ -235,6 +235,28 @@ services:
       - "${DCL_BIND_HOST:-127.0.0.1}:8601:80"
     restart: unless-stopped
 
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.12.3
+    environment:
+      WEBUI_URL: ${DCL_OPENWEBUI_URL:-http://localhost:${DCL_OPENWEBUI_PORT:-8300}}
+      ENABLE_OLLAMA_API: "false"
+      ENABLE_VERSION_UPDATE_CHECK: "false"
+    ports:
+      - "${DCL_BIND_HOST:-127.0.0.1}:${DCL_OPENWEBUI_PORT:-8300}:8080"
+    volumes:
+      - open-webui-data:/app/backend/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+    restart: unless-stopped
+
   models:
     <<: *backend
     image: dcl-v2-models:local
@@ -377,3 +399,4 @@ volumes:
   redis-data:
   minio-data:
   hf-cache:
+  open-webui-data:
