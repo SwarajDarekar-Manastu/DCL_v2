@@ -10,6 +10,7 @@ description: The DCL Answer Engine as a chat model (file 08 §2.1); install as f
 import asyncio
 import html
 import json
+import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 from typing import Any, Literal
@@ -25,6 +26,7 @@ from frontend.openwebui.api_endpoint import (  # inline
     open_webui_groups,
     put_upload,
     request_upload,
+    skill_playbook,
     stream_answer,
 )
 from frontend.openwebui.config import DclConfigError, build_config  # inline
@@ -57,12 +59,31 @@ def _text_of(content: Any) -> str:
     return ""
 
 
+# Skill mentions as Open WebUI v0.12.3 writes them into message text: <$skillId|label> or </skillId|label>
+# (open_webui/utils/skills.py SKILL_ID_RE and SKILL_MENTION_RE).
+SKILL_ID = r"(?:[a-z0-9_-]+|terminal:[^|>\s]+)"
+SKILL_MENTION = re.compile(rf"<(?:\$({SKILL_ID})(?:\|([^>]*))?|/({SKILL_ID})\|([^>]*))>")
+
+
+def without_skill_mentions(text: str) -> str:
+    """The engine reads plain text: a mention tag becomes its label (or the skill id without one)."""
+    return SKILL_MENTION.sub(lambda m: m.group(2) or m.group(4) or m.group(1) or m.group(3), text)
+
+
+def mentioned_skills(messages: list[dict], metadata: dict) -> list[str]:
+    """Skills $-mentioned in the last user message, in order, then any other ids Open WebUI listed."""
+    last = next((_text_of(m.get("content")) for m in reversed(messages) if m.get("role") == "user"), "")
+    ids = [m.group(1) or m.group(3) for m in SKILL_MENTION.finditer(last)]
+    listed = (metadata.get("chat_context") or {}).get("mentioned_skill_ids") or []
+    return list(dict.fromkeys([*ids, *sorted(str(i) for i in listed)]))
+
+
 def engine_messages(messages: list[dict]) -> list[dict]:
     """Open WebUI messages → engine ChatMessage list (text only; tool and image parts are dropped)."""
     out = []
     for message in messages:
         role = message.get("role")
-        text = _text_of(message.get("content"))
+        text = without_skill_mentions(_text_of(message.get("content")))
         if role in ("user", "assistant", "system") and text.strip():
             out.append({"role": role, "content": text})
     return out
@@ -201,6 +222,20 @@ class Pipe:
                 )
         return attachments
 
+    async def _playbook_hint(self, skill_ids: list[str]) -> str | None:
+        """The intent of the first mentioned skill that is a DCL playbook (tag dcl-playbook:<intent>)."""
+        for skill_id in skill_ids:
+            try:
+                intent = await self._skill_playbook(skill_id)
+            except Exception:  # an unreadable skill must not block the answer
+                intent = None
+            if intent:
+                return intent
+        return None
+
+    async def _skill_playbook(self, skill_id: str) -> str | None:
+        return await skill_playbook(skill_id)
+
     def _task_reply(self, task: str, messages: list[dict], chat_id: str) -> str:
         """Open WebUI's own background tasks never reach the engine."""
         if task == "title_generation":
@@ -262,6 +297,9 @@ class Pipe:
                 "max_embeds": self.valves.MAX_EMBEDS_PER_MESSAGE,
             },
         }
+        hint = await self._playbook_hint(mentioned_skills(body.get("messages", []), metadata))
+        if hint:
+            request["options"]["playbook_hint"] = hint
 
         streamed: list[str] = []
         citations: list[dict] = []
