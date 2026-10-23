@@ -1037,6 +1037,11 @@ Blocked on: Lead: pin `resvg-py==0.5.0` in the parse group for SVG renders (Rout
 Needs from others: as above.
 Next: SVG render and read_schematic, after the pin.
 
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: 9db42e9 (the chat-feedback flag uses the document's route; Gemini time split in TraceView; repair output capped).
+Blocked on: S1's A1 re-run. On the stack, 26 A1 documents are still PROCESSING, 7 are ACTIVE with a language, and the parse worker logged no vision call in the last 30 min.
+- So far llm_calls holds only engine and test calls, nothing with doc_id. Once the re-run runs, I check that the workers' vision calls reach llm_calls with doc_id; per-document tokens depend on it.
+Next: the A1 OCR-per-script and token report, then the handwriting calibration (medium vs high) on the TP7 sheets
 ## 2026-10-23 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready (merge requests, stacked on the branch):
 - Review API, item 6 (5f42ee4): dry run (a telemetry set_unit's stats converted to SI against S5's sanity range), undo (the last resolution within 30 days; a rule only that resolution used is retired; junked locations restored; committed documents rebuilt), simulate. No review route answers 501 now.
@@ -1084,3 +1089,11 @@ Merged / ready: M5 crop acceptance (`backend/tests/acceptance/M5.md`, `m5_state.
 Blocked on: S1's re-dispatch and S2's crop fix (Lead says when), then I run the check and report counts
 Needs from others: Lead: stack DATABASE/MINIO credentials for the run (S5 has none), or run `m5_state.py report` from the main checkout
 Next: idle until messaged
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: A1 formula and code enrichment cap and per-stage timings. This addresses ECSS-E-ST-35-06C, which FAILED past cpu_parse's soft limit.
+- `process_pdf(enrichment_max=…)` caps Docling's CodeFormula items per document; the default of 200 is the Lead's figure. Skipped items keep their layout text, and a SOFT LOW_CONFIDENCE flag names the count. The parameter is fed from pipeline_config `routes.A1.formula_enrichment_max`.
+- The CIR gets `timings.json`: seconds per route stage, per Docling run (with Docling's own stage profile) and the enrichment counts.
+- Measured on CPU (a 3-formula page): about 30 s per formula. Batching gives no speed-up (batch 1: 79–107 s, batch 5: 113 s, batch 16: 117 s), so Docling's batch size stays. With 200 formulas, enrichment alone would take about 100 minutes.
+Blocked on: nothing
+Needs from others: S1: pass pipeline_config `routes.A1.formula_enrichment_max` from office_run to `process_pdf(enrichment_max=)`. Lead: a lower default (about 30 formulas, roughly 15 min) or GPU enrichment, given about 30 s per formula on CPU
+Next: the four A1 crop defects (clip to the region bbox, handwriting crop gate, table crops, contact sheet)

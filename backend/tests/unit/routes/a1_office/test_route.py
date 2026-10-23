@@ -310,3 +310,57 @@ def test_every_image_asset_has_its_size_and_no_figure_is_empty(fake_vision, memo
         "[Figure fig2 (line_chart) on page 2]",
     ]
     assert len({f.content for f in filled}) == 3  # distinct content hashes, distinct anchors
+
+
+def test_formula_enrichment_beyond_the_cap_is_flagged_and_stage_timings_reach_the_cir(
+    fake_vision, memory_store
+):
+    import json
+
+    from backend.routes.a1_office import convert as convert_module
+
+    def convert_with_formulas(data, run, name):
+        result = convert_module.convert_run(data, run, name)
+        budget = convert_module._BUDGET.get()
+        budget.used, budget.skipped = budget.limit, 7  # as if the page held limit + 7 formulas
+        return result
+
+    name, data = fixture("doi_paper")
+    store = stores(memory_store)
+    doc = process_pdf(
+        data,
+        blob_sha256=SHA,
+        file_name=name,
+        folder=folder("APS - Library", "Preheat", name, SourceOrigin.EXTERNAL_KEPT),
+        vision=fake_vision(triage_page=triage()),
+        stores=store,
+        convert=convert_with_formulas,
+        enrichment_max=3,
+    )
+    [flag] = [
+        f for f in doc.flags if f.suggested_resolution and "enrichment" in f.suggested_resolution.rationale
+    ]
+    assert (flag.flag_type, flag.severity) == (FlagType.LOW_CONFIDENCE_EXTRACTION, FlagSeverity.SOFT)
+    assert "skipped for 7 of 10 items (cap 3 per document)" in flag.suggested_resolution.rationale
+    timings = json.loads(store.put_cir.objects["timings.json"])
+    assert {"preflight", "triage", "convert", "figures", "tables", "handwriting", "page_renders"} <= set(
+        timings["stages"]
+    )
+    assert timings["enrichment"] == {"limit": 3, "used": 3, "skipped": 7}
+    assert timings["runs"][0]["pages"] == [1, 1] and "layout" in timings["runs"][0]["docling"]
+
+
+def test_the_enrichment_cap_counts_per_document_and_lets_everything_through_outside_one():
+    from backend.routes.a1_office.convert import cap_enrichment, enrichment_budget
+
+    class FakeModel:
+        def prepare_element(self, conv_res, element):
+            return element if element != "text" else None
+
+    model = FakeModel()
+    cap_enrichment(model)
+    cap_enrichment(model)  # idempotent: wrapping twice does not double count
+    with enrichment_budget(2) as budget:
+        kept = [model.prepare_element(conv_res=None, element=e) for e in ["f1", "text", "f2", "f3", "c1"]]
+    assert kept == ["f1", None, "f2", None, None] and (budget.used, budget.skipped) == (2, 2)
+    assert model.prepare_element(conv_res=None, element="f9") == "f9"  # no document budget: untouched
