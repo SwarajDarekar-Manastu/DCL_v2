@@ -58,6 +58,9 @@ class InspectVisualsArgs(BaseModel):
     components: list[str] = []
     k: int = Field(default=6, ge=1, le=20)
     similar_to_asset_id: uuid.UUID | None = None
+    similar_to_vector: list[float] | None = Field(
+        default=None, description="image embedding of a photo the user attached (answer-time only)"
+    )
     relook_question: str | None = None
     user_language: str = "en"
 
@@ -106,6 +109,18 @@ def similar_images(session: Session, asset_id: uuid.UUID, filters: SearchFilters
     return list(session.execute(statement, {**where.params, "ref": asset_id, "k": k}))
 
 
+def similar_to_vector(session: Session, vector: list[float], filters: SearchFilters, k: int) -> list[Any]:
+    """kNN on image embeddings from an attached photo's embedding (file 07 §9.7; the photo is not stored)."""
+    where = build_where(filters, Scope.CHILD)
+    literal = "[" + ",".join(f"{v:.7f}" for v in vector) + "]"
+    statement = text(
+        f"SELECT {NODE_COLUMNS}, 1 - (image_embedding <=> CAST(:v AS halfvec(768))) AS similarity "  # noqa: S608
+        f"FROM document_nodes WHERE {where.sql} AND image_embedding IS NOT NULL "
+        "ORDER BY image_embedding <=> CAST(:v AS halfvec(768)) LIMIT :k"
+    ).bindparams(*where.binds)
+    return list(session.execute(statement, {**where.params, "v": literal, "k": k}))
+
+
 def _assets(session: Session, asset_ids: list[uuid.UUID]) -> dict[uuid.UUID, tuple[str, str | None]]:
     """asset_id → (web URI, thumb URI) where a thumb of the same blob exists."""
     if not asset_ids:
@@ -148,8 +163,12 @@ def inspect_visuals(
             key = (hit.doc_id, hit.anchor)
             by_key.setdefault(key, {"hit": hit})
         rankings.append([(h.doc_id, h.anchor) for h in found.hits])
-    if args.similar_to_asset_id:
-        rows = similar_images(session, args.similar_to_asset_id, filters, args.k * 2)
+    if args.similar_to_asset_id or args.similar_to_vector:
+        rows = (
+            similar_to_vector(session, args.similar_to_vector, filters, args.k * 2)
+            if args.similar_to_vector
+            else similar_images(session, args.similar_to_asset_id, filters, args.k * 2)
+        )
         if not rows:
             warnings.append("the reference image has no image embedding; similarity search skipped")
         documents = _documents(session, list({r.doc_id for r in rows}))

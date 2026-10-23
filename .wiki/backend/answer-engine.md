@@ -97,6 +97,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-23 | S2 | Chat attachments (file 07 §9.7): `tools/attachments.py` fetches each presigned upload once (25 MB cap, ≤ 5 files), text files used as they are, PDFs and images read by Gemini (`attachment.v1`), office files via LibreOffice to PDF; evidence `user_attachment` with provenance `user_provided` ("<name> (your attachment)"), never indexed; an attached photo with a visual question runs T3 by its image embedding (`InspectVisualsArgs.similar_to_vector`); live: an attached PDF read through the gateway; 4 unit + 1 workflow + 1 DB tests |
 | 2026-10-23 | S2 | Citation markers: `synthesis.number_citations` turns `[E3]`/`[E1, E4]` into `[1]`/`[1, 2]` numbered by first appearance, one number per source, markers without a source dropped, so markers and citation events match one to one (also on the extractive path); 2 tests |
 | 2026-10-23 | S2 | `answer_traces` writer and the trace routes (Show trace, Report issue with the wrong-unit CONFLICT); live: one stack answer wrote its row; 1 DB test |
 | 2026-10-23 | S2 | Prompt registry API (list, show, diff, run on sample) over the prompt files; 4 tests |
