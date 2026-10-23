@@ -49,6 +49,7 @@ from backend.routes.a1_office.convert import (
     low_ocr_pages,
     plan_runs,
 )
+from backend.routes.a1_office.crops import SheetItem, clip_to_layout, contact_sheet, pad_into_whitespace
 from backend.routes.a1_office.figures import read_figures
 from backend.routes.a1_office.handwriting import transcribe_regions
 from backend.routes.a1_office.metadata import extract_metadata, humanize, plan_conflicts
@@ -56,6 +57,7 @@ from backend.routes.a1_office.preflight import (
     Preflight,
     PreflightFailure,
     preflight,
+    render_crop,
     render_page,
 )
 from backend.routes.a1_office.structure import PageContext, build_structure
@@ -310,10 +312,24 @@ def process_pdf(
             cloud_allowed=cloud_allowed,
             critical_field_patterns=critical_field_patterns,
             put_asset=stores.put_asset,
+            page_sizes={p.page_no: (p.width_pt, p.height_pt) for p in checked.pages},
         )
-    nodes = [n.model_copy(update={"ordinal": i}) for i, n in enumerate(fill_empty_figures(handwriting.nodes))]
+    with clock("table_crops"):
+        cropped = table_crops(
+            handwriting.nodes, pdf_bytes=pdf, blob_sha256=blob_sha256, put_asset=stores.put_asset
+        )
+    nodes = [n.model_copy(update={"ordinal": i}) for i, n in enumerate(fill_empty_figures(cropped.nodes))]
     flags += figures.flags + tables.flags + handwriting.flags
-    assets += figures.assets + handwriting.assets
+    assets += figures.assets + handwriting.assets + cropped.assets
+    sheet = contact_sheet(
+        figures.crops + cropped.crops + handwriting.crops, f"{file_name} · {blob_sha256[:12]} · crops"
+    )
+    qa = {
+        "crops": len(figures.crops) + len(cropped.crops) + len(handwriting.crops),
+        "handwriting_rejected": len(handwriting.rejected),
+        "contact_sheet": stores.put_asset(f"qa/{blob_sha256}/crops.png", sheet) if sheet else None,
+    }
+    stores.put_cir("qa/crops.json", json.dumps({**qa, "rejected": handwriting.rejected}).encode())
 
     page_text = {
         p: "\n".join(n.content for n in nodes if n.page_no == p) for p in range(1, checked.page_count + 1)
@@ -330,6 +346,7 @@ def process_pdf(
     )
     flags += metadata.flags
     flags += plan_conflicts(folder, furniture, page_text.get(1, ""))
+    fields = metadata.fields.model_copy(update={"catalog": {**(metadata.fields.catalog or {}), "qa": qa}})
 
     render_started = time.monotonic()
     for page_no in range(1, checked.page_count + 1):
@@ -385,7 +402,7 @@ def process_pdf(
             route=Route.A1,
             parser_version=PARSER_VERSION,
             cir_uri=cir_uri,
-            document=metadata.fields,
+            document=fields,
             nodes=nodes,
             assets=assets,
             mentions=structure.mentions,
@@ -393,6 +410,47 @@ def process_pdf(
             unit_hashes=[UnitHash(unit="page", key=str(p), sha256=h) for p, h in sorted(hashes.items())],
         )
     )
+
+
+TABLE_PAD = 0.0
+
+
+@dataclass
+class TableCrops:
+    nodes: list[ProcessedNode]
+    assets: list[ProcessedAsset]
+    crops: list[SheetItem]
+
+
+def table_crops(
+    nodes: list[ProcessedNode], *, pdf_bytes: bytes, blob_sha256: str, put_asset: Callable[[str, bytes], str]
+) -> TableCrops:
+    """A `table_crop` asset for every table node that has none (A1.5 QA and the reviewer's table pane),
+    clipped and padded like a figure crop, at 300 dpi."""
+    layout = [(n.ref, b) for n in nodes for b in n.bboxes]
+    out, assets, crops = [], [], []
+    for node in nodes:
+        if node.node_type != NodeType.TABLE or node.asset_ref or not node.bboxes:
+            out.append(node)
+            continue
+        others = [b for ref, b in layout if ref != node.ref]
+        box = pad_into_whitespace(clip_to_layout(node.bboxes[0], others), others, TABLE_PAD)
+        png = render_crop(pdf_bytes, box, dpi=300, pad_px=0)
+        ref = f"asset:{node.ref}"
+        uri = put_asset(f"tables/{blob_sha256}/{node.ref.replace('/', '_')}.png", png)
+        assets.append(
+            ProcessedAsset(
+                ref=ref,
+                kind=AssetKind.TABLE_CROP,
+                minio_uri=uri,
+                page_no=box.page_no,
+                bbox=box.model_dump(exclude={"page_no"}),
+                **image_fields(png),
+            )
+        )
+        crops.append(SheetItem(png, f"table · {node.ref}"))
+        out.append(node.model_copy(update={"asset_ref": ref}))
+    return TableCrops(out, assets, crops)
 
 
 class StageClock:

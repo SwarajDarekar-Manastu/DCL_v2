@@ -364,3 +364,21 @@ def test_the_enrichment_cap_counts_per_document_and_lets_everything_through_outs
         kept = [model.prepare_element(conv_res=None, element=e) for e in ["f1", "text", "f2", "f3", "c1"]]
     assert kept == ["f1", None, "f2", None, None] and (budget.used, budget.skipped) == (2, 2)
     assert model.prepare_element(conv_res=None, element="f9") == "f9"  # no document budget: untouched
+
+
+def test_tables_get_a_crop_and_the_document_a_contact_sheet(fake_vision, memory_store):
+    name, data = fixture("german_datasheet")
+    store = stores(memory_store)
+    doc = process_pdf(
+        data,
+        blob_sha256=SHA,
+        file_name=name,
+        folder=folder("APS - Library", "Vendor brochures/DE", name, SourceOrigin.EXTERNAL_KEPT),
+        vision=fake_vision(triage_page=triage(language="de")),
+        stores=store,
+    )
+    (table,) = [n for n in doc.nodes if n.node_type is NodeType.TABLE]
+    (crop,) = [a for a in doc.assets if a.ref == table.asset_ref]
+    assert crop.kind == "table_crop" and crop.minio_uri.startswith(f"s3://dcl-assets/tables/{SHA}/")
+    qa = doc.document.catalog["qa"]
+    assert qa["contact_sheet"] == f"s3://dcl-assets/qa/{SHA}/crops.png" and qa["crops"] >= 1
