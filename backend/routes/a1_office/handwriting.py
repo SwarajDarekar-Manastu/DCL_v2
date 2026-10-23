@@ -34,7 +34,7 @@ from backend.llm_engine.gemini_types import Image
 from backend.llm_engine.vision.schemas import HandwritingKind
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType
 from backend.routes.a1_office.assets import image_fields
-from backend.routes.a1_office.crops import SheetItem, crop_quality, inside_any
+from backend.routes.a1_office.crops import CROP_DPI, SheetItem, crop_quality, inside_any
 from backend.routes.a1_office.preflight import render_crop
 from backend.routes.a1_office.triage import PageDecision
 
@@ -147,7 +147,9 @@ def transcribe_regions(
                 continue
             label_node = nearest_label(box, texts)
             label = label_text(label_node)
-            crop = render_crop(pdf_bytes, box, dpi=300, pad_px=20)
+            crop = render_crop(
+                pdf_bytes, box, dpi=CROP_DPI, pad_px=13
+            )  # 13 px at 200 dpi ≈ the former 20 at 300
             result.crops.append(SheetItem(crop, f"handwriting · hw/{crop_id}"))
             uri = put_asset(f"crops/{blob_sha256}/{crop_id}.png", crop)
             asset_ref = f"asset:{crop_id}"

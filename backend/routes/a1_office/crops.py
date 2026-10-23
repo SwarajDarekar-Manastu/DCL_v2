@@ -17,7 +17,9 @@ from dataclasses import dataclass
 
 from backend.dispatcher.contract import PageBox
 
-MIN_SIDE_PX = 48
+CROP_DPI = 200  # stored crops: Pillow from layout boxes at 150–200 dpi (DECISIONS 2026-10-23)
+MIN_SIDE_PX = 48  # measured at GATE_DPI: 48 px at 300 dpi ≈ 11.5 pt, a small handwritten digit
+GATE_DPI = 300
 MIN_AREA_FRACTION = 0.003
 MAX_ASPECT = 12.0
 CONTAINED = 0.8  # share of another item's area inside the box for it to count as part of the figure
@@ -88,7 +90,7 @@ class Quality:
     reason: str | None = None
 
 
-def crop_quality(box: PageBox, page_size_pt: tuple[float, float], dpi: int = 300) -> Quality:
+def crop_quality(box: PageBox, page_size_pt: tuple[float, float], dpi: int = GATE_DPI) -> Quality:
     width_px = (box.x1 - box.x0) * page_size_pt[0] * dpi / 72
     height_px = (box.y1 - box.y0) * page_size_pt[1] * dpi / 72
     if min(width_px, height_px) < MIN_SIDE_PX:

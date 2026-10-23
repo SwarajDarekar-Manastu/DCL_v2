@@ -49,7 +49,13 @@ from backend.routes.a1_office.convert import (
     low_ocr_pages,
     plan_runs,
 )
-from backend.routes.a1_office.crops import SheetItem, clip_to_layout, contact_sheet, pad_into_whitespace
+from backend.routes.a1_office.crops import (
+    CROP_DPI,
+    SheetItem,
+    clip_to_layout,
+    contact_sheet,
+    pad_into_whitespace,
+)
 from backend.routes.a1_office.figures import read_figures
 from backend.routes.a1_office.handwriting import transcribe_regions
 from backend.routes.a1_office.metadata import extract_metadata, humanize, plan_conflicts
@@ -435,7 +441,7 @@ def table_crops(
             continue
         others = [b for ref, b in layout if ref != node.ref]
         box = pad_into_whitespace(clip_to_layout(node.bboxes[0], others), others, TABLE_PAD)
-        png = render_crop(pdf_bytes, box, dpi=300, pad_px=0)
+        png = render_crop(pdf_bytes, box, dpi=CROP_DPI, pad_px=0)
         ref = f"asset:{node.ref}"
         uri = put_asset(f"tables/{blob_sha256}/{node.ref.replace('/', '_')}.png", png)
         assets.append(

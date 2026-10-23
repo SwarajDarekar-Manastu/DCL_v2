@@ -27,7 +27,13 @@ from backend.dispatcher.contract import (
 from backend.llm_engine.gemini_types import Image
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType
 from backend.routes.a1_office.assets import image_fields
-from backend.routes.a1_office.crops import SheetItem, clip_to_layout, is_full_page, pad_into_whitespace
+from backend.routes.a1_office.crops import (
+    CROP_DPI,
+    SheetItem,
+    clip_to_layout,
+    is_full_page,
+    pad_into_whitespace,
+)
 
 PLOT_CLASSES = frozenset({"bar_chart", "box_plot", "line_chart", "pie_chart", "scatter_plot"})
 SCHEMATIC_CLASSES = frozenset({"engineering_drawing", "flow_chart"})
@@ -159,7 +165,7 @@ def read_figures(
 
             others = [b for ref, b in layout if ref != node.ref]
             box = pad_into_whitespace(clip_to_layout(box, others), others, CROP_PAD)
-            crop = render_crop(pdf_bytes, box, dpi=300, pad_px=0)
+            crop = render_crop(pdf_bytes, box, dpi=CROP_DPI, pad_px=0)
             result.crops.append(SheetItem(crop, f"{node.metadata.get('class') or figure_class} · {node.ref}"))
             kind = AssetKind.PHOTO_IN_DOC if figure_class in PHOTO_CLASSES else AssetKind.FIGURE_CROP
             uri = put_asset(f"figures/{blob_sha256}/{node.ref}.png", crop)

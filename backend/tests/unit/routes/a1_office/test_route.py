@@ -380,5 +380,8 @@ def test_tables_get_a_crop_and_the_document_a_contact_sheet(fake_vision, memory_
     (table,) = [n for n in doc.nodes if n.node_type is NodeType.TABLE]
     (crop,) = [a for a in doc.assets if a.ref == table.asset_ref]
     assert crop.kind == "table_crop" and crop.minio_uri.startswith(f"s3://dcl-assets/tables/{SHA}/")
+    page_width_pt = 595.0  # the fixture is A4
+    expected_px = (crop.bbox.x1 - crop.bbox.x0) * page_width_pt * 200 / 72  # stored at 200 dpi
+    assert abs(crop.width - expected_px) <= 3
     qa = doc.document.catalog["qa"]
     assert qa["contact_sheet"] == f"s3://dcl-assets/qa/{SHA}/crops.png" and qa["crops"] >= 1
