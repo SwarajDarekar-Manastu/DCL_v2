@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §1, §2 |
-| Last updated | 2026-10-22 |
+| Last updated | 2026-10-23 |
 
 ## Purpose
 
@@ -54,6 +54,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/dispatcher/routing.py`
 - `backend/dispatcher/adapters.py`
 - `backend/dispatcher/office_run.py`
+- `backend/dispatcher/location.py`
+- `backend/tests/unit/dispatcher/test_derived.py`
 - `backend/tests/unit/dispatcher/test_office_run.py`
 - `backend/celery_redis/tasks_process.py`
 - `backend/dispatcher/contract.py`
@@ -81,6 +83,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | S1 | Type resolution (magic bytes, sniffers, extension refinement, mismatch); 39 tests |
 | 2026-10-22 | S1 | Adapter registry, release of parked documents, enqueue after commit (Route C LabJack first) |
 | 2026-10-22 | S1 | Route A1 (PDF) adapter on cpu_parse with `office_run.py`; `folder_tree` public (settings previews); `Suggestion.resolution` optional (explicit no-suggestion) |
+| 2026-10-23 | S1 | `dispatch_derived` and `_new_document` (one creation path for files and derived blobs); `location.py`; contract `ProcessedDocument.derived_blobs` (`DerivedBlob`, base64 in JSON); `LowConfidenceEvidence.page_ocr_text` and `ExtractionCrop.ocr_text` for the viewer's text toggle |
 
 ## Related
 

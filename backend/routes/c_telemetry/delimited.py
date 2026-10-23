@@ -56,6 +56,8 @@ class Delimited:
     footer: list[list[str]] = field(default_factory=list)
     delimiter: str = ","
     decimal_comma: bool = False
+    header_lines: tuple[int, int] | None = None  # (first, last) file line of the header record
+    row_lines: list[tuple[int, int]] = field(default_factory=list)  # parallel to ``rows``
 
     def number(self, text: str) -> float:
         text = text.strip()
@@ -85,9 +87,17 @@ def read_delimited(data: bytes) -> Delimited:
         delimiter = csv.Sniffer().sniff(sample, delimiters=DELIMITERS).delimiter
     except csv.Error:
         delimiter = max(DELIMITERS, key=sample.count)
-    rows = [[cell.strip() for cell in row] for row in csv.reader(io.StringIO(text), delimiter=delimiter)]
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    rows: list[list[str]] = []
+    spans: list[tuple[int, int]] = []  # file lines of each record (a quoted cell may span lines)
+    last_line = 0
+    for row in reader:
+        rows.append([cell.strip() for cell in row])
+        spans.append((last_line + 1, reader.line_num))
+        last_line = reader.line_num
     while rows and not any(rows[-1]):
         rows.pop()
+        spans.pop()
     header_index = None
     for i, row in enumerate(rows[:-1]):
         filled = [c for c in row if c]
@@ -107,15 +117,31 @@ def read_delimited(data: bytes) -> Delimited:
     ]
     preamble = [line.replace('"', "") for line in preamble]
     header = rows[header_index] if rows else []
-    body = [r for r in rows[header_index + 1 :] if any(r)]
+    kept = [
+        (r, span)
+        for r, span in zip(rows[header_index + 1 :], spans[header_index + 1 :], strict=True)
+        if any(r)
+    ]
+    body = [r for r, _ in kept]
+    body_lines = [span for _, span in kept]
     numeric_columns = sum(
         1 for j in range(len(header)) if body and is_number(body[0][j] if j < len(body[0]) else "")
     )
     footer: list[list[str]] = []
     while body and numeric_columns and _numeric(body[-1]) < numeric_columns:
         footer.insert(0, body.pop())
+        body_lines.pop()
     decimal_comma = delimiter == ";" and any(re.fullmatch(r"-?\d+,\d+", c) for r in body[:20] for c in r)
-    return Delimited(preamble, header, body, footer, delimiter, decimal_comma)
+    return Delimited(
+        preamble,
+        header,
+        body,
+        footer,
+        delimiter,
+        decimal_comma,
+        header_lines=spans[header_index] if rows else None,
+        row_lines=body_lines,
+    )
 
 
 def _seconds(values: list[str]) -> np.ndarray | None:
@@ -232,6 +258,7 @@ def as_table(table: Delimited, name: str) -> Table:
         rows=[table.header, *table.rows],
         caption=PurePosixPath(name).stem,
         page_note="; ".join(table.preamble) or None,
+        row_lines=[table.header_lines, *table.row_lines] if table.header_lines else None,
     )
 
 

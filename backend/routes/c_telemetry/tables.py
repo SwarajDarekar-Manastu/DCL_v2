@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from typing import Any
 
+from openpyxl.utils import get_column_letter
+
 from backend.common.units import UnitError, parse_unit
 from backend.dispatcher.contract import ChannelStats, Flag, FlagAnchor, ProcessedNode, UnitTelemetryEvidence
 from backend.postgres.enums import FlagSeverity, FlagType, NodeSource, NodeType
@@ -86,6 +88,25 @@ class Table:
     hidden: bool = False
     page_note: str | None = None
     error_cells: list[str] = field(default_factory=list)
+    # Where each row of ``rows`` came from, for stable anchors (file 04 §4.4): sheet row numbers with
+    # the island's column span (workbooks), or (first, last) file lines (CSV; a quoted cell may wrap).
+    row_lines: list[tuple[int, int]] | None = None
+    col_span: tuple[int, int] | None = None
+
+    def row_locator(self, index: int) -> dict[str, Any]:
+        """Locator of ``rows[index]``: a one-row ``cell_range`` on a sheet, else the file lines."""
+        if not self.row_lines or index >= len(self.row_lines):
+            return {}
+        first, last = self.row_lines[index]
+        if self.col_span is not None:
+            c0, c1 = self.col_span
+            return {"cell_range": f"{get_column_letter(c0)}{first}:{get_column_letter(c1)}{last}"}
+        return {"line_start": first, "line_end": last}
+
+    def table_locator(self) -> dict[str, Any]:
+        if self.col_span is not None or not self.row_lines:
+            return {}
+        return {"line_start": self.row_lines[0][0], "line_end": self.row_lines[-1][1]}
 
     @property
     def header(self) -> list[str]:
@@ -97,8 +118,11 @@ class Table:
 
     def column_units(self) -> dict[int, str]:
         units = {i: u for i, h in enumerate(self.header) if (u := header_unit(h))}
-        if self.body:
+        if self.body and not self.has_unit_column():
+            # A units row holds no numbers; a table with a Unit column states units per row instead.
             row = [cell_text(v) for v in self.body[0]]
+            if any(t and is_number(t) for t in row):
+                return units
             parsed = {}
             for i, text in enumerate(row):
                 if text and not is_number(text):
@@ -110,6 +134,8 @@ class Table:
             if parsed and len(parsed) >= max(1, len([t for t in row if t]) // 2):
                 units.update({i: u for i, u in parsed.items() if i not in units})
                 self.rows = [self.rows[0], *self.body[1:]]  # the units row is not data
+                if self.row_lines:
+                    self.row_lines = [self.row_lines[0], *self.row_lines[2:]]
         return units
 
     def has_unit_column(self) -> bool:
@@ -139,6 +165,7 @@ def table_nodes(table: Table, ref: str, ordinal: int, breadcrumb: str) -> list[P
             content=table_html(table),
             sheet_name=table.sheet,
             cell_range=table.cell_range,
+            **table.table_locator(),
             source=NodeSource.STRUCTURED,
             metadata={
                 k: v
@@ -170,6 +197,7 @@ def table_nodes(table: Table, ref: str, ordinal: int, breadcrumb: str) -> list[P
                 breadcrumb=breadcrumb,
                 content=(f"{title} | " if title else "") + " | ".join(cells),
                 sheet_name=table.sheet,
+                **table.row_locator(i + 1),
                 source=NodeSource.STRUCTURED,
             )
         )

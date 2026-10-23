@@ -225,3 +225,41 @@ def test_list_filters_by_prefix(client):
     client.put("/settings", json={"changes": [{"key": "answer.proprietary_terms", "value": ["X"]}]})
     items = client.get("/settings", params={"prefix": "answer."}).json()["items"]
     assert [(i["key"], i["version"], i["value"]) for i in items] == [("answer.proprietary_terms", 1, ["X"])]
+
+
+def test_model_prices_are_validated_and_feed_the_client(client, session):
+    bad = client.put(
+        "/settings", json={"changes": [{"key": "models.prices", "value": {"m": {"input_per_mtok": -1}}}]}
+    )
+    assert bad.status_code == 422 and set(bad.json()["detail"]["errors"]) == {"models.prices"}
+    prices = {"gemini-3.8-flash": {"input_per_mtok": 0.3, "output_per_mtok": 2.5}}
+    assert (
+        client.put("/settings", json={"changes": [{"key": "models.prices", "value": prices}]}).status_code
+        == 200
+    )
+    (price,) = pc.model_prices(session).values()
+    assert (price.input_per_mtok, price.output_per_mtok, price.cached_per_mtok) == (0.3, 2.5, 0.0)
+
+
+def test_processing_scope_preview_estimates_cost_from_the_ledger(client, session):
+    import uuid
+
+    from backend.postgres.models import LlmCall
+
+    session.add(Blob(sha256="e" * 64, size_bytes=7, minio_uri="s3://dcl-raw/e"))
+    session.flush()
+    session.add(_item("i8", FOLDER_B, "z.pdf", "LANDED", size=7, blob="e" * 64, mime="application/pdf"))
+    for _doc in range(5):  # five documents at $0.02, each in two calls
+        doc = uuid.uuid4()
+        for _ in range(2):
+            session.add(
+                LlmCall(model="m", purpose="triage_page", doc_id=doc, cost_estimate=0.01, status="ok")
+            )
+    pc.set_value(session, pc.PROCESSING_SCOPE, [FOLDER_A], "seed")
+    session.commit()
+    batch = {"changes": [{"key": pc.PROCESSING_SCOPE, "value": [FOLDER_A, FOLDER_B]}]}
+    [impact] = client.post("/settings/preview", json=batch).json()["impacts"]
+    assert (impact["estimated_cost_usd"], impact["cost_note"]) == (
+        0.02,
+        "mean $0.0200 per document over 5 documents",
+    )

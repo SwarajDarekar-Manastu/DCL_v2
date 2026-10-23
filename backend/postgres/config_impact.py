@@ -12,7 +12,8 @@ that is not picked up by the next run on its own:
 - ``gate.*``: applies to new and changed items at the next delta; the preview counts landed items the new
   gate would reject (they stay indexed).
 
-No Gemini cost estimate yet: it needs the ``llm_calls`` ledger and model prices, which do not exist.
+The Gemini cost estimate for widening ``processing.scope`` is the mean cost per document over the priced
+``llm_calls`` rows (at least ``COST_SAMPLE_MIN`` documents) times the files that enter; null otherwise.
 """
 
 from collections import Counter
@@ -31,7 +32,8 @@ from backend.sync.gate import GateConfig, GateInput, gate_item
 from backend.sync.scope import HELD_BY_DOWNLOAD_SCOPE, in_scope
 
 NOT_FETCHED = (DriveItemStatus.PENDING_DOWNLOAD, DriveItemStatus.DOWNLOAD_FAILED)
-NO_COST = "no llm_calls ledger or model prices yet; counts only"
+NO_COST = "no priced llm_calls yet (set models.prices); counts only"
+COST_SAMPLE_MIN = 5  # documents with priced calls before an average is shown
 
 
 @dataclass
@@ -127,14 +129,33 @@ def _processing_scope_impact(session: Session, key: str, scope: list[str]) -> Im
             seen.add(item.blob_sha256)
             leaving += 1
     size, by_ext = _sizes(entering)
+    per_doc, sample = _mean_cost_per_document(session)
     return Impact(
         key,
         f"{len(entering)} landed files will be processed; {leaving} waiting files will no longer be",
         {"to_process": len(entering), "no_longer_processed": leaving},
         size,
         by_ext,
-        cost_note=NO_COST,
+        estimated_cost_usd=round(per_doc * len(entering), 2) if per_doc is not None else None,
+        cost_note=f"mean ${per_doc:.4f} per document over {sample} documents"
+        if per_doc is not None
+        else NO_COST,
     )
+
+
+def _mean_cost_per_document(session: Session) -> tuple[float | None, int]:
+    from sqlalchemy import func
+
+    from backend.postgres.models import LlmCall
+
+    per_doc = (
+        select(func.sum(LlmCall.cost_estimate).label("cost"))
+        .where(LlmCall.doc_id.is_not(None), LlmCall.cost_estimate.is_not(None))
+        .group_by(LlmCall.doc_id)
+        .subquery()
+    )
+    mean, sample = session.execute(select(func.avg(per_doc.c.cost), func.count())).one()
+    return (float(mean), sample) if sample >= COST_SAMPLE_MIN and mean is not None else (None, sample)
 
 
 def _route_impact(session: Session, key: str, enabled: bool) -> Impact:

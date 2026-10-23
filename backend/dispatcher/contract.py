@@ -20,11 +20,19 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from backend.postgres.enums import (
     AmbientCondition,
     AssetKind,
+    BlobDerivationKind,
     DocKind,
     FlagSeverity,
     FlagType,
@@ -479,6 +487,9 @@ class ExtractionCrop(_Model):
     alternatives: list[str] = []
     confidence: float | None = Field(default=None, ge=0, le=1)
     printed_label: str | None = None
+    ocr_text: str | None = Field(
+        default=None, description="the OCR engine's text of this crop (viewer text toggle)"
+    )
 
 
 class LowConfidenceEvidence(_Model):
@@ -488,6 +499,9 @@ class LowConfidenceEvidence(_Model):
     crops: list[ExtractionCrop] = []
     table_a_html: str | None = None
     table_b_html: str | None = None
+    page_ocr_text: str | None = Field(
+        default=None, description="the page's OCR text, shown by the PageViewer's text toggle (file 08 §4.2)"
+    )
 
 
 class SensitiveEvidence(_Model):
@@ -762,6 +776,38 @@ class TelemetryRunRecord(_Model):
     channels: list[TelemetryChannelRecord] = []
 
 
+# ---------------------------------------------------------------- derived blobs
+
+
+DERIVED_KINDS = frozenset(
+    {BlobDerivationKind.EMBEDDED_OBJECT, BlobDerivationKind.ARCHIVE_MEMBER, BlobDerivationKind.PDF_ATTACHMENT}
+)
+
+
+class DerivedBlob(_Model):
+    """A file found inside the primary one (an Excel object in a Word file, an archive member, a PDF
+    attachment). The commit path stores it in ``dcl-raw`` and ``blob_derivations``; the next dispatch
+    makes it a document of its own. Give the bytes (base64 in JSON), or the sha256 of a blob a route
+    already stored."""
+
+    member_path: str = Field(min_length=1, description="path inside the parent, e.g. word/embeddings/x.xlsx")
+    model_config = ConfigDict(extra="forbid", frozen=True, ser_json_bytes="base64", val_json_bytes="base64")
+
+    data: bytes | None = None
+    blob_sha256: str | None = Field(default=None, pattern=SHA256_HEX.pattern)
+    kind: BlobDerivationKind = BlobDerivationKind.EMBEDDED_OBJECT
+
+    @model_validator(mode="after")
+    def _bytes_or_sha(self) -> Self:
+        if (self.data is None) == (self.blob_sha256 is None):
+            raise ValueError("a derived blob carries either data or blob_sha256")
+        if self.kind not in DERIVED_KINDS:
+            raise ValueError(f"kind {self.kind} is not a derived-file kind")
+        if self.member_path.startswith("/") or ".." in self.member_path.split("/"):
+            raise ValueError("member_path is relative and stays inside the parent")
+        return self
+
+
 # ---------------------------------------------------------------- the contract
 
 
@@ -779,6 +825,7 @@ class ProcessedDocument(_Model):
     mentions: list[Mention] = []
     flags: list[Flag] = []
     unit_hashes: list[UnitHash] = []
+    derived_blobs: list[DerivedBlob] = []
 
     @model_validator(mode="after")
     def _references_resolve(self) -> Self:
@@ -788,6 +835,7 @@ class ProcessedDocument(_Model):
         node_refs = _unique([node.ref for node in self.nodes], "node ref")
         asset_refs = _unique([asset.ref for asset in self.assets], "asset ref")
         _unique([flag.fingerprint for flag in self.flags], "flag fingerprint")
+        _unique([blob.member_path for blob in self.derived_blobs], "derived member_path")
         for node in self.nodes:
             if node.parent_ref is not None and node.parent_ref not in node_refs:
                 raise ValueError(f"node {node.ref!r}: parent_ref {node.parent_ref!r} is not a node")

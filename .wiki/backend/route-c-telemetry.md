@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §7; 05 §4.4; 06 §4 |
-| Last updated | 2026-10-22 |
+| Last updated | 2026-10-23 |
 
 ## Purpose
 
@@ -89,6 +89,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | t0 on coarse data: sustain ≥ 2 samples, rise onset instead of the steep part (2 Hz DAQami; S2 report) |
 | 2026-10-22 | S1 | `suggest.py`: every telemetry UNIT_AMBIGUITY gets `suggested_resolution` (stated raw unit 0.6, same-name sibling unit 0.5, unit in the channel name 0.4, else an explicit no-suggestion with the .cfg scaling); 5 tests |
 | 2026-10-22 | S1 | Step 2: migration 0009, .cfg evidence, normalization, t0, metrics, bounds, commit, resume from raw.parquet, retroactive pass; 39 Route C tests |
+| 2026-10-23 | S1 | Stable-anchor locators on table/table_row nodes (sheet + one-row cell_range; CSV file lines); first data row of tables with a Unit column no longer dropped; one-off `dcl.process.relocate_route_c_tables`; `test_locators.py` |
 
 ## Related
 

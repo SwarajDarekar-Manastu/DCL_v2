@@ -42,10 +42,12 @@ M2_M4_TABLES = {
     "telemetry_channels",
 }
 AUTH_TABLES = {"users"}  # local password RBAC (migration 0010)
-EXPECTED_TABLES = M1_TABLES | M2_M4_TABLES | AUTH_TABLES
+LEDGER_TABLES = {"llm_calls", "answer_traces"}  # migration 0012
+EXPECTED_TABLES = M1_TABLES | M2_M4_TABLES | AUTH_TABLES | LEDGER_TABLES
 
 # Every ✓ column of file 05 and the enum it must follow.
 CHECKED_COLUMNS: dict[tuple[str, str], type[StrEnum]] = {
+    ("llm_calls", "status"): enums.LlmCallStatus,
     ("sync_roots", "status"): enums.SyncRootStatus,
     ("sync_roots", "auth_status"): enums.AuthStatus,
     ("sync_roots", "default_source_origin"): enums.SourceOrigin,
@@ -183,6 +185,7 @@ def _item(conn, item_id: str, drive_id: str = "d1", **extra):
 
 def _seed(conn) -> None:
     _insert(conn, "sync_roots", root_name="APU", remote_drive_id="d1", remote_item_id="r1")
+    _insert(conn, "llm_calls", model="gemini-3.8-flash", purpose="triage_page", status="ok")
     _insert(conn, "blobs", sha256=SHA_A, size_bytes=1, minio_uri="s3://a")
     _insert(conn, "blobs", sha256=SHA_B, size_bytes=1, minio_uri="s3://b")
     _insert(conn, "drive_folders", drive_id="d1", item_id="f1", root_name="APU", name="TP07")

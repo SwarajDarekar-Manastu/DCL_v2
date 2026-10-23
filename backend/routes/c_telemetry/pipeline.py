@@ -7,6 +7,7 @@ ACTIVE_WITH_SOFT_FLAGS). Without an indexer the result is kept as ``{sha}/C/v1/p
 """
 
 import json
+import logging
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ from backend.dispatcher.contract import (
     SiblingUnit,
 )
 from backend.dispatcher.folder_context import FolderContext
+from backend.dispatcher.location import primary_location
 from backend.dispatcher.routing import PROCESSED_MARK
 from backend.dispatcher.type_resolution import HEAD_BYTES
 from backend.indexing.commit import Indexer, commit_document
@@ -56,7 +58,9 @@ from backend.routes.c_telemetry.suggest import with_suggestion
 from backend.routes.c_telemetry.tables import header_unit, table_document, unit_flags
 from backend.routes.c_telemetry.tdms import tdms_source
 from backend.routes.c_telemetry.workbook import island_source, read_workbook
-from backend.storage.minio import CIR, TELEMETRY, BucketStore, parse_uri
+from backend.storage.minio import CIR, RAW, TELEMETRY, BucketStore, parse_uri
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -158,12 +162,7 @@ def process_document(
         .join(DocumentSource, DocumentSource.blob_sha256 == Blob.sha256)
         .where(DocumentSource.doc_id == doc_id, DocumentSource.role == DocumentSourceRole.PRIMARY)
     )
-    item = session.scalar(
-        select(DriveItem)
-        .where(DriveItem.blob_sha256 == blob.sha256, DriveItem.status != DriveItemStatus.DELETED)
-        .order_by(DriveItem.path_cached)
-        .limit(1)
-    )
+    item = primary_location(session, blob.sha256)
     if item is None:
         raise LookupError(f"no live location holds the primary blob of {doc_id}")
     context = FolderContext.model_validate(document.folder_context)
@@ -214,12 +213,15 @@ def process_document(
     if not result.halted and indexer is not None:
         try:
             plan = indexer(session, result.document, document.doc_id, cloud_allowed)
-        except ModelServerUnavailable:
+        except ModelServerUnavailable as exc:
+            log.warning("models role unreachable for %s; the clean result is parked: %s", doc_id, exc)
             plan = None  # models role unreachable: park the clean run (Lead 2026-10-22); a re-run commits it
     runs = processed.telemetry_runs
     rows = sum(r.n_rows or 0 for r in runs) if runs else None
     if plan is not None:
-        committed = commit_document(session, document, result.document, plan, PIPELINE_VERSION)
+        committed = commit_document(
+            session, document, result.document, plan, PIPELINE_VERSION, raw=BucketStore(minio, RAW)
+        )
         return RouteCOutcome(doc_id, committed.status, rows, committed.channels, 0, result.soft)
     if not result.halted:
         uri_ = cir.put(
@@ -552,3 +554,23 @@ def _apply_fields(document: Document, processed) -> None:
     document.doc_date = fields.doc_date
     document.date_source = fields.date_source
     document.unit_count = fields.unit_count
+
+
+def unlocated_table_documents(session: Session) -> list[uuid.UUID]:
+    """Committed Route C documents with a table or table_row node that has no stable-anchor locator
+    (neither sheet + cell_range nor line_start): written before rows carried their positions."""
+    from backend.postgres.models import DocumentNode
+
+    rows = session.scalars(
+        select(DocumentNode.doc_id)
+        .join(Document, Document.doc_id == DocumentNode.doc_id)
+        .where(
+            Document.route == "C",
+            Document.status.in_([DocumentStatus.ACTIVE, DocumentStatus.ACTIVE_WITH_SOFT_FLAGS]),
+            DocumentNode.node_type.in_([NodeType.TABLE, NodeType.TABLE_ROW]),
+            DocumentNode.line_start.is_(None),
+            DocumentNode.cell_range.is_(None),
+        )
+        .distinct()
+    ).all()
+    return list(rows)

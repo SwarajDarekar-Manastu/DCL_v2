@@ -943,3 +943,18 @@ Test: `uv sync --frozen --group parse --group dev && uv run pytest -q` exit 0; A
 Blocked on: nothing for A2.
 Needs from others: S1: the `dcl.process.route_a2` runner and adapters. Lead: dependency pins for A2/B/E/G.
 Next: Route B once the grammar pins are in; then E, then G.
+## 2026-10-23 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready (merge requests, one per item, stacked in this order on the branch):
+- Locators (51813e6): Route C table and table_row nodes carry sheet + one-row cell_range (workbooks) or line_start/line_end (CSV). Also fixed: tables with a Unit column lost their first data row. One-off backfill task `dcl.process.relocate_route_c_tables`, to run after the redeploy.
+- NUL guard (b9ca0f9), plus the entity fix 2562a9e: `strip_nul()` at the start of `commit_document`. New entities are now `created_by = system`; the old value 'llm' failed the commit of A1 doc 8a7080bd.
+- Derived blobs (0228dd8):
+  - `ProcessedDocument.derived_blobs` and one shared `register_derived_blobs()` for S2's A1.9 and S6's Route G.
+  - `dispatch_derived` turns children into documents; `primary_location()` gives them their parent's location.
+  - Low-confidence evidence gains `page_ocr_text` and per-crop `ocr_text`.
+- 0012 (18fdcca): `llm_calls` (ledger hook `db_ledger`) and `answer_traces`. Prices are the `models.prices` config key, not a table; the preview estimates the cost of widening the scope from priced `llm_calls`.
+- Real-time sync (1162a9e): `dcl.sync.poll_deltas` (S4: every 300 s) and `dcl.sync.renew_subscriptions` (hourly, a no-op until webhooks are on); receiver `POST /sync/webhook` behind `sync.webhooks_enabled`.
+Test: `uv run pytest -q` with test servers: 1,791 tests, 0 failures, 73 skipped (before the main merge). After the merge: api, schema, benchmark and celery tests green.
+Live: A1 re-run with cloud_allowed and the 6 E13 patents is still running. KR20110128394A FAILED: RapidOCR cannot read `ch_PP-OCRv5_det_mobile.onnx` in the parse image (Permission denied, S4). 7 runs parked while the models role was loading after the stack restart; they are re-enqueued.
+Blocked on: nothing
+Needs from others: S4: readable RapidOCR models in the parse image; apply 0012 after the merge; beat entries for the two tasks; then I run the locator backfill.
+Next: A1 counts and the M2 live check when the batch ends; item 6 (review dry run, undo, simulate)

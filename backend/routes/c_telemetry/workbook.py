@@ -146,14 +146,15 @@ def read_workbook(data: bytes, recalc: Callable[[bytes], bytes] | None = None) -
         if errors:
             book.error_sheets[ws.title] = errors
         for r0, c0, r1, c1 in islands(grid):
-            matrix = [[grid.get((r, c)) for c in range(c0, c1 + 1)] for r in range(r0, r1 + 1)]
+            numbered = [(r, [grid.get((r, c)) for c in range(c0, c1 + 1)]) for r in range(r0, r1 + 1)]
             caption = None
-            first = [v for v in matrix[0] if v is not None]
-            if len(matrix) > 2 and len({cell_text(v) for v in first}) == 1:  # one cell, or one merged title
-                caption, matrix, r0 = cell_text(first[0]), matrix[1:], r0 + 1
-            matrix = [row for row in matrix if any(v is not None for v in row)]
-            if not matrix:
+            first = [v for v in numbered[0][1] if v is not None]
+            if len(numbered) > 2 and len({cell_text(v) for v in first}) == 1:  # one cell, or one merged title
+                caption, numbered, r0 = cell_text(first[0]), numbered[1:], r0 + 1
+            numbered = [(r, row) for r, row in numbered if any(v is not None for v in row)]
+            if not numbered:
                 continue
+            matrix = [row for _, row in numbered]
             cell_range = _range(r0, c0, r1, c1)
             header = [cell_text(v) for v in matrix[0]]
             body = matrix[1:]
@@ -175,6 +176,8 @@ def read_workbook(data: bytes, recalc: Callable[[bytes], bytes] | None = None) -
                     cell_range=cell_range,
                     hidden=hidden,
                     error_cells=[e for e in errors if _inside(e, r0, c0, r1, c1)],
+                    row_lines=[(r, r) for r, _ in numbered],
+                    col_span=(c0, c1),
                 )
             )
     return book

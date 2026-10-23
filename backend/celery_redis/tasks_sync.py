@@ -213,3 +213,43 @@ def token_health() -> bool:
     settings = get_settings()
     with Session(_engine(), expire_on_commit=False) as session, GraphClient(_tokens().access_token) as graph:
         return check_token_health(session, graph, settings.drive_id, settings.folder_ids[0])
+
+
+@app.task(name="dcl.sync.poll_deltas", queue=IO_LIGHT)
+def poll_deltas() -> list[str]:
+    """Near-real-time sync (beat every 5 minutes): one delta run per settled root, that is ACTIVE with a
+    stored delta link, no crawl chain in progress (no ``next_link_checkpoint``) and no run holding the
+    per-root lock (``run_delta`` takes it with SET NX, TTL above the io_light time limit)."""
+    with Session(_engine(), expire_on_commit=False) as session:
+        names = list(
+            session.scalars(
+                select(SyncRoot.root_name).where(
+                    SyncRoot.delta_link.is_not(None),
+                    SyncRoot.next_link_checkpoint.is_(None),
+                    SyncRoot.status == SyncRootStatus.ACTIVE,
+                )
+            )
+        )
+    lock = _redis()
+    names = [name for name in names if not lock.exists(f"sync:lock:{name}")]
+    for name in names:
+        delta_root.apply_async(args=[name], queue=IO_LIGHT)
+    return names
+
+
+@app.task(name="dcl.sync.renew_subscriptions", queue=IO_LIGHT)
+def renew_subscriptions() -> dict[str, str]:
+    """Graph subscriptions per root (file 02 §3.3); a no-op while ``sync.webhooks_enabled`` is off."""
+    from backend.sync.webhooks import SubscriptionClient, ensure_subscriptions, webhook_config
+
+    with Session(_engine(), expire_on_commit=False) as session:
+        config = webhook_config(session, get_settings())
+        if config is None:
+            return {}
+        client = SubscriptionClient(_tokens().access_token)
+        try:
+            outcome = ensure_subscriptions(session, client, config)
+        finally:
+            client.close()
+        session.commit()
+    return outcome
