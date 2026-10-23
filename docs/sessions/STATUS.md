@@ -1103,3 +1103,9 @@ Merged / ready: the 13 formats cases are now route-level acceptance checks (`bac
 Blocked on: nothing
 Needs from others: nothing
 Next: idle until messaged (M5 report JSON from the Lead after S2's fix and S1's re-dispatch)
+
+## 2026-10-23 19:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: gold for S2's document-model comparison study (DECISIONS 2026-10-23). Committed: schema and loader `backend/tests/benchmark/gold/gold.py` (+ `test_gold.py`: grid coverage, normalised boxes, page references). Local only in data/gold/: 31 pages with 318 region boxes over 10 classes, 10 hard tables with 762 cells, 3 equations (1 with .tex truth, 2 S5 transcriptions), 16 handwriting readings; the local annotation tools (render grid, ink-snap, overlay, ruling-line finder, cell extraction from the text layer) stay in data/gold/tools/. Test: `uv run pytest backend/tests/benchmark`
+Blocked on: Lead ruling: the allowlisted LaTeX projects with PDF twins hold one display equation, not 20
+Needs from others: nothing
+Next: idle until messaged
