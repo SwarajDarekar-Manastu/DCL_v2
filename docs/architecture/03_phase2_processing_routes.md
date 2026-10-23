@@ -72,7 +72,7 @@ Runs before route selection when a folder contains files that only make sense to
 | Telemetry run folder | `.cfg` + N `.dat` (+ `.tdms`, `.csv`) → channel map built once per folder and shared |
 | Photo bursts | Same folder, timestamps within 60 s, pHash distance ≤ 6 → `photo_cluster` |
 
-If the assembler is unsure (two `.tex` files both with `\documentclass`), it indexes both and raises `CONFLICT` SOFT ("two masters in folder X").
+If the assembler is unsure (two `.tex` files both with `\documentclass`), it indexes both and raises `CONFLICT` SOFT ("two masters in folder X"). `.tex` files that no master includes are assembled per folder by file name (a lone file is titled after itself) and the document keeps a note in `metadata_sources.assembler.notes`; this raises no flag, because no one can decide anything about it and the verdict holds for one folder while a document stands for every byte-identical copy.
 
 ### 1.4 Output contract (every route)
 
@@ -98,12 +98,13 @@ validation gate → (HARD flag? halt with staged payload) → deterministic meta
 
 ### 1.6 Route gating and the processing scope
 
-Two configuration switches sit between the adapter lookup and the route, so the pipeline can be built and rolled out route by route (file 10 §3, §5):
+Three configuration switches sit between the adapter lookup and the route, so the pipeline can be built and rolled out route by route (file 10 §3, §5):
 
 - `routes.<X>.enabled` — a disabled route does not halt or flag its files. The dispatcher creates the `documents` row with `status = WAITING_FOR_ROUTE` and stops. Enabling the route later re-dispatches every parked document automatically; the Console shows the parked count per route.
 - `processing.scope` — a landed blob outside the allowlist is not dispatched at all (it stays `LANDED` on the location, no document row). Widening the scope dispatches it.
+- `routes.held_kinds` — file kinds (type-resolution names such as `zip`, `gzip`, `wbpz`, `iges`) that wait as `WAITING_FOR_ROUTE` even though their route is on, so one route can run for some kinds and wait for others. Removing a kind releases its parked files on the next dispatch. Route G runs with `zip`, `gzip`, `wbpz` and `iges` held (Lead, 2026-10-23): STL, STEP, scdoc and DWG are processed; archives, ANSYS packages and IGES wait.
 
-Neither switch is a flag: nothing in the Review queue, no human action needed. `UNSUPPORTED_FORMAT` remains reserved for types with no adapter at all.
+None of the switches is a flag: nothing in the Review queue, no human action needed. `UNSUPPORTED_FORMAT` remains reserved for types with no adapter at all.
 
 ---
 
@@ -533,7 +534,7 @@ Sub-route decision by `ffprobe`: duration, audio stream present, speech probabil
 ### F.1 Workshop / meeting recordings (speech, typically > 5 min)
 
 1. FFmpeg extracts 16 kHz mono audio.
-2. faster-whisper (`large-v3`) with word timestamps; optional diarization (pyannote) if speakers matter — default off.
+2. faster-whisper with word timestamps, `medium` int8 on the CPU (`pipeline_config` `routes.F.whisper_model`; `large-v3` needs more than the 4 GiB media worker and moves to the GPU models role later, DECISIONS 2026-10-23); optional diarization (pyannote) if speakers matter — default off.
 3. Scene-change detection (frame histogram delta) finds slide transitions; each slide frame is OCR'd (Docling image backend) and, if diagram-heavy, described by `describe_slide`.
 4. Chunking by topic: transcript segmented at pauses > 2 s and slide changes into 60–120 s windows; each child node = window text + slide text; parent = 10-minute section; `metadata.t_start_s/t_end_s` and a deep link `…/video?asset=…#t=14m20s` (the Console serves a player that seeks).
 
@@ -553,17 +554,26 @@ Edge cases: no audio track, variable frame rate, portrait phone video, very long
 
 ## 11. Route G — Archives and CAE packages
 
-Inventory: 3 `.zip`, 41 `.gz`, 1 `.wbpz` (ANSYS Workbench), 1 `.scdoc` (SpaceClaim).
+Inventory: 3 `.zip`, 41 `.gz`, 1 `.wbpz` (ANSYS Workbench), 1 `.scdoc` (SpaceClaim). None of the 41 `.gz` reaches this route today: 3 `.dat.gz` sit in a `_to_delete` folder (quarantined by the gate), 35 `.tar.gz` are inside `.venv` folders and 3 `.synctex.gz` are LaTeX output (junk).
 
-1. **Bomb guard** before extraction: compressed/uncompressed ratio ≤ 100, total uncompressed ≤ 5 GB, entries ≤ 50,000, nesting depth ≤ 3, path traversal (`../`, absolute paths) rejected. Violations → `PARSE_FAILURE` HARD with the manifest.
-2. **Extraction** to a scratch directory; every inner file becomes a blob in `dcl-raw` (content-addressed, so a member identical to a loose file is the same blob and is **not** processed twice) and a row in `blob_derivations` (`parent_blob_sha256`, `member_path`, `child_blob_sha256`, `kind = archive_member`).
-3. Members are dispatched to routes A–F with the archive's folder context plus `archive_path` breadcrumb. `.synctex.gz` and other gate-listed junk inside archives are skipped by the same gate, which receives `parent_kind` (`zip`, `gz`, `wbpz`) and applies the configurable `kept_endings_by_parent_kind` exceptions (default: `.out` kept under `wbpz`).
-4. `.dat.gz` (`11bar_10sec.dat.gz`) → gunzip → Route C with the folder's channel map.
-5. **`.wbpz`** (zip): extract solver `.out` logs (text → document nodes with the solver-summary table parsed), engineering data XML (material properties → table nodes + `material` mentions with units), report images (→ figure pipeline), project tree (`.wbpj`) → a summary in `documents.catalog` of the archive's document (analysis systems, materials, mesh stats if present).
-6. **`.scdoc`**: no open parser. Recorded as a `cad_reference` document whose `catalog` holds filename, size, folder context and the OneDrive link; `STL/STEP` exports found in the same folder (none in the current inventory) would be linked by `document_relations(REFERENCES)` and measured with trimesh when an adapter is added.
-7. Encrypted archives → `PARSE_FAILURE` HARD.
+**Decision (user, 2026-10-23): Route G keeps a metadata card, not the contents.** Unpacking, parsing and embedding the contents of these files costs a bomb guard, a reader per format and a second round of documents for little retrieval value, and the files are searched for by what they are and where they were used. Every file of this route becomes one `ProcessedDocument` with one text node, the **card**, which the common tail enriches and embeds like any other text (§1.5). Nothing is extracted, so nothing in this route can crash on a corrupt or hostile file.
 
-Edge cases: duplicate member names in different case, zip within zip, archives of entire Python environments (members hit the Tier-1/2 gate and are skipped — the archive itself is marked `mostly_junk` if > 90% skipped), symlinks in tar (ignored), very large members (> 1 GB → held).
+The card states, in plain English:
+
+1. kind, file name and size (`ZIP archive`, `ANSYS Workbench package`, `STEP CAD model`, `AutoCAD drawing (DWG)`, …);
+2. the folder, and the test plan, run and hardware identified from the folder context (§1.2);
+3. the file's dates (last modified, created, from the OneDrive item) and **every other live location of the same bytes with its date**, and the test plans those folders belong to, so a question about when or where a file was used has an answer;
+4. the related files beside it (same-stem drawings and exports; the other CAD files in the folder), which also become `document_relations(REFERENCES)`;
+5. for an archive or package: the member count, file types, top-level entries and the first 40 member names, read from the archive's directory only (zip, wbpz, scdoc: central directory; tar: headers up to 5,000 entries and 300 MB; gzip: the name inside). A password-protected archive says so; a damaged one says its directory could not be listed;
+6. for STL, STEP and STP up to 200 MB: bounding box, volume, surface area, triangle and vertex counts (trimesh, OpenCASCADE through cascadio). IGES, DWG and `.scdoc` are not measured.
+
+`doc_kind` is `cae_package` for `.wbpz`, `cad_reference` for CAD and `.scdoc`/`.dwg`, `unknown` for plain archives. The route raises **no flag**: a damaged or locked file is a card that says so. Because the files are found by their questions, the enrichment of a Route G document also writes question proxies (§1.5, file 04 §5.4), whatever its `doc_kind`.
+
+The route's catalog (`documents.catalog`) holds the same facts as data: format, size, folder, link, dates, copies, test plans, measurement, member names (first 200), `references`, `folder_drawings`.
+
+**Frozen alternative (kept as `process_full` in `backend/routes/g_archives/route.py`, not wired):** the bomb guard (ratio ≤ 100, total ≤ 5 GB, entries ≤ 50,000, depth ≤ 3, path traversal, encrypted → `PARSE_FAILURE` HARD), extraction of every member as a blob in `dcl-raw` with a `blob_derivations` row (`archive_member`) and a document dispatched to routes A–F, `.dat.gz` → Route C, `.wbpz` solver logs, material XML and project tree parsed into nodes. Defects found when it was run on the sample set (2026-10-23) are listed in `docs/sessions/STATUS.md`; reviving it means fixing those first.
+
+Edge cases: a name that does not match the content (a zip named `.pdf`) is read by content (§1.1); a file with no members to list is a card without a contents block.
 
 ---
 

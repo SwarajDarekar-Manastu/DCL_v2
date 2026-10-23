@@ -160,6 +160,7 @@ Retention of failed/old job rows must never delete `done` rows of live documents
 | `catalog` | jsonb | route-specific structured payloads that are too small for tables: the draw.io graph (`{nodes[], edges[]}`), the ANSYS project summary, the SpaceClaim/STEP reference |
 | `entity_ids` | uuid[] | GIN; canonical entity ids (ids, not names, so merges do not stale it) |
 | `search_text` | text | English title + summary + entity names; BM25 |
+| `minhash` | bytea | nullable; 128 × uint32 MinHash of the body text (parent and table nodes); null when the text is under 50 shingles; set by `backend/indexing/near_duplicates.py` on every commit (file 02 §5.3) |
 | `cir_uri` | text | prefix in `dcl-cir` |
 | `staged_payload_uri` | text | CHECK: non-null exactly when `status = 'HALTED'` |
 | `parser_version`, `pipeline_version` | int | — |
@@ -284,6 +285,7 @@ Only `document_nodes.asset_id → assets` exists; there is no back-reference fro
 | `anchor` | jsonb `{page, sheet, bbox, content_sha256, channel, column, line}` (stable anchor, no node ids) |
 | `evidence`, `suggested_resolution`, `resolution` | jsonb |
 | `resolution_rule_id` | FK → rules, indexed |
+| `proposed_by_rule_id` | FK → rules, indexed; the proposal rule whose units the suggestion carries; kept after the flag is resolved (migration 0015) |
 | `assigned_to`, `resolved_by`, `resolved_at`, `due_at`, `created_at` | — |
 
 Case-level state (status, assignee, age) is derived in `v_review_cases` from its flags. Resolutions are **authored data**: the indexer re-applies them as overlays on every rebuild (file 04 §7).
@@ -293,7 +295,7 @@ Case-level state (status, assignee, age) is derived in `v_review_cases` from its
 | Column | Meaning |
 |--------|---------|
 | `rule_id` uuid PK | — |
-| `rule_type` ✓ | `channel_map`, `unit_mapping`, `schema_mapping`, `supersession`, `ignore_pattern`, `origin_override` |
+| `rule_type` ✓ | `channel_map` (a person's approval of one file's columns: the only answer Route C reads), `channel_proposal` (fills in the suggestion of matching files, never an answer), `unit_mapping` (stored as a proposal), `schema_mapping`, `supersession`, `ignore_pattern`, `origin_override` |
 | `origin` ✓ | `operator`, `cfg`, `header`, `config_json`, `tdms_props` |
 | `scope_root`, `scope_folder_id`, `scope_filename_glob`, `scope_extension` | columns (the matching key and the specificity order) |
 | `body` | jsonb (the mapping itself) |
@@ -308,7 +310,7 @@ Partial index `(rule_type, scope_folder_id) WHERE active`. "Files affected by th
 
 ### 4.6 Configuration and operations (2)
 
-**`pipeline_config`** — append-only; PK `(key, version)`; `value` jsonb; `updated_by`; `updated_at`; `description`; view `v_config_current` = latest version per key. Rollback = insert the old value as a new version. Secrets and endpoints (Graph app ids, gateway URL and key, database credentials, alert webhook) are **never** stored here; they come from the environment file (file 01 §7.1). Keys include: `gate.*`, `sync.download_scope` (list of root/folder ids/globs allowed to download; empty = everything), `sync.download_concurrency`, `sync.daily_delta_cron`, `processing.scope` (which landed blobs may be processed), `routes.<X>.enabled`, `routes.<X>.parser_version`, `routes.A1.ocr_engine_by_script`, `thresholds.*`, `chunking.*`, `models.*`, `translation.mode`, `translation.full_for`, `sources.origin_defaults`, `flags.severity_overrides`, `flags.strict_mode`, `cloud.vertex_project`, `cloud.region`, `cloud.daily_token_budget`, `sanity_ranges`, `critical_field_patterns`, `report_json_schemas`, `answer.external_allowed_groups` (seeded with `dcl-external-search` by migration seed data, S1), `answer.proprietary_terms` (seeded by S5 from the hardware and project names in the crawl, confirmed by the user), `answer.external_search_enabled` (kill switch, default true; the group list is the real gate), `vision.extraction_safety` (absent or false = off; true or a list of extraction capability names that send the BLOCK_ONLY_HIGH safety setting).
+**`pipeline_config`** — append-only; PK `(key, version)`; `value` jsonb; `updated_by`; `updated_at`; `description`; view `v_config_current` = latest version per key. Rollback = insert the old value as a new version. Secrets and endpoints (Graph app ids, gateway URL and key, database credentials, alert webhook) are **never** stored here; they come from the environment file (file 01 §7.1). Keys include: `gate.*`, `sync.download_scope` (list of root/folder ids/globs allowed to download; empty = everything), `sync.download_concurrency`, `sync.daily_delta_cron`, `processing.scope` (which landed blobs may be processed), `routes.<X>.enabled`, `routes.<X>.parser_version`, `routes.held_kinds` (list of file kinds that wait as `WAITING_FOR_ROUTE` while their route is on), `routes.F.whisper_model` (`tiny`, `base`, `small`, `medium` (default) or `large-v3`), `routes.A1.ocr_engine_by_script`, `thresholds.*`, `chunking.*`, `models.*`, `translation.mode`, `translation.full_for`, `sources.origin_defaults`, `flags.severity_overrides`, `flags.strict_mode`, `cloud.vertex_project`, `cloud.region`, `cloud.daily_token_budget`, `sanity_ranges`, `critical_field_patterns`, `report_json_schemas`, `answer.external_allowed_groups` (seeded with `dcl-external-search` by migration seed data, S1), `answer.proprietary_terms` (seeded by S5 from the hardware and project names in the crawl, confirmed by the user), `answer.external_search_enabled` (kill switch, default true; the group list is the real gate), `vision.extraction_safety` (absent or false = off; true or a list of extraction capability names that send the BLOCK_ONLY_HIGH safety setting).
 
 **`llm_calls`** — `call_id`; `at` (indexed); `model`; `purpose`; `prompt_version`; `doc_id`, `node_anchor`, `trace_id` (no FKs: the ledger outlives documents); `input_tokens`, `output_tokens`, `cached_tokens`; `latency_ms`; `cost_estimate`; `status`; `error`; `request_id`. The daily budget guard aggregates this table.
 

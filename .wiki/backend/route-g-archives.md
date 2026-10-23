@@ -10,17 +10,18 @@
 
 ## Purpose
 
-Archives are opened safely and their members become documents of their own; ANSYS packages are summarized; CAD files become `cad_reference` documents, measured when they are meshes or B-reps and linked to the drawings next to them.
+Every archive, ANSYS package and CAD file becomes one metadata card (what it is, where it sat, when, every other place it is stored, its member names or measurements) that the common tail enriches and embeds; nothing is unpacked. The unpacking design (bomb guard, members as documents) is kept as `process_full`, unwired.
 
 ## Location
 
 Code (`backend/routes/g_archives/`):
-- `route.py`: `process` (runner entry), `process_archive`, `process_cad`, `can_handle`, `Stores`, manifest nodes, flags
+- `card.py`: `build_card`, `Copy` (the metadata card, the route's output)
+- `route.py`: `process` (runner entry, the card), `process_full` (unpacking, unwired), `process_archive`, `process_cad`, `can_handle`, `Stores`
 - `archive.py`: `Expander` (bomb guard, gate per member, nested archives), `archive_kind`, limits
 - `wbpz.py`: solver `.out` summary, MatML materials, analysis systems from `.wbpj`
 - `cad.py`: `measure` (trimesh, cascadio), `related_files`, `describe`
 
-Tests: `backend/tests/unit/routes/g_archives/test_route_g.py` (synthetic bombs, nesting, traversal, encryption, held members, gzip, tar symlinks, wbpz, STL, scdoc/dwg; X2 Injector.zip, web zip with junk, tar.gz, STL, STEP when `data/samples/` is present).
+Tests: `backend/tests/unit/routes/g_archives/test_card.py` (the card), `test_route_g.py` (the unwired unpacking route: synthetic bombs, nesting, traversal, encryption, held members, gzip, tar symlinks, wbpz, STL, scdoc/dwg; X2 Injector.zip, web zip with junk, tar.gz, STL, STEP when `data/samples/` is present).
 
 ## Interfaces
 
@@ -59,6 +60,8 @@ Waiting on others: S1 registers the adapter (`dcl.process.route_g`) and runner (
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | Lead | Rebuilt as metadata cards (user ruling): `card.py` `build_card`, one node per file with kind, size, folder, plan/run/hardware, dates, every copy with its date, related files, member names from the directory, mesh/solid measurements; no unpacking, no flags, no derived blobs, never crashes. The unpacking route is `process_full` (unwired). `PARSER_VERSION` 2. Tests `test_card.py`; real G corpus end to end in `test_route_tail.py`; `routes.held_kinds` now empty |
+| 2026-10-23 | Lead | Frozen by the user: zip, gzip, wbpz and IGES wait (`routes.held_kinds`); STL, STEP, scdoc and DWG run. Run on `data/samples/G` (local): 72 of 99 checks pass; defects listed in STATUS 2026-10-23 (corrupt-archive crash, IGES, wbpz convergence, STEP exactness, tar door, memory) are shelved |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-23 | S6 | Route built: archives with bomb guard and gate, derived blobs, wbpz, CAD measurement and references |
 | 2026-10-23 | S6 | Samples smoke test `backend/tests/unit/routes/test_samples_smoke.py` (every accepted file in data/samples, vision off) |

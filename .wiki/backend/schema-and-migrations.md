@@ -83,6 +83,9 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-24 | Lead | Migration 0015 (applied on the stack DB 2026-10-24, pg_dump first): `rule_type` CHECK gains `channel_proposal`; `review_flags.proposed_by_rule_id` (FK rules, indexed). Additive: an older API keeps working against it. `RuleType.CHANNEL_PROPOSAL` |
+| 2026-10-23 | Lead | 0013 and 0014 applied on the live stack DB (pg_dump first; order: 0013, api redeploy, 0014, because contract models are `extra="forbid"`). 0014 also moves open orphan-file notes onto `documents.metadata_sources.assembler.notes`, deletes those flags and returns a document that was soft-flagged only for one to ACTIVE; downgrade does not restore the deleted flags |
+| 2026-10-23 | Lead | Migration 0014: CONFLICT evidence in `review_flags` gets `relation` (data only, no schema change; idempotent; downgrade restores the old two-sided shape); `backend/tests/schema/test_conflict_relation.py` |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | Base, naming convention, enums→CHECK, M1 registry models, migration 0001, schema tests, FK-without-index query |
 | 2026-10-21 | S1 | session.py; `Job.key_for()` |
@@ -97,6 +100,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-23 | S1 | Migration 0012 `llm_calls` (`LlmCall`, `LlmCallStatus`) and `backend/postgres/ledger.py` `db_ledger(engine)`, the gateway client's `ledger` hook; `backend/tests/schema/test_llm_calls.py` |
 | 2026-10-23 | S1 | 0012 adds `answer_traces` (file 05; model `AnswerTrace`); prices are the `models.prices` config key (`PriceSpec`, `model_prices()` for the gateway client); settings preview estimates widening cost from priced `llm_calls` |
 | 2026-10-23 | S1 | Settings preview for `models.*` (item 11): an embedding-model change counts the nodes to re-embed (text, image, distinct texts); other model keys apply to new calls |
+| 2026-10-23 | Lead | Migration 0013 adds nullable `documents.minhash` (bytea, 128 × uint32) for the near-duplicate step (see `backend/index-commit`, DECISIONS 2026-10-23); the stack DB needs `alembic upgrade head` (S4) before the next re-index |
 
 ## Related
 

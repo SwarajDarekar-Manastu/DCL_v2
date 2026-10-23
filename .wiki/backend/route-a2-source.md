@@ -69,6 +69,7 @@ Waiting on others:
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | Lead | The `ValueError … is not in the subpath` on real documents was `primary_location` choosing each part's path from the alphabetically first copy of identical bytes in another test plan; `location_near` (dispatcher) now takes the copy beside the master. Test `backend/tests/unit/dispatcher/test_a2_copies.py`; end to end on a real report folder in `backend/tests/unit/indexing/test_route_tail.py` |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-23 | S6 | Twin through S2's `process_twin` (Lead ruling); own page map removed |
 | 2026-10-23 | S6 | Route built: LaTeX (assembly, macros, walker, tables, figures, bibliography, twin page map) and JSON; tests on synthetic projects and E3/E4 |

@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S2 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §10 |
-| Last updated | 2026-10-22 |
+| Last updated | 2026-10-23 |
 
 ## Purpose
 
@@ -49,6 +49,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | Lead | Speech model is read from `routes.F.whisper_model` (default `medium` int8; was the `large-v3` default, which the 4 GiB media worker cannot hold): `media_run._transcriber(size)`, key validated in `pipeline_config`. Live: the 7.8 MB video that was OOM-killed three times now finishes ACTIVE_WITH_SOFT_FLAGS in 40 s at about 1.9 GiB. Tests `test_route_runners.py` |
+| 2026-10-23 | Lead | A missing or weak ignition edge is a CONFLICT SOFT with `relation = check_failed` (detected / expected, file 03 §C.6), as the telemetry route raises its t0 doubt. It was LOW_CONFIDENCE_EXTRACTION with empty evidence: the reviewer saw a flag with nothing to look at and no fitting action. An already open flag of the old type stays until the document is processed again |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S2 | Route F: ffprobe triage, speech check, ignition/shutdown from luminance, keyframes and `video_timeline`, acoustic events, workshop transcript parts, windows and sections; 8 tests |
 

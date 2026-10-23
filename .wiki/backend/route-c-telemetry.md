@@ -79,6 +79,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-24 | Lead | After the gate, `process_document` calls `proposals.refresh` for the document, so a file that arrives (or is resumed) after a proposal rule exists halts as before with the rule's units shown on its unit flags (`proposed_by_rule_id`); only a `channel_map` is an answer. Test: `test_a_proposal_shows_its_units_on_a_file_that_arrives_later_and_the_file_still_halts` |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | backend/common/units.py (registry, aliases, references, canonical units); 29 tests |
 | 2026-10-21 | S1 | Quantity vocabulary + fits_quantity(); entity/alias/fact enums for S2 |
