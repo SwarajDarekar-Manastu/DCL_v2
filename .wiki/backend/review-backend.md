@@ -53,6 +53,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/review/api_models.py`
 - `backend/api/review.py`
 - `backend/review/cases.py`
+- `backend/review/entities.py`
+- `backend/api/entities.py`
 - `backend/tests/unit/review/`
 - `backend/tests/integration/review/`
 
@@ -76,6 +78,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | `ExportedRule.status` (operator / proposed, default proposed), `load_rules_dir` (top level only, operator rules only); `ChannelMapEntry.open_threshold`; quantities typed |
 | 2026-10-22 | S1 | Review API live: queue, detail, resolve with operator rules and resume_for_rule, reject, assign, rules; 13 DB tests |
 | 2026-10-23 | S1 | Review dry run, undo and simulate (no 501 left); `task_for_route()` in the adapter table for rebuilds |
+| 2026-10-23 | S1 | Entity curation (item 10): `GET /entities`, `POST /entities/merge`, `POST /entities/split` in `backend/api/entities.py` over `backend/review/entities.py` (aliases, mentions, documents.entity_ids, audit); route tolerance for unknown flag routes |
 
 ## Related
 
