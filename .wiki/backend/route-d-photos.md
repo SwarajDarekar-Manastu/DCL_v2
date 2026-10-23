@@ -52,6 +52,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S2 | Import chain fixed for the media image (no PDF stack): `a1_office.figures` imports `preflight` only where a PDF crop is rendered; a test imports `d_photos` and `f_video` with pikepdf, pypdfium2, docling and lxml blocked (65 photos FAILED live) |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S2 | Route D: HEIC, EXIF without GPS, pHash bursts, classify-first routing, photo node, web/thumb assets, flags; 9 tests |
 

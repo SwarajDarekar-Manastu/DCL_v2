@@ -79,6 +79,8 @@ uv run python -m pytest backend/tests/unit/api
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Entities page over S1's /entities: search by name or alias and type with paging, merge selected entities into the one kept (what moves stated first, cross-type refused), split chosen aliases into a new entity; reviewer role, so the nav entry is reviewer too (`src/lib/components/entities/`) |
+| 2026-10-23 | S3 | Channel-map case view (user request): a file with two or more telemetry unit flags opens on one table: plain-language banner with hover explanations, the file's first rows with the channel's column outlined, per channel first values, sparkline of S1's ~200-point series, unit picker preselected with the suggestion and its confidence, shared ambient for gauge units, Preview all (dry run per channel, units shown as symbols, temperatures in °C) and one Apply all and resume; per-flag details stay reachable (`ChannelMapView.svelte`, `channel_map.ts`) |
 | 2026-10-23 | S3 | `low_confidence` pane shows each crop's OCR reading (`ocr_text`) and the page OCR text behind a toggle (`page_ocr_text`, S1) |
 | 2026-10-23 | S3 | Rules page "Export YAML": active operator rules in S1's `RulesFile` format (`rules_export.ts`); contract fixture checked by vitest and by S1's `load_yaml` (`backend/tests/unit/api/test_rules_export_contract.py`) |
 | 2026-10-23 | S3 | Evidence panes for every kind of S1's contract: `low_confidence` (crops with reading, confidence, alternatives, zoom; tables A/B with cell diff, HTML read as text only), `unit_fact`, `json_schema`, `file_facts`, `sensitive` (`LowConfidencePane.svelte`, `evidence.ts`) |

@@ -7,6 +7,9 @@ stamps and codes are skipped (kept in the CIR only). Maps, screenshots and other
 The node text is the structured reading rendered as text, plus the caption and the body sentences that
 refer to the figure ("Figure 4 shows…"); the reading itself stays in `metadata.structured_reading`. Every
 figure crop is an asset (`figures/{sha256}/{figure_id}.png`) so the viewer shows the original next to it.
+The crop is Docling's region clipped against the page's other layout items and padded only into whitespace
+(crops.py); a figure covering the page is `class = full_page_image` (its picture class stays in
+`picture_class` and decides the reading).
 """
 
 import re
@@ -24,7 +27,7 @@ from backend.dispatcher.contract import (
 from backend.llm_engine.gemini_types import Image
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType
 from backend.routes.a1_office.assets import image_fields
-from backend.routes.a1_office.preflight import render_crop
+from backend.routes.a1_office.crops import SheetItem, clip_to_layout, is_full_page, pad_into_whitespace
 
 PLOT_CLASSES = frozenset({"bar_chart", "box_plot", "line_chart", "pie_chart", "scatter_plot"})
 SCHEMATIC_CLASSES = frozenset({"engineering_drawing", "flow_chart"})
@@ -46,6 +49,8 @@ SKIP_CLASSES = frozenset(
 )
 FIGURE_NUMBER = re.compile(r"\b(?:fig(?:ure)?|abb(?:ildung)?|図)\.?\s*(\d+)", re.IGNORECASE)
 LOW_PHOTO_CONFIDENCE = 0.5
+# No padding: Docling regions are tight, and section headings carry no box to stop a pad (Moog fig18).
+CROP_PAD = 0.0
 
 
 @dataclass
@@ -54,6 +59,7 @@ class FigureResult:
     assets: list[ProcessedAsset] = field(default_factory=list)
     flags: list[Flag] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
+    crops: list[SheetItem] = field(default_factory=list)
 
 
 def _referencing_sentences(caption: str | None, texts: list[ProcessedNode]) -> list[str]:
@@ -127,13 +133,14 @@ def read_figures(
 ) -> FigureResult:
     """Replace every figure placeholder by its reading (or drop it when it is decoration)."""
     texts = [n for n in nodes if n.node_type == NodeType.CHILD]
+    layout = [(n.ref, b) for n in nodes for b in n.bboxes]
     out: list[ProcessedNode] = []
     result = FigureResult(nodes=out)
     for node in nodes:
         if node.node_type != NodeType.FIGURE:
             out.append(node)
             continue
-        figure_class = node.metadata.get("class") or "other"
+        figure_class = node.metadata.get("picture_class") or node.metadata.get("class") or "other"
         if figure_class in SKIP_CLASSES:
             result.skipped.append(node.ref)
             continue
@@ -141,8 +148,19 @@ def read_figures(
         caption = node.metadata.get("caption")
         asset_ref = None
         crop = None
+        if box is not None and is_full_page(box):
+            node = node.model_copy(
+                update={
+                    "metadata": {**node.metadata, "class": "full_page_image", "picture_class": figure_class}
+                }
+            )
         if box is not None:
+            from backend.routes.a1_office.preflight import render_crop  # PDF stack: not in the media image
+
+            others = [b for ref, b in layout if ref != node.ref]
+            box = pad_into_whitespace(clip_to_layout(box, others), others, CROP_PAD)
             crop = render_crop(pdf_bytes, box, dpi=300, pad_px=0)
+            result.crops.append(SheetItem(crop, f"{node.metadata.get('class') or figure_class} · {node.ref}"))
             kind = AssetKind.PHOTO_IN_DOC if figure_class in PHOTO_CLASSES else AssetKind.FIGURE_CROP
             uri = put_asset(f"figures/{blob_sha256}/{node.ref}.png", crop)
             asset_ref = f"asset:{node.ref}"

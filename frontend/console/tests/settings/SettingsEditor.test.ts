@@ -150,3 +150,49 @@ describe('section rollback', () => {
 		expect(await screen.findByText(/Gate restored to 2026-10-21 19:28: gate.junk_names v3\./)).toBeTruthy();
 	});
 });
+
+describe('re-embed warning', () => {
+	it('asks the admin to acknowledge an embedding-model change before applying', async () => {
+		vi.mocked(api.listSettings).mockResolvedValue({ items: [entry('models.embedding', 'embeddinggemma-2')] });
+		vi.mocked(api.previewSettings).mockResolvedValue({
+			impacts: [
+				{
+					key: 'models.embedding',
+					summary: 'requires re-embedding 3788 nodes (3312 text, 476 image; 2400 distinct texts) through the local embedding service',
+					counts: { reembed_nodes: 3788, text_nodes: 3312, image_nodes: 476, distinct_texts: 2400 },
+					bytes: 0,
+					by_extension: {},
+					estimated_cost_usd: null,
+					cost_note: null
+				}
+			]
+		});
+		vi.mocked(api.applySettings).mockResolvedValue(appliedResult('models.embedding', 2));
+		render(SettingsEditor, { patterns: ['models.*'] });
+		await screen.findByText('models.embedding');
+		await fireEvent.input(field('models.embedding'), { target: { value: 'embeddinggemma-3' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+		const warning = await screen.findByRole('alert', { name: 'Re-embedding' });
+		expect(warning.textContent).toContain('requires re-embedding 3788 nodes');
+		const apply = screen.getByRole('button', { name: 'Apply' });
+		expect(apply.hasAttribute('disabled')).toBe(true);
+		await fireEvent.click(within(warning).getByLabelText(/I understand that 3,788 nodes will be re-embedded/));
+		expect(apply.hasAttribute('disabled')).toBe(false);
+		await fireEvent.click(apply);
+		await waitFor(() => expect(api.applySettings).toHaveBeenCalledTimes(1));
+	});
+
+	it('shows no warning for other model keys', async () => {
+		vi.mocked(api.listSettings).mockResolvedValue({ items: [entry('models.reasoning', 'gemini-3.8-flash')] });
+		vi.mocked(api.previewSettings).mockResolvedValue({
+			impacts: [{ key: 'models.reasoning', summary: 'applies to new calls; nothing is re-processed', counts: {}, bytes: 0, by_extension: {}, estimated_cost_usd: null, cost_note: null }]
+		});
+		render(SettingsEditor, { patterns: ['models.*'] });
+		await screen.findByText('models.reasoning');
+		await fireEvent.input(field('models.reasoning'), { target: { value: 'gemini-3.1-flash-lite' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+		await screen.findByText(/applies to new calls/);
+		expect(screen.queryByRole('alert', { name: 'Re-embedding' })).toBeNull();
+		expect(screen.getByRole('button', { name: 'Apply' }).hasAttribute('disabled')).toBe(false);
+	});
+});

@@ -43,6 +43,7 @@ class PageDecision:
     image_only: bool
     ocr_engine: str | None
     handwriting_regions: list[HandwritingRegion] = field(default_factory=list)
+    has_handwriting: bool = False
     has_tables: bool = False
     has_figures: bool = False
     triage_source: str = "signals"
@@ -117,6 +118,7 @@ def triage_pages(
                 image_only=signals.image_only,
                 ocr_engine=ocr_engine(page_type, script, table),
                 handwriting_regions=list(reading.handwriting_regions) if reading else [],
+                has_handwriting=reading.has_handwriting if reading else False,
                 has_tables=reading.has_tables if reading else False,
                 has_figures=reading.has_figures if reading else False,
                 triage_source="vision+signals" if reading else "signals",

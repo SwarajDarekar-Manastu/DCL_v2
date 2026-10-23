@@ -87,6 +87,13 @@
 		) as Record<string, string>
 	);
 	let blocked = $derived(Object.keys(parseErrors).length > 0);
+	// file 08 §3.2 Models: an embedding-model change "requires re-embedding N nodes"; it must be acknowledged.
+	let reembed = $derived(impacts?.find((i) => (i.counts.reembed_nodes ?? 0) > 0) ?? null);
+	let acknowledged = $state(false);
+	$effect(() => {
+		void reembed;
+		acknowledged = false;
+	});
 
 	function setDraft(key: string, text: string) {
 		drafts[key] = { ...drafts[key], text };
@@ -228,13 +235,21 @@
 					{/each}
 				</ul>
 			{/if}
+			{#if reembed}
+				<div class="grid gap-1.5" role="alert" aria-label="Re-embedding">
+					<Notice tone="warning">This change {reembed.summary}.</Notice>
+					<label class="flex items-center gap-2 text-sm"
+						><input type="checkbox" bind:checked={acknowledged} /> I understand that {reembed.counts.reembed_nodes.toLocaleString('en-US')} nodes will be re-embedded</label
+					>
+				</div>
+			{/if}
 			<label class="field-label grid gap-1"
 				>Reason (kept with every new version)
 				<input class="field text-foreground" bind:value={description} placeholder="why this change" />
 			</label>
 			<div class="flex gap-2">
 				<Button variant="outline" disabled={busy || blocked || !changes.length} onclick={preview}>Preview</Button>
-				<Button disabled={busy || blocked || !changes.length || !impacts} onclick={apply}>Apply</Button>
+				<Button disabled={busy || blocked || !changes.length || !impacts || (!!reembed && !acknowledged)} onclick={apply}>Apply</Button>
 				<Button variant="ghost" disabled={busy} onclick={() => load()}>Discard</Button>
 			</div>
 			{#if blocked}<p class="text-hard m-0 text-xs">Fix the marked values to preview.</p>{:else if !impacts && changes.length}<p class="text-muted-foreground m-0 text-xs">Preview first to see what the change affects.</p>{/if}

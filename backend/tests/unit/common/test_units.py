@@ -109,3 +109,31 @@ def test_units_are_checked_against_the_quantity_vocabulary(unit, quantity, fits)
 
 def test_every_quantity_has_a_dimension_entry():
     assert set(QUANTITY_DIMENSIONS) == set(Quantity)
+
+
+@pytest.mark.parametrize(
+    ("text", "dimension", "canonical", "value", "si"),
+    [
+        ("mV", "[electric_potential]", "volt", 2500.0, 2.5),
+        ("V", "[electric_potential]", "volt", 4.5, 4.5),
+        ("mA", "[current]", "ampere", 20.0, 0.02),
+        ("kohm", "[resistance]", "ohm", 1.5, 1500.0),
+        ("kHz", "[frequency]", "hertz", 1.0, 1000.0),
+        ("kJ", "[energy]", "joule", 2.0, 2000.0),
+    ],
+)
+def test_electrical_frequency_and_energy_units_are_named(text, dimension, canonical, value, si):
+    parsed = parse_unit(text)
+    assert (parsed.dimension, parsed.canonical) == (dimension, canonical)
+    assert to_canonical(value, text) == pytest.approx((si, canonical))
+
+
+@pytest.mark.parametrize("quantity", ["voltage", "current", "resistance", "frequency", "energy"])
+def test_the_quantity_vocabulary_names_these_dimensions(quantity):
+    from backend.postgres.enums import Quantity
+
+    unit = {"voltage": "V", "current": "A", "resistance": "ohm", "frequency": "Hz", "energy": "J"}[quantity]
+    assert (
+        fits_quantity(unit, Quantity(quantity))
+        and parse_unit(unit).dimension.strip("[]").replace("electric_potential", "voltage") == quantity
+    )

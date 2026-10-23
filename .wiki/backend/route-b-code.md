@@ -64,6 +64,7 @@ Waiting on others: S1 registers the adapter (`dcl.process.route_b`, cpu_parse) a
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-23 | S6 | Route built: Python, C, MATLAB via Tree-sitter, notebooks, Markdown, text, requirements; tests on synthetic and real samples |
 | 2026-10-23 | S6 | Samples smoke test `backend/tests/unit/routes/test_samples_smoke.py` (every accepted file in data/samples, vision off) |
+| 2026-10-23 | S6 | Import-light: the `route` module and `can_handle` need only the standard library and Pillow (the dispatcher's io_light image); parse libraries load inside the process functions. Guarded by `backend/tests/unit/routes/test_routes_import_light.py` |
 
 ## Related
 

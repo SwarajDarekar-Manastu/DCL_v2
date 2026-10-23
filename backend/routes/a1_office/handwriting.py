@@ -8,7 +8,10 @@
 4. The reading enters the page as its own text node right after its label, written as
    `Label: [HW 0.85 | conf 0.92]`, so the uncertain span is visible wherever it is cited; the structure
    (box, label, value, unit, confidence, alternatives) stays in `metadata.handwriting`.
-5. Confidence below 0.75 or illegible → LOW_CONFIDENCE_EXTRACTION, SOFT, or HARD when the label matches a
+5. Quality gate before any crop or call (crops.py): a candidate below 48 px a side, below 0.3 % of the page,
+   at 12:1 or more, or lying in a table on a page that triage did not call handwritten is dropped and
+   counted in `rejected` (cell borders of ECSS-E-ST-35-06C p. 90 were read as handwriting).
+6. Confidence below 0.75 or illegible → LOW_CONFIDENCE_EXTRACTION, SOFT, or HARD when the label matches a
    `critical_field_patterns` entry (a value that feeds a calculation: a tare weight, a scaling factor).
 """
 
@@ -31,6 +34,7 @@ from backend.llm_engine.gemini_types import Image
 from backend.llm_engine.vision.schemas import HandwritingKind
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType
 from backend.routes.a1_office.assets import image_fields
+from backend.routes.a1_office.crops import SheetItem, crop_quality, inside_any
 from backend.routes.a1_office.preflight import render_crop
 from backend.routes.a1_office.triage import PageDecision
 
@@ -46,6 +50,8 @@ class HandwritingResult:
     assets: list[ProcessedAsset] = field(default_factory=list)
     flags: list[Flag] = field(default_factory=list)
     transcribed: int = 0
+    rejected: list[dict] = field(default_factory=list)
+    crops: list[SheetItem] = field(default_factory=list)
 
 
 def region_box(page_no: int, box_2d: list[int]) -> PageBox:
@@ -113,9 +119,11 @@ def transcribe_regions(
     cloud_allowed: bool,
     critical_field_patterns: Iterable[str],
     put_asset: Callable[[str, bytes], str],
+    page_sizes: dict[int, tuple[float, float]] | None = None,
 ) -> HandwritingResult:
     critical = [re.compile(p, re.IGNORECASE) for p in critical_field_patterns]
     texts = [n for n in nodes if n.node_type == NodeType.CHILD]
+    tables = [b for n in nodes if n.node_type == NodeType.TABLE for b in n.bboxes]
     inserted: dict[str, list[ProcessedNode]] = {}
     tail: list[ProcessedNode] = []
     result = HandwritingResult(nodes=[])
@@ -127,10 +135,20 @@ def transcribe_regions(
             if region.kind not in TRANSCRIBED_KINDS:
                 continue
             box = region_box(decision.page_no, region.box_2d)
+            crop_id = f"p{decision.page_no}_hw{index}"
+            size = (page_sizes or {}).get(decision.page_no, (595.0, 842.0))
+            quality = crop_quality(box, size)
+            if quality.ok and not decision.has_handwriting and inside_any(box, tables):
+                quality = type(quality)(False, "inside a table on a page triage did not call handwritten")
+            if not quality.ok:
+                result.rejected.append(
+                    {"crop_id": crop_id, "page": decision.page_no, "reason": quality.reason}
+                )
+                continue
             label_node = nearest_label(box, texts)
             label = label_text(label_node)
             crop = render_crop(pdf_bytes, box, dpi=300, pad_px=20)
-            crop_id = f"p{decision.page_no}_hw{index}"
+            result.crops.append(SheetItem(crop, f"handwriting · hw/{crop_id}"))
             uri = put_asset(f"crops/{blob_sha256}/{crop_id}.png", crop)
             asset_ref = f"asset:{crop_id}"
             result.assets.append(

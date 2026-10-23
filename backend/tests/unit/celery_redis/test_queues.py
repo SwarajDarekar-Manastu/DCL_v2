@@ -10,9 +10,9 @@ from backend.celery_redis.queues import POOLS, VISIBILITY_TIMEOUT_S, Queue
 DEVOPS = Path(__file__).resolve().parents[4] / "backend/devops"
 EXPECTED_FILE_10 = {
     Queue.IO_LIGHT: ("threads", 4, 1024),
-    Queue.CPU_PARSE: ("prefork", 4, 4 * 6144),
+    Queue.CPU_PARSE: ("prefork", 1, 6144),
     Queue.TELEMETRY_STREAM: ("prefork", 2, 2 * 3072),
-    Queue.MEDIA: ("prefork", 2, 4096),
+    Queue.MEDIA: ("prefork", 1, 4096),
     Queue.VISION_BATCH: ("threads", 2, 1024),
     Queue.EMBED: ("threads", 2, 2048),
     Queue.BENCHMARK: ("prefork", 1, 2048),

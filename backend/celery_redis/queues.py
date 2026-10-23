@@ -53,10 +53,11 @@ POOLS: dict[Queue, Pool] = {
     pool.queue: pool
     for pool in (
         Pool(Queue.IO_LIGHT, "threads", 4, 1024, None, 300, 360, 5),
-        # 3,600 s: a 420-page standard ran past 1,800 s in CPU enrichment (2026-10-23).
-        Pool(Queue.CPU_PARSE, "prefork", 4, 4 * 6144, 6144, 3600, 3900, 2),
+        # One document at a time (user decision 2026-10-23); 3,600 s: a 420-page standard ran past 1,800 s.
+        Pool(Queue.CPU_PARSE, "prefork", 1, 6144, 6144, 3600, 3900, 2),
         Pool(Queue.TELEMETRY_STREAM, "prefork", 2, 2 * 3072, 3072, 3600, 3900, 2),
-        Pool(Queue.MEDIA, "prefork", 2, 4096, 2048, 3600, 3900, 2),
+        # One video or photo batch at a time: two Whisper + decode children passed 4 GiB (2026-10-23).
+        Pool(Queue.MEDIA, "prefork", 1, 4096, 2048, 3600, 3900, 2),
         Pool(Queue.VISION_BATCH, "threads", 2, 1024, None, 900, 1000, 5),
         Pool(Queue.EMBED, "threads", 2, 2048, None, 600, 660, 5),
         # One benchmark answer at a time, Answer Engine in process; prefork so the time limits are enforced.

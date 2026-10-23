@@ -91,6 +91,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | Step 2: migration 0009, .cfg evidence, normalization, t0, metrics, bounds, commit, resume from raw.parquet, retroactive pass; 39 Route C tests |
 | 2026-10-23 | S1 | Stable-anchor locators on table/table_row nodes (sheet + one-row cell_range; CSV file lines); first data row of tables with a Unit column no longer dropped; one-off `dcl.process.relocate_route_c_tables`; `test_locators.py` |
 | 2026-10-23 | S1 | UNIT_AMBIGUITY evidence for the Review UI: `columns`, `column_index`, 20 `sample_rows`, `time_column`, ~200-point `series` streamed from raw.parquet (`raw_preview`, `with_preview`; under 50 KB per flag); one-off `dcl.process.refresh_halted_route_c` |
+| 2026-10-23 | S1 | `backend/common/units.py`: canonical volt, ampere, ohm, hertz, joule (voltage columns no longer convert to base SI expressions) |
 
 ## Related
 

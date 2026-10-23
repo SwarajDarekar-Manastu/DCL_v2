@@ -1098,6 +1098,37 @@ Blocked on: nothing
 Needs from others: S1: pass pipeline_config `routes.A1.formula_enrichment_max` from office_run to `process_pdf(enrichment_max=)`. Lead: a lower default (about 30 formulas, roughly 15 min) or GPU enrichment, given about 30 s per formula on CPU
 Next: the four A1 crop defects (clip to the region bbox, handwriting crop gate, table crops, contact sheet)
 
+## 2026-10-23 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c-cpuconc
+Merged / ready: c524367 on claude/gifted-hofstadter-0bec1c-cpuconc (from main 4b4d3c5): cpu_parse concurrency 1 (1 × 6 GiB, 3,600/3,900 s kept) and media concurrency 1 (4 GiB kept). First set (api, beat, io_light, telemetry_stream, media, vision_batch, embed, benchmark) runs main cf02d3d, healthy. Test: uv run pytest 1478 passed, 367 skipped
+Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
+Needs from others: Lead — merge; S1 — drain signal for cpu_parse; S2 — Route D import fix on main before the media recreate
+Next: recreate cpu_parse from main at S1's signal (or by about 09:55Z, the two-hour cap); recreate worker-media once S2's D fix is on main
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: import-light route modules. The dispatcher's io_light image can import `can_handle` with only the standard library and Pillow. A blocked-modules test guards it.
+- Smoke routes without samples now skip.
+- The TP12 twin xfail is removed; S2's fix makes it pass.
+Test: `uv run pytest -q` exit 0.
+Blocked on: nothing.
+Next: idle until messaged.
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Route D import-chain fix. `d_photos` → `a1_office.figures` imported `preflight` (pikepdf) at module level, and the media image has no PDF stack, so 65 photos FAILED. `figures` now imports `preflight` only where a PDF crop is rendered. `test_media_imports.py` imports `d_photos` and `f_video` in a fresh interpreter with pikepdf, pypdfium2, docling and lxml blocked; it fails on the old code. Checked in the running media image as well. Plan sheet skipped for this one-line fix.
+Blocked on: nothing
+Needs from others: S4: redeploy the media worker; S1: re-dispatch the 65 FAILED photos
+Next: the four crop defects, then the model-comparison study plan
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: the four A1 crop defects, with S5's conventions.
+- Figure and table crops are clipped at the neighbouring layout items. A label inside the figure, or a section that holds it, is kept.
+- No padding: a 1 % pad took in a heading on the Moog brochure, and headings have no box to stop it.
+- Handwriting candidates are gated: at least 48 px a side, at least 0.3 % of the page, below 12:1, and not inside a table on a page that triage did not call handwritten. Rejections are counted in the CIR `qa/crops.json`.
+- Every table node gets a `table_crop`. A figure covering at least 85 % of the page is `full_page_image`.
+- One contact sheet per document at `qa/{sha}/crops.png`, linked from `documents.catalog.qa`.
+- Before/after sheets were made in the parse worker for the Moog brochure (the bleed on fig9 and fig16 is gone) and ECSS-E-ST-35-06C pp. 80–95 (6 table crops). They are in my scratchpad, `crops/` folder.
+- Tests: A1 unit 97 passed, plus 1 new handwriting-gate test.
+- The handwriting gate was not live-checked: it needs Gemini triage, which comes with S1's re-run.
+Blocked on: nothing
+Needs from others: S1 re-run of A1 (cloud on) to see the handwriting gate on ECSS p. 90 live
+Next: the document-model comparison study plan (plan sheet first, sent to the Lead before running)
 ## 2026-10-23 16:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: the 13 formats cases are now route-level acceptance checks (`backend/tests/acceptance/test_format_routes.py`, `FORMATS.md`): each calls the route entry point on the local public sample (A1 process_office with local soffice, B process_code, C tdms_source, E process_diagram, G process) and asserts the values in git-ignored data/benchmark/formats.local.yaml; zip check also asserts the .DS_Store member is skipped. 13 pass locally, the docx check skips without tesseract (runs in the parse image); a mutation run fails all 13. Engine formats suite removed (template and its binary readers in test_suites.py). Test: `uv run --group parse pytest backend/tests/acceptance/test_format_routes.py`; `uv run pytest -q`
 Blocked on: nothing

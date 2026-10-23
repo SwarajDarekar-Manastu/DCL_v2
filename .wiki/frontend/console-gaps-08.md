@@ -14,7 +14,7 @@ Status: **build** = S3 builds it now (one merge request each, in this order); **
 | 1 | 3.2 | "Rollback to version" per **section** | per key and per section | done 2026-10-23 |
 | 2 | 3.2 Sources | roots, auth status, "start device-code sign-in", webhook status, live counts (items held, blobs waiting), "download/process everything" with Gemini cost | roots table, device-code sign-in, process everything with preview | done 2026-10-23 (cost shown once S1 prices it) |
 | 3 | 3.2 Routes | "re-process affected documents" button with count | re-process by route, count first | done 2026-10-23 |
-| 4 | 3.2 Models | "requires re-embedding N nodes" before an embedding-model change | generic JSON edit, no impact | API: S1/S2 impact for `models.*` |
+| 4 | 3.2 Models | "requires re-embedding N nodes" before an embedding-model change | re-embed warning with acknowledgement | done 2026-10-23 |
 | 5 | 3.2 Prompts | versioned prompt texts, diff viewer, "run on sample" | Prompts screen over S2's registry | done 2026-10-23 |
 | 6 | 4.2 QueueList | saved filters | named saved filters per user (this browser) | done 2026-10-23 |
 | 7 | 4.2 EvidencePane | PageViewer (page render, bbox per flag, zoom, crop lightbox, OCR text toggle) for `low_confidence`; TablePreview (A/B side by side, cell diff) for `json_schema` / table conflicts; panes for `unit_fact`, `file_facts`, `sensitive`; PhotoView | dedicated panes for `unit_telemetry`, `array_schema`, `conflict`, `parse_failure`; the other five kinds fall back to a generic JSON pane | done 2026-10-23 (component tests; no live flags of these kinds yet). OCR-text toggle done 2026-10-23 over S1's `page_ocr_text` / `ocr_text` |
@@ -22,7 +22,7 @@ Status: **build** = S3 builds it now (one merge request each, in this order); **
 | 9 | 4.2 CaseHeader | "undo last resolution" | wired to `POST /review/cases/{id}/undo` | API: S1 (answers 501) |
 | 10 | 4.2 RulesPage | "simulate" | wired to `POST /review/rules/{id}/simulate` | API: S1 (answers 501) |
 | 11 | 4.2 RulesPage | export YAML | "Export YAML" in S1's RulesFile format | done 2026-10-23 |
-| 12 | 4.2 EntitiesPage | search canonicals, merge/split aliases, counts | placeholder | API: S1 (`backend/api/entities.py` has no routes) |
+| 12 | 4.2 EntitiesPage | search canonicals, merge/split aliases, counts | search, merge, split | done 2026-10-23 |
 | 13 | 4.2 OpsPage | queue depths, token/cost today, halted/soft counts, last benchmark pass rate | `GET /ops/summary` and overview panels | done 2026-10-23 (tokens/cost today show a note until S1's llm_calls lands) |
 | 14 | 4.2 OpsPage | sync status per root; failed-task retry | sync per root done 2026-10-23; retry deferred (Lead) |
 | 15 | 5.5 Suites | import JSON, clone a suite | import and clone | done 2026-10-23 |

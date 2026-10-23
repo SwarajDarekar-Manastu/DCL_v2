@@ -11,7 +11,7 @@ describe('roles', () => {
 
 	it('shows each role only the areas it may use', () => {
 		const labels = (roles: string[]) => visibleNav(roles).map((item) => item.label);
-		expect(labels(['viewer'])).toEqual(['Benchmark', 'Entities', 'Ops']);
+		expect(labels(['viewer'])).toEqual(['Benchmark', 'Ops']);
 		expect(labels(['viewer', 'reviewer'])).toEqual(['Review', 'Benchmark', 'Entities', 'Ops', 'Audit']);
 		expect(labels(['viewer', 'reviewer', 'admin'])).toEqual([
 			'Review',
