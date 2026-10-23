@@ -84,6 +84,9 @@ services:
   worker-embed:
     environment: *dev-env
 
+  worker-benchmark:
+    environment: *dev-env
+
   portainer:
     image: portainer/portainer-ce:2.45.2
     command: ["--admin-password-file", "/run/secrets/portainer_admin"]
