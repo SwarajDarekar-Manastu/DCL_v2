@@ -1097,3 +1097,9 @@ Merged / ready: A1 formula and code enrichment cap and per-stage timings. This a
 Blocked on: nothing
 Needs from others: S1: pass pipeline_config `routes.A1.formula_enrichment_max` from office_run to `process_pdf(enrichment_max=)`. Lead: a lower default (about 30 formulas, roughly 15 min) or GPU enrichment, given about 30 s per formula on CPU
 Next: the four A1 crop defects (clip to the region bbox, handwriting crop gate, table crops, contact sheet)
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: Route D import-chain fix. `d_photos` → `a1_office.figures` imported `preflight` (pikepdf) at module level, and the media image has no PDF stack, so 65 photos FAILED. `figures` now imports `preflight` only where a PDF crop is rendered. `test_media_imports.py` imports `d_photos` and `f_video` in a fresh interpreter with pikepdf, pypdfium2, docling and lxml blocked; it fails on the old code. Checked in the running media image as well. Plan sheet skipped for this one-line fix.
+Blocked on: nothing
+Needs from others: S4: redeploy the media worker; S1: re-dispatch the 65 FAILED photos
+Next: the four crop defects, then the model-comparison study plan
