@@ -25,6 +25,7 @@ class Provenance(StrEnum):
     LITERATURE = "literature"
     CALCULATION = "calculation"
     WEB = "web"
+    USER_PROVIDED = "user_provided"  # a file the user attached in chat; answer-time only, never indexed
 
 
 LITERATURE_KINDS = frozenset(

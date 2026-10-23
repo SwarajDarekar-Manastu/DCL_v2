@@ -171,7 +171,8 @@ def test_a_queued_run_completes_with_results_aggregate_and_events(engine, setup)
     progress = [d for _, e, d in events if e == "progress" and "case_id" in d]
     assert len(progress) == 6 and progress[-1]["cases_done"] == 6
     assert [e for _, e, _ in events][-1] == "finished" and events[-1][2]["status"] == "completed"
-    assert catalog.run_results(Session(engine), run_id).results  # S3's view reads what the runner wrote
+    with Session(engine) as s:  # S3's view reads what the runner wrote
+        assert catalog.run_results(s, run_id).results
 
 
 def test_a_redelivered_run_resumes_and_a_final_run_is_left_alone(engine, setup):

@@ -35,8 +35,10 @@ FEEDBACK_KINDS = [
     ("wrong_unit", "Wrong unit or extraction"),
     ("wrong_translation", "Wrong translation"),
 ]
-REPORT_PROMPT = "Start with the number of the reason, then describe the problem:\n" + "\n".join(
-    f"{i}. {label}" for i, (_, label) in enumerate(FEEDBACK_KINDS, start=1)
+REPORT_PROMPT = (
+    "Start with the number of the reason, then describe the problem:\n"
+    + "\n".join(f"{i}. {label}" for i, (_, label) in enumerate(FEEDBACK_KINDS, start=1))
+    + "\nTo point at a source, add its number in brackets, e.g. 4 [2] the pressure is psia, not psig."
 )
 TRACE_CSS = "".join(
     [
@@ -55,6 +57,12 @@ HEIGHT_SCRIPT = (
 
 
 NUMBER_WITH_UNIT = re.compile(r"(-?\d+(?:\.\d+)?)\s*([A-Za-z%°µ][A-Za-z0-9%°µ/()·^-]*)")
+
+
+def page_of(anchor: Any) -> int | None:
+    """The page of a serialized stable anchor 'page:<n>:<hash>' (file 04 §4.4); None for other kinds."""
+    parts = anchor.split(":", 2) if isinstance(anchor, str) else []
+    return int(parts[1]) if len(parts) >= 2 and parts[0] == "page" and parts[1].isdigit() else None
 
 
 def draft_from_trace(trace: dict, suite: str) -> dict:
@@ -82,9 +90,10 @@ def draft_from_trace(trace: dict, suite: str) -> dict:
             )
     citations, seen = [], set()
     for citation in trace.get("citations") or []:
-        anchor = citation.get("anchor") if isinstance(citation.get("anchor"), dict) else {}
+        raw = citation.get("anchor")
+        anchor = raw if isinstance(raw, dict) else {}
         doc_id = anchor.get("doc_id") or citation.get("doc_id")
-        page = anchor.get("page_no") or anchor.get("page") or citation.get("page_no")
+        page = anchor.get("page_no") or anchor.get("page") or citation.get("page_no") or page_of(raw)
         if doc_id and (doc_id, page) not in seen:
             seen.add((doc_id, page))
             citations.append({"doc_id": doc_id, "page": page})
@@ -111,6 +120,12 @@ def parse_report(text: str) -> tuple[str, str | None] | None:
         return None
     comment = match.group(2).strip()
     return FEEDBACK_KINDS[int(match.group(1)) - 1][0], comment[:4000] or None
+
+
+def cited_source(comment: str | None) -> str | None:
+    """The source a report points at: the first [n] in the comment ('the unit in [2] is psia' → '2')."""
+    match = re.search(r"\[(\d{1,3})\]", comment or "")
+    return match.group(1) if match else None
 
 
 def _e(value: Any) -> str:
@@ -280,7 +295,13 @@ class Action:
             kind, comment = parsed
             try:
                 await send_feedback(
-                    config, identity, trace["trace_id"], kind, comment, None, self.http_client
+                    config,
+                    identity,
+                    trace["trace_id"],
+                    kind,
+                    comment,
+                    cited_source(comment),
+                    self.http_client,
                 )
             except EngineError as exc:
                 await notify("error", f"The report could not be recorded: {exc.detail}")

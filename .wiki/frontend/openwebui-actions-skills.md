@@ -50,7 +50,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 ## Rubric (what "done" means for this feature)
 
-- [x] Show trace renders an inline embed from the message's trace; a missing trace or 501 is a readable notification
+- [x] Show trace renders an inline embed from the message's trace; a missing trace or 501 is a readable notification (live 2026-10-23)
 - [x] Report issue posts one of the five kinds, signed; cancel or a reply without a reason number sends nothing
 - [x] 'Add to benchmark' creates a draft case prefilled from verified claims (the prefill validates as the API's `DraftFromChat`)
 - [ ] Only Gemini credentials exist in Open WebUI (deployment check with S4)
@@ -67,6 +67,7 @@ uv run python -m pytest backend/tests/unit/openwebui
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Live against S2's trace routes: Show trace renders as an embed; Report issue appends the feedback row and, naming a page source ([n]), opens a SOFT CONFLICT; Add to benchmark creates a draft with question, verified number, tools, cited document and trace; draft citations now carry the page from serialized anchors |
 | 2026-10-23 | S3 | Installed live; Show trace, Report issue and Add to benchmark reach the engine and stop at S2's 501 trace routes (notification shown); 13 playbook skills published (S2's script) |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | Show trace and Report issue actions, single-file bundle, tests |

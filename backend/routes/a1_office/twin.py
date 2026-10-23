@@ -4,9 +4,9 @@ Route A2 (S6) owns the text; this module gives it what only the PDF has:
 
 - `page_map(headings, pages)`: every A2 section heading located in the PDF page texts, in document order
   (normalized text, numbering kept; a heading that is not found takes the page of the one before it, so the
-  map is monotonic and every section has a page; a page holding three or more headings is a table of
-  contents and is skipped). A2 sets `page_no` on its nodes from it and writes
-  `page_map.json`.
+  map is monotonic and every section has a page; a page holding three or more numbered headings in full
+  ("2.1 Instrumentation") is a table of contents and is skipped). A2 sets `page_no` on its nodes from it
+  and writes `page_map.json`.
 - `pdf_only_pages(pages, source_text)`: pages whose words are mostly absent from the source (scanned
   appendices, signature and approval pages, an image-only page).
 - `process_twin(...)`: page renders for every page (PAGE_RENDER assets, the citation highlights), the page
@@ -47,7 +47,8 @@ def page_texts(pdf_bytes: bytes) -> list[str]:
         document.close()
 
 
-TOC_HEADINGS = 3  # a page that contains this many headings is a table of contents, not their pages
+TOC_HEADINGS = 3  # a page that contains this many numbered headings is a table of contents, not their pages
+NUMBERED = re.compile(r"^\d+(?:\.\d+)*\.?\s")
 
 
 def _strip_number(text: str) -> str:
@@ -65,22 +66,19 @@ def page_map(headings: list[str], pages: list[str]) -> dict[int, int]:
     maps to the page where its section starts."""
     normalized = [_normalized(p) for p in pages]
     targets = [_normalized(h) for h in headings]
-    toc = {
+    numbered = [t for t in targets if NUMBERED.match(t)]
+    toc = {  # only full "number title" matches count: a body page may mention three short titles in prose
         page_no
         for page_no, text in enumerate(normalized, start=1)
-        if sum(_on_page(t, text) for t in targets) >= TOC_HEADINGS
+        if sum(t in text for t in numbered) >= TOC_HEADINGS
     }
     out: dict[int, int] = {}
     current = 1
     for index, target in enumerate(targets):
-        found = next(
-            (
-                page_no
-                for page_no in range(current, len(pages) + 1)
-                if page_no not in toc and _on_page(target, normalized[page_no - 1])
-            ),
-            None,
-        )
+        ahead = [p for p in range(current, len(pages) + 1) if p not in toc]
+        found = next((p for p in ahead if target and target in normalized[p - 1]), None)
+        if found is None:  # numbering or punctuation differ: the title without its number
+            found = next((p for p in ahead if _on_page(target, normalized[p - 1])), None)
         current = found or current
         out[index] = current
     return out

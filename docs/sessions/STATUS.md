@@ -1008,6 +1008,15 @@ Merged / ready: a739eb3 on claude/gifted-hofstadter-0bec1c-media (from main ec8e
 Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
 Needs from others: Lead — merge; user — gateway per-model rates for models.prices
 Next: after the merge, build the media image and recreate api and every worker from main (ledger writes from all clients)
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: chat attachments (file 07 §9.7). The engine fetches each presigned upload once (25 MB cap, up to 5 files) and reads it as user-provided evidence labelled "<name> (your attachment)", provenance `user_provided`; nothing is indexed.
+- Text files are used as they are; PDFs and images are read by Gemini (`attachment.v1`); office files go through LibreOffice to PDF first.
+- An attached photo with a visual question also runs T3 by its image embedding.
+- Live: an attached PDF was read through the gateway.
+Blocked on: nothing
+Needs from others: S3: the Pipe's provenance label map can add `user_provided` → "your attachment" (it falls back to the raw value meanwhile)
+Next: D/F stack test when S4 and S1 say so; the A1 OCR and cost report after S1's re-run; then the Gemini time split per answer from llm_calls
 ## 2026-10-23 — DCL S6 Routes — claude/s6-routes
 Merged / ready:
 - Route G (4e0a981): archives with the bomb guard and the gate, members as derived_blobs, .wbpz, .scdoc/.dwg cad_reference, STL/STEP measured.
@@ -1018,6 +1027,15 @@ Needs from others:
 - S1: G adapter and runner, register_derived_blobs, REFERENCES relations from catalog.references, and kinds for .stl/.step/.stp/.igs/.iges/.dwg. Today .step resolves to Route C, and .c/.m members resolve to C.
 - S2: twin.page_map's contents-page check counts number-stripped headings, so TP12 Overview maps to page 1 instead of 6.
 Next: all four S6 routes are built; idle until messaged.
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: the samples smoke test (ed1692a), `backend/tests/unit/routes/test_samples_smoke.py`. Every accepted file in data/samples passes with vision off, in ~14 s. One summary line per route:
+- A2: 28 files, 475 nodes
+- B: 11 files, 121 nodes
+- E: 10 files, 69 nodes
+- G: 6 files, 6 nodes
+Blocked on: Lead: pin `resvg-py==0.5.0` in the parse group for SVG renders (Route E follow-up 1).
+Needs from others: as above.
+Next: SVG render and read_schematic, after the pin.
 
 ## 2026-10-23 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
 Merged / ready (merge requests, stacked on the branch):

@@ -72,6 +72,7 @@ Waiting on others:
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-23 | S6 | Twin through S2's `process_twin` (Lead ruling); own page map removed |
 | 2026-10-23 | S6 | Route built: LaTeX (assembly, macros, walker, tables, figures, bibliography, twin page map) and JSON; tests on synthetic projects and E3/E4 |
+| 2026-10-23 | S6 | Samples smoke test `backend/tests/unit/routes/test_samples_smoke.py` (every accepted file in data/samples, vision off) |
 
 ## Related
 

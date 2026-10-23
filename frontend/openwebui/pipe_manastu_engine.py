@@ -41,6 +41,7 @@ PROVENANCE_LABEL = {
     "literature": "literature",
     "web": "web",
     "calculation": "calculation",  # physics calculator results (RocketCEA, nozzle sizing), file 07 §5
+    "user_provided": "your attachment",  # a file attached to the chat message (never indexed)
 }
 # Open WebUI sizes an embed iframe from this message (file 08 §1, Rich UI embedding).
 HEIGHT_SCRIPT = (
