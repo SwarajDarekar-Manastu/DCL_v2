@@ -89,6 +89,7 @@ def client(db):
     app.include_router(engine_api.router)
     cache, gemini = Cache(), Client()
     app.dependency_overrides[auth.current_user] = lambda: USER
+
     def session():
         with Session(db) as s:
             yield s
