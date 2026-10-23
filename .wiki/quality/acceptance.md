@@ -19,6 +19,7 @@ Code:
 - `backend/tests/acceptance/M1.md`, `M2.md` (criterion → check or procedure)
 - `backend/tests/acceptance/m1_state.py` (read-only registry queries; snapshot/compare CLI)
 - `backend/tests/acceptance/m2_state.py` (read-only Route C, Parquet (MinIO GET) and TP7 CONFLICT checks)
+- `backend/tests/acceptance/M5.md`, `m5_state.py` (A1 crop geometry, table crops, figure content, contact sheets; `report` CLI)
 - `backend/tests/acceptance/conftest.py` (opt-in live session, read-only)
 
 Tests and fixtures:
@@ -26,6 +27,7 @@ Tests and fixtures:
 - `backend/tests/acceptance/test_m1_checks_on_seeded_db.py` (disposable DB, `DCL_TEST_DATABASE_URL`)
 - `backend/tests/acceptance/test_m2_acceptance.py` (live stack, `DCL_ACCEPTANCE=1`, `DCL_MINIO_*` for Parquet)
 - `backend/tests/acceptance/test_m2_checks_on_seeded_db.py` (disposable DB; Parquet from a dict)
+- `backend/tests/acceptance/test_m5_acceptance.py` (live stack), `test_m5_checks_on_seeded_db.py` (disposable DB)
 
 ## Interfaces
 
@@ -51,6 +53,10 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/tests/acceptance/test_m1_checks_on_seeded_db.py`
 - `backend/tests/acceptance/test_m2_acceptance.py`
 - `backend/tests/acceptance/test_m2_checks_on_seeded_db.py`
+- `backend/tests/acceptance/M5.md`
+- `backend/tests/acceptance/m5_state.py`
+- `backend/tests/acceptance/test_m5_acceptance.py`
+- `backend/tests/acceptance/test_m5_checks_on_seeded_db.py`
 
 ## Rubric (what "done" means for this feature)
 
@@ -60,6 +66,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] M2 Route C checks (criteria 1, 6 and the reported outcome) executable, read-only, proven on a seeded DB
 - [x] TP7 footer CONFLICT check executable, read-only, proven on a seeded DB
 - [ ] M2 checks green on the live stack (Lead runs them); 1c waits on Route C suggestions, TP7 on A1 dispatch
+- [x] M5 crop checks (size, page share, full-page rule, table crops, figure content, contact sheets) executable, read-only, proven on a seeded DB
+- [ ] M5 crop checks run on the live stack after S1's re-dispatch and S2's crop fix (S5 runs, Lead triggers)
 - [ ] M2 criteria 3 and 4 executable (wait on Routes A2 and B)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
@@ -70,6 +78,7 @@ Verification: `DCL_TEST_DATABASE_URL=<disposable db> uv run pytest backend/tests
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-23 | S5 | M5 crop checks and `m5_state.py report`; 7 seeded-DB proofs |
 | 2026-10-22 | S5 | M2 Route C checks (status counts, flag/status, unit cases, SI Parquet, duplicate flags) and the TP7 footer CONFLICT check; 11 seeded-DB proofs |
 | 2026-10-22 | S5 | M1.md procedure 10 gets S4's queue load-test harness and expected report |
 | 2026-10-22 | S5 | M1.md procedures 6–9 get S1's commands (delta crawl, downloader, resync) |
