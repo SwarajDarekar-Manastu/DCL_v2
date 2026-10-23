@@ -1008,3 +1008,13 @@ Merged / ready: a739eb3 on claude/gifted-hofstadter-0bec1c-media (from main ec8e
 Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
 Needs from others: Lead — merge; user — gateway per-model rates for models.prices
 Next: after the merge, build the media image and recreate api and every worker from main (ledger writes from all clients)
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready:
+- Route G (4e0a981): archives with the bomb guard and the gate, members as derived_blobs, .wbpz, .scdoc/.dwg cad_reference, STL/STEP measured.
+- Same commit: Lead's test-hygiene fix. Sample tests skip per missing file; the C and MATLAB grammar imports are guarded.
+Test: `uv run pytest -q` exit 0. G: 19 tests. One xfail: TP12 exact twin pages.
+Blocked on: nothing.
+Needs from others:
+- S1: G adapter and runner, register_derived_blobs, REFERENCES relations from catalog.references, and kinds for .stl/.step/.stp/.igs/.iges/.dwg. Today .step resolves to Route C, and .c/.m members resolve to C.
+- S2: twin.page_map's contents-page check counts number-stripped headings, so TP12 Overview maps to page 1 instead of 6.
+Next: all four S6 routes are built; idle until messaged.
