@@ -275,3 +275,38 @@ def test_nul_bytes_from_a_text_layer_never_reach_the_commit(fake_vision, memory_
     clean = without_nul(dirty)
     assert clean.nodes[0].content == "Schub 12 N" and clean.nodes[1:] == doc.nodes[1:]
     assert "\x00" not in clean.model_dump_json()
+
+
+def test_every_image_asset_has_its_size_and_no_figure_is_empty(fake_vision, memory_store):
+    from backend.dispatcher.contract import ProcessedNode
+    from backend.routes.a1_office.route import fill_empty_figures
+
+    name, data = fixture("german_datasheet")
+    doc = process_pdf(
+        data,
+        blob_sha256=SHA,
+        file_name=name,
+        folder=folder("APS - Library", "Vendor brochures/DE", name, SourceOrigin.EXTERNAL_KEPT),
+        vision=fake_vision(triage_page=triage(language="de")),
+        stores=stores(memory_store),
+    )
+    assert doc.assets and all(a.width and a.height and a.bytes for a in doc.assets)
+    figures = [
+        ProcessedNode(
+            ref=f"fig{i}",
+            node_type=NodeType.FIGURE,
+            ordinal=i,
+            content="",
+            page_no=2,
+            source=NodeSource.PRINTED,
+            metadata={"class": "line_chart", "caption": caption},
+        )
+        for i, caption in enumerate([None, "Figure 3: Pc over time", None])
+    ]
+    filled = fill_empty_figures(figures)
+    assert [f.content for f in filled] == [
+        "[Figure fig0 (line_chart) on page 2]",
+        "Figure 3: Pc over time",
+        "[Figure fig2 (line_chart) on page 2]",
+    ]
+    assert len({f.content for f in filled}) == 3  # distinct content hashes, distinct anchors

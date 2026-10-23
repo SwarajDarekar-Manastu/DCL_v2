@@ -963,6 +963,17 @@ Next: A1 counts and the M2 live check when the batch ends; item 6 (review dry ru
 Merged / ready: (6) the prompt registry API (file 08 §3.3) over the prompt files: list with latest/in_use/variables, show, diff, and run on sample (reviewers; one Gemini call logged as `console.prompt_preview`). Plan sheet skipped (small).
 Blocked on: nothing
 Next: (7) translation, then derived_blobs in A1.9, then the answer_traces writer
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready (2 commits):
+- (7) On-the-fly translation for the viewer: `translate_passages` with a content-hash cache, and `POST /v1/translate {doc_id, page_no | anchor, target_language}`. Content under a root without cloud permission is never sent (403).
+- A1 stack defects:
+  - every image asset carries width, height and bytes;
+  - a figure node is never empty: caption, else a unique placeholder;
+  - the twin page map skips a text table of contents.
+- Existing documents: no separate backfill; S1's A1 re-dispatch rewrites the assets and figure nodes.
+Blocked on: nothing
+Next: answer_traces writer, with the /v1/traces routes and the feedback write
 ## 2026-10-23 — DCL S6 Routes — claude/s6-routes
 Merged / ready:
 - A2 twin through S2's `process_twin` (7b83583). Nodes get `page_no` from the twin; page renders and PDF-only appendix pages come from `twin_appendix`. My page_map.py is removed.

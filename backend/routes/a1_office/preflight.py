@@ -158,6 +158,15 @@ def preflight(pdf_bytes: bytes) -> Preflight:
         document.close()
 
 
+def image_fields(data: bytes) -> dict[str, int]:
+    """`width`, `height` (pixels) and `bytes` of a PNG or JPEG for its ProcessedAsset (viewer layout)."""
+    from PIL import Image as PILImage
+
+    with PILImage.open(io.BytesIO(data)) as image:
+        width, height = image.size
+    return {"width": width, "height": height, "bytes": len(data)}
+
+
 def render_page(
     pdf_bytes: bytes, page_no: int, *, long_side_px: int | None = None, dpi: int | None = None
 ) -> bytes:

@@ -76,3 +76,46 @@ def test_process_twin_renders_every_page_and_runs_the_appendix_through_a1(fake_v
         f"pages/{SHA}/0001.png",
         f"pages/{SHA}/0002.png",
     ]
+
+
+def text_pdf(pages: list[list[str]]) -> bytes:
+    """A PDF with a real text layer (Helvetica), one list of lines per page."""
+    pdf = pikepdf.new()
+    font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica
+        )
+    )
+    for lines in pages:
+        ops = ["BT", "/F1 12 Tf", "14 TL", "72 760 Td"]
+        for line in lines:
+            ops.append(f"({line}) Tj T*")
+        ops.append("ET")
+        page = pdf.add_blank_page(page_size=(595, 842))
+        page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+        page.Contents = pdf.make_stream("\n".join(ops).encode())
+    out = io.BytesIO()
+    pdf.save(out)
+    return out.getvalue()
+
+
+def test_a_text_table_of_contents_does_not_capture_the_headings():
+    from backend.routes.a1_office.twin import page_texts
+
+    pdf = text_pdf(
+        [
+            ["Test Report 37"],
+            [
+                "Contents",
+                "1 Introduction ..... 3",
+                "2 Test Setup ..... 4",
+                "2.1 Instrumentation ..... 4",
+                "3 Results ..... 5",
+            ],
+            ["1 Introduction", "The thruster was fired in vacuum."],
+            ["2 Test Setup", "The stand.", "2.1 Instrumentation", "Pressure transducers."],
+            ["3 Results", "Chamber pressure rose."],
+        ]
+    )
+    headings = ["1 Introduction", "2 Test Setup", "2.1 Instrumentation", "3 Results"]
+    assert page_map(headings, page_texts(pdf)) == {0: 3, 1: 4, 2: 4, 3: 5}

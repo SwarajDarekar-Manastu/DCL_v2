@@ -38,7 +38,13 @@ from backend.routes.a1_office.convert import OcrPlan, Run, RunResult, convert_ru
 from backend.routes.a1_office.figures import read_figures
 from backend.routes.a1_office.handwriting import transcribe_regions
 from backend.routes.a1_office.metadata import extract_metadata, humanize, plan_conflicts
-from backend.routes.a1_office.preflight import Preflight, PreflightFailure, preflight, render_page
+from backend.routes.a1_office.preflight import (
+    Preflight,
+    PreflightFailure,
+    image_fields,
+    preflight,
+    render_page,
+)
 from backend.routes.a1_office.structure import PageContext, build_structure
 from backend.routes.a1_office.tables_qa import check_tables
 from backend.routes.a1_office.triage import PageDecision, triage_pages
@@ -263,7 +269,7 @@ def process_pdf(
         critical_field_patterns=critical_field_patterns,
         put_asset=stores.put_asset,
     )
-    nodes = [n.model_copy(update={"ordinal": i}) for i, n in enumerate(handwriting.nodes)]
+    nodes = [n.model_copy(update={"ordinal": i}) for i, n in enumerate(fill_empty_figures(handwriting.nodes))]
     flags += figures.flags + tables.flags + handwriting.flags
     assets += figures.assets + handwriting.assets
 
@@ -284,11 +290,16 @@ def process_pdf(
     flags += plan_conflicts(folder, furniture, page_text.get(1, ""))
 
     for page_no in range(1, checked.page_count + 1):
-        uri = stores.put_asset(
-            f"pages/{blob_sha256}/{page_no:04d}.png", render_page(pdf, page_no, dpi=RENDER_DPI)
-        )
+        png = render_page(pdf, page_no, dpi=RENDER_DPI)
+        uri = stores.put_asset(f"pages/{blob_sha256}/{page_no:04d}.png", png)
         assets.append(
-            ProcessedAsset(ref=f"page:{page_no}", kind=AssetKind.PAGE_RENDER, minio_uri=uri, page_no=page_no)
+            ProcessedAsset(
+                ref=f"page:{page_no}",
+                kind=AssetKind.PAGE_RENDER,
+                minio_uri=uri,
+                page_no=page_no,
+                **image_fields(png),
+            )
         )
     for result in results:
         stores.put_cir(
@@ -328,6 +339,20 @@ def process_pdf(
             unit_hashes=[UnitHash(unit="page", key=str(p), sha256=h) for p, h in sorted(hashes.items())],
         )
     )
+
+
+def fill_empty_figures(nodes: list[ProcessedNode]) -> list[ProcessedNode]:
+    """A figure node is never empty: its caption, else a placeholder naming the figure, its class and page,
+    so every figure has its own content hash and anchor (190 of 481 stack figures shared the empty hash)."""
+    out = []
+    for node in nodes:
+        if node.node_type is NodeType.FIGURE and not node.content.strip():
+            caption = (node.metadata.get("caption") or "").strip()
+            kind = node.metadata.get("class") or "image"
+            where = f"page {node.page_no}" if node.page_no else "no page"
+            node = node.model_copy(update={"content": caption or f"[Figure {node.ref} ({kind}) on {where}]"})
+        out.append(node)
+    return out
 
 
 def _unique_flags(flags: list[Flag]) -> list[Flag]:

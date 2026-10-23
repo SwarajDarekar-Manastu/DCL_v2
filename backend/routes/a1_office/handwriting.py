@@ -30,7 +30,7 @@ from backend.dispatcher.contract import (
 from backend.llm_engine.gemini_types import Image
 from backend.llm_engine.vision.schemas import HandwritingKind
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType
-from backend.routes.a1_office.preflight import render_crop
+from backend.routes.a1_office.preflight import image_fields, render_crop
 from backend.routes.a1_office.triage import PageDecision
 
 TRANSCRIBED_KINDS = frozenset({HandwritingKind.VALUE, HandwritingKind.CORRECTION, HandwritingKind.NOTE})
@@ -139,6 +139,7 @@ def transcribe_regions(
                     minio_uri=uri,
                     page_no=box.page_no,
                     bbox=box.model_dump(exclude={"page_no"}),
+                    **image_fields(crop),
                 )
             )
             reading = vision.transcribe_handwriting(

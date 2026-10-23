@@ -59,6 +59,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S2 | On-the-fly translation (file 04 §10, `enrichment_only`): `translate.py` `translate_passages` (one Gemini call for the uncached passages, prompt `enrichment/translate.v1`, cache `dcl-cir/_translation_cache/…` by content hash, `TranslationRefused` without cloud permission); `POST /v1/translate {doc_id, page_no | anchor, target_language}` in `backend/api/engine.py` for the viewer's Translate toggle; 2 unit + 2 DB tests |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S2 | Sanity range by origin and role (S5 rule); `seed_rows()`; alias index keeps display names |
 | 2026-10-22 | S2 | Per-parent extraction with grounding, entity normalization (seed + DB index, fuzzy ≥ 92, English canonical for non-English), numeric facts (locale, units, sanity, provenance); 37 tests |
