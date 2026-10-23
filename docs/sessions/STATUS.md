@@ -990,3 +990,9 @@ Merged / ready: config/gate.yaml no longer lists `.c` as junk (Lead ruling after
 Blocked on: nothing
 Needs from others: Lead: file 02 §4 line 127 still lists `.c` (manual amendment); `.obj` and `.d` were never in the list and I did not add them (`.obj` is also the Wavefront 3D mesh format)
 Next: idle until messaged
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: the `answer_traces` writer and the trace routes. Each answer's trace is written with question, chat, message and user ids, and with `mode` inside model_config. GET /v1/traces/{id} and GET /v1/traces?chat_id&message_id serve the caller's own traces (404 otherwise). POST /v1/traces/{id}/feedback appends in one statement; `wrong_unit` on a cited page opens a SOFT CONFLICT flag. Live: one stack answer wrote its row. Also in this branch: `image_fields` moved to the dependency-free `a1_office/assets.py`, so Route F imports without the parse group (the Lead's importorskip guard is removed), and the translate test is ruff-formatted.
+Blocked on: nothing
+Needs from others: S6: `test_route_b.py::test_web_samples_c_matlab_notebook` fails in any checkout that has a `data/samples/web` folder without S6's files; it should skip per missing file
+Next: citation markers = citation events, then attachments

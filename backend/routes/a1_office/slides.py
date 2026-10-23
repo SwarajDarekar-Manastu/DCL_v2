@@ -29,8 +29,9 @@ from backend.dispatcher.contract import ProcessedAsset, ProcessedDocument, Proce
 from backend.dispatcher.folder_context import FolderContext
 from backend.llm_engine.gemini_types import GeminiError, Image
 from backend.postgres.enums import AssetKind, NodeSource, NodeType, Route
+from backend.routes.a1_office.assets import image_fields
 from backend.routes.a1_office.metadata import extract_metadata, humanize
-from backend.routes.a1_office.preflight import image_fields, render_page
+from backend.routes.a1_office.preflight import render_page
 
 log = logging.getLogger(__name__)
 

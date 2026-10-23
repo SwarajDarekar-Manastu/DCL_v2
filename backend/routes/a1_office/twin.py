@@ -25,7 +25,8 @@ import pypdfium2 as pdfium
 
 from backend.dispatcher.contract import Flag, ProcessedAsset, ProcessedNode
 from backend.postgres.enums import AssetKind
-from backend.routes.a1_office.preflight import image_fields, render_page
+from backend.routes.a1_office.assets import image_fields
+from backend.routes.a1_office.preflight import render_page
 
 APPENDIX = "Appendix (PDF-only)"
 PDF_ONLY_SHARE = 0.3  # a page sharing less than this share of its words with the source is PDF-only
