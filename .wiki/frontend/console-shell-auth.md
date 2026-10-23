@@ -91,6 +91,7 @@ Known: `npm audit` reports a low-severity advisory in `cookie` (pulled in by Sve
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Native select option lists get the popover colours in both themes (option text was near the list colour in dark mode); WCAG AA checked from the tokens (`tests/contrast.test.ts`) |
 | 2026-10-22 | S3 | Local login proven on the stack; dev-token sign-in removed (auth.py, ws.py, vite.config.ts, config.py and .env.example names) |
 | 2026-10-22 | S3 | Local password accounts (user decision): login, users admin, rate limit, bootstrap admin, Console sign-in form and Users page; MSAL dormant behind VITE_AUTH_MODE=msal |
 | 2026-10-21 | Lead | Map created from the architecture manual |
