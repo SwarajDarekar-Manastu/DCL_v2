@@ -92,6 +92,20 @@ async def open_webui_groups(user_id: str) -> tuple[str, ...]:
     return tuple(sorted(group.name for group in await Groups.get_groups_by_member_id(user_id)))
 
 
+PLAYBOOK_TAG = "dcl-playbook:"
+
+
+async def skill_playbook(skill_id: str) -> str | None:
+    """The engine intent of a published DCL playbook Skill (tag `dcl-playbook:<intent>`); None otherwise."""
+    try:
+        from open_webui.models.skills import Skills
+    except ImportError:
+        return None
+    skill = await Skills.get_skill_by_id(skill_id)
+    tags = (skill.meta.tags or []) if skill is not None and skill.meta is not None else []
+    return next((t.removeprefix(PLAYBOOK_TAG) for t in tags if t.startswith(PLAYBOOK_TAG)), None)
+
+
 def sign_identity(secret: str, timestamp: str, user_id: str, email: str, groups: str, body: bytes) -> str:
     message = f"{timestamp}\n{user_id}\n{email}\n{groups}\n{hashlib.sha256(body).hexdigest()}"
     return hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
