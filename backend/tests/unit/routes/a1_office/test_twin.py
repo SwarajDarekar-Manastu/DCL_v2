@@ -119,3 +119,24 @@ def test_a_text_table_of_contents_does_not_capture_the_headings():
     )
     headings = ["1 Introduction", "2 Test Setup", "2.1 Instrumentation", "3 Results"]
     assert page_map(headings, page_texts(pdf)) == {0: 3, 1: 4, 2: 4, 3: 5}
+
+
+def test_a_body_page_mentioning_short_titles_is_not_a_contents_page():
+    from backend.routes.a1_office.twin import page_texts
+
+    pdf = text_pdf(
+        [
+            ["TP12 Test Report", "Valve, Test and Procedure records are kept with the build log."],
+            ["Contents", "1 Overview ..... 3", "2 Valve ..... 3", "3 Test ..... 4", "4 Procedure ..... 4"],
+            [
+                "1 Overview",
+                "Valve, test and procedure were checked.",
+                "2 Valve",
+                "The valve opened in 12 ms.",
+            ],
+            ["3 Test", "Test 4 ran 20 s.", "4 Procedure", "The procedure was followed."],
+        ]
+    )
+    headings = ["1 Overview", "2 Valve", "3 Test", "4 Procedure"]
+    # pages 1 and 3 name Valve, Test and Procedure in prose but are not contents pages; page 2 is
+    assert page_map(headings, page_texts(pdf)) == {0: 3, 1: 3, 2: 4, 3: 4}
