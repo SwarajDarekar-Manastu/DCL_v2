@@ -72,6 +72,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Suite import (file picker, summary, `POST …/import`) and clone (new suite, ids `<suite>.<case_id>`, hold-out and retired cases never copied) (`suite_io.ts`, `SuiteImport.svelte`, `SuiteClone.svelte`) |
 | 2026-10-22 | S3 | Aligned with S2's runner output (aggregate and metric keys, runner errors as their own outcome, partial pass rate); compare counts only cases scored in both runs |
 | 2026-10-22 | S3 | A new run enqueues `dcl.benchmark.start` after the commit (lazy Celery import) |
 | 2026-10-21 | Lead | Map created from the architecture manual |

@@ -25,7 +25,7 @@ Status: **build** = S3 builds it now (one merge request each, in this order); **
 | 12 | 4.2 EntitiesPage | search canonicals, merge/split aliases, counts | placeholder | API: S1 (`backend/api/entities.py` has no routes) |
 | 13 | 4.2 OpsPage | queue depths, token/cost today, halted/soft counts, last benchmark pass rate | `GET /ops/summary` and overview panels | done 2026-10-23 (tokens/cost today show a note until S1's llm_calls lands) |
 | 14 | 4.2 OpsPage | sync status per root; failed-task retry | missing | API: S1 sync status; retry needs S4 to store replayable task args |
-| 15 | 5.5 Suites | import JSON, clone a suite | export only | build: import button (API exists) and clone (export → import under a new suite name) |
+| 15 | 5.5 Suites | import JSON, clone a suite | import and clone | done 2026-10-23 |
 | 16 | 6 Viewer | handwriting regions with confidence as a pane; plot and diagram renders; page navigation (`GET /docs/{id}/pages/{n}/render`) | handwriting drawn as overlays; plots/diagrams fall back to text; one page only | build: handwriting pane from regions, `image` view for figure/diagram assets, previous/next page |
 | 17 | 6 Viewer | on-the-fly translation when `content_en` is missing | toggle shows `content_en` only | API: S2 translation |
 
