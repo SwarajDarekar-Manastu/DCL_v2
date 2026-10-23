@@ -61,6 +61,7 @@ Waiting on others: S1 registers the adapter (`dcl.process.route_g`) and runner (
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-23 | S6 | Route built: archives with bomb guard and gate, derived blobs, wbpz, CAD measurement and references |
+| 2026-10-23 | S6 | Samples smoke test `backend/tests/unit/routes/test_samples_smoke.py` (every accepted file in data/samples, vision off) |
 
 ## Related
 

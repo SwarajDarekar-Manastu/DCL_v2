@@ -1027,3 +1027,12 @@ Needs from others:
 - S1: G adapter and runner, register_derived_blobs, REFERENCES relations from catalog.references, and kinds for .stl/.step/.stp/.igs/.iges/.dwg. Today .step resolves to Route C, and .c/.m members resolve to C.
 - S2: twin.page_map's contents-page check counts number-stripped headings, so TP12 Overview maps to page 1 instead of 6.
 Next: all four S6 routes are built; idle until messaged.
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: the samples smoke test (ed1692a), `backend/tests/unit/routes/test_samples_smoke.py`. Every accepted file in data/samples passes with vision off, in ~14 s. One summary line per route:
+- A2: 28 files, 475 nodes
+- B: 11 files, 121 nodes
+- E: 10 files, 69 nodes
+- G: 6 files, 6 nodes
+Blocked on: Lead: pin `resvg-py==0.5.0` in the parse group for SVG renders (Route E follow-up 1).
+Needs from others: as above.
+Next: SVG render and read_schematic, after the pin.
