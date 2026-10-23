@@ -181,6 +181,8 @@ def test_beat_schedule_runs_sync_on_io_light_and_the_benchmark_sweep_on_its_queu
     schedule = celery_app.app.conf.beat_schedule
     assert {e["task"] for e in schedule.values()} == {
         "dcl.sync.delta_all",
+        "dcl.sync.poll_deltas",
+        "dcl.sync.renew_subscriptions",
         "dcl.sync.token_health",
         "dcl.sync.enqueue_downloads",
         "dcl.process.dispatch",
@@ -192,6 +194,9 @@ def test_beat_schedule_runs_sync_on_io_light_and_the_benchmark_sweep_on_its_queu
     assert set(queues.values()) == {"io_light"}
     daily = schedule["sync-delta-all-daily"]["schedule"]
     assert isinstance(daily, crontab) and daily.hour == {2} and daily.minute == {0}
+    assert schedule["sync-delta-poll"]["schedule"] == 300.0
+    renew = schedule["sync-renew-subscriptions"]["schedule"]
+    assert isinstance(renew, crontab) and renew.minute == {0} and len(renew.hour) == 24
     assert schedule["sync-token-health"]["schedule"] == 900.0
     assert schedule["sync-enqueue-downloads"]["schedule"] == 600.0
     assert schedule["process-dispatch"]["schedule"] == 1800.0

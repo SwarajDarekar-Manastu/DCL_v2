@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `frontend/ops-page` |
-| Status | in-progress (failed tasks, queue depths, documents by status, open flags, last run per suite done; tokens/cost today wait for S1's llm_calls (0012); sync status per root waits for S1) |
+| Status | in-progress (failed tasks, queue depths, documents by status, open flags, last run per suite, model calls today done; sync status per root waits for S1) |
 | Owner session | S3 (`backend/api/ops.py` by Lead ruling 2026-10-22) |
 | Spec | docs/architecture/08_frontend_openwebui.md §4.2 (OpsPage), §4.4; 10_development_plan.md §4 (dead-letter queue) |
 | Last updated | 2026-10-22 |
@@ -49,13 +49,15 @@ Consumes:
 - [x] Importing the router does not build the Celery app (subprocess test)
 - [x] Console lists failed tasks with error and stored args, empty state (component test); live read against the stack's Redis returns without error
 - [x] Queue depths, documents by status, open HARD/SOFT flags, last run per suite (unit tests, integration test on the real schema, in-process run on the stack data)
-- [ ] Tokens/cost today (needs S1's llm_calls, migration 0012) and sync status per root (needs S1)
+- [x] Model calls, tokens and cost today from the live `llm_calls` (0012 applied; integration test sums today only)
+- [ ] Sync status per root (needs S1)
 - [ ] Retry (only if S4 stores replayable args)
 
 ## Change log
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Model calls today read from the live `llm_calls` (0012); integration test |
 | 2026-10-23 | S3 | `GET /ops/summary` and the overview panels (queues, documents, open flags, last runs, model calls today) |
 | 2026-10-22 | S3 | Map created; `GET /ops/failed-tasks` and the Failed tasks section |
 

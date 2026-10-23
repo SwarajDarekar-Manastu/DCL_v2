@@ -974,3 +974,19 @@ Merged / ready (2 commits):
 - Existing documents: no separate backfill; S1's A1 re-dispatch rewrites the assets and figure nodes.
 Blocked on: nothing
 Next: answer_traces writer, with the /v1/traces routes and the feedback write
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready:
+- A2 twin through S2's `process_twin` (7b83583). Nodes get `page_no` from the twin; page renders and PDF-only appendix pages come from `twin_appendix`. My page_map.py is removed.
+- Route B (bc8db82): `process_code` for .py/.c/.h/.m (Tree-sitter), .ipynb, .md, .txt/.bat/.cmd and requirements files.
+Test: `uv run pytest -q` exit 0 (on main f6238e4 merged). B: 15 tests pass, A2: 28.
+Blocked on: nothing.
+Needs from others:
+- S1: B adapter and runner.
+- S2: twin.page_map maps every heading to a contents page that lists them (headings 1, 2, 2.1 all land on page 2). A page that matches many headings should be skipped.
+Next: Route E (plan sheet open), then G.
+
+## 2026-10-23 13:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: config/gate.yaml no longer lists `.c` as junk (Lead ruling after S1's finding); `.o`, `.a`, `.so` stay junk and C sources under Tier-1 environment folders are still skipped; gate tests pin all four against the documented rule and S1's gate_item. Test: `uv run pytest -q` (exit 0)
+Blocked on: nothing
+Needs from others: Lead: file 02 §4 line 127 still lists `.c` (manual amendment); `.obj` and `.d` were never in the list and I did not add them (`.obj` is also the Wavefront 3D mesh format)
+Next: idle until messaged

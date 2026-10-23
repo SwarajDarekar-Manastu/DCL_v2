@@ -6,7 +6,8 @@
 | Status | in-progress |
 | Owner session | S4 |
 | Spec | docs/architecture/01_system_overview_and_tech_stack.md §6; 09 §H.1 (MinIO); 10 §3, §4 |
-| Last updated | 2026-10-23 | S4 | `open-webui` service (ghcr.io/open-webui/open-webui:v0.12.3) on `DCL_OPENWEBUI_PORT` (8300), volume `open-webui-data`, `WEBUI_URL` from `DCL_OPENWEBUI_URL`, Ollama off; default network so the Pipe reaches `http://api:8200` |
+| Last updated | 2026-10-23 | S4 | Beat: `sync-delta-poll` → `dcl.sync.poll_deltas` every 300 s and `sync-renew-subscriptions` → `dcl.sync.renew_subscriptions` hourly, both on io_light, next to the daily `delta_all` |
+| 2026-10-23 | S4 | `open-webui` service (ghcr.io/open-webui/open-webui:v0.12.3) on `DCL_OPENWEBUI_PORT` (8300), volume `open-webui-data`, `WEBUI_URL` from `DCL_OPENWEBUI_URL`, Ollama off; default network so the Pipe reaches `http://api:8200` |
 | 2026-10-22 |
 
 ## Purpose

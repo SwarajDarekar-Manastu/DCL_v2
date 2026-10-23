@@ -19,7 +19,6 @@ Code (`backend/routes/a2_source/`):
 - `latex.py`: include resolution with a source map (`assemble`), user macros (`collect_macros`), the pylatexenc `Walker` (blocks, labels, numbering), siunitx, `resolve_refs`
 - `tables.py`: `tabular` family → HTML (`multicolumn`, `multirow`, header detection, `longtable` heads and feet)
 - `bib.py`: BibTeX parser, cite text, reference text
-- `page_map.py`: section → twin PDF page (pypdfium2 text, table-of-contents pages skipped)
 - `json_sections.py`: schema sniffer (report section, section file, data array, config, unknown), flatten
 
 Tests: `backend/tests/unit/routes/a2_source/` (synthetic projects inline; `test_real_samples.py` runs on E4 TP12 and E3 when `data/samples/` is present).
@@ -27,23 +26,23 @@ Tests: `backend/tests/unit/routes/a2_source/` (synthetic projects inline; `test_
 ## Interfaces
 
 Provides:
-- `process_latex(files, *, title, folder, stores, folder_files, read_file, conflicts, vision, cloud_allowed, doc_id)` and `process_json(files, *, title, folder, stores, schema_config)` → `ProcessedDocument` (route A2, parser_version 1)
+- `process_latex(files, *, title, folder, stores, folder_files, read_file, conflicts, vision, cloud_allowed, doc_id, twin_appendix)` and `process_json(files, *, title, folder, stores, schema_config)` → `ProcessedDocument` (route A2, parser_version 1)
 - `files`: the assembler's plan as `SourceFile(path, blob_sha256, data, role)` with roles primary / part / visual_twin
-- Node anchors: `line_start`/`line_end` are lines of `assembled.md`; `metadata.source` = `file:line`, `metadata.pdf_page` = twin page of the section
-- CIR `dcl-cir/{sha256}/A2/v1/`: `assembled.md`, `structure.json`, `source_map.json`, `page_map.json`
+- Node anchors: `line_start`/`line_end` are lines of `assembled.md`; `metadata.source` = `file:line`; with a twin, `page_no` = twin page of the section (S2's `process_twin`)
+- CIR `dcl-cir/{sha256}/A2/v1/`: `assembled.md`, `structure.json`, `source_map.json`; `page_map.json` and `appendix/…` from `process_twin`
+- Twin: page renders (`pages/{twin sha}/{nnnn}.png`), PDF-only pages through `twin_appendix` (a bound A1 `process_pdf`) under "Appendix (PDF-only)"
 - Assets: `figures/{sha256}/{nnnn}{ext}` (kind `figure_crop`) for `\includegraphics` images found in the folder
 - Mentions: `reference` (bibliography), `quantity` (siunitx, JSON strings with units)
 - Flags: CONFLICT SOFT (assembler), PARSE_FAILURE HARD (full and per-section walk fail; invalid JSON), UNIT_AMBIGUITY SOFT (unit-less numeric table in a results section), SENSITIVE_CONTENT HARD (secret, `backend/sync/gate.scan_secrets`), SCHEMA_UNKNOWN SOFT (JSON)
 
 Consumes:
 - `backend/dispatcher/assembler.py` plans (S1), `config/report_json_schemas.yaml` (S5)
-- `backend/routes/a1_office/metadata.py` (`extract_metadata`, `plan_conflicts`), `figures.render_plot` (S2)
+- `backend/routes/a1_office/metadata.py` (`extract_metadata`, `plan_conflicts`), `figures.render_plot`, `twin.process_twin` (S2)
 - VisionService `classify_image` + `digitize_plot` for plot images, only when cloud processing is allowed
-- pylatexenc 2.11 (parse group, through docling), pypdfium2 for the twin
+- pylatexenc 2.11 (parse group)
 
 Waiting on others:
 - S1: adapter registration and the `dcl.process.route_a2` runner (reads the plan's blobs, lists the subtree for `folder_files`, reads siblings by path)
-- Lead: pin `pylatexenc==2.11` in the `parse` group (today it arrives only through docling)
 
 ## Workspace (files to touch when modifying this feature)
 
@@ -56,7 +55,7 @@ Waiting on others:
 - [x] Unknown JSON shape indexes generically with SCHEMA_UNKNOWN SOFT
 - [x] \ref and \cite resolve to readable text in chunks
 - [x] Every node has a line locator; `source_map.json` maps it to `file:line`
-- [x] Twin page map assigns a page to the TP12 sections (monotone, contents page skipped)
+- [x] Twin page map assigns a page to the TP12 sections (monotone); nodes carry `page_no`
 - [ ] Runner and adapter registered by S1; one live document committed
 - [ ] TikZ figures described (manual: low priority; today a figure node with the caption only)
 
@@ -71,6 +70,7 @@ Waiting on others:
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-23 | S6 | Twin through S2's `process_twin` (Lead ruling); own page map removed |
 | 2026-10-23 | S6 | Route built: LaTeX (assembly, macros, walker, tables, figures, bibliography, twin page map) and JSON; tests on synthetic projects and E3/E4 |
 
 ## Related

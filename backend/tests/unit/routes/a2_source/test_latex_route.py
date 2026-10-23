@@ -335,14 +335,13 @@ TC-1 & degC \\
     assert "Foot" not in node.content
 
 
-def test_twin_page_map_skips_the_contents_page(memory, folder):
+def test_twin_gives_pages_renders_and_page_map(memory, folder):
     reportlab = pytest.importorskip("reportlab.pdfgen.canvas")
-    pytest.importorskip("pypdfium2")
+    pytest.importorskip("pikepdf")
     buffer = io.BytesIO()
     canvas = reportlab.Canvas(buffer)
     for lines in (
         ["Hot Fire Report TP12"],
-        ["Contents", "1 Introduction", "2 Results", "2.1 Test 01"],
         ["1. Introduction", "The chamber pressure"],
         ["2. Results", "2.1 Test 01", "Table 1"],
     ):
@@ -351,14 +350,19 @@ def test_twin_page_map_skips_the_contents_page(memory, folder):
         canvas.showPage()
     canvas.save()
     files, siblings = _project()
-    files.append(source("report.pdf", buffer.getvalue(), DocumentSourceRole.VISUAL_TWIN))
-    processed = _run(memory, folder, files, siblings)
+    twin = source("report.pdf", buffer.getvalue(), DocumentSourceRole.VISUAL_TWIN)
+    processed = _run(memory, folder, [*files, twin], siblings)
 
     page_map = json.loads(memory.cir["page_map.json"])
-    assert page_map["sections"] == {"1 Introduction": 3, "2 Results": 4, "2.1 Test 01": 4}
+    assert [h["page_no"] for h in page_map["headings"]] == [2, 3, 3]
     intro = next(n for n in processed.nodes if "chamber pressure $P_c$" in n.content)
-    assert intro.metadata["pdf_page"] == 3
-    assert processed.document.page_count == 4
+    assert intro.page_no == 2 and intro.line_start is not None
+    assert next(n for n in processed.nodes if n.node_type == NodeType.TABLE).page_no == 3
+    renders = [a for a in processed.assets if a.kind == "page_render"]
+    assert [a.minio_uri for a in renders] == [
+        f"s3://dcl-assets/pages/{twin.blob_sha256}/{p:04d}.png" for p in (1, 2, 3)
+    ]
+    assert processed.document.page_count == 3
 
 
 def test_unit_text_for_siunitx():

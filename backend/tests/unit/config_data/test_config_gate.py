@@ -56,9 +56,10 @@ MANUAL_TIER1 = [
     "*.egg-info",
 ]
 MANUAL_QUARANTINE = ["_to_delete", "old", "archive_old", "backup"]
+# ".c" removed from the 02 §4 list by the Lead on 2026-10-23: C sources go to Route B.
 MANUAL_TIER2 = (
     ".pyc .pyi .pyd .typed .dll .exe .lib .a .so .o .qml .qmltypes .qm .pak .metainfo .mesh .frag .bin "
-    ".h .c .cpp .pxd .pyx .f90 .f .f95 .pyf .inc .f2py_f2cmap .afm .ttf .mplstyle .ico .icns .ani .cls "
+    ".h .cpp .pxd .pyx .f90 .f .f95 .pyf .inc .f2py_f2cmap .afm .ttf .mplstyle .ico .icns .ani .cls "
     ".bas .xlam .applescript .asp .pys .vbs .sct .idl .rc .chm .pyw .tab .zi .tpl .tmpl .template .build "
     ".cmake .toml .pc .pth .spec .whl .rst .apache .bsd .python .external .ps1 .fish .pem .lua "
     ".xrc .al .g4 .lark .gitignore .iml "
@@ -155,6 +156,11 @@ CASES = [
     ("report.xlsx", ["APU", "Test Plan 37"], "ACCEPTED"),
     ("OneDrive link.url", ["APU"], "SKIPPED_SHORTCUT"),
     ("Workshop.lnk", ["APU"], "SKIPPED_SHORTCUT"),
+    ("cfe_es_crc.c", ["APU", "Flight software", "src"], "ACCEPTED"),
+    ("cfe_es_crc.o", ["APU", "Flight software", "src"], "SKIPPED_JUNK"),
+    ("libcfe.a", ["APU", "Flight software", "lib"], "SKIPPED_JUNK"),
+    ("libcfe.so", ["APU", "Flight software", "lib"], "SKIPPED_JUNK"),
+    ("_umath.c", ["APU", "tools", ".venv", "Lib", "site-packages", "numpy"], "SKIPPED_JUNK"),
 ]
 
 

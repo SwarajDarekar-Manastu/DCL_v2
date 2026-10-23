@@ -19,6 +19,8 @@
 # Manual decisions (Lead, 2026-10-21): ".ini" is data, not junk (02 §4; Tier-4 secret scan
 # still applies); ".1" is not junk (man pages only occur under Tier-1 paths); ".out" stays
 # junk except for members of an ANSYS .wbpz archive (kept_endings_by_parent_kind below, 03 §11).
+# Lead, 2026-10-23: ".c" is source code for Route B, not junk; C sources inside environment folders
+# are still dropped by Tier 1 (site-packages, .venv). Build outputs (.o, .a, .so) stay junk.
 #
 # To verify against the real crawl (M1): rejection counts for the segments "build", "env",
 # "backup" and the endings ".log", ".bin", ".tab", ".out" in team folders.
@@ -35,7 +37,7 @@ quarantine_path_patterns: ["_to_delete", "old", "archive_old", "backup", "* (old
 junk_extensions: [
   # compiled and environment files
   ".pyc", ".pyi", ".pyd", ".typed", ".dll", ".exe", ".lib", ".a", ".so", ".o", ".qml", ".qmltypes",
-  ".qm", ".pak", ".metainfo", ".mesh", ".frag", ".bin", ".h", ".c", ".cpp", ".pxd", ".pyx", ".f90",
+  ".qm", ".pak", ".metainfo", ".mesh", ".frag", ".bin", ".h", ".cpp", ".pxd", ".pyx", ".f90",
   ".f", ".f95", ".pyf", ".inc", ".f2py_f2cmap", ".afm", ".ttf", ".mplstyle", ".ico", ".icns", ".ani",
   ".cls", ".bas", ".xlam", ".applescript", ".asp", ".pys", ".vbs", ".sct", ".idl", ".rc", ".chm",
   ".pyw", ".tab", ".zi", ".tpl", ".tmpl", ".template", ".build", ".cmake", ".toml", ".pc",

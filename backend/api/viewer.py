@@ -81,8 +81,8 @@ class PageView(BaseModel):
     page_no: int
     page_count: int
     image_url: str  # presigned page render (15 min)
-    width: int
-    height: int
+    width: int | None = Field(default=None, description="pixels; null when the pipeline did not record it")
+    height: int | None = None
     regions: list[Region] = []
     text: str = ""  # OCR / extracted text of the page, for the text toggle
 
@@ -91,8 +91,8 @@ class ImageView(BaseModel):
     kind: Literal["image"] = "image"
     image_kind: Literal["photo", "plot", "diagram", "figure"]
     image_url: str
-    width: int
-    height: int
+    width: int | None = Field(default=None, description="pixels; null when the pipeline did not record it")
+    height: int | None = None
     regions: list[Region] = []
     caption: str = ""
 
@@ -177,6 +177,10 @@ PresignFn = Callable[[str], str]
 CODE_NODES = {"code_symbol", "module_header", "config"}
 TIME_NODES = {"transcript_window", "video_event"}
 TABLE_NODE, TABLE_ROW_NODE = "table", "table_row"
+# Route A1 figure classes (backend/routes/a1_office/figures.py): plots and schematics are shown as such.
+PLOT_CLASSES = frozenset({"bar_chart", "box_plot", "line_chart", "pie_chart", "scatter_plot"})
+SCHEMATIC_CLASSES = frozenset({"engineering_drawing", "flow_chart"})
+IMAGE_ASSETS = {AssetKind.FIGURE_CROP, AssetKind.DIAGRAM_RENDER, AssetKind.PHOTO_IN_DOC}
 A1_CELL = re.compile(r"\$?([A-Za-z]{1,3})\$?(\d+)")
 RESOLUTION_MESSAGE = {
     ResolutionStatus.EXACT: "",
@@ -319,6 +323,51 @@ def _first_nodes(session: Session, doc_id: UUID, limit: int = 3) -> list[Documen
     return list(session.scalars(stmt.limit(limit)))
 
 
+def _handwriting_regions(session: Session, doc_id: UUID, page_no: int) -> list[Region]:
+    """Every handwritten reading on the page (Route A1 writes them to node metadata `handwriting`)."""
+    rows = session.scalars(
+        select(DocumentNode).where(DocumentNode.doc_id == doc_id, DocumentNode.page_no == page_no)
+    )
+    regions = []
+    for node in rows:
+        for hw in (node.metadata_ or {}).get("handwriting") or []:
+            box = hw.get("bbox") or {}
+            if box.get("page_no", page_no) != page_no or not all(k in box for k in ("x0", "y0", "x1", "y1")):
+                continue
+            reading = (
+                "illegible"
+                if hw.get("illegible")
+                else " ".join(str(p) for p in (hw.get("value_raw"), hw.get("unit")) if p not in (None, ""))
+            )
+            label = f"{hw['label']}: {reading}" if hw.get("label") else reading
+            regions.append(
+                Region(
+                    bbox=(box["x0"], box["y0"], box["x1"], box["y1"]),
+                    kind="handwriting",
+                    label=label or "handwriting",
+                    confidence=hw.get("confidence"),
+                )
+            )
+    return regions
+
+
+def _image_view(asset: Asset, node: DocumentNode, presign: PresignFn) -> ImageView:
+    figure_class = (node.metadata_ or {}).get("class")
+    if asset.kind == AssetKind.DIAGRAM_RENDER or figure_class in SCHEMATIC_CLASSES:
+        image_kind = "diagram"
+    elif asset.kind == AssetKind.PHOTO_IN_DOC:
+        image_kind = "photo"
+    else:
+        image_kind = "plot" if figure_class in PLOT_CLASSES else "figure"
+    return ImageView(
+        image_kind=image_kind,
+        image_url=presign(asset.minio_uri),
+        width=asset.width,
+        height=asset.height,
+        caption=(node.metadata_ or {}).get("caption") or node.breadcrumb or "",
+    )
+
+
 def _page_render(session: Session, blob_sha256: str | None, page_no: int) -> Asset | None:
     if not blob_sha256:
         return None
@@ -340,7 +389,7 @@ def _view(
     presign: PresignFn,
 ) -> PageView | ImageView | TableView | CodeView | TextView | VideoView:
     render = _page_render(session, blob_sha256, page_no or 1)
-    if render and render.width and render.height:
+    if render is not None:
         page_text = "\n\n".join(n.content for n in nodes)
         return PageView(
             page_no=page_no or 1,
@@ -348,7 +397,7 @@ def _view(
             image_url=presign(render.minio_uri),
             width=render.width,
             height=render.height,
-            regions=boxes,
+            regions=[*boxes, *_handwriting_regions(session, doc.doc_id, page_no or 1)],
             text=page_text,
         )
     first = nodes[0] if nodes else None
@@ -362,9 +411,13 @@ def _view(
         wanted = anchor.line_start if anchor and anchor.line_start else None
         highlight = (wanted, wanted) if wanted else (start, first.line_end or start + len(lines) - 1)
         return CodeView(language=doc.language or "text", first_line=start, lines=lines, highlight=highlight)
+    if first and first.asset_id and first.node_type != "photo":
+        asset = session.get(Asset, first.asset_id)
+        if asset is not None and asset.kind in IMAGE_ASSETS:
+            return _image_view(asset, first, presign)
     if first and first.node_type == "photo" and first.asset_id:
         asset = session.get(Asset, first.asset_id)
-        if asset and asset.width and asset.height:
+        if asset is not None:
             return ImageView(
                 image_kind="photo",
                 image_url=presign(asset.minio_uri),
@@ -395,6 +448,8 @@ def build_viewer_payload(
     if anchor is not None:
         resolution = resolve_anchor(session, anchor)
         status, page_no = resolution.status, resolution.page_no
+        if status == ResolutionStatus.PAGE_FALLBACK and not anchor.content_sha256:
+            status = ResolutionStatus.EXACT  # a plain page link claims no passage, so nothing "changed"
         nodes = _nodes(session, [m.node_id for m in resolution.matches])
         # already filtered to the resolved page by resolve_anchor (exact matches only)
         boxes = [Region(bbox=(b.x0, b.y0, b.x1, b.y1), kind="cited") for b in resolution.boxes]
