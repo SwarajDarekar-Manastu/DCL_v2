@@ -618,3 +618,56 @@ def retrieval_lab(
         k=request.k,
         user_language=request.user_language,
     )
+
+
+# ---------------------------------------------------------------- prompt registry (file 08 §3.3)
+
+
+def _prompt_registry():
+    from backend.llm_engine.prompts import registry
+
+    return registry
+
+
+@router.get("/prompts")
+def prompts_list(user: CurrentUser) -> list[Any]:
+    """Every prompt version with `latest`, `in_use` (pinned by the code today) and its template variables."""
+    return _prompt_registry().list_prompts()
+
+
+@router.get("/prompts/{area}/{version}")
+def prompt_text(area: str, version: str, user: CurrentUser) -> Any:
+    registry = _prompt_registry()
+    try:
+        return registry.get_prompt(area, version)
+    except registry.PromptNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/prompts/{area}/diff/{a}/{b}")
+def prompt_diff(area: str, a: str, b: str, user: CurrentUser) -> Any:
+    registry = _prompt_registry()
+    try:
+        return registry.diff_prompts(area, a, b)
+    except registry.PromptNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/prompts/{area}/{version}/run")
+async def prompt_run(area: str, version: str, body: dict, user: CurrentUser) -> Any:
+    """Run on sample: one Gemini call with the configured model; reviewers and admins (it costs tokens)."""
+    from backend.api.auth import ConsoleRole
+    from backend.llm_engine.gemini_client import GeminiClient
+    from backend.llm_engine.gemini_types import GeminiError
+
+    if not user.has(ConsoleRole.REVIEWER):
+        raise HTTPException(status_code=403, detail="requires role reviewer")
+    registry = _prompt_registry()
+    request = registry.PromptRun.model_validate(body)
+    client = _ENGINE.get("gemini") or GeminiClient(get_settings())
+    try:
+        return await registry.run_prompt(client, area, version, request, user=user.email)
+    except registry.PromptNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except GeminiError as exc:
+        raise HTTPException(status_code=502, detail=f"gateway: {str(exc)[:300]}") from exc

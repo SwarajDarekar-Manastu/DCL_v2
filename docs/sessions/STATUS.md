@@ -958,3 +958,8 @@ Live: A1 re-run with cloud_allowed and the 6 E13 patents is still running. KR201
 Blocked on: nothing
 Needs from others: S4: readable RapidOCR models in the parse image; apply 0012 after the merge; beat entries for the two tasks; then I run the locator backfill.
 Next: A1 counts and the M2 live check when the batch ends; item 6 (review dry run, undo, simulate)
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: (6) the prompt registry API (file 08 §3.3) over the prompt files: list with latest/in_use/variables, show, diff, and run on sample (reviewers; one Gemini call logged as `console.prompt_preview`). Plan sheet skipped (small).
+Blocked on: nothing
+Next: (7) translation, then derived_blobs in A1.9, then the answer_traces writer
