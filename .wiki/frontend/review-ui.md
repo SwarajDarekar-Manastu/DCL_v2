@@ -79,6 +79,7 @@ uv run python -m pytest backend/tests/unit/api
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Saved queue filters (file 08 §4.2): named filter sets per user in this browser (`saved_filters.ts`, `SavedFilters.svelte`) |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | `GET /audit` over audit_events and the Audit page; case History link |
 | 2026-10-21 | S3 | Review UI MVP: queue, case view with typed evidence and resolution consoles, dry-run gate, folder-scoped rules, assign/reject/undo, rules page, live updates; OpenAPI type generation; asset presign route |

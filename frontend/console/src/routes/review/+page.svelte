@@ -7,6 +7,7 @@
 	import { live } from '$lib/live.svelte';
 	import CaseView from '$lib/components/review/CaseView.svelte';
 	import QueueFilters from '$lib/components/review/QueueFilters.svelte';
+	import SavedFilters from '$lib/components/review/SavedFilters.svelte';
 	import QueueList from '$lib/components/review/QueueList.svelte';
 	import { filtersFromUrl, urlFor } from '$lib/components/review/filters';
 	import InboxIcon from '@lucide/svelte/icons/inbox';
@@ -111,6 +112,7 @@
 					<Button variant="ghost" size="sm" href="/review/rules" class="ml-auto"><ListChecksIcon />Rules</Button>
 				</div>
 				<QueueFilters {filters} onChange={setFilters} />
+				<div class="mt-2.5"><SavedFilters owner={session.user?.email ?? ''} {filters} onApply={setFilters} /></div>
 			</div>
 			<div class="min-h-0 flex-1 overflow-y-auto">
 				{#if listError}

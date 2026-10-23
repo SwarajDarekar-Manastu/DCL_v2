@@ -16,7 +16,7 @@ Status: **build** = S3 builds it now (one merge request each, in this order); **
 | 3 | 3.2 Routes | "re-process affected documents" button with count | `routes.<X>.enabled` edit with S1's parked-count preview | API: S1 re-dispatch route |
 | 4 | 3.2 Models | "requires re-embedding N nodes" before an embedding-model change | generic JSON edit, no impact | API: S1/S2 impact for `models.*` |
 | 5 | 3.2 Prompts | versioned prompt texts, diff viewer, "run on sample" | key list only | API: S2 prompt registry routes |
-| 6 | 4.2 QueueList | saved filters | URL filters only (route, root, test plan, assignee, status exist) | build: named saved filters per user |
+| 6 | 4.2 QueueList | saved filters | named saved filters per user (this browser) | done 2026-10-23 |
 | 7 | 4.2 EvidencePane | PageViewer (page render, bbox per flag, zoom, crop lightbox, OCR text toggle) for `low_confidence`; TablePreview (A/B side by side, cell diff) for `json_schema` / table conflicts; panes for `unit_fact`, `file_facts`, `sensitive`; PhotoView | dedicated panes for `unit_telemetry`, `array_schema`, `conflict`, `parse_failure`; the other five kinds fall back to a generic JSON pane | build: one pane per remaining evidence kind (S1's typed models in `contract.py`) |
 | 8 | 4.2 ResolutionConsole | "preview conversion" (dry run) | wired to `POST /review/dry-run` | API: S1 (answers 501) |
 | 9 | 4.2 CaseHeader | "undo last resolution" | wired to `POST /review/cases/{id}/undo` | API: S1 (answers 501) |
