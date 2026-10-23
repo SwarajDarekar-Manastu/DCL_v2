@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { ApiError, getOpsSummary, listFailedTasks, type FailedTask, type OpsSummary } from '$lib/api_endpoint';
+	import { ApiError, getOpsSummary, listFailedTasks, listRoots, type FailedTask, type OpsSummary, type RootStatus } from '$lib/api_endpoint';
+	import SyncStatus from '$lib/components/ops/SyncStatus.svelte';
 	import OpsOverview from '$lib/components/ops/OpsOverview.svelte';
 	import { live } from '$lib/live.svelte';
 	import { hasRole } from '$lib/auth/roles';
@@ -13,6 +14,8 @@
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
 
 	let isAdmin = $derived(hasRole(session.user?.roles ?? [], 'admin'));
+	let isReviewer = $derived(hasRole(session.user?.roles ?? [], 'reviewer'));
+	let roots = $state<RootStatus[] | null>(null);
 	let failed = $state<FailedTask[] | null>(null);
 	let error = $state('');
 	let reload = $state(0);
@@ -26,6 +29,10 @@
 		void reload;
 		void live.reviewCounts;
 		void live.lastRunEvent;
+		if (isReviewer)
+			listRoots()
+				.then((r) => (roots = r))
+				.catch((e) => (summaryError = e instanceof ApiError ? e.detail : String(e)));
 		getOpsSummary()
 			.then((s) => {
 				summary = s;
@@ -54,6 +61,7 @@
 	<Page title="Ops" description="Sync status, queue depths, failed tasks and cost today (file 08 §4.2).">
 		<div class="grid gap-5">
 			{#if summaryError}<Notice tone="error">{summaryError}</Notice>{/if}
+			{#if roots}<SyncStatus {roots} />{/if}
 			{#if summary}<OpsOverview {summary} />{/if}
 			{#if isAdmin}
 				<section class="panel" aria-labelledby="failed-title">
