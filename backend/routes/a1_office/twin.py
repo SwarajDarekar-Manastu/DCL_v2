@@ -4,7 +4,8 @@ Route A2 (S6) owns the text; this module gives it what only the PDF has:
 
 - `page_map(headings, pages)`: every A2 section heading located in the PDF page texts, in document order
   (normalized text, numbering kept; a heading that is not found takes the page of the one before it, so the
-  map is monotonic and every section has a page). A2 sets `page_no` on its nodes from it and writes
+  map is monotonic and every section has a page; a page holding three or more headings is a table of
+  contents and is skipped). A2 sets `page_no` on its nodes from it and writes
   `page_map.json`.
 - `pdf_only_pages(pages, source_text)`: pages whose words are mostly absent from the source (scanned
   appendices, signature and approval pages, an image-only page).
@@ -24,7 +25,7 @@ import pypdfium2 as pdfium
 
 from backend.dispatcher.contract import Flag, ProcessedAsset, ProcessedNode
 from backend.postgres.enums import AssetKind
-from backend.routes.a1_office.preflight import render_page
+from backend.routes.a1_office.preflight import image_fields, render_page
 
 APPENDIX = "Appendix (PDF-only)"
 PDF_ONLY_SHARE = 0.3  # a page sharing less than this share of its words with the source is PDF-only
@@ -45,25 +46,40 @@ def page_texts(pdf_bytes: bytes) -> list[str]:
         document.close()
 
 
+TOC_HEADINGS = 3  # a page that contains this many headings is a table of contents, not their pages
+
+
+def _strip_number(text: str) -> str:
+    return re.sub(r"^[\d.]+\s*", "", text)
+
+
+def _on_page(target: str, page: str) -> bool:
+    words = _strip_number(target)
+    return bool(target) and (target in page or bool(words) and words in page)
+
+
 def page_map(headings: list[str], pages: list[str]) -> dict[int, int]:
-    """heading index → 1-based page; order-constrained, a miss inherits the previous page."""
+    """heading index → 1-based page; order-constrained, a miss inherits the previous page. Pages that contain
+    TOC_HEADINGS or more headings (a text table of contents) are skipped, so a heading listed in the contents
+    maps to the page where its section starts."""
     normalized = [_normalized(p) for p in pages]
+    targets = [_normalized(h) for h in headings]
+    toc = {
+        page_no
+        for page_no, text in enumerate(normalized, start=1)
+        if sum(_on_page(t, text) for t in targets) >= TOC_HEADINGS
+    }
     out: dict[int, int] = {}
     current = 1
-    for index, heading in enumerate(headings):
-        target = _normalized(heading)
-        found = None
-        if target:
-            for page_no in range(current, len(pages) + 1):
-                if target in normalized[page_no - 1]:
-                    found = page_no
-                    break
-            if found is None:  # numbering or line breaks differ: the heading's words without the number
-                words = re.sub(r"^[\d.]+\s*", "", target)
-                for page_no in range(current, len(pages) + 1):
-                    if words and words in normalized[page_no - 1]:
-                        found = page_no
-                        break
+    for index, target in enumerate(targets):
+        found = next(
+            (
+                page_no
+                for page_no in range(current, len(pages) + 1)
+                if page_no not in toc and _on_page(target, normalized[page_no - 1])
+            ),
+            None,
+        )
         current = found or current
         out[index] = current
     return out
@@ -135,11 +151,16 @@ def process_twin(
     only = pdf_only_pages(pages, source_text, _image_pages(pdf_bytes))
     result = TwinResult(mapping, only)
     for page_no in range(1, len(pages) + 1):
-        uri = put_asset(
-            f"pages/{blob_sha256}/{page_no:04d}.png", render_page(pdf_bytes, page_no, dpi=RENDER_DPI)
-        )
+        png = render_page(pdf_bytes, page_no, dpi=RENDER_DPI)
+        uri = put_asset(f"pages/{blob_sha256}/{page_no:04d}.png", png)
         result.assets.append(
-            ProcessedAsset(ref=f"page:{page_no}", kind=AssetKind.PAGE_RENDER, minio_uri=uri, page_no=page_no)
+            ProcessedAsset(
+                ref=f"page:{page_no}",
+                kind=AssetKind.PAGE_RENDER,
+                minio_uri=uri,
+                page_no=page_no,
+                **image_fields(png),
+            )
         )
     put_cir(
         "page_map.json",

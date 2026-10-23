@@ -73,6 +73,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S2 | Stack defects (S3, S6): every image asset carries width, height and bytes (`preflight.image_fields`; page renders, figure and handwriting crops, slide renders, twin renders, Route F frames); a figure node is never empty (`fill_empty_figures`: caption, else `[Figure <ref> (<class>) on page <n>]`, unique per figure); `twin.page_map` skips a page holding three or more headings (text table of contents); 3 tests |
 | 2026-10-23 | S2 | A1.9–A1.10 and A1.0: `process_office` (Word via LibreOffice → PDF pipeline + DOCX extras; slides native with chart XML and notes; describe_slide above 25 %); `twin.py` page map, PDF-only appendix through A1; live: 2 real DOCX (17 and 16 pages, 122 s and 62 s in the parse worker) and Apache POI's public PPTX/PPT/pie-chart samples through the stack's LibreOffice and Gemini; 6 + 3 tests |
 | 2026-10-23 | S2 | Owner-password PDFs (open without a password; the 8 ECSS standards) decrypted in memory and processed, `Preflight.decrypted`; PARSE_FAILURE only when a user password is needed (file 03 §A1.1 amended); 1 test |
 | 2026-10-23 | S2 | NUL bytes stripped from every string of the output (`without_nul`; an Elsevier paper's text layer made the commit fail); 1 test |
