@@ -35,15 +35,17 @@ CANONICAL_UNITS = {
     "[temperature]": "kelvin",
     "[mass] / [time]": "gram / second",
     "[power]": "watt",
+    "[electric_potential]": "volt",
+    "[current]": "ampere",
+    "[resistance]": "ohm",
+    "[frequency]": "hertz",
+    "[energy]": "joule",
 }
 NAMED_DIMENSIONS = (
     *CANONICAL_UNITS,
     "[length]",
     "[mass]",
     "[time]",
-    "[current]",
-    "[electric_potential]",
-    "[energy]",
 )
 
 
