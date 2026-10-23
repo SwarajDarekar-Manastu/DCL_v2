@@ -181,7 +181,7 @@ If the folder contains `name.tex` (or the JSON section set) whose stem matches t
 
 ### A1.1 Pre-flight
 
-- **Encrypted / password-protected:** `PARSE_FAILURE` HARD with reason; operator can upload a decrypted copy in the Console or mark skip.
+- **Password-protected (a user password is needed to open):** `PARSE_FAILURE` HARD with reason; operator can upload a decrypted copy in the Console or mark skip. **Owner-password PDFs** that open without a password (permission restrictions only, common for ECSS standards) are decrypted in memory and processed normally (decided 2026-10-22).
 - **Damaged xref / malformed:** attempt repair with `qpdf --qdf`/`pikepdf`; if repaired, record `repaired=true`; else `PARSE_FAILURE`.
 - **Text-layer density per page:** characters per page from the PDF text layer (pypdfium2). Also a **garbage-text detector**: ratio of dictionary words and of printable ASCII; fonts without a ToUnicode map produce "text" that is noise. Density < 50 chars or garbage ratio > 40% → page is treated as image-only for triage.
 - **Rotation:** OCR orientation detection on image-only pages; pages rotated for processing; original kept for rendering with the rotation recorded.

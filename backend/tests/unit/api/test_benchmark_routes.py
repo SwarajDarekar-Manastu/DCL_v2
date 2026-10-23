@@ -162,3 +162,76 @@ def test_run_detail_404(client, token, monkeypatch):
     run_id = uuid.uuid4()
     response = client.get(f"/benchmark/runs/{run_id}", headers=bearer(token))
     assert response.status_code == 404 and response.json()["detail"] == f"no run {run_id}"
+
+
+def queued_run(suite="telemetry"):
+    from datetime import UTC, datetime
+
+    from backend.benchmark.catalog import RunView
+
+    return RunView(
+        run_id=uuid.UUID("0b6d9f0e-aaaa-4bbb-8ccc-444455556666"),
+        suite=suite,
+        status="queued",
+        case_versions={"tp07-t04-peak": 2},
+        git_commit=None,
+        model_config={"requested_by": "engineer@manastuspace.com"},
+        pipeline_version=None,
+        active_doc_count=None,
+        started_at=datetime(2026, 10, 22, 10, 0, tzinfo=UTC),
+        finished_at=None,
+        aggregate={},
+    )
+
+
+def test_a_new_run_is_committed_then_started_at_once(client, token, db, monkeypatch):
+    sent, order = [], []
+    monkeypatch.setattr(benchmark, "start_run", lambda session, body, actor: queued_run(body.suite))
+    original_commit = db.commit
+    db.commit = lambda: (order.append("commit"), original_commit())
+    client.app.dependency_overrides[benchmark.get_task_sender] = lambda: (
+        lambda name, args: (
+            order.append("send"),
+            sent.append((name, args)),
+        )
+    )
+    response = client.post("/benchmark/runs", json={"suite": "telemetry"}, headers=bearer(token, [REVIEWERS]))
+    assert response.status_code == 201 and response.json()["status"] == "queued"
+    assert sent == [("dcl.benchmark.start", ["0b6d9f0e-aaaa-4bbb-8ccc-444455556666"])]
+    assert order == ["commit", "send"]
+
+
+def test_a_run_stays_queued_when_the_broker_is_down(client, token, monkeypatch, caplog):
+    monkeypatch.setattr(benchmark, "start_run", lambda session, body, actor: queued_run(body.suite))
+
+    def broken(name, args):
+        raise ConnectionError("redis unreachable")
+
+    client.app.dependency_overrides[benchmark.get_task_sender] = lambda: broken
+    with caplog.at_level("WARNING", logger="backend.api.benchmark"):
+        response = client.post(
+            "/benchmark/runs", json={"suite": "telemetry"}, headers=bearer(token, [REVIEWERS])
+        )
+    assert response.status_code == 201 and response.json()["status"] == "queued"
+    assert "the sweep will start it" in caplog.text
+
+
+def test_a_refused_run_is_not_started(client, token, monkeypatch):
+    sent = []
+
+    def refuse(session, body, actor):
+        raise Problem(422, "suite empty has no active cases")
+
+    monkeypatch.setattr(benchmark, "start_run", refuse)
+    client.app.dependency_overrides[benchmark.get_task_sender] = lambda: lambda name, args: sent.append(name)
+    response = client.post("/benchmark/runs", json={"suite": "empty"}, headers=bearer(token, [REVIEWERS]))
+    assert response.status_code == 422 and sent == []
+
+
+def test_importing_the_router_does_not_build_the_celery_app():
+    import subprocess
+    import sys
+
+    code = "import sys, backend.api.benchmark; print('backend.celery_redis.app' in sys.modules)"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "False"

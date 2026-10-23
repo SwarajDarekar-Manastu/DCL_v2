@@ -203,11 +203,18 @@ class CaseDelta(BaseModel):
 
 
 class RunComparison(BaseModel):
+    """Only cases scored in both runs are compared; the rest are listed so nothing hides."""
+
     base: RunView
     head: RunView
     newly_failing: list[CaseDelta]
     newly_passing: list[CaseDelta]
     still_failing: list[CaseDelta]
+    not_scored: list[CaseDelta] = Field(
+        default_factory=list, description="the runner could not score it in one run"
+    )
+    only_in_base: list[str] = Field(default_factory=list)
+    only_in_head: list[str] = Field(default_factory=list)
     aggregate_delta: dict[str, float]
     config_diff: dict[str, dict[str, Any]]
 
@@ -554,21 +561,27 @@ def cancel_run(session: Session, run_id: uuid.UUID) -> RunView:
 def compare_runs(session: Session, base_id: uuid.UUID, head_id: uuid.UUID) -> RunComparison:
     base, head = run_results(session, base_id), run_results(session, head_id)
     before = {r.case_id: r for r in base.results}
-    newly_failing, newly_passing, still_failing = [], [], []
+    after = {r.case_id: r for r in head.results}
+    scored = lambda r: r.passed is not None and not (r.metrics or {}).get("error")  # noqa: E731
+    newly_failing, newly_passing, still_failing, not_scored = [], [], [], []
     for r in head.results:
         b = before.get(r.case_id)
+        if b is None:
+            continue
         delta = CaseDelta(
             case_id=r.case_id,
-            base_passed=b.passed if b else None,
+            base_passed=b.passed,
             head_passed=r.passed,
-            base_failure_class=b.failure_class if b else None,
+            base_failure_class=b.failure_class,
             head_failure_class=r.failure_class,
         )
-        if r.passed is False and (b is None or b.passed is not False):
+        if not (scored(b) and scored(r)):
+            not_scored.append(delta)
+        elif b.passed and not r.passed:
             newly_failing.append(delta)
-        elif r.passed is True and b is not None and b.passed is False:
+        elif not b.passed and r.passed:
             newly_passing.append(delta)
-        elif r.passed is False:
+        elif not r.passed:
             still_failing.append(delta)
     numeric = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)  # noqa: E731
     aggregate_delta = {
@@ -592,6 +605,9 @@ def compare_runs(session: Session, base_id: uuid.UUID, head_id: uuid.UUID) -> Ru
         base=base.run,
         head=head.run,
         newly_failing=newly_failing,
+        not_scored=not_scored,
+        only_in_base=sorted(set(before) - set(after)),
+        only_in_head=sorted(set(after) - set(before)),
         newly_passing=newly_passing,
         still_failing=still_failing,
         aggregate_delta=aggregate_delta,

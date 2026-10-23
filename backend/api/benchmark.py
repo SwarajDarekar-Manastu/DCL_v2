@@ -1,6 +1,8 @@
 """Benchmark API routes (file 08 §5.5): thin wrappers over backend/benchmark/catalog.py. Owner: S3."""
 
+import logging
 import uuid
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -47,6 +49,31 @@ router = APIRouter(prefix="/benchmark", tags=["benchmark"])
 Viewer = Annotated[ConsoleUser, Depends(require_role(ConsoleRole.VIEWER))]
 Reviewer = Annotated[ConsoleUser, Depends(require_role(ConsoleRole.REVIEWER))]
 DB = Annotated[Session, Depends(get_session)]
+log = logging.getLogger(__name__)
+
+START_TASK = "dcl.benchmark.start"  # S2's runner (backend/benchmark/tasks.py)
+TaskSender = Callable[[str, list[str]], None]
+
+
+def get_task_sender() -> TaskSender:
+    """Celery send_task by name; the Celery app is imported only when a run is started."""
+
+    def send(name: str, args: list[str]) -> None:
+        from backend.celery_redis.app import app
+
+        app.send_task(name, args=args)
+
+    return send
+
+
+def _start_now(send: TaskSender, run_id: str) -> None:
+    """Best effort: when the broker is unreachable the run stays QUEUED and the runner's sweep starts it."""
+    try:
+        send(START_TASK, [run_id])
+    except Exception:  # broker down or not configured for this role
+        log.warning(
+            "could not enqueue %s for run %s; the sweep will start it", START_TASK, run_id, exc_info=True
+        )
 
 
 def _http(exc: Problem) -> HTTPException:
@@ -144,8 +171,13 @@ def get_runs(
 
 
 @router.post("/runs", status_code=status.HTTP_201_CREATED)
-def post_run(body: RunRequest, user: Reviewer, session: DB) -> RunView:
-    return _write(session, lambda: start_run(session, body, user.email))
+def post_run(
+    body: RunRequest, user: Reviewer, session: DB, send: Annotated[TaskSender, Depends(get_task_sender)]
+) -> RunView:
+    """Snapshot the cases as a QUEUED run, commit, then ask the runner to start it at once."""
+    run = _write(session, lambda: start_run(session, body, user.email))
+    _start_now(send, str(run.run_id))
+    return run
 
 
 @router.get("/runs/{run_id}")

@@ -51,11 +51,17 @@
 					<span class="text-muted-foreground">Head</span>
 					<a class="font-mono" href={runHref(data.head.run_id)}>{data.head.run_id.slice(0, 8)}</a>
 					<ToneBadge tone="outline">{data.head.suite}</ToneBadge>
+					{#if data.base.suite !== data.head.suite}<ToneBadge tone="outline">base: {data.base.suite}</ToneBadge>{/if}
 				</p>
 			{/if}
 		{/snippet}
 
 		{#if error}<Notice tone="error" class="mb-4">{error}</Notice>{/if}
+		{#if data && data.base.suite !== data.head.suite}
+			<Notice tone="warning" class="mb-4"
+				>These runs belong to different suites ({data.base.suite}, {data.head.suite}). Only cases in both are compared, and the summary deltas mix different questions.</Notice
+			>
+		{/if}
 		{#if data}
 			{#if items.length}
 				<ul class="m-0 mb-5 grid list-none grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border p-0 md:grid-cols-4" aria-label="Summary">
@@ -72,7 +78,7 @@
 			{/if}
 
 			<div class="grid gap-5">
-				{#each [{ title: 'Newly failing', rows: data.newly_failing, cls: 'text-hard' }, { title: 'Newly passing', rows: data.newly_passing, cls: 'text-ok' }, { title: 'Still failing', rows: data.still_failing, cls: '' }] as group (group.title)}
+				{#each [{ title: 'Newly failing', rows: data.newly_failing, cls: 'text-hard' }, { title: 'Newly passing', rows: data.newly_passing, cls: 'text-ok' }, { title: 'Still failing', rows: data.still_failing, cls: '' }, { title: 'Not scored in one run (runner error)', rows: data.not_scored ?? [], cls: 'text-warn' }] as group (group.title)}
 					<section class="panel">
 						<div class="panel-header">
 							<h2 class={cn('panel-title', group.cls)}>{group.title} <span class="num font-mono">({group.rows.length})</span></h2>
@@ -95,6 +101,16 @@
 						{/if}
 					</section>
 				{/each}
+
+				{#if data.only_in_base?.length || data.only_in_head?.length}
+					<section class="panel" aria-label="Cases in one run only">
+						<div class="panel-header"><h2 class="panel-title">Cases in one run only (not compared)</h2></div>
+						<dl class="kv px-4 py-3 text-sm">
+							{#if data.only_in_base?.length}<dt>Only in base</dt><dd class="font-mono text-xs">{data.only_in_base.join(', ')}</dd>{/if}
+							{#if data.only_in_head?.length}<dt>Only in head</dt><dd class="font-mono text-xs">{data.only_in_head.join(', ')}</dd>{/if}
+						</dl>
+					</section>
+				{/if}
 
 				<section class="panel">
 					<div class="panel-header"><h2 class="panel-title">Configuration changes</h2></div>

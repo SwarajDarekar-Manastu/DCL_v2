@@ -16,7 +16,7 @@
 	import { session } from '$lib/auth/session.svelte';
 	import ResultDrilldown from '$lib/components/benchmark/ResultDrilldown.svelte';
 	import { compareHref, runHref, suiteHref } from '$lib/components/benchmark/links';
-	import { byCategory, failureCounts, isActive, POLL_MS, ribbon, RUN_TONE, runProgress } from '$lib/components/benchmark/run_view';
+	import { byCategory, failureCounts, isActive, outcome, POLL_MS, resultError, ribbon, RUN_TONE, runProgress } from '$lib/components/benchmark/run_view';
 	import { Button } from '$lib/components/ui/button';
 	import Notice from '$lib/components/shell/Notice.svelte';
 	import Page from '$lib/components/shell/Page.svelte';
@@ -75,9 +75,10 @@
 	let items = $derived(data ? ribbon(data.run.aggregate, comparison?.base.aggregate ?? null) : []);
 	let failures = $derived(data ? failureCounts(data.results) : []);
 	let categories = $derived(data ? byCategory(data.results, cases) : []);
-	let passedCount = $derived(data ? data.results.filter((r) => r.passed === true).length : 0);
-	let failedCount = $derived(data ? data.results.filter((r) => r.passed === false).length : 0);
-	let unscoredCount = $derived(data ? data.results.filter((r) => r.passed === null).length : 0);
+	let outcomes = $derived(data ? data.results.map((r) => outcome(r)) : []);
+	let passedCount = $derived(outcomes.filter((o) => o === 'pass').length);
+	let failedCount = $derived(outcomes.filter((o) => o === 'fail').length);
+	let errorCount = $derived(outcomes.filter((o) => o === 'error').length);
 	let newlyFailing = $derived(new Set(comparison?.newly_failing.map((d) => d.case_id) ?? []));
 
 	async function cancel() {
@@ -106,9 +107,10 @@
 				<div class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
 					<ToneBadge tone={RUN_TONE[run.status]}>{run.status}</ToneBadge>
 					<span><span class="num text-foreground font-mono">{Object.keys(run.case_versions).length}</span> cases</span>
-					<span><span class="num text-foreground font-mono">{passedCount + failedCount + unscoredCount}</span> results</span>
+					<span><span class="num text-foreground font-mono">{outcomes.length}</span> results</span>
 					<span class="text-ok"><span class="num font-mono font-medium">{passedCount}</span> passed</span>
 					<span class={failedCount ? 'text-hard' : ''}><span class="num font-mono font-medium">{failedCount}</span> failed</span>
+					{#if errorCount}<span class="text-warn"><span class="num font-mono font-medium">{errorCount}</span> not scored (runner error)</span>{/if}
 					{#if run.git_commit}<span>commit <code>{run.git_commit.slice(0, 10)}</code></span>{/if}
 					{#if run.started_at}<span class="num">started {run.started_at.slice(0, 16).replace('T', ' ')}</span>{/if}
 				</div>
@@ -197,12 +199,12 @@
 							<tr class={cn(newlyFailing.has(r.case_id) && 'shadow-[inset_3px_0_0_var(--hard)]', open === r.case_id && 'bg-muted/60')}>
 								<td class="font-mono text-xs">{r.case_id}{#if newlyFailing.has(r.case_id)}<span class="sr-only"> (newly failing)</span>{/if}</td>
 								<td>
-									{#if r.passed === null}<span class="text-muted-foreground">—</span>{:else if r.passed}<ToneBadge tone="ok">✓ pass</ToneBadge>{:else}<ToneBadge
-											tone="hard">✗ fail</ToneBadge
-										>{/if}
+									{#if outcome(r) === 'error'}<ToneBadge tone="warn" title={resultError(r) ?? ''}>error</ToneBadge>{:else if outcome(r) === 'pending'}<span
+											class="text-muted-foreground">—</span
+										>{:else if r.passed}<ToneBadge tone="ok">✓ pass</ToneBadge>{:else}<ToneBadge tone="hard">✗ fail</ToneBadge>{/if}
 								</td>
 								<td class="font-mono text-xs">{r.failure_class ?? ''}</td>
-								<td class="num font-mono">{r.latency_ms ?? '—'} ms</td>
+								<td class="num font-mono">{r.latency_ms === null || r.latency_ms === undefined ? '—' : `${r.latency_ms} ms`}</td>
 								<td class="text-right">
 									<Button variant="ghost" size="xs" aria-expanded={open === r.case_id} onclick={() => (open = open === r.case_id ? null : r.case_id)}
 										>{open === r.case_id ? 'Hide' : 'Details'}</Button

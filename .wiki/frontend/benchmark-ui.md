@@ -31,15 +31,15 @@ Provides (viewer reads; reviewer writes):
 - `GET /benchmark/suites` (case counts by status and category, last run with pass rate); `GET /benchmark/suites/{suite}/export`; `POST /benchmark/suites/{suite}/import` (counts created / versioned / unchanged)
 - `GET /benchmark/cases?suite&status&category` (latest versions); `GET /benchmark/cases/{case_id}` (all versions); `POST /benchmark/cases`; `POST /benchmark/cases/{case_id}/versions` (an edit is a new version); `POST …/approve` (draft → active); `POST …/retire`
 - `POST /benchmark/drafts` (signed Pipe identity only; Add-to-benchmark action; status `draft`, `source_trace_id` kept)
-- `GET /benchmark/runs?suite&limit`; `POST /benchmark/runs` (snapshot `{case_id: version}` of the active cases or a subset; status `queued` for S2's runner); `GET /benchmark/runs/{run_id}` (run + per-case results); `POST …/cancel`
-- `GET /benchmark/compare?base&head` (newly failing / passing / still failing, numeric aggregate deltas, config diff)
+- `GET /benchmark/runs?suite&limit`; `POST /benchmark/runs` (snapshot `{case_id: version}` of the active cases or a subset; status `queued`; after the commit it sends `dcl.benchmark.start(run_id)` by name so S2's runner starts it at once, best effort: with the broker down the runner's one-minute sweep starts it); `GET /benchmark/runs/{run_id}` (run + per-case results); `POST …/cancel`
+- `GET /benchmark/compare?base&head` (only cases scored in both runs count: newly failing / passing / still failing; `not_scored` when the runner errored in either run; `only_in_base` / `only_in_head`; numeric aggregate deltas; config diff). The page warns when the suites differ
 - `CaseSpec` (file 08 §5.3): language, paraphrases, expected_numeric {metric, value, unit, tolerance_pct}, expected_citations / must_not_cite {file_name | doc_id | standard_id, page}, expected_tools {tools, ordered}, expected_entities, retrieval_gold_anchors {doc_id, anchor `<kind>:<value>:<hash>`}, expected_behavior (5 values), clarification_answer; unknown keys are refused
 
 Every authored change writes `audit_events` (entity_type `benchmark_case`: create, new_version, approve, retired, draft_from_chat).
 
 Runs are started from the suite page (all active cases, or a picked subset in suite order) and from the case editor ("Run this case now", one case id), both over `POST /benchmark/runs`. A queued or running run page shows a progress bar (results against the case snapshot) and re-reads `GET /benchmark/runs/{id}` every 5 s until the status is final, in addition to live `run` events, so it does not depend on the runner publishing them.
 
-Results dashboard: ribbon of aggregate keys (pass_rate, numeric_exactness, citation_recall, faithfulness, recall_at_8, recall_at_30, latency_p95_ms, cost_total) with deltas against a chosen baseline run, failure classes, pass counts per category, newly failing cases; drilldown reads the per-result metric keys agreed with S2 (numeric, citations, tools, faithfulness, recall_at_8/30, reranker_margin, judge_rationale, warnings) and links gold anchors to the viewer.
+Results dashboard: ribbon of S2's aggregate keys (`pass_rate`, `numeric_exactness`, `citation_recall`, `faithfulness`, `retrieval_recall_at_8`, `retrieval_recall_at_30`, `latency_p50_ms`, `latency_p95_ms`, `cost_total`) with deltas against a chosen baseline; while a run is going the pass rate says "(n of m so far)" (`cases_done`/`cases_total`). Each result has an outcome: pass, fail, error (S2's `metrics.error`: the runner could not score the case; counted as RUN_ERROR, kept apart from failure classes) or pending. The drilldown reads S2's `score_case` metrics: `mode`, `numeric.details` (expected, tolerance, found, ok; unit_error, verifier_dropped), checks for citations, tools, entities, `behavior.checks` (with judge rationale), `provenance_labeling`, `out_of_scope`, faithfulness, `retrieval` (recall@8/@30, rerank margin), and gold anchors linked to the viewer.
 
 Consumes:
 - S1 migration 0006 (`benchmark_cases`, `benchmark_runs`, `benchmark_results`, enums), S2 runner fills runs and results, S2 `POST /v1/retrieval/search` for the Retrieval lab, S5 golden suites (import format = `SuiteExport`)
@@ -62,6 +62,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] A run snapshots the active case versions and stays queued for the runner
 - [x] Runs start for a suite, a picked subset or one case; the run page shows progress and polls until the status is final (unit tests in `run_view.test.ts`)
 - [x] Compare lists newly failing / passing cases with failure classes and aggregate deltas
+- [x] Checked against six real runs on the stack (2026-10-22): suite list, run progress and polling, results with drilldown, compare
 - [ ] A deliberate regression is caught with the right failure class (needs S2's runner, M10)
 - [ ] A re-index does not zero retrieval metrics (anchors resolve; needs the runner)
 - [x] Console screens (suites, case editor, runs, results with baseline, drilldown, compare, retrieval lab); checked in the browser against a mock API, including a reranker-off regression shown as RERANK_MISS with the config diff
@@ -71,6 +72,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-22 | S3 | Aligned with S2's runner output (aggregate and metric keys, runner errors as their own outcome, partial pass rate); compare counts only cases scored in both runs |
+| 2026-10-22 | S3 | A new run enqueues `dcl.benchmark.start` after the commit (lazy Celery import) |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | Benchmark API and `CaseSpec` over migration 0006; unit and ParadeDB integration tests |
 | 2026-10-22 | S3 | Console screens and Retrieval lab; live `run` topic refreshes run pages |
