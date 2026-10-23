@@ -24,6 +24,7 @@ from backend.llm_engine.prompts import load_prompt
 
 SYNTHESIS_PROMPT = "synthesis.v1"
 VERIFY_PROMPT = "verify.v1"
+REPAIR_PROMPT = "repair.v1"
 EVIDENCE_CHARS = 9000
 
 
@@ -153,6 +154,59 @@ async def _synthesize(
     return result.parsed
 
 
+class RepairedClaim(BaseModel):
+    index: int
+    text: str | None = None
+    evidence_ids: list[str] = []
+
+
+class Repair(BaseModel):
+    claims: list[RepairedClaim] = []
+
+
+async def _repair(
+    client,
+    question: str,
+    output: SynthesisOutput,
+    rejected: dict[int, str],
+    items: list[Evidence],
+    language: str,
+    trace_id: str | None,
+) -> tuple[SynthesisOutput, set[int]]:
+    """Only the rejected claims go back, each with its evidence items, at thinking MEDIUM (DECISIONS
+    2026-10-23); the corrected sentence replaces the old one in place, a null removes it. Returns the
+    patched output and the indexes of the claims that changed."""
+    by_id = {e.id: e for e in items}
+    blocks = []
+    for i, reason in rejected.items():
+        claim = output.claims[i]
+        cited = [by_id[eid] for eid in claim.evidence_ids if eid in by_id] or items
+        evidence = "\n".join(f"[{e.id}] {e.text}" for e in cited)
+        blocks.append(f"Claim {i}: {claim.text}\nRejected because: {reason}\nEvidence:\n<<<\n{evidence}\n>>>")
+    prompt = load_prompt("engine", REPAIR_PROMPT)
+    result = await client.generate(
+        model=model_id(),
+        messages=[
+            Message.system(prompt.system.replace("$language", language)),
+            Message.user(prompt.render_user(question=question, claims="\n\n".join(blocks))),
+        ],
+        context=CallContext(purpose="engine.repair", prompt_version=REPAIR_PROMPT, trace_id=trace_id),
+        schema=Repair,
+        thinking=ThinkingLevel.MEDIUM,
+    )
+    markdown, claims, changed = output.answer_markdown, list(output.claims), set()
+    for fix in result.parsed.claims:
+        if fix.index not in rejected or not 0 <= fix.index < len(claims) or not fix.text:
+            continue
+        old = claims[fix.index]
+        markdown = markdown.replace(old.text, fix.text)
+        claims[fix.index] = old.model_copy(
+            update={"text": fix.text, "evidence_ids": fix.evidence_ids or old.evidence_ids}
+        )
+        changed.add(fix.index)
+    return output.model_copy(update={"answer_markdown": markdown, "claims": claims}), changed
+
+
 async def verify(client, claims: list[Claim], items: list[Evidence], trace_id: str | None) -> list[Verdict]:
     if not claims:
         return []
@@ -230,9 +284,18 @@ async def answer(
     rejected = _rejected(output, verdicts, mismatches)
     passes = 1
     if rejected:
-        notes = "\n".join(f"- {output.claims[i].text} ({reason})" for i, reason in rejected.items())
-        output = await _synthesize(client, question, analysis, items, language, notes, trace_id)
-        verdicts = await verify(client, output.claims, items, trace_id)
+        output, changed = await _repair(client, question, output, rejected, items, language, trace_id)
+        if changed:
+            order = sorted(changed)
+            fresh = await verify(client, [output.claims[i] for i in order], items, trace_id)
+            renumbered = {
+                order[v.claim_index]: v.model_copy(update={"claim_index": order[v.claim_index]})
+                for v in fresh
+                if 0 <= v.claim_index < len(order)
+            }
+            verdicts = [renumbered.get(v.claim_index, v) for v in verdicts if v.claim_index not in changed]
+            verdicts += list(renumbered.values())
+            verdicts.sort(key=lambda v: v.claim_index)
         mismatches = numeric_mismatches(output.claims, items)
         rejected = _rejected(output, verdicts, mismatches)
         passes = 2
