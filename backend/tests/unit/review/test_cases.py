@@ -299,3 +299,12 @@ def test_undo_of_mark_junk_restores_the_file_and_rebuilds(session, seeded):
     assert (item.status, item.gate_reason) == ("LANDED", None)
     assert undone.rebuild_doc_id == seeded["other"].doc_id
     assert session.get(Document, seeded["other"].doc_id).status == "PROCESSING"
+
+
+def test_a_flag_with_an_unknown_route_still_opens(session, seeded):
+    key = f"{seeded['sheet'].doc_id}:"
+    (flag,) = session.scalars(select(ReviewFlag).where(ReviewFlag.case_key == key)).all()
+    flag.route = "answer"
+    session.commit()
+    detail = cases.case_detail(session, key, is_admin=False)
+    assert (detail.flags[0].route, detail.summary.route) == (None, "C")
