@@ -922,3 +922,8 @@ Merged / ready: targeted synthesis repair (DECISIONS 2026-10-23).
 - Warm query embedding on the GPU: 0.02–0.03 s (first call 0.14–0.26 s).
 Blocked on: nothing
 Next: A1.9–A1.10 office formats and the twin page map, then the queue (D/F readiness, A1 report, handwriting calibration, Gemini split, trace writer, prompt registry, translation, re-embed counts)
+## 2026-10-23 12:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: public samples for formats the corpus lacks in git-ignored data/samples/web/ (21 files: STL ×2, STEP, DXF ×2, draw.io ×2, SVG ×2, VSDX ×2, PPTX, DOCX ×2, notebook, MATLAB, C, zip with nested folders and a .DS_Store junk member, tar.gz, synthetic TDMS with unit strings) with SOURCES.md (URL, license, sha256); none for DWG (no permissive source) or .wbpz (no public sample). data/samples (real + web, 286 files) copied to the s6-routes worktree. Formats suite: 13 golden cases (A1, B, C, E, G), answers verified in the local samples. Test: `uv run pytest -q backend/tests/benchmark`
+Blocked on: nothing
+Needs from others: S6: index the web samples so the formats suite can run
+Next: idle until messaged
