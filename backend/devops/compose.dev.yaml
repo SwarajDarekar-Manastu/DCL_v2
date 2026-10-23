@@ -61,7 +61,7 @@ services:
 
   worker-cpu-parse:
     environment: *dev-env
-    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "cpu_parse@%h", "--loglevel", "INFO", "--queues", "cpu_parse", "--pool", "prefork", "--concurrency", "2", "--soft-time-limit", "3600", "--time-limit", "3900", "--max-memory-per-child", "3145728"]
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "cpu_parse@%h", "--loglevel", "INFO", "--queues", "cpu_parse", "--pool", "prefork", "--concurrency", "1", "--soft-time-limit", "3600", "--time-limit", "3900", "--max-memory-per-child", "6291456"]
     deploy:
       resources:
         limits:

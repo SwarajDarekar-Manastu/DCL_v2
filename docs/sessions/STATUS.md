@@ -1097,3 +1097,9 @@ Merged / ready: A1 formula and code enrichment cap and per-stage timings. This a
 Blocked on: nothing
 Needs from others: S1: pass pipeline_config `routes.A1.formula_enrichment_max` from office_run to `process_pdf(enrichment_max=)`. Lead: a lower default (about 30 formulas, roughly 15 min) or GPU enrichment, given about 30 s per formula on CPU
 Next: the four A1 crop defects (clip to the region bbox, handwriting crop gate, table crops, contact sheet)
+
+## 2026-10-23 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c-cpuconc
+Merged / ready: c524367 on claude/gifted-hofstadter-0bec1c-cpuconc (from main 4b4d3c5): cpu_parse concurrency 1 (1 × 6 GiB, 3,600/3,900 s kept) and media concurrency 1 (4 GiB kept). First set (api, beat, io_light, telemetry_stream, media, vision_batch, embed, benchmark) runs main cf02d3d, healthy. Test: uv run pytest 1478 passed, 367 skipped
+Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
+Needs from others: Lead — merge; S1 — drain signal for cpu_parse; S2 — Route D import fix on main before the media recreate
+Next: recreate cpu_parse from main at S1's signal (or by about 09:55Z, the two-hour cap); recreate worker-media once S2's D fix is on main
