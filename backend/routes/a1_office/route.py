@@ -17,7 +17,9 @@ Not yet here: the visual-twin check and page map (A1.0), DOCX/PPTX (A1.9–A1.10
 import hashlib
 import json
 import logging
+import time
 from collections.abc import Callable, Iterable
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 from backend.dispatcher.contract import (
@@ -29,13 +31,24 @@ from backend.dispatcher.contract import (
     ProcessedAsset,
     ProcessedDocument,
     ProcessedNode,
+    Suggestion,
     UnitHash,
 )
 from backend.dispatcher.folder_context import FolderContext
 from backend.llm_engine.gemini_types import GeminiError, Image
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType, Route
 from backend.routes.a1_office.assets import image_fields
-from backend.routes.a1_office.convert import OcrPlan, Run, RunResult, convert_run, low_ocr_pages, plan_runs
+from backend.routes.a1_office.convert import (
+    ENRICHMENT_MAX,
+    EnrichmentBudget,
+    OcrPlan,
+    Run,
+    RunResult,
+    convert_run,
+    enrichment_budget,
+    low_ocr_pages,
+    plan_runs,
+)
 from backend.routes.a1_office.figures import read_figures
 from backend.routes.a1_office.handwriting import transcribe_regions
 from backend.routes.a1_office.metadata import extract_metadata, humanize, plan_conflicts
@@ -147,26 +160,48 @@ def process_pdf(
     critical_field_patterns: Iterable[str] = (),
     engine_by_script: dict[str, str] | None = None,
     convert: Callable[..., RunResult] = convert_run,
+    enrichment_max: int = ENRICHMENT_MAX,
 ) -> ProcessedDocument:
+    """`enrichment_max`: pipeline_config `routes.A1.formula_enrichment_max` (formula and code items per
+    document sent to Docling's CodeFormula model; the rest keep their layout text and are flagged)."""
     cir_uri = f"s3://dcl-cir/{blob_sha256}/A1/v{PARSER_VERSION}/"
+    clock = StageClock()
     try:
-        checked: Preflight = preflight(pdf_bytes)
+        with clock("preflight"):
+            checked: Preflight = preflight(pdf_bytes)
     except PreflightFailure as failure:
         return _failed(blob_sha256, file_name, failure, pdf_bytes, cir_uri)
     context = " / ".join([*folder.breadcrumb, file_name])
     pdf = checked.pdf_bytes
-    decisions = triage_pages(
-        checked,
-        vision,
-        context=context,
-        doc_id=doc_id,
-        cloud_allowed=cloud_allowed,
-        engine_by_script=engine_by_script,
-    )
+    with clock("triage"):
+        decisions = triage_pages(
+            checked,
+            vision,
+            context=context,
+            doc_id=doc_id,
+            cloud_allowed=cloud_allowed,
+            engine_by_script=engine_by_script,
+        )
     by_page = {d.page_no: d for d in decisions}
 
-    first_pass = [convert(pdf, run, file_name) for run in plan_runs(decisions)]
-    results, still_low, passes = _second_pass(pdf, first_pass, by_page, file_name, convert)
+    run_seconds: list[dict] = []
+
+    def timed_convert(data: bytes, run: Run, name: str) -> RunResult:
+        started = time.monotonic()
+        result = convert(data, run, name)
+        run_seconds.append(
+            {
+                "pages": [run.first, run.last],
+                "ocr": f"{run.ocr.engine}:{'+'.join(run.ocr.languages)}" if run.ocr else None,
+                "seconds": round(time.monotonic() - started, 3),
+                "docling": result.timings,
+            }
+        )
+        return result
+
+    with clock("convert"), enrichment_budget(enrichment_max) as budget:
+        first_pass = [timed_convert(pdf, run, file_name) for run in plan_runs(decisions)]
+        results, still_low, passes = _second_pass(pdf, first_pass, by_page, file_name, timed_convert)
 
     page_contexts: dict[int, PageContext] = {}
     page_ocr: dict[int, float | None] = {}
@@ -188,6 +223,7 @@ def process_pdf(
     flags: list[Flag] = []
     assets: list[ProcessedAsset] = []
 
+    transcribe_started = time.monotonic()
     for page_no in still_low:
         reading = None
         if cloud_allowed:
@@ -236,39 +272,45 @@ def process_pdf(
             )
             passes[page_no] = "transcribe_failed" if cloud_allowed else "ocr_low"
     nodes = sorted(nodes, key=lambda n: (n.page_no or 0, n.ordinal))
+    clock.add("transcribe_page", time.monotonic() - transcribe_started)
+    if budget.skipped:
+        flags.append(enrichment_flag(budget))
 
-    figures = read_figures(
-        nodes,
-        pdf_bytes=pdf,
-        blob_sha256=blob_sha256,
-        vision=vision,
-        context=context,
-        doc_id=doc_id,
-        cloud_allowed=cloud_allowed,
-        put_asset=stores.put_asset,
-    )
-    tables = check_tables(
-        figures.nodes,
-        pdf_bytes=pdf,
-        page_ocr=page_ocr,
-        vision=vision,
-        context=context,
-        doc_id=doc_id,
-        cloud_allowed=cloud_allowed,
-    )
-    handwriting = transcribe_regions(
-        tables.nodes,
-        decisions,
-        pdf_bytes=pdf,
-        blob_sha256=blob_sha256,
-        vision=vision,
-        context=context,
-        test_plan_id=folder.test_plan_id,
-        doc_id=doc_id,
-        cloud_allowed=cloud_allowed,
-        critical_field_patterns=critical_field_patterns,
-        put_asset=stores.put_asset,
-    )
+    with clock("figures"):
+        figures = read_figures(
+            nodes,
+            pdf_bytes=pdf,
+            blob_sha256=blob_sha256,
+            vision=vision,
+            context=context,
+            doc_id=doc_id,
+            cloud_allowed=cloud_allowed,
+            put_asset=stores.put_asset,
+        )
+    with clock("tables"):
+        tables = check_tables(
+            figures.nodes,
+            pdf_bytes=pdf,
+            page_ocr=page_ocr,
+            vision=vision,
+            context=context,
+            doc_id=doc_id,
+            cloud_allowed=cloud_allowed,
+        )
+    with clock("handwriting"):
+        handwriting = transcribe_regions(
+            tables.nodes,
+            decisions,
+            pdf_bytes=pdf,
+            blob_sha256=blob_sha256,
+            vision=vision,
+            context=context,
+            test_plan_id=folder.test_plan_id,
+            doc_id=doc_id,
+            cloud_allowed=cloud_allowed,
+            critical_field_patterns=critical_field_patterns,
+            put_asset=stores.put_asset,
+        )
     nodes = [n.model_copy(update={"ordinal": i}) for i, n in enumerate(fill_empty_figures(handwriting.nodes))]
     flags += figures.flags + tables.flags + handwriting.flags
     assets += figures.assets + handwriting.assets
@@ -289,6 +331,7 @@ def process_pdf(
     flags += metadata.flags
     flags += plan_conflicts(folder, furniture, page_text.get(1, ""))
 
+    render_started = time.monotonic()
     for page_no in range(1, checked.page_count + 1):
         png = render_page(pdf, page_no, dpi=RENDER_DPI)
         uri = stores.put_asset(f"pages/{blob_sha256}/{page_no:04d}.png", png)
@@ -301,6 +344,7 @@ def process_pdf(
                 **image_fields(png),
             )
         )
+    clock.add("page_renders", time.monotonic() - render_started)
     for result in results:
         stores.put_cir(
             f"docling/{result.run.first}-{result.run.last}.json",
@@ -324,6 +368,16 @@ def process_pdf(
         )
         stores.put_cir(f"pages/{page_no}.txt", page_text.get(page_no, "").encode("utf-8"))
     stores.put_cir("page_hashes.json", json.dumps(hashes).encode())
+    stores.put_cir(
+        "timings.json",
+        json.dumps(
+            {
+                "stages": clock.seconds,
+                "runs": run_seconds,
+                "enrichment": {"limit": budget.limit, "used": budget.used, "skipped": budget.skipped},
+            }
+        ).encode(),
+    )
 
     return without_nul(
         ProcessedDocument(
@@ -338,6 +392,42 @@ def process_pdf(
             flags=_unique_flags(flags),
             unit_hashes=[UnitHash(unit="page", key=str(p), sha256=h) for p, h in sorted(hashes.items())],
         )
+    )
+
+
+class StageClock:
+    """Seconds per route stage, for the CIR's `timings.json`."""
+
+    def __init__(self):
+        self.seconds: dict[str, float] = {}
+
+    def add(self, stage: str, seconds: float) -> None:
+        self.seconds[stage] = round(self.seconds.get(stage, 0.0) + seconds, 3)
+
+    @contextmanager
+    def __call__(self, stage: str):
+        started = time.monotonic()
+        try:
+            yield
+        finally:
+            self.add(stage, time.monotonic() - started)
+
+
+def enrichment_flag(budget: EnrichmentBudget) -> Flag:
+    """SOFT LOW_CONFIDENCE: formulas and code beyond the per-document cap kept their layout text."""
+    return Flag(
+        flag_type=FlagType.LOW_CONFIDENCE_EXTRACTION,
+        severity=FlagSeverity.SOFT,
+        anchor=FlagAnchor(content_sha256=hashlib.sha256(b"formula_enrichment_cap").hexdigest()[:16]),
+        evidence=LowConfidenceEvidence(),
+        suggested_resolution=Suggestion(
+            confidence=0.0,
+            rationale=(
+                f"formula and code enrichment skipped for {budget.skipped} of "
+                f"{budget.used + budget.skipped} items (cap {budget.limit} per document): "
+                "their text is the layout text, not LaTeX or code"
+            ),
+        ),
     )
 
 

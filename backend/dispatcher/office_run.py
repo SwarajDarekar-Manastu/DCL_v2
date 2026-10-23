@@ -43,6 +43,11 @@ def process_a1_document(
                 pipeline_config.get(ctx.session, "critical_field_patterns", default=[]) or []
             ),
             engine_by_script=pipeline_config.get(ctx.session, "routes.A1.ocr_engine_by_script", default=None),
+            enrichment_max=pipeline_config.get(
+                ctx.session,
+                pipeline_config.FORMULA_ENRICHMENT_MAX,
+                default=pipeline_config.FORMULA_ENRICHMENT_DEFAULT,
+            ),
             **common_options(ctx),
         )
 

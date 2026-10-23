@@ -120,6 +120,7 @@ def test_clean_run_without_indexer_is_parked_with_its_inputs(session, minio):
     )
     assert kwargs["folder"].test_plan_id == "TP07"
     assert kwargs["critical_field_patterns"] == ("(?i)pressure",)
+    assert kwargs["enrichment_max"] == 30  # routes.A1.formula_enrichment_max unset: the decided default
     assert (outcome.status, outcome.hard_flags, outcome.soft_flags) == ("WAITING_FOR_ROUTE", 0, 1)
     assert doc.metadata_sources[PROCESSED_MARK]["uri"] == f"s3://dcl-cir/{sha}/A1/v1/processed.json"
     assert session.scalars(select(ReviewFlag.severity)).all() == ["SOFT"]
