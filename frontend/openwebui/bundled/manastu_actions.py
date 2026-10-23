@@ -47,7 +47,9 @@ class DclConfig:
     shared_secret: str
     console_url: str
     connect_timeout_s: float = 10.0
-    read_timeout_s: float = 180.0  # longest gap between two SSE frames (design synthesis p95 is 60 s)
+    # Longest silence between two SSE frames, above the engine's 300 s workflow limit (ANSWER_TIMEOUT_S): a
+    # slow answer arrives or ends with the engine's own timeout, never cut off by the Pipe first.
+    read_timeout_s: float = 330.0
 
 
 def build_config(engine_url: str, shared_secret: str, console_url: str = "") -> DclConfig:

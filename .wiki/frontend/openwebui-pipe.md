@@ -58,8 +58,10 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] The engine's own verifier accepts the Pipe's signed headers; a tampered body is refused
 - [x] The installable bundle is current and passes the same tests
 - [x] Install script for the stack's Open WebUI (create/update, activate, valves, actions on the engine model), tested against the v0.12.3 routes
-- [ ] Installed in the stack's Open WebUI by the admin (after S4 brings it up and the admin account exists)
-- [ ] Pilot run in a real Open WebUI against the live engine (M8/M9)
+- [x] Installed in the stack's Open WebUI (2026-10-23, by script with the admin session; functions, valves, engine model with actions, 13 playbook skills)
+- [x] Live answer through Open WebUI (golden case tp23-max-firing-duration: 10 s, 4 claims verified, 19 s; 6 sources whose Console links resolve exact with cited boxes)
+- [ ] Answer text markers match the sources (engine writes [E1]…, citations are numbered 1…; S2)
+- [ ] Attachments used by the engine (upload slot and PUT work; the engine answered from the corpus instead; S2)
 - [x] $-mentioned DCL playbook skill → `playbook_hint` (first tagged mention; tags become labels; source and bundle tests)
 - [x] Attachments forwarded through `POST /assets/upload` (only the user's own files, size-capped, failures skipped with a notification)
 - [x] Tests listed above pass; status entry written; this map updated; plan sheet deleted
@@ -75,6 +77,7 @@ uv run python -m pytest backend/tests/unit/openwebui
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Installed on the stack's Open WebUI; read timeout 330 s (above the engine's 300 s limit) after a live attachment answer was cut at 180 s |
 | 2026-10-23 | S3 | Skill mention → `AnswerOptions.playbook_hint` through the `dcl-playbook` tag; mention tags become labels |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | Pipe, api_endpoint.py, config.py, single-file build, replay tests |
