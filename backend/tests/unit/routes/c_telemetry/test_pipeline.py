@@ -192,6 +192,14 @@ def test_the_folder_cfg_reaches_the_flag_evidence(session, minio):
     }
     assert evidence["y1"]["scaling_equation"] == "y=b*50.044"
     assert evidence["y1"]["scaling_source"] == "LJStreamM.cfg"
+    y1 = evidence["y1"]
+    assert y1["columns"][y1["column_index"]] == "y1" and y1["time_column"] == y1["columns"][0]
+    assert len(y1["sample_rows"]) == 20 and len(y1["sample_rows"][0]) == len(y1["columns"])
+    assert y1["series"][0][0] == 0.0 and 150 <= len(y1["series"]) <= 200  # 200 rows: one point per row picked
+    assert all(len(point) == 2 for point in y1["series"])
+    import json
+
+    assert len(json.dumps(y1)) < 50_000
 
 
 def _fake_indexer(session, doc, doc_id, cloud_allowed):

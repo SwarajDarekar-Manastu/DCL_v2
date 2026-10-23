@@ -411,6 +411,13 @@ class UnitTelemetryEvidence(_Model):
     candidate_units: list[CandidateUnit] = []
     sibling_units: list[SiblingUnit] = []
     sanity: SanityBounds | None = None
+    columns: list[str] = Field(default=[], description="column names of sample_rows, time column first")
+    column_index: int | None = Field(default=None, ge=0, description="this channel's position in columns")
+    sample_rows: list[list[float | str | None]] = Field(default=[], description="first 20 data rows, parsed")
+    time_column: str | None = None
+    series: list[tuple[float, float | None]] = Field(
+        default=[], description="about 200 [t_rel_s, value] points, downsampled from raw.parquet"
+    )
 
 
 class UnitFactEvidence(_Model):

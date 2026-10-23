@@ -216,6 +216,23 @@ def route_f(doc_id: str) -> dict[str, object]:
     return _run(doc_id, process_f_document)
 
 
+@app.task(name="dcl.process.refresh_halted_route_c", queue=IO_LIGHT)
+def refresh_halted_route_c() -> dict[str, int]:
+    """One-off: resume every HALTED Route C document from its own raw.parquet so its flags carry the
+    current evidence (sample rows, column index, downsampled series for the Review UI). Still HALTED after."""
+    from sqlalchemy import select
+
+    with Session(_engine(), expire_on_commit=False) as session:
+        doc_ids = list(
+            session.scalars(
+                select(Document.doc_id).where(Document.route == "C", Document.status == DocumentStatus.HALTED)
+            )
+        )
+    for doc_id in doc_ids:
+        app.send_task("dcl.process.resume_route_c", args=[str(doc_id)], queue=TELEMETRY_STREAM)
+    return {"documents": len(doc_ids)}
+
+
 @app.task(name="dcl.process.resume_for_rule", queue=IO_LIGHT)
 def resume_for_rule(rule_id: str) -> dict[str, int]:
     """Retroactive pass after a channel_map rule is created or changed (file 06 §8): every HALTED Route C

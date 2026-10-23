@@ -362,6 +362,7 @@ def process_series(
                 observe(batch)
             raw_uri = f"s3://{telemetry.bucket}/{telemetry_key(str(run_id), 'raw')}"
         quantiles = _quantiles(path, header.channels)
+        previews = raw_preview(path, header.columns)
         outcome = (
             _normalize(
                 path,
@@ -467,6 +468,7 @@ def process_series(
         for c in resolution.unresolved
     ]
     flags += [_with_header(f, header.header_lines, inputs.folder_config) for f in outcome.flags]
+    flags = [with_preview(f, previews) for f in flags]
     ambient, ambient_value = resolution.ambient()
     t0 = outcome.run.t0 if outcome.clean else None
     rate = timebase.actual_rate_hz
@@ -818,3 +820,73 @@ def source_from_schema(schema: Mapping, name: str) -> SeriesSource:
         failed=failed,
         title=schema.get("title"),
     )
+
+
+# ---------------------------------------------------------------- evidence preview (Review UI)
+
+SAMPLE_ROWS = 20
+SERIES_POINTS = 200
+
+
+def _cell(value) -> float | str | None:
+    if value is None:
+        return None
+    if isinstance(value, float):
+        return None if value != value else float(f"{value:.6g}")
+    if isinstance(value, int):
+        return value
+    return str(value)[:64]
+
+
+def raw_preview(path: Path, columns: Sequence[str]) -> dict:
+    """What the Review UI draws for a channel flag: the first rows of the file as parsed and about
+    ``SERIES_POINTS`` evenly spaced ``[t_rel_s, value]`` points per channel, streamed from raw.parquet."""
+    parquet = pq.ParquetFile(path)
+    names = [c for c in columns if c in parquet.schema_arrow.names]
+    total = parquet.metadata.num_rows
+    wanted = (
+        sorted({round(i * (total - 1) / (SERIES_POINTS - 1)) for i in range(SERIES_POINTS)}) if total else []
+    )
+    rows: list[list] = []
+    picked: dict[str, list] = {c: [] for c in names}
+    start, cursor = 0, 0
+    for batch in parquet.iter_batches(columns=names, batch_size=65_536):
+        data = {c: batch.column(i).to_pylist() for i, c in enumerate(names)}
+        if len(rows) < SAMPLE_ROWS:
+            for j in range(min(SAMPLE_ROWS - len(rows), batch.num_rows)):
+                rows.append([_cell(data[c][j]) for c in names])
+        end = start + batch.num_rows
+        while cursor < len(wanted) and wanted[cursor] < end:
+            j = wanted[cursor] - start
+            for c in names:
+                picked[c].append(data[c][j])
+            cursor += 1
+        start = end
+    time_column = names[0] if names else None
+    t0 = next((t for t in picked.get(time_column, []) if t is not None), 0.0) if time_column else 0.0
+    times = [None if t is None else float(f"{t - t0:.6g}") for t in picked.get(time_column, [])]
+    series = {
+        c: [
+            (t, _cell(v) if not isinstance(_cell(v), str) else None)
+            for t, v in zip(times, picked[c], strict=True)
+            if t is not None
+        ]
+        for c in names[1:]
+    }
+    return {"columns": names, "rows": rows, "time_column": time_column, "series": series}
+
+
+def with_preview(flag: Flag, preview: dict) -> Flag:
+    """The flag with the preview of its channel, when it is a telemetry unit flag on a column of the file."""
+    evidence = flag.evidence
+    channel = flag.anchor.channel
+    if not isinstance(evidence, UnitTelemetryEvidence) or channel not in preview.get("series", {}):
+        return flag
+    update = {
+        "columns": preview["columns"],
+        "column_index": preview["columns"].index(channel),
+        "sample_rows": preview["rows"],
+        "time_column": preview["time_column"],
+        "series": preview["series"][channel],
+    }
+    return flag.model_copy(update={"evidence": evidence.model_copy(update=update)})
