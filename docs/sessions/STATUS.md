@@ -1036,3 +1036,9 @@ Merged / ready: the samples smoke test (ed1692a), `backend/tests/unit/routes/tes
 Blocked on: Lead: pin `resvg-py==0.5.0` in the parse group for SVG renders (Route E follow-up 1).
 Needs from others: as above.
 Next: SVG render and read_schematic, after the pin.
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: SVG render in Route E. The SVG is rasterized with resvg-py at the draw.io size rule and read_schematic runs on it.
+Test: `uv run pytest -q` exit 0; E: 14 tests pass.
+Blocked on: nothing.
+Needs from others: nothing.
+Next: idle until messaged.
