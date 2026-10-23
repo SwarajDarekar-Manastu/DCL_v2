@@ -6,6 +6,7 @@
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import { Button } from '$lib/components/ui/button';
 	import Notice from '$lib/components/shell/Notice.svelte';
+	import FlagGuide from './FlagGuide.svelte';
 	import {
 		candidateChoices,
 		channelRows,
@@ -116,8 +117,9 @@
 
 <section class="grid gap-4" aria-label="Channel map">
 	<div class="bg-warn-bg border-warn-border rounded-lg border px-4 py-3" role="status">
-		<p class="m-0 font-medium">
+		<p class="m-0 flex items-center gap-1.5 font-medium">
 			This file has {rows.length} columns with no unit. Pick the unit for each so processing can continue.
+			<FlagGuide flagType="UNIT_AMBIGUITY" />
 		</p>
 		<p class="text-muted-foreground m-0 mt-1 text-[13px]">
 			Each column is a measurement <abbr title="A channel is one column of a test-data file: one sensor recorded over time.">channel</abbr>. Until every channel has a unit the file is

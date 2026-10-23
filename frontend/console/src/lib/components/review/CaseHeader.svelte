@@ -8,6 +8,7 @@
 	import ToneBadge from '$lib/components/shell/ToneBadge.svelte';
 	import { auditUrl } from './audit';
 	import { ageText, isAging } from './format';
+	import { groupLocations, shortFolder } from './locations';
 
 	interface Props {
 		detail: CaseDetail;
@@ -22,6 +23,7 @@
 	let hardOpen = $derived(detail.flags.filter((f) => f.severity === 'HARD' && ['OPEN', 'IN_PROGRESS', 'REOPENED'].includes(f.status)).length);
 	let undoable = $derived(detail.flags.some((f) => f.status === 'RESOLVED' || f.status === 'REJECTED_FILE'));
 	let pageNo = $derived(/^\d+$/.test(summary.page_or_sheet) ? Number(summary.page_or_sheet) : null);
+	let places = $derived(groupLocations(detail.locations));
 	let historyHref = $derived(auditUrl({ entity_id: [summary.case_key, ...detail.flags.map((f) => f.flag_id)] }));
 	let viewerHref = $derived(
 		summary.doc_id ? `/docs/${summary.doc_id}/viewer${pageNo ? `?anchor=${encodeURIComponent(`page:${pageNo}:`)}` : ''}` : null
@@ -56,10 +58,24 @@
 		<span class="bg-border mx-1 h-4 w-px" aria-hidden="true"></span>
 		{#if viewerHref}<Button variant="ghost" size="sm" href={viewerHref}><FileTextIcon />Open in viewer</Button>{/if}
 		<Button variant="ghost" size="sm" href={historyHref}><HistoryIcon />History</Button>
-		{#each detail.locations as location (location.path)}
-			{#if location.web_url}<Button variant="ghost" size="sm" href={location.web_url} target="_blank" rel="noopener noreferrer"
-					><ExternalLinkIcon />Open folder in OneDrive</Button
-				>{/if}
-		{/each}
+		{#if places.primary}
+			<Button variant="ghost" size="sm" href={places.primary.url} target="_blank" rel="noopener noreferrer" title={places.primary.folder}
+				><ExternalLinkIcon />Open in OneDrive</Button
+			>
+		{/if}
+		{#if places.others.length}
+			<details class="relative">
+				<summary class="text-muted-foreground hover:text-foreground cursor-pointer text-xs select-none">{places.others.length} other cop{places.others.length === 1 ? 'y' : 'ies'}</summary>
+				<ul class="bg-popover absolute z-20 mt-1 grid max-h-64 w-80 max-w-[90vw] list-none gap-0.5 overflow-auto rounded-md border p-2 text-xs shadow-md">
+					{#each places.others as link (link.url)}
+						<li>
+							<a class="hover:underline" href={link.url} target="_blank" rel="noopener noreferrer" title={link.folder}
+								>{shortFolder(link.folder)} <span class="text-muted-foreground">· {link.file}</span></a
+							>
+						</li>
+					{/each}
+				</ul>
+			</details>
+		{/if}
 	</div>
 </header>

@@ -5,6 +5,7 @@
 	import Notice from '$lib/components/shell/Notice.svelte';
 	import SeverityBadge from '$lib/components/shell/SeverityBadge.svelte';
 	import ToneBadge from '$lib/components/shell/ToneBadge.svelte';
+	import FlagGuide from './FlagGuide.svelte';
 	import DryRunPanel from './DryRunPanel.svelte';
 	import EvidencePane from './EvidencePane.svelte';
 	import ResolutionForm from './ResolutionForm.svelte';
@@ -46,6 +47,7 @@
 	<header class="panel-header bg-muted/40 flex-wrap justify-start gap-2">
 		<SeverityBadge severity={flag.severity} />
 		<h3 class="m-0 font-mono text-[13px] font-semibold">{flag.flag_type} <span class="sr-only">({flag.severity})</span></h3>
+		<FlagGuide flagType={flag.flag_type} />
 		{#if where(flag.anchor)}<span class="text-muted-foreground text-xs">{where(flag.anchor)}</span>{/if}
 		<ToneBadge tone={open ? 'outline' : 'ok'} class="ml-auto">{flag.status}</ToneBadge>
 	</header>
