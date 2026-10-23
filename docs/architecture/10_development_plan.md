@@ -99,6 +99,7 @@ Why not ingest everything at the start: the metadata crawl and even the download
 | `media` | 2 | 4 GB | HEIC conversion, FFmpeg, whisper (CPU) |
 | `vision_batch` | 2 (async) | 1 GB | Gemini vision/enrichment batch orchestration (I/O bound) |
 | `embed` | 1–2 | 2 GB | batches to the embedding service (GPU) |
+| `benchmark` | 1 (prefork) | 2 GB, child recycled past 1.5 GB | benchmark runner (`dcl.benchmark.*`), Answer Engine in process, soft 950 s / hard 1000 s (added 2026-10-23) |
 
 Task time limits and retries per queue; dead-letter queue with a Console "Failed tasks" page. The queue layer is load-tested in M1 with synthetic tasks before any parser exists.
 

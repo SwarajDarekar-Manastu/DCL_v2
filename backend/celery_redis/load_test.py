@@ -4,8 +4,9 @@ Runs inside any backend container of a live stack (it needs the broker), for exa
 
     docker compose -p dcl-v2 exec worker-io-light python -m backend.celery_redis.load_test --tasks 5000
 
-Plan: `--tasks` synthetic no-op tasks spread evenly over the six queues; a `--transient` share fails once
-or twice and succeeds on retry; a `--permanent` share fails past max_retries and must be dead-lettered;
+Plan: `--tasks` synthetic no-op tasks spread evenly over every queue of `POOLS` (seven); a `--transient`
+share fails once or twice and succeeds on retry; a `--permanent` share fails past max_retries and must be
+dead-lettered;
 `--oom` extra tasks on telemetry_stream allocate memory until the container kills their worker process
 and must be dead-lettered after MAX_DELIVERIES. The run passes when every task is done on the queue it was
 routed to, or dead-lettered for the expected reason. Container-level containment (no other worker

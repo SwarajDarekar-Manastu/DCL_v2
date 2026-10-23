@@ -8,7 +8,7 @@ set -euo pipefail
 PROJECT="dcl-v2"
 if [[ "${1:-}" == "--project" ]]; then PROJECT="$2"; shift 2; fi
 RUNNER="${DCL_LOAD_TEST_SERVICE:-worker-io-light}"
-WORKERS=(worker-io-light worker-cpu-parse worker-telemetry-stream worker-media worker-vision-batch worker-embed)
+WORKERS=(worker-io-light worker-cpu-parse worker-telemetry-stream worker-media worker-vision-batch worker-embed worker-benchmark)
 
 state() { docker inspect --format '{{.State.StartedAt}} restarts={{.RestartCount}}' "${PROJECT}-$1-1"; }
 
