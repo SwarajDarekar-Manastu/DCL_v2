@@ -5,6 +5,10 @@ transport and production behavior: retries with jittered backoff and Retry-After
 classification, a circuit breaker, bounded concurrency per model, an idempotency key per call, timeouts,
 an inline-size guard, the daily budget and gateway quota, and one llm_calls record per call. Capabilities the
 probe has not confirmed (gemini_capabilities.json) fall back to a plain call or raise CapabilityUnavailable.
+
+By default every call is written to `llm_calls` through S1's `db_ledger` on the stack database and priced from
+pipeline_config `models.prices` (StackLedger). `ledger=None` turns recording off (unit tests); an explicit
+`prices` mapping replaces the configured prices.
 """
 
 import asyncio
@@ -168,6 +172,67 @@ class _Call:
     idempotency_key: str
 
 
+PRICE_REFRESH_S = 300.0
+
+
+class StackLedger:
+    """The default llm_calls hook: rows through S1's `db_ledger`, prices from pipeline_config `models.prices`.
+
+    Prices are re-read at most every `refresh_s`, so an operator's price change reaches running processes
+    without a restart. A failed read keeps the last prices (empty at first, so `cost_estimate` stays null).
+    """
+
+    def __init__(
+        self,
+        read_prices: Callable[[], dict[str, ModelPrice]],
+        write: Callable[[LlmCallRecord], None],
+        refresh_s: float = PRICE_REFRESH_S,
+        clock: Callable[[], float] = time.monotonic,
+    ):
+        self._read_prices, self._write, self._refresh_s, self._clock = read_prices, write, refresh_s, clock
+        self._prices: dict[str, ModelPrice] = {}
+        self._read_at: float | None = None
+        self._lock = threading.Lock()
+
+    @classmethod
+    def for_settings(cls, settings: Settings) -> "StackLedger":
+        from sqlalchemy.orm import Session
+
+        from backend.postgres.ledger import db_ledger
+        from backend.postgres.pipeline_config import model_prices
+        from backend.postgres.session import engine_from_settings
+
+        engine = None
+
+        def connected():
+            nonlocal engine
+            engine = engine or engine_from_settings(settings)
+            return engine
+
+        def read_prices() -> dict[str, ModelPrice]:
+            with Session(connected()) as session:
+                return model_prices(session)
+
+        return cls(read_prices, lambda record: db_ledger(connected())(record))
+
+    def prices(self) -> dict[str, ModelPrice]:
+        with self._lock:
+            now = self._clock()
+            if self._read_at is None or now - self._read_at >= self._refresh_s:
+                self._read_at = now
+                try:
+                    self._prices = self._read_prices()
+                except Exception:
+                    log.warning("models.prices unavailable; keeping %d known prices", len(self._prices))
+            return self._prices
+
+    def __call__(self, record: LlmCallRecord) -> None:
+        self._write(record)
+
+
+_STACK_LEDGER: Any = object()
+
+
 class GeminiClient:
     """Async and sync access to Gemini through the gateway. One instance per process."""
 
@@ -176,7 +241,7 @@ class GeminiClient:
         settings: Settings | None = None,
         *,
         capabilities: Capabilities | None = None,
-        ledger: Callable[[LlmCallRecord], None] | None = None,
+        ledger: Callable[[LlmCallRecord], None] | None = _STACK_LEDGER,
         budget: DailyTokenBudget | None = None,
         prices: dict[str, ModelPrice] | None = None,
         timeout: httpx.Timeout | None = None,
@@ -199,7 +264,9 @@ class GeminiClient:
         self._default_thinking = settings.gemini_thinking_level
         self._default_include_thoughts = settings.gemini_include_thoughts
         self.capabilities = capabilities or Capabilities.load()
-        self._ledger, self._budget, self._prices = ledger, budget, prices or {}
+        if ledger is _STACK_LEDGER:
+            ledger = StackLedger.for_settings(settings)
+        self._ledger, self._budget, self._prices = ledger, budget, prices
         self._timeout = timeout or httpx.Timeout(connect=10.0, read=180.0, write=60.0, pool=10.0)
         self._stream_timeout = httpx.Timeout(connect=10.0, read=stream_idle_s, write=60.0, pool=10.0)
         self._max_attempts = max_attempts
@@ -291,11 +358,16 @@ class GeminiClient:
             req, body, self.adapter.path(model, stream), context, time.monotonic(), str(uuid.uuid4())
         )
 
+    def _price_list(self) -> dict[str, ModelPrice]:
+        if self._prices is not None:
+            return self._prices
+        return self._ledger.prices() if isinstance(self._ledger, StackLedger) else {}
+
     def _record(self, call: _Call, usage: Usage, request_id: str | None, error: GeminiError | None) -> int:
         latency_ms = int((time.monotonic() - call.started) * 1000)
         if self._budget is not None:
             self._budget.record(usage.total_tokens)
-        price = self._prices.get(call.req.model)
+        price = self._price_list().get(call.req.model)
         record = LlmCallRecord(
             at=datetime.now(UTC),
             model=call.req.model,
