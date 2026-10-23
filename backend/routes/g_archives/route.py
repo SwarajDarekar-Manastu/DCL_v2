@@ -48,7 +48,7 @@ from backend.postgres.enums import (
     NodeType,
     Route,
 )
-from backend.routes.g_archives import cad, wbpz
+from backend.routes.g_archives import cad
 from backend.routes.g_archives.archive import ArchiveBomb, ArchiveEncrypted, Expander, Member, archive_kind
 from backend.sync.gate import GateConfig
 
@@ -260,6 +260,8 @@ def process_archive(
 
 
 def _wbpz(members: list[Member], title: str, offset: int) -> tuple[list[ProcessedNode], list[Mention], dict]:
+    from backend.routes.g_archives import wbpz  # lxml: imported only when a .wbpz is processed
+
     nodes, mentions = [], []
     summaries, materials, systems = {}, [], set()
     for member in members:

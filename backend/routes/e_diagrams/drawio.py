@@ -20,14 +20,19 @@ from urllib.parse import unquote
 
 from lxml import etree
 
-from backend.routes.e_diagrams.graph import Component, Connection, Graph, Group, Note, Page, strip_html
+from backend.routes.e_diagrams.graph import (  # noqa: F401 — DiagramError is re-exported for callers
+    Component,
+    Connection,
+    DiagramError,
+    Graph,
+    Group,
+    Note,
+    Page,
+    strip_html,
+)
 
 DEFAULT_MEDIA = {"dashed": "electrical", "solid": "fluid"}
 CONTAINER_STYLES = re.compile(r"(^|;)(group|swimlane|container=1|shape=(table|tableRow))(;|$)")
-
-
-class DiagramError(ValueError):
-    pass
 
 
 def safe_parser() -> etree.XMLParser:
