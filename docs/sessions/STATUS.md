@@ -914,3 +914,9 @@ Latency profile (run 1: 225–236 s per answered case):
 Blocked on: S4 (through the Lead): `capabilities: [gpu]` (or `[gpu, compute, utility]`) on the models service, then recreate it. Verify `/models/health` reports `"device":"cuda","dtype":"bfloat16"`.
 Needs from others: S1's A1 re-run
 Next: re-time one live case after the GPU fix to get the Gemini share; then the OCR-per-script and cost report after S1's A1 re-run; then the handwriting calibration
+
+## 2026-10-23 12:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: public samples for formats the corpus lacks in git-ignored data/samples/web/ (21 files: STL ×2, STEP, DXF ×2, draw.io ×2, SVG ×2, VSDX ×2, PPTX, DOCX ×2, notebook, MATLAB, C, zip with nested folders and a .DS_Store junk member, tar.gz, synthetic TDMS with unit strings) with SOURCES.md (URL, license, sha256); none for DWG (no permissive source) or .wbpz (no public sample). data/samples (real + web, 286 files) copied to the s6-routes worktree. Formats suite: 13 golden cases (A1, B, C, E, G), answers verified in the local samples. Test: `uv run pytest -q backend/tests/benchmark`
+Blocked on: nothing
+Needs from others: S6: index the web samples so the formats suite can run
+Next: idle until messaged
