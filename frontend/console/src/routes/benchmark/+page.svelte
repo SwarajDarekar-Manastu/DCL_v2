@@ -12,10 +12,15 @@
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
 	import ToneBadge from '$lib/components/shell/ToneBadge.svelte';
 	import { live } from '$lib/live.svelte';
+	import SuiteClone from '$lib/components/benchmark/SuiteClone.svelte';
+	import SuiteImport from '$lib/components/benchmark/SuiteImport.svelte';
 
 	let suites = $state<SuiteSummary[]>([]);
 	let runs = $state<BenchmarkRun[]>([]);
 	let error = $state('');
+	let notice = $state('');
+	let cloning = $state<string | null>(null);
+	let reloadSuites = $state(0);
 	let busy = $state(false);
 	let picked = $state<string[]>([]);
 	let canRun = $derived(hasRole(session.user?.roles ?? [], 'reviewer'));
@@ -24,6 +29,7 @@
 
 	$effect(() => {
 		void live.lastRunEvent;
+		void reloadSuites;
 		Promise.all([listSuites(), listRuns()])
 			.then(([s, r]) => {
 				suites = s;
@@ -78,9 +84,13 @@
 		{/snippet}
 
 		{#if error}<Notice tone="error" class="mb-4">{error}</Notice>{/if}
+		{#if notice}<Notice tone="success" class="mb-4">{notice}</Notice>{/if}
 
 		<section class="panel mb-6" aria-labelledby="suites-title">
-			<div class="panel-header"><h2 id="suites-title" class="panel-title">Suites</h2></div>
+			<div class="panel-header flex flex-wrap items-center justify-between gap-2">
+				<h2 id="suites-title" class="panel-title">Suites</h2>
+				{#if canRun}<SuiteImport onDone={(m) => ((notice = m), (reloadSuites += 1))} />{/if}
+			</div>
 			{#if suites.length === 0 && !error}
 				<EmptyState class="m-4" title="No suites yet" description="Import one or create a case." />
 			{:else}
@@ -99,8 +109,21 @@
 								<td class="text-right whitespace-nowrap">
 									{#if canRun}<Button size="xs" disabled={busy || !s.cases_by_status.active} onclick={() => run(s.suite)}>Run</Button>{/if}
 									<Button variant="outline" size="xs" onclick={() => download(s.suite)}>Export</Button>
+									{#if canRun}<Button variant="outline" size="xs" onclick={() => (cloning = cloning === s.suite ? null : s.suite)}>Clone</Button>{/if}
 								</td>
 							</tr>
+							{#if cloning === s.suite}
+								<tr class="hover:bg-transparent">
+									<td colspan="6" class="p-3"
+										><SuiteClone
+											suite={s.suite}
+											existing={suites.map((x) => x.suite)}
+											onDone={(m) => ((notice = m), (cloning = null), (reloadSuites += 1))}
+											onCancel={() => (cloning = null)}
+										/></td
+									>
+								</tr>
+							{/if}
 						{/each}
 					</tbody>
 				</table>
