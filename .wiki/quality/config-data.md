@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S5 |
 | Spec | docs/architecture/04 §3.3, §8; 03 §1.3, §A2.1, §C.1; 06 §8; 10 §2 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-23 |
 
 ## Purpose
 
