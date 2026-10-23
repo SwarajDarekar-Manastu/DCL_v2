@@ -661,6 +661,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sync/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Graph Webhook */
+        post: operations["graph_webhook_sync_webhook_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/answer": {
         parameters: {
             query?: never;
@@ -692,6 +709,80 @@ export interface paths {
         put?: never;
         /** Confirm */
         post: operations["confirm_v1_answer__trace_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Prompts List
+         * @description Every prompt version with `latest`, `in_use` (pinned by the code today) and its template variables.
+         */
+        get: operations["prompts_list_v1_prompts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts/{area}/diff/{a}/{b}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Prompt Diff */
+        get: operations["prompt_diff_v1_prompts__area__diff__a___b__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts/{area}/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Prompt Text */
+        get: operations["prompt_text_v1_prompts__area___version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts/{area}/{version}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prompt Run
+         * @description Run on sample: one Gemini call with the configured model; reviewers and admins (it costs tokens).
+         */
+        post: operations["prompt_run_v1_prompts__area___version__run_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1683,6 +1774,11 @@ export interface components {
             crop_uri: string;
             /** Model Value */
             model_value?: string | null;
+            /**
+             * Ocr Text
+             * @description the OCR engine's text of this crop (viewer text toggle)
+             */
+            ocr_text?: string | null;
             /** Printed Label */
             printed_label?: string | null;
         };
@@ -2078,6 +2174,11 @@ export interface components {
              * @enum {string}
              */
             kind: "low_confidence";
+            /**
+             * Page Ocr Text
+             * @description the page's OCR text, shown by the PageViewer's text toggle (file 08 §4.2)
+             */
+            page_ocr_text?: string | null;
             /** Table A Html */
             table_a_html?: string | null;
             /** Table B Html */
@@ -4607,6 +4708,37 @@ export interface operations {
             };
         };
     };
+    graph_webhook_sync_webhook_post: {
+        parameters: {
+            query?: {
+                validationToken?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     answer_v1_answer_post: {
         parameters: {
             query?: never;
@@ -4670,6 +4802,129 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prompts_list_v1_prompts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown[];
+                };
+            };
+        };
+    };
+    prompt_diff_v1_prompts__area__diff__a___b__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                area: string;
+                a: string;
+                b: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prompt_text_v1_prompts__area___version__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                area: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prompt_run_v1_prompts__area___version__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                area: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
