@@ -8,7 +8,7 @@ describe('Sidebar', () => {
 	it('hides areas the user cannot use', () => {
 		render(Sidebar, { user: user(['viewer']), currentPath: '/ops', onSignOut: () => {} });
 		const links = screen.getAllByRole('link').map((a) => a.textContent?.trim());
-		expect(links).toEqual(['DCL Console', 'Benchmark', 'Entities', 'Ops']);
+		expect(links).toEqual(['DCL Console', 'Benchmark', 'Ops']);
 		expect(screen.getByRole('link', { name: 'Ops' }).getAttribute('aria-current')).toBe('page');
 		expect(screen.getByText('Viewer')).toBeTruthy();
 	});

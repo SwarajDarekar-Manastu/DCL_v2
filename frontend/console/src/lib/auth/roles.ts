@@ -18,7 +18,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
 	{ href: '/review', label: 'Review', role: 'reviewer' },
 	{ href: '/benchmark', label: 'Benchmark', role: 'viewer' },
-	{ href: '/entities', label: 'Entities', role: 'viewer' },
+	{ href: '/entities', label: 'Entities', role: 'reviewer' }, // S1's /entities needs reviewer
 	{ href: '/settings', label: 'Settings', role: 'admin' },
 	{ href: '/ops', label: 'Ops', role: 'viewer' },
 	{ href: '/audit', label: 'Audit', role: 'reviewer' }
