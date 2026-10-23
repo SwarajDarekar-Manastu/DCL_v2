@@ -16,7 +16,7 @@ Configuration screens over pipeline_config with validation, impact counts, cost 
 
 Code:
 - `frontend/console/src/routes/settings/` (`+layout.svelte` admin gate and menu, `+page.ts` redirect to the first section, `[section]/` page and 404 for unknown sections)
-- `frontend/console/src/lib/components/settings/` (`sections.ts` registry: id, title, `pipeline_config` key patterns (`exact`, `family.*`, `routes.<X>.enabled`), apply semantics per section of 08 §3.2; `SectionMenu.svelte` (sections + Users); `settings_form.ts` (key matching, typed drafts, parsing, value comparison); `SettingsEditor.svelte` (keys with typed editors, one batch: preview → apply with reason; 422 per key, 409 reloads); `KeyHistory.svelte` (versions, restore → rollback); `UsersAdmin.svelte` (see console-shell-auth))
+- `frontend/console/src/lib/components/settings/` (`sections.ts` registry: id, title, `pipeline_config` key patterns (`exact`, `family.*`, `routes.<X>.enabled`), apply semantics per section of 08 §3.2; `SectionMenu.svelte` (sections + Users); `settings_form.ts` (key matching, typed drafts, parsing, value comparison); `SettingsEditor.svelte` (keys with typed editors, one batch: preview → apply with reason; 422 per key, 409 reloads); `KeyHistory.svelte` (versions, restore → rollback); `SectionHistory.svelte` ("rollback to version" for a whole section: every write newest first, restore to a moment = one rollback of each key's version from then where it differs; keys created later are kept and named); `UsersAdmin.svelte` (see console-shell-auth))
 - `backend/api/settings.py` (S1 owns the router; the Console calls it only through `api_endpoint.ts`)
 
 Tests and fixtures:
@@ -54,6 +54,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Section rollback to a point in time (file 08 §3.2) |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S3 | Scaffolding: admin-gated layout, section registry and routes, tests |
 | 2026-10-22 | S3 | Editing over S1's /settings API: typed editors, preview with impacts, apply with reason and expected versions, 422/409 handling, history and restore; Users page |

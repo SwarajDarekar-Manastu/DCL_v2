@@ -124,3 +124,29 @@ describe('SettingsEditor', () => {
 		expect(await screen.findByText('gate.junk_names restored to version 1 (now version 3).')).toBeTruthy();
 	});
 });
+
+describe('section rollback', () => {
+	it('restores every changed key of the section to a chosen moment in one rollback', async () => {
+		const at = (key: string, version: number, when: string, value: unknown) => ({ ...entry(key, value, version, `u${version}`), updated_at: when });
+		vi.mocked(api.settingHistory).mockImplementation(async (key: string) => ({
+			items:
+				key === 'gate.junk_names'
+					? [at(key, 2, '2026-10-22T08:14:00Z', ['.DS_Store', 'Thumbs.db']), at(key, 1, '2026-10-21T19:28:00Z', ['.DS_Store'])]
+					: [at(key, 1, '2026-10-21T19:28:00Z', 4294967296)]
+		}));
+		vi.mocked(api.rollbackSettings).mockResolvedValue(appliedResult('gate.junk_names', 3));
+		render(SettingsEditor, { patterns: PATTERNS, title: 'Gate' });
+		await screen.findByText('gate.max_download_bytes');
+		await fireEvent.click(screen.getByRole('button', { name: 'Section history and rollback' }));
+		const history = await screen.findByRole('region', { name: 'Section history' });
+		await waitFor(() => expect(within(history).getAllByRole('listitem')).toHaveLength(3));
+		const oldest = within(history)
+			.getAllByRole('listitem')
+			.find((li) => li.textContent?.includes('gate.junk_names') && li.textContent.includes('v1')) as HTMLElement;
+		await fireEvent.click(within(oldest).getByRole('button', { name: 'Restore to here' }));
+		expect(screen.getByRole('region', { name: 'Restore plan' }).textContent).toContain('gate.junk_names → v1');
+		await fireEvent.click(screen.getByRole('button', { name: 'Restore section' }));
+		expect(api.rollbackSettings).toHaveBeenCalledWith({ versions: { 'gate.junk_names': 1 }, description: 'restore Gate to 2026-10-21T19:28' });
+		expect(await screen.findByText(/Gate restored to 2026-10-21 19:28: gate.junk_names v3\./)).toBeTruthy();
+	});
+});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConfigEntry } from '../../src/lib/api_endpoint';
-import { fromDraft, keyMatches, kindOf, sameValue, sectionKeys, summary, toDraft } from '../../src/lib/components/settings/settings_form';
+import { fromDraft, keyMatches, kindOf, restoreAt, sameValue, sectionKeys, sectionTimeline, summary, toDraft } from '../../src/lib/components/settings/settings_form';
 
 const entry = (key: string, value: unknown, version = 1): ConfigEntry => ({
 	key,
@@ -60,5 +60,42 @@ describe('typed drafts', () => {
 	it('shortens long values for history rows', () => {
 		expect(summary('x'.repeat(200), 10)).toBe('xxxxxxxxx…');
 		expect(summary(['a'])).toBe('["a"]');
+	});
+});
+
+describe('section restore', () => {
+	const h = (key: string, rows: [number, string, unknown][]): ConfigEntry[] =>
+		rows.map(([version, at, value]) => ({ ...entry(key, value, version), updated_at: at, updated_by: `u${version}` }));
+	const histories = {
+		'gate.junk_names': h('gate.junk_names', [
+			[1, '2026-10-21T19:28:00Z', ['a']],
+			[2, '2026-10-22T08:14:00Z', ['a', 'b']],
+			[3, '2026-10-22T08:20:00Z', ['a']]
+		]),
+		'gate.max_download_bytes': h('gate.max_download_bytes', [
+			[1, '2026-10-21T19:28:00Z', 100],
+			[2, '2026-10-22T09:00:00Z', 200]
+		]),
+		'gate.shortcut_extensions': h('gate.shortcut_extensions', [[1, '2026-10-22T10:00:00Z', ['.url']]])
+	};
+
+	it('lists every write newest first', () => {
+		expect(sectionTimeline(histories).map((p) => `${p.key}@${p.version}`)).toEqual([
+			'gate.shortcut_extensions@1',
+			'gate.max_download_bytes@2',
+			'gate.junk_names@3',
+			'gate.junk_names@2',
+			'gate.junk_names@1',
+			'gate.max_download_bytes@1'
+		]);
+	});
+
+	it('restores each key to its version at that moment, skipping unchanged and newer keys', () => {
+		expect(restoreAt(histories, '2026-10-22T08:14:00Z')).toEqual({
+			versions: { 'gate.junk_names': 2, 'gate.max_download_bytes': 1 },
+			newer: ['gate.shortcut_extensions']
+		});
+		// junk_names v1 has the same value as today's v3: nothing to write for it
+		expect(restoreAt(histories, '2026-10-21T19:28:00Z').versions).toEqual({ 'gate.max_download_bytes': 1 });
 	});
 });
