@@ -1084,3 +1084,9 @@ Merged / ready: M5 crop acceptance (`backend/tests/acceptance/M5.md`, `m5_state.
 Blocked on: S1's re-dispatch and S2's crop fix (Lead says when), then I run the check and report counts
 Needs from others: Lead: stack DATABASE/MINIO credentials for the run (S5 has none), or run `m5_state.py report` from the main checkout
 Next: idle until messaged
+
+## 2026-10-23 16:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: the 13 formats cases are now route-level acceptance checks (`backend/tests/acceptance/test_format_routes.py`, `FORMATS.md`): each calls the route entry point on the local public sample (A1 process_office with local soffice, B process_code, C tdms_source, E process_diagram, G process) and asserts the values in git-ignored data/benchmark/formats.local.yaml; zip check also asserts the .DS_Store member is skipped. 13 pass locally, the docx check skips without tesseract (runs in the parse image); a mutation run fails all 13. Engine formats suite removed (template and its binary readers in test_suites.py). Test: `uv run --group parse pytest backend/tests/acceptance/test_format_routes.py`; `uv run pytest -q`
+Blocked on: nothing
+Needs from others: nothing
+Next: idle until messaged (M5 report JSON from the Lead after S2's fix and S1's re-dispatch)
