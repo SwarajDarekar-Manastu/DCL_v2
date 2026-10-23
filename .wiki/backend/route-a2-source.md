@@ -3,54 +3,76 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `backend/route-a2-source` |
-| Status | planned |
-| Owner session | S1 |
-| Spec | docs/architecture/03_phase2_processing_routes.md §5 |
-| Last updated | 2026-10-21 |
+| Status | in-progress |
+| Owner session | S6 |
+| Spec | docs/architecture/03_phase2_processing_routes.md §5 (A2), §1.3 (assembler), file 04 §4, file 06 §4 |
+| Last updated | 2026-10-23 |
 
 ## Purpose
 
-Parse ground-truth report sources: JSON section schemas, LaTeX master/include resolution, macro expansion, Pandoc to Markdown with math and tables intact, page map to the PDF twin.
+Parse the ground-truth report sources: a LaTeX project (master, parts, PDF twin) or a report JSON file becomes one `ProcessedDocument` with section breadcrumbs, `$…$` math, HTML tables, figures with captions, resolved references, a source map to `file:line` and a page map to the compiled PDF.
 
 ## Location
 
-Code:
-- `backend/routes/a2_source/`
+Code (`backend/routes/a2_source/`):
+- `route.py`: `process_latex`, `process_json` (the entry points), `SourceFile`, `Stores`, `can_handle_tex`, `can_handle_json`, flags, CIR
+- `latex.py`: include resolution with a source map (`assemble`), user macros (`collect_macros`), the pylatexenc `Walker` (blocks, labels, numbering), siunitx, `resolve_refs`
+- `tables.py`: `tabular` family → HTML (`multicolumn`, `multirow`, header detection, `longtable` heads and feet)
+- `bib.py`: BibTeX parser, cite text, reference text
+- `page_map.py`: section → twin PDF page (pypdfium2 text, table-of-contents pages skipped)
+- `json_sections.py`: schema sniffer (report section, section file, data array, config, unknown), flatten
 
-Tests and fixtures:
-- `backend/tests/unit/routes/a2_source/`
-- `backend/tests/fixtures/route_a2/`
+Tests: `backend/tests/unit/routes/a2_source/` (synthetic projects inline; `test_real_samples.py` runs on E4 TP12 and E3 when `data/samples/` is present).
 
 ## Interfaces
 
 Provides:
-- section nodes with breadcrumbs
-- source_map and page_map in CIR
+- `process_latex(files, *, title, folder, stores, folder_files, read_file, conflicts, vision, cloud_allowed, doc_id)` and `process_json(files, *, title, folder, stores, schema_config)` → `ProcessedDocument` (route A2, parser_version 1)
+- `files`: the assembler's plan as `SourceFile(path, blob_sha256, data, role)` with roles primary / part / visual_twin
+- Node anchors: `line_start`/`line_end` are lines of `assembled.md`; `metadata.source` = `file:line`, `metadata.pdf_page` = twin page of the section
+- CIR `dcl-cir/{sha256}/A2/v1/`: `assembled.md`, `structure.json`, `source_map.json`, `page_map.json`
+- Assets: `figures/{sha256}/{nnnn}{ext}` (kind `figure_crop`) for `\includegraphics` images found in the folder
+- Mentions: `reference` (bibliography), `quantity` (siunitx, JSON strings with units)
+- Flags: CONFLICT SOFT (assembler), PARSE_FAILURE HARD (full and per-section walk fail; invalid JSON), UNIT_AMBIGUITY SOFT (unit-less numeric table in a results section), SENSITIVE_CONTENT HARD (secret, `backend/sync/gate.scan_secrets`), SCHEMA_UNKNOWN SOFT (JSON)
 
 Consumes:
-- report_json_schemas.yaml (quality/config-data)
+- `backend/dispatcher/assembler.py` plans (S1), `config/report_json_schemas.yaml` (S5)
+- `backend/routes/a1_office/metadata.py` (`extract_metadata`, `plan_conflicts`), `figures.render_plot` (S2)
+- VisionService `classify_image` + `digitize_plot` for plot images, only when cloud processing is allowed
+- pylatexenc 2.11 (parse group, through docling), pypdfium2 for the twin
+
+Waiting on others:
+- S1: adapter registration and the `dcl.process.route_a2` runner (reads the plan's blobs, lists the subtree for `folder_files`, reads siblings by path)
+- Lead: pin `pylatexenc==2.11` in the `parse` group (today it arrives only through docling)
 
 ## Workspace (files to touch when modifying this feature)
 
-Keep this list exact. A plan sheet copies it and adds only what the task truly needs.
-
 - `backend/routes/a2_source/`
 - `backend/tests/unit/routes/a2_source/`
-- `backend/tests/fixtures/route_a2/`
 
 ## Rubric (what "done" means for this feature)
 
-- [ ] Multi-file LaTeX project assembles into one document
-- [ ] Unknown JSON shape indexes generically with SCHEMA_UNKNOWN SOFT
-- [ ] \ref and \cite resolve to readable text in chunks
-- [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
+- [x] Multi-file LaTeX project assembles into one document (E4 TP12: 11 sections and appendices A, B)
+- [x] Unknown JSON shape indexes generically with SCHEMA_UNKNOWN SOFT
+- [x] \ref and \cite resolve to readable text in chunks
+- [x] Every node has a line locator; `source_map.json` maps it to `file:line`
+- [x] Twin page map assigns a page to the TP12 sections (monotone, contents page skipped)
+- [ ] Runner and adapter registered by S1; one live document committed
+- [ ] TikZ figures described (manual: low priority; today a figure node with the caption only)
+
+## Notes
+
+- The manual names Pandoc; file 01 lists "Pandoc / pylatexenc". pylatexenc keeps character positions, which the source map needs, and needs no binary. A failure of the walker on the whole body falls back to one walk per `\section`; only when every section fails is PARSE_FAILURE raised.
+- The real section JSON files (`{id, title, order, content: {text, …}}`, written by `Test_plan_creator.py`) match no schema in `report_json_schemas.yaml`, so they index generically with SCHEMA_UNKNOWN; S5 can add a schema for that shape.
+- doc_kind comes from A1's L1 rules (`Test_plan.tex` → `test_plan` even when the title says Report).
 
 ## Change log
 
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-23 | S6 | Route built: LaTeX (assembly, macros, walker, tables, figures, bibliography, twin page map) and JSON; tests on synthetic projects and E3/E4 |
 
 ## Related
 
-- `.wiki/index.md`
+- `backend/dispatcher-and-route-gating` (assembler, registry), `backend/route-a1-office` (metadata, figures), `backend/chunker-and-anchors`, `quality/config-data` (report schemas)

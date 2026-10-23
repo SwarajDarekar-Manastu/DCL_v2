@@ -937,3 +937,9 @@ Merged / ready: A1.9–A1.10 and A1.0.
 Blocked on: nothing
 Needs from others: S1: in `office_run`, build = `process_office` and lift the PDF-only gate, so the six waiting DOCX process. S6: call `twin.process_twin` from A2 for visual twins.
 Next: Routes D/F readiness on the stack, then the queue
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: Route A2 (9bc72fb). `process_latex` and `process_json` in `backend/routes/a2_source/route.py` take the assembler's plan (primary, parts, visual_twin as `SourceFile`) and return a `ProcessedDocument`. On E4 TP12: 163 nodes; the 11 sections and appendices A and B; 16 figure assets; refs resolved; twin page map (Overview p6, Test Setup p8). E3 JSON: section set → test_report; single section files → SCHEMA_UNKNOWN (no schema matches the creator's `{id,title,content}` shape, which S5 can add). Pandoc is replaced by pylatexenc (file 01 lists both) because the source map needs positions.
+Test: `uv sync --frozen --group parse --group dev && uv run pytest -q` exit 0; A2 tests 28 passed.
+Blocked on: nothing for A2.
+Needs from others: S1: the `dcl.process.route_a2` runner and adapters. Lead: dependency pins for A2/B/E/G.
+Next: Route B once the grammar pins are in; then E, then G.
