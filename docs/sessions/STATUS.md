@@ -1130,3 +1130,11 @@ Merged / ready: the four A1 crop defects, with S5's conventions.
 Blocked on: nothing
 Needs from others: S1 re-run of A1 (cloud on) to see the handwriting gate on ECSS p. 90 live
 Next: the document-model comparison study plan (plan sheet first, sent to the Lead before running)
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Plan sheet for the document-model comparison study: `.wiki/plans/backend__route-a1-office__model-study.md` (sent to the Lead; nothing run yet).
+- It covers the five jobs, their candidates, metrics, item counts, the decision rule, a cost of about 500k Gemini tokens plus about 45 min of CPU, and the gold format to agree with S5.
+- Pins: paddlex==3.7.2 with paddlepaddle==3.3.1, and unimernet==0.2.3. Both conflict with the parse group (paddlex pins PyYAML 6.0.2; unimernet pins transformers 4.42.4), so they would run in isolated study environments only.
+Blocked on: the Lead's acceptance of the plan; S5's gold
+Needs from others: S5: gold per job in the agreed format
+Next: run the study after acceptance

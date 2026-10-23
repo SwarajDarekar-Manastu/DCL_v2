@@ -63,6 +63,7 @@ Temporary, one per task in progress, deleted on completion (see README). Listed 
 
 | Plan sheet | Feature | Session | Opened |
 |------------|---------|---------|--------|
+| [plans/backend__route-a1-office__model-study.md](plans/backend__route-a1-office__model-study.md) | `backend/route-a1-office` | S2 | 2026-10-23 |
 
 ## Maintenance
 
