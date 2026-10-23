@@ -894,3 +894,9 @@ Merged / ready: redeploy from main cf02d3d: api, beat, io_light, telemetry_strea
 Blocked on: S1's A1-drain signal for cpu_parse; time for the RustFS lifecycle watch (interim check 2026-10-23 07:38Z: 3 PENDING, 3 controls ok; due 2026-10-24 00:00Z)
 Needs from others: user — gateway per-model rates for models.prices (the gateway exposes none)
 Next: recreate cpu_parse from main when S1 signals; after 2026-10-24 00:00Z the watch check, then the merge request for this branch
+
+## 2026-10-23 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: worker-media recreated from main f79effb at 08:12Z (concurrency 1, healthy; imports d_photos, f_video, pillow_heif, imagehash, faster_whisper; ffmpeg 5.1.9; sources match f79effb); up to 2 media tasks may have been interrupted (S1 re-dispatches D/F). Parse image built from f79effb for cpu_parse
+Blocked on: S1's A1-drain signal or the 09:55Z cap for the cpu_parse recreate; time for the RustFS lifecycle watch (due 2026-10-24 00:00Z)
+Needs from others: S1 — drain signal
+Next: recreate cpu_parse from the f79effb parse image; after 2026-10-24 00:00Z the watch check, then the merge request for this branch
