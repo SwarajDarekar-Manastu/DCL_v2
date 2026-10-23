@@ -31,6 +31,7 @@ def test_pools_match_file_10_section_4():
     assert {q: (p.pool, p.concurrency, p.memory_limit_mb) for q, p in POOLS.items()} == EXPECTED_FILE_10
     assert POOLS[Queue.TELEMETRY_STREAM].max_memory_per_child_mb == 3072
     assert POOLS[Queue.CPU_PARSE].max_memory_per_child_mb == 6144
+    assert (POOLS[Queue.CPU_PARSE].soft_time_limit_s, POOLS[Queue.CPU_PARSE].time_limit_s) == (3600, 3900)
     benchmark = POOLS[Queue.BENCHMARK]
     assert (benchmark.soft_time_limit_s, benchmark.time_limit_s) == (950, 1000)
 

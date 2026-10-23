@@ -53,7 +53,8 @@ POOLS: dict[Queue, Pool] = {
     pool.queue: pool
     for pool in (
         Pool(Queue.IO_LIGHT, "threads", 4, 1024, None, 300, 360, 5),
-        Pool(Queue.CPU_PARSE, "prefork", 4, 4 * 6144, 6144, 1800, 2100, 2),
+        # 3,600 s: a 420-page standard ran past 1,800 s in CPU enrichment (2026-10-23).
+        Pool(Queue.CPU_PARSE, "prefork", 4, 4 * 6144, 6144, 3600, 3900, 2),
         Pool(Queue.TELEMETRY_STREAM, "prefork", 2, 2 * 3072, 3072, 3600, 3900, 2),
         Pool(Queue.MEDIA, "prefork", 2, 4096, 2048, 3600, 3900, 2),
         Pool(Queue.VISION_BATCH, "threads", 2, 1024, None, 900, 1000, 5),

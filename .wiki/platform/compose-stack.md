@@ -81,6 +81,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S4 | cpu_parse pool limits 3,600 s soft / 3,900 s hard (was 1,800/2,100): a 420-page standard exceeded the soft limit in CPU enrichment |
 | 2026-10-23 | S4 | `media` image target for worker-media: `media` group, ffmpeg/ffprobe, faster-whisper `medium` int8 pre-downloaded, `whisper-cache` volume; `av==18.0.0` pinned (faster-whisper 1.2.1 passes `metadata_errors`, removed in PyAV 19); offline transcription verified |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S4 | RustFS adoption step 1: `minio-init` sets the app policy with `policy_set` (RustFS answers `attach_policy` with AEAD id 2); full init twice + policy scope verified on RustFS 1.0.3 and MinIO |
