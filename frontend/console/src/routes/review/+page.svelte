@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { crumb } from '$lib/components/shell/crumb.svelte';
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -79,6 +80,12 @@
 		};
 	});
 
+	// The open case names the last crumb, so the trail reads Review > <case> and Review goes back to the queue.
+	$effect(() => {
+		crumb.leaf = detail?.summary.title ?? '';
+		return () => (crumb.leaf = '');
+	});
+
 	async function loadMore() {
 		if (!nextCursor) return;
 		try {
@@ -111,6 +118,12 @@
 					{/if}
 					<Button variant="ghost" size="sm" href="/review/rules" class="ml-auto"><ListChecksIcon />Rules</Button>
 				</div>
+				{#if filters.proposed_by_rule_id}
+					<p class="bg-info-bg border-info-border m-0 flex flex-wrap items-center gap-x-2 rounded-md border px-3 py-2 text-xs">
+						Only the files one rule has proposed units for.
+						<button type="button" class="text-link cursor-pointer border-0 bg-transparent p-0 text-xs" onclick={() => setFilters({ ...filters, proposed_by_rule_id: undefined })}>Show all</button>
+					</p>
+				{/if}
 				<QueueFilters {filters} onChange={setFilters} />
 				<div class="mt-2.5"><SavedFilters owner={session.user?.email ?? ''} {filters} onApply={setFilters} /></div>
 			</div>

@@ -6,9 +6,9 @@
 	import type { CaseDetail } from '$lib/api_endpoint';
 	import { Button } from '$lib/components/ui/button';
 	import ToneBadge from '$lib/components/shell/ToneBadge.svelte';
-	import { auditUrl } from './audit';
+	import { auditUrl, decisionsHref } from './audit';
 	import { ageText, isAging } from './format';
-	import { groupLocations, shortFolder } from './locations';
+	import { groupLocations } from './locations';
 
 	interface Props {
 		detail: CaseDetail;
@@ -58,6 +58,9 @@
 		<span class="bg-border mx-1 h-4 w-px" aria-hidden="true"></span>
 		{#if viewerHref}<Button variant="ghost" size="sm" href={viewerHref}><FileTextIcon />Open in viewer</Button>{/if}
 		<Button variant="ghost" size="sm" href={historyHref}><HistoryIcon />History</Button>
+		{#if detail.flags.some((f) => f.status === 'RESOLVED' || f.status === 'REJECTED_FILE')}
+			<Button variant="ghost" size="sm" href={decisionsHref(summary.case_key)}>Edit decisions</Button>
+		{/if}
 		{#if places.primary}
 			<Button variant="ghost" size="sm" href={places.primary.url} target="_blank" rel="noopener noreferrer" title={places.primary.folder}
 				><ExternalLinkIcon />Open in OneDrive</Button
@@ -65,12 +68,16 @@
 		{/if}
 		{#if places.others.length}
 			<details class="relative">
-				<summary class="text-muted-foreground hover:text-foreground cursor-pointer text-xs select-none">{places.others.length} other cop{places.others.length === 1 ? 'y' : 'ies'}</summary>
-				<ul class="bg-popover absolute z-20 mt-1 grid max-h-64 w-80 max-w-[90vw] list-none gap-0.5 overflow-auto rounded-md border p-2 text-xs shadow-md">
+				<summary
+					class="text-muted-foreground hover:text-foreground cursor-pointer text-xs select-none"
+					title="The same file, byte for byte, kept once. These are the other folders it sits in."
+					>Same file in {places.others.length} other folder{places.others.length === 1 ? '' : 's'}</summary
+				>
+				<ul class="bg-popover absolute right-0 z-20 mt-1 grid max-h-64 w-96 max-w-[90vw] list-none gap-1.5 overflow-auto rounded-md border p-2 text-xs shadow-md">
 					{#each places.others as link (link.url)}
 						<li>
-							<a class="hover:underline" href={link.url} target="_blank" rel="noopener noreferrer" title={link.folder}
-								>{shortFolder(link.folder)} <span class="text-muted-foreground">· {link.file}</span></a
+							<a class="block break-words hover:underline" href={link.url} target="_blank" rel="noopener noreferrer"
+								>{link.folder}{#if link.file !== places.primary?.file} <span class="text-muted-foreground">· {link.file}</span>{/if}</a
 							>
 						</li>
 					{/each}

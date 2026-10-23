@@ -65,8 +65,8 @@
 						<span class="min-w-0 flex-1 text-[13px] leading-5 font-medium break-words"
 							>{item.title}{#if item.page_or_sheet}<span class="text-muted-foreground font-normal">{` · ${item.page_or_sheet}`}</span>{/if}</span
 						>
-						{#if item.has_suggestion}<span class="text-info mt-0.5" title="has a suggested resolution"
-								><SparklesIcon class="size-3.5" aria-hidden="true" /><span class="sr-only">has suggestion</span></span
+						{#if item.has_suggestion}<span class="text-info mt-0.5" title={item.has_rule_proposal ? 'a rule proposes its units' : 'has a suggested resolution'}
+								><SparklesIcon class="size-3.5" aria-hidden="true" /><span class="sr-only">{item.has_rule_proposal ? 'rule proposal' : 'has suggestion'}</span></span
 							>{/if}
 					</span>
 					<span class="text-muted-foreground font-mono text-[11px] leading-4 tracking-tight">{flagCountsText(item.flag_counts)}</span>

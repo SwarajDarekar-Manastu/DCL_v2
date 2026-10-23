@@ -2,6 +2,7 @@
 	import type { RuleDraft, RuleType } from '$lib/api_endpoint';
 	import { Button } from '$lib/components/ui/button';
 	import Notice from '$lib/components/shell/Notice.svelte';
+	import { exampleBody, RULE_TYPE_HELP } from './rules_guide';
 
 	interface Props {
 		busy: boolean;
@@ -10,14 +11,22 @@
 
 	let { busy, onSubmit }: Props = $props();
 
-	const RULE_TYPES: RuleType[] = ['unit_mapping', 'schema_mapping', 'channel_map', 'supersession', 'ignore_pattern', 'origin_override'];
-	let ruleType = $state<RuleType>('unit_mapping');
+	// A file's approval (channel_map) is made by applying a file, never by a rule: it is not offered here.
+	const RULE_TYPES: RuleType[] = ['channel_proposal', 'schema_mapping', 'supersession', 'ignore_pattern', 'origin_override'];
+	let ruleType = $state<RuleType>('channel_proposal');
 	let scopeRoot = $state('');
 	let scopeFolderId = $state('');
 	let scopeGlob = $state('');
 	let scopeExtension = $state('');
 	let precedence = $state(0);
-	let bodyText = $state('{\n  \n}');
+	let bodyText = $state(exampleBody('channel_proposal'));
+	let lastExample = exampleBody('channel_proposal');
+
+	function changeType() {
+		// An example the reviewer has not touched follows the type; their own text is kept.
+		if (bodyText === lastExample) bodyText = lastExample = exampleBody(ruleType);
+		else lastExample = exampleBody(ruleType);
+	}
 
 	let parsed = $derived.by((): { body: Record<string, unknown> | null; error: string } => {
 		try {
@@ -52,10 +61,14 @@
 	<div class="grid grid-cols-[1fr_8rem] gap-3">
 		<label class="grid gap-1"
 			><span class="field-label">Rule type</span>
-			<select class="field font-mono" bind:value={ruleType}>{#each RULE_TYPES as t (t)}<option value={t}>{t}</option>{/each}</select>
+			<select class="field font-mono" bind:value={ruleType} onchange={changeType}>{#each RULE_TYPES as t (t)}<option value={t}>{t}</option>{/each}</select>
 		</label>
 		<label class="grid gap-1"><span class="field-label">Precedence</span> <input class="field num font-mono" type="number" bind:value={precedence} /></label>
 	</div>
+	<p class="text-muted-foreground m-0 -mt-2 text-xs">{RULE_TYPE_HELP[ruleType].what}</p>
+	{#if RULE_TYPE_HELP[ruleType].effect === 'stored'}
+		<Notice tone="warning">Nothing in the pipeline reads this kind of rule yet. It is saved and listed, and no file changes.</Notice>
+	{/if}
 	<fieldset class="m-0 grid grid-cols-2 gap-3 rounded-md border p-3">
 		<legend class="text-muted-foreground px-1 text-xs font-medium">Scope (most specific match wins)</legend>
 		<label class="grid gap-1"><span class="field-label">Root</span> <input class="field" bind:value={scopeRoot} placeholder="APU Heater" /></label>
@@ -65,9 +78,9 @@
 	</fieldset>
 	{#if global}<Notice tone="warning">No scope: this rule applies everywhere.</Notice>{/if}
 	<label class="grid gap-1"
-		><span class="field-label">Body (JSON; validated by rule type on the server)</span>
+		><span class="field-label">Body (JSON, an example for the type; the server checks it)</span>
 		<textarea class="field font-mono text-xs" rows="8" spellcheck="false" bind:value={bodyText}></textarea></label
 	>
 	{#if parsed.error}<Notice tone="warning">{parsed.error}</Notice>{/if}
-	<Button type="submit" class="justify-self-start" disabled={busy || !parsed.body}>Create rule</Button>
+	<Button type="submit" class="justify-self-start" disabled={busy || !parsed.body}>Save rule</Button>
 </form>

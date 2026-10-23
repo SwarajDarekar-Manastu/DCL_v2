@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import type { FlagView } from '../../src/lib/api_endpoint';
 import FlagConsole from '../../src/lib/components/review/FlagConsole.svelte';
@@ -58,6 +58,7 @@ describe('FlagConsole', () => {
 				evidence: {
 					kind: 'conflict',
 					subject: 'AIN0 unit',
+					relation: 'sources_disagree',
 					a: { label: 'T07.cfg', value: 'psig', provenance: 'cfg file', date: '2026-03-01' },
 					b: { label: 'header', value: 'psi', provenance: '.dat header' }
 				}
@@ -66,6 +67,50 @@ describe('FlagConsole', () => {
 		expect(screen.getByText('Source A: T07.cfg')).toBeTruthy();
 		expect(screen.getByText('psig')).toBeTruthy();
 		expect(screen.queryByText(/Pipeline halted/)).toBeNull();
+	});
+
+	const conflict = (relation: 'sources_disagree' | 'check_failed' | 'note', docs = false) =>
+		unitFlag({
+			flag_id: 'c',
+			flag_type: 'CONFLICT',
+			severity: 'SOFT',
+			allowed_actions: ['choose_source', 'mark_superseded', 'accept_both', 'ignore'],
+			suggested_resolution: null,
+			evidence: {
+				kind: 'conflict',
+				subject: 'Main_Files',
+				relation,
+				a: { label: 'assembler', value: 'not included by any master', provenance: 'file 03 §1.3', doc_id: docs ? 'd1' : null },
+				b: relation === 'note' ? null : { label: 'expected', value: 'a sharp edge', provenance: 'file 03 §C.6', doc_id: docs ? 'd2' : null }
+			}
+		});
+	const choices = () => within(screen.getByRole('combobox')).getAllByRole('option').map((o) => o.textContent);
+
+	it('shows a note as one finding with nothing to choose between', () => {
+		show(conflict('note'));
+		expect(screen.getByText(/What the system noticed/)).toBeTruthy();
+		expect(screen.queryByText(/Source A|Source B|Expected/)).toBeNull();
+		expect(choices()).toEqual(['leave open', 'Accept as it is', 'Ignore']);
+	});
+
+	it('shows a failed check as found against expected', () => {
+		show(conflict('check_failed'));
+		expect(screen.getByText('Found: assembler')).toBeTruthy();
+		expect(screen.getByText('Expected')).toBeTruthy();
+		expect(choices()).toEqual(['leave open', 'Accept as it is', 'Ignore']);
+	});
+
+	it('offers "mark superseded" only when the sides are documents', () => {
+		show(conflict('sources_disagree'));
+		expect(choices()).toEqual(['leave open', 'Pick the authoritative source', 'Accept both', 'Ignore']);
+		cleanup();
+		show(conflict('sources_disagree', true));
+		expect(choices()).toContain('Mark a document superseded');
+	});
+
+	it('never offers what the console cannot carry out yet', () => {
+		show(unitFlag({ flag_type: 'PARSE_FAILURE', allowed_actions: ['use_replacement', 'skip', 'mark_junk'], evidence: null, suggested_resolution: null }));
+		expect(choices()).toEqual(['leave open', 'Skip file', 'Mark junk']);
 	});
 
 	it('shows how a closed flag was resolved instead of the console', () => {

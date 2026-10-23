@@ -1,7 +1,7 @@
 // Resolution drafts for the case view (file 06 §6): which actions a flag offers, how a draft starts,
 // when it is complete, and the rule a scoped resolution becomes.
 
-import type { CaseLocation, FlagView, Resolution, ResolutionAction, RuleDraft, RuleScope, RuleType } from '$lib/api_endpoint';
+import type { CaseLocation, FlagView, Resolution, ResolutionAction, RuleScope } from '$lib/api_endpoint';
 
 export const ACTION_LABEL: Record<ResolutionAction, string> = {
 	set_unit: 'Set channel unit',
@@ -24,9 +24,42 @@ export const ACTION_LABEL: Record<ResolutionAction, string> = {
 	exclude: 'Exclude permanently'
 };
 
-/** The server computes what this user may do with the flag (S1 allowed_actions_for). */
-export function allowedActions(flag: Pick<FlagView, 'allowed_actions'>): ResolutionAction[] {
-	return flag.allowed_actions.filter((action): action is ResolutionAction => action in ACTION_LABEL);
+/** Actions the server allows but the console cannot carry out yet: never offered. */
+export const NOT_BUILT: readonly ResolutionAction[] = ['use_replacement', 'redact'];
+
+type ConflictEvidence = Extract<NonNullable<FlagView['evidence']>, { kind: 'conflict' }>;
+
+function conflictOf(flag: Partial<Pick<FlagView, 'evidence'>>): ConflictEvidence | null {
+	return flag.evidence?.kind === 'conflict' ? flag.evidence : null;
+}
+
+/** The documents a "mark superseded" can name: the sides of a disagreement that are documents. */
+export function supersedable(flag: Partial<Pick<FlagView, 'evidence'>>): { doc_id: string; label: string }[] {
+	const conflict = conflictOf(flag);
+	if (!conflict || conflict.relation !== 'sources_disagree') return [];
+	return [conflict.a, conflict.b].flatMap((side) => (side?.doc_id ? [{ doc_id: side.doc_id, label: side.label }] : []));
+}
+
+/**
+ * What this user may do with the flag: the server's list (S1 allowed_actions_for), minus what the console
+ * cannot do yet, minus what does not fit the kind of conflict: a failed check or a note has no source to pick
+ * and no document to supersede.
+ */
+export function allowedActions(flag: Pick<FlagView, 'allowed_actions'> & Partial<Pick<FlagView, 'evidence'>>): ResolutionAction[] {
+	const conflict = conflictOf(flag);
+	return flag.allowed_actions.filter((action): action is ResolutionAction => {
+		if (!(action in ACTION_LABEL) || NOT_BUILT.includes(action as ResolutionAction)) return false;
+		if (!conflict) return true;
+		if (conflict.relation !== 'sources_disagree') return action === 'accept_both' || action === 'ignore';
+		return action !== 'mark_superseded' || supersedable(flag).length > 0;
+	});
+}
+
+/** The label of an action for this flag: on a failed check or a note "accept both" reads "Accept as it is". */
+export function actionLabel(action: ResolutionAction, flag: Pick<FlagView, 'evidence'>): string {
+	const conflict = conflictOf(flag);
+	if (conflict && conflict.relation !== 'sources_disagree' && action === 'accept_both') return 'Accept as it is';
+	return ACTION_LABEL[action];
 }
 
 /** Pressure units offered for UNIT_AMBIGUITY on telemetry (file 06 §6), as unit + gauge/abs. */
@@ -125,25 +158,19 @@ export type ScopeChoice = 'file' | 'folder' | 'folder_pattern';
 /** Where the case's file lives (first OneDrive location), for rule scopes. */
 export type ScopeInfo = Pick<CaseLocation, 'root_name' | 'folder_id' | 'file_name' | 'extension'>;
 
-const RULE_TYPE: Partial<Record<ResolutionAction, RuleType>> = {
-	set_unit: 'unit_mapping',
-	map_columns: 'schema_mapping'
-};
-
+/** Only a unit decision can be proposed to other files: that is the one kind of rule a route fills in from. */
 export function canBecomeRule(action: ResolutionAction): boolean {
-	return action in RULE_TYPE;
+	return action === 'set_unit';
 }
 
-/** The operator rule a scoped resolution creates; null for "this file only". */
-export function ruleFor(r: Resolution, choice: ScopeChoice, where: ScopeInfo, pattern = ''): RuleDraft | null {
-	const ruleType = RULE_TYPE[r.action];
-	if (!ruleType || choice === 'file') return null;
+/** The scope a case's unit decisions are also proposed under: null is "no other file". */
+export function caseRuleScope(choice: ScopeChoice, where: ScopeInfo, pattern = ''): RuleScope | null {
+	if (choice === 'file') return null;
 	if (!where.folder_id) throw new Error('folder scope needs the folder id of the case');
 	const scope: RuleScope = { scope_root: where.root_name, scope_folder_id: where.folder_id };
 	if (choice === 'folder_pattern') {
 		if (!pattern.trim()) throw new Error('enter a filename pattern');
 		scope.scope_filename_glob = pattern.trim();
 	}
-	const { action: _action, ...body } = r;
-	return { rule_type: ruleType, scope, body, precedence: 0 };
+	return scope;
 }

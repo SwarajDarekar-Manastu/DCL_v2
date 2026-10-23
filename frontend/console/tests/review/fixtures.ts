@@ -19,6 +19,7 @@ export function summary(overrides: Partial<CaseSummary> = {}): CaseSummary {
 		assignee: null,
 		oldest_created_at: '2026-10-19T08:00:00Z',
 		has_suggestion: true,
+		has_rule_proposal: false,
 		files_unblocked: 116,
 		preview_asset_id: null,
 		...overrides
@@ -71,6 +72,7 @@ export function unitFlag(overrides: Partial<FlagView> = {}): FlagView {
 		},
 		resolution: null,
 		resolution_rule_id: null,
+		proposed_by_rule_id: null,
 		assigned_to: null,
 		resolved_by: null,
 		resolved_at: null,
@@ -96,6 +98,7 @@ export function detail(flags: FlagView[] = [unitFlag()], overrides: Partial<Case
 			}
 		],
 		siblings: ['T07.cfg'],
+		applied_units: [],
 		...overrides
 	};
 }

@@ -7,7 +7,7 @@ import { detail, unitFlag } from './fixtures';
 
 vi.mock('../../src/lib/api_endpoint', async (importOriginal) => {
 	const real = await importOriginal<typeof import('../../src/lib/api_endpoint')>();
-	return { ...real, dryRun: vi.fn(), resolveCase: vi.fn() };
+	return { ...real, dryRun: vi.fn(), resolveCase: vi.fn(), previewRule: vi.fn() };
 });
 
 // Shaped on the real halted LabJack run Test_01_02Bar_i_0 (Injector 14 flow test): columns and header from the
@@ -56,6 +56,7 @@ const LABJACK = detail(flags);
 beforeEach(() => {
 	vi.mocked(api.dryRun).mockReset();
 	vi.mocked(api.resolveCase).mockReset();
+	vi.mocked(api.previewRule).mockReset();
 });
 
 describe('channel map logic', () => {
@@ -132,8 +133,126 @@ describe('ChannelMapView', () => {
 			['flag-y0', 'bar', 'SEA_LEVEL'],
 			['flag-y1', 'bar', null]
 		]);
-		expect(await screen.findByText('Units set for 2 channels. 1 document resuming.')).toBeTruthy();
+		expect(await screen.findByText('Approved the units of 2 channels. This file is resuming.')).toBeTruthy();
 		expect(onChanged).toHaveBeenCalled();
+	});
+
+	it('approves this file and also proposes its units to the folder, saying how many files it reaches', async () => {
+		const dryRunResult = {
+			affected_documents: 1,
+			channels: [{ canonical_name: 'y0', unit_si: 'bar', stat_min: 1, stat_max: 2, stat_mean: null, stat_p99: null, sanity_min: 0, sanity_max: 1e7, within_sanity: true }],
+			messages: [],
+			new_flags: [],
+			preview: null
+		} as unknown as api.DryRunResponse;
+		vi.mocked(api.dryRun).mockResolvedValue(dryRunResult);
+		vi.mocked(api.previewRule).mockResolvedValue({ matched_documents: 12, waiting_documents: 12, finished_documents: 0, sample: [], effect: 'proposes', open_channels: [], problem: null });
+		vi.mocked(api.resolveCase).mockResolvedValue({ case_key: 'k', flags: [], rule: null, resumed_doc_ids: ['d'] } as unknown as api.ResolveResponse);
+		render(ChannelMapView, { detail: LABJACK, onChanged: vi.fn(), onDetails: vi.fn() });
+		expect(screen.getByText(/Only this file is decided/)).toBeTruthy();
+		await fireEvent.change(screen.getByLabelText('Unit of y1'), { target: { value: 'bar_a' } });
+		await fireEvent.click(screen.getByRole('radio', { name: /the other files in this folder/ }));
+		expect(await screen.findByText(/it reaches 12 files, 12 waiting/)).toBeTruthy();
+		expect(vi.mocked(api.previewRule).mock.calls[0][0]).toEqual({
+			rule_type: 'channel_proposal',
+			scope: { scope_root: 'APU Heater', scope_folder_id: 'FOLDER-TP30' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Preview all' }));
+		await waitFor(() => expect(api.dryRun).toHaveBeenCalled());
+		await fireEvent.click(await screen.findByRole('button', { name: /Apply all and resume/ }));
+		await waitFor(() => expect(api.resolveCase).toHaveBeenCalledOnce());
+		expect(vi.mocked(api.resolveCase).mock.calls[0][1].rule_scope).toEqual({ scope_root: 'APU Heater', scope_folder_id: 'FOLDER-TP30' });
+	});
+
+	describe('when a rule proposes units', () => {
+		const rationale = 'proposed by a rule that asha saved on 2026-10-23; check it against this file';
+		const proposed = detail(
+			[0, 1, 2].map((k) =>
+				unitFlag({
+					flag_id: `flag-y${k}`,
+					anchor: { channel: `y${k}` },
+					evidence: evidence(k),
+					proposed_by_rule_id: 'rule-1',
+					suggested_resolution:
+						k < 2
+							? {
+									resolution: { action: 'set_unit', channel: `y${k}`, unit: 'bar', quantity: 'pressure', gauge_or_abs: 'absolute', ambient_condition: null, ambient_pressure_bar_abs: null, expression: null, canonical_name: `pt_10${k}` },
+									confidence: 0.85,
+									rationale,
+									proposed_by: 'rule'
+								}
+							: { resolution: null, confidence: 0, rationale: 'no suggestion', proposed_by: 'heuristic' }
+				})
+			)
+		);
+		const converted = (within: boolean | ((c: string) => boolean) = true) =>
+			vi.mocked(api.dryRun).mockImplementation(async (body) => {
+				const channel = body.resolution.resolution.action === 'set_unit' ? body.resolution.resolution.channel : '';
+				return {
+					affected_documents: 1,
+					channels: [{ canonical_name: channel, unit_si: 'bar', stat_min: 1.9, stat_max: 2.2, stat_mean: null, stat_p99: null, sanity_min: 0, sanity_max: 30, within_sanity: typeof within === 'function' ? within(channel) : within }],
+					messages: [],
+					new_flags: [],
+					preview: null
+				} as unknown as api.DryRunResponse;
+			});
+
+		it('shows who proposed it, checks the numbers at once and applies only the proposed columns', async () => {
+			converted();
+			vi.mocked(api.resolveCase).mockResolvedValue({ case_key: 'k', flags: [], rule: null, resumed_doc_ids: ['d'], proposed_files: 0 } as unknown as api.ResolveResponse);
+			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn(), onReject: vi.fn() });
+			expect(screen.getByRole('region', { name: 'Proposed by a rule' }).textContent).toContain('A rule proposes the units of 2 of 3 columns.');
+			expect(screen.getByText(/Proposed by a rule that asha saved on 2026-10-23/)).toBeTruthy();
+			expect(screen.getAllByText('proposed by a rule')).toHaveLength(2);
+			await waitFor(() => expect(api.dryRun).toHaveBeenCalledTimes(2)); // the numbers are shown without a click
+			const button = await screen.findByRole('button', { name: 'Apply proposed rule (2 of 3 columns)' });
+			await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+
+			await fireEvent.click(button);
+			await waitFor(() => expect(api.resolveCase).toHaveBeenCalledOnce());
+			const body = vi.mocked(api.resolveCase).mock.calls[0][1];
+			expect(body.resolutions.map((r) => [r.flag_id, r.resolution.action === 'set_unit' && r.resolution.canonical_name])).toEqual([
+				['flag-y0', 'pt_100'],
+				['flag-y1', 'pt_101']
+			]);
+			expect(await screen.findByText(/Approved the units of 2 channels. This file is resuming./)).toBeTruthy();
+		});
+
+		it('will not apply numbers that look wrong once converted, and says which', async () => {
+			converted((channel) => channel !== 'y1');
+			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn(), onReject: vi.fn() });
+			expect(await screen.findByText(/These look wrong once converted: y1/)).toBeTruthy();
+			const button = screen.getByRole('button', { name: /Apply proposed rule/ }) as HTMLButtonElement;
+			expect(button.disabled).toBe(true);
+			expect(api.resolveCase).not.toHaveBeenCalled();
+		});
+
+		it('hands over to "Apply all and resume" once a proposed unit is changed, and can go back', async () => {
+			converted();
+			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn(), onReject: vi.fn() });
+			await waitFor(() => expect(api.dryRun).toHaveBeenCalledTimes(2));
+			await fireEvent.change(screen.getByLabelText('Unit of y0'), { target: { value: 'psia' } });
+			expect(screen.queryByRole('button', { name: /Apply proposed rule/ })).toBeNull();
+			expect(screen.getByText(/You changed a proposed unit/)).toBeTruthy();
+			await fireEvent.click(screen.getByRole('button', { name: 'Back to the proposed units' }));
+			expect((screen.getByLabelText('Unit of y0') as HTMLSelectElement).value).toBe('bar_a');
+			expect(await screen.findByRole('button', { name: /Apply proposed rule/ })).toBeTruthy();
+		});
+
+		it('lets the reviewer skip the file instead', async () => {
+			converted();
+			const onReject = vi.fn();
+			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn(), onReject });
+			await fireEvent.click(screen.getByRole('button', { name: 'Skip file' }));
+			expect(onReject).toHaveBeenCalledWith('skip');
+		});
+
+		it('keeps the file halted when no rule proposes anything: no banner, no proposed-rule button', () => {
+			render(ChannelMapView, { detail: LABJACK, onChanged: vi.fn(), onDetails: vi.fn(), onReject: vi.fn() });
+			expect(screen.queryByRole('region', { name: 'Proposed by a rule' })).toBeNull();
+			expect(screen.queryByRole('button', { name: /Apply proposed rule/ })).toBeNull();
+			expect(screen.getByRole('button', { name: 'Skip file' })).toBeTruthy();
+		});
 	});
 
 	it('keeps the per-flag details reachable', async () => {

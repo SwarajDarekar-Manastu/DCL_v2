@@ -9,7 +9,8 @@
 	import DryRunPanel from './DryRunPanel.svelte';
 	import EvidencePane from './EvidencePane.svelte';
 	import ResolutionForm from './ResolutionForm.svelte';
-	import { ACTION_LABEL, allowedActions, missing, needsPreview, startDraft } from './resolution';
+	import { guideKeyFor } from './flag_guide';
+	import { actionLabel, allowedActions, missing, needsPreview, startDraft, supersedable } from './resolution';
 
 	interface Props {
 		flag: FlagView;
@@ -47,7 +48,7 @@
 	<header class="panel-header bg-muted/40 flex-wrap justify-start gap-2">
 		<SeverityBadge severity={flag.severity} />
 		<h3 class="m-0 font-mono text-[13px] font-semibold">{flag.flag_type} <span class="sr-only">({flag.severity})</span></h3>
-		<FlagGuide flagType={flag.flag_type} />
+		<FlagGuide topic={guideKeyFor(flag)} />
 		{#if where(flag.anchor)}<span class="text-muted-foreground text-xs">{where(flag.anchor)}</span>{/if}
 		<ToneBadge tone={open ? 'outline' : 'ok'} class="ml-auto">{flag.status}</ToneBadge>
 	</header>
@@ -70,11 +71,11 @@
 						onchange={(e) => choose((e.currentTarget as HTMLSelectElement).value as ResolutionAction | '')}
 					>
 						<option value="">leave open</option>
-						{#each actions as action (action)}<option value={action}>{ACTION_LABEL[action]}</option>{/each}
+						{#each actions as action (action)}<option value={action}>{actionLabel(action, flag)}</option>{/each}
 					</select>
 				</label>
 				{#if draft}
-					<ResolutionForm bind:draft />
+					<ResolutionForm bind:draft documents={supersedable(flag)} />
 					{#if gap}<Notice tone="warning">Missing: {gap}</Notice>{/if}
 					{#if needsPreview(draft.action)}
 						<Button variant="outline" size="sm" class="justify-self-start" disabled={!!gap || preview.busy} onclick={onPreview}>Preview conversion</Button>

@@ -13,9 +13,13 @@ export interface ChannelRow {
 	flag: FlagView;
 	channel: string;
 	evidence: TelemetryEvidence;
-	/** the suggestion's set_unit, when the pipeline proposed one */
+	/** the suggestion's set_unit, when the pipeline or a rule proposed one */
 	suggestion: SetUnit | null;
 	confidence: number | null;
+	/** the suggestion comes from a saved rule, not from the file's own hints */
+	byRule: boolean;
+	/** why it is proposed, in the words of whoever produced it */
+	rationale: string | null;
 }
 
 const telemetry = (f: FlagView): TelemetryEvidence | null => (f.evidence?.kind === 'unit_telemetry' ? f.evidence : null);
@@ -32,7 +36,9 @@ export function channelRows(detail: Pick<CaseDetail, 'flags'>): ChannelRow[] {
 				channel: evidence.channel,
 				evidence,
 				suggestion: suggested?.action === 'set_unit' ? suggested : null,
-				confidence: suggested?.action === 'set_unit' ? (flag.suggested_resolution?.confidence ?? null) : null
+				confidence: suggested?.action === 'set_unit' ? (flag.suggested_resolution?.confidence ?? null) : null,
+				byRule: suggested?.action === 'set_unit' && flag.suggested_resolution?.proposed_by === 'rule',
+				rationale: suggested?.action === 'set_unit' ? (flag.suggested_resolution?.rationale ?? null) : null
 			};
 		});
 	const order = (r: ChannelRow) => r.evidence.column_index ?? Number.MAX_SAFE_INTEGER;
@@ -78,8 +84,8 @@ export const UNIT_GROUPS: { quantity: string; label: string; choices: UnitChoice
 		quantity: 'flow',
 		label: 'Flow, force',
 		choices: [
-			{ id: 'g_s', label: 'g/s', unit: 'g/s', quantity: 'mass_flow', gauge_or_abs: 'n/a' },
-			{ id: 'kg_s', label: 'kg/s', unit: 'kg/s', quantity: 'mass_flow', gauge_or_abs: 'n/a' },
+			{ id: 'g_s', label: 'g/s', unit: 'g/s', quantity: 'mass_flow_rate', gauge_or_abs: 'n/a' },
+			{ id: 'kg_s', label: 'kg/s', unit: 'kg/s', quantity: 'mass_flow_rate', gauge_or_abs: 'n/a' },
 			{ id: 'n', label: 'N', unit: 'N', quantity: 'force', gauge_or_abs: 'n/a' }
 		]
 	},
@@ -126,8 +132,19 @@ export const findChoice = (row: ChannelRow, id: string) => [...candidateChoices(
 
 export type Ambient = 'VACUUM_CHAMBER' | 'SEA_LEVEL' | 'AMBIENT_RECORDED' | 'UNKNOWN';
 
+/** What a gauge reading is relative to, in the words the Console uses wherever it asks. */
+export const AMBIENT_OPTIONS: { value: Ambient; label: string }[] = [
+	{ value: 'SEA_LEVEL', label: 'sea-level air (1.013 bar)' },
+	{ value: 'AMBIENT_RECORDED', label: 'the ambient recorded in the run' },
+	{ value: 'VACUUM_CHAMBER', label: 'a vacuum chamber' },
+	{ value: 'UNKNOWN', label: 'not known' }
+];
+
 /** The set_unit resolution for a channel and a chosen unit; gauge units carry the shared ambient reference. */
 export function setUnit(row: ChannelRow, choice: UnitChoice, ambient: Ambient | null): SetUnit {
+	const proposed = row.suggestion;
+	// A rule's chosen name stays only while the unit is the proposed one: the name often carries the unit.
+	const name = proposed?.canonical_name && proposed.unit === choice.unit && proposed.gauge_or_abs === choice.gauge_or_abs ? proposed.canonical_name : null;
 	return {
 		action: 'set_unit',
 		channel: row.channel,
@@ -136,8 +153,14 @@ export function setUnit(row: ChannelRow, choice: UnitChoice, ambient: Ambient | 
 		gauge_or_abs: choice.gauge_or_abs,
 		ambient_condition: choice.gauge_or_abs === 'gauge' ? ambient : null,
 		ambient_pressure_bar_abs: null,
-		expression: null
+		expression: null,
+		canonical_name: name
 	};
+}
+
+/** The columns a rule proposes a unit for, and whether the pickers still hold exactly its units. */
+export function proposedRows(rows: ChannelRow[]): ChannelRow[] {
+	return rows.filter((r) => r.byRule);
 }
 
 export interface SourceTable {

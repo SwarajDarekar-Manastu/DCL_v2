@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { ApiError, listAudit, type AuditFilters, type AuditItem } from '$lib/api_endpoint';
+	import { ApiError, listAudit, listCases, type AuditFilters, type AuditItem, type CaseSummary } from '$lib/api_endpoint';
 	import { session } from '$lib/auth/session.svelte';
 	import AuditTimeline from '$lib/components/review/AuditTimeline.svelte';
-	import { auditFiltersFromUrl, auditUrl } from '$lib/components/review/audit';
+	import { auditFiltersFromUrl, auditUrl, decisionsHref } from '$lib/components/review/audit';
 	import Notice from '$lib/components/shell/Notice.svelte';
+	import ToneBadge from '$lib/components/shell/ToneBadge.svelte';
 	import Page from '$lib/components/shell/Page.svelte';
 	import RoleGate from '$lib/components/shell/RoleGate.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -18,6 +19,29 @@
 	let error = $state('');
 
 	const describe = (e: unknown) => (e instanceof ApiError ? e.detail : String(e));
+
+	// "Find a file": files that have at least one decision, by words in the name or path.
+	let finder = $state('');
+	let found = $state<CaseSummary[]>([]);
+	let finding = $state(false);
+	$effect(() => {
+		const text = finder.trim();
+		if (text.length < 2) {
+			found = [];
+			finding = false;
+			return;
+		}
+		finding = true;
+		const timer = setTimeout(
+			() =>
+				listCases({ decided: true, q: text, limit: 12 })
+					.then((r) => (found = r.items))
+					.catch((e) => (error = describe(e)))
+					.finally(() => (finding = false)),
+			250
+		);
+		return () => clearTimeout(timer);
+	});
 
 	$effect(() => {
 		const f = filters;
@@ -88,7 +112,31 @@
 {/snippet}
 
 <RoleGate roles={session.user?.roles ?? []} role="reviewer">
-	<Page title="Audit" description="Who changed what, when, with the before and after of each change." filters={filterBar}>
+	<Page title="Audit" description="Who changed what, when, with the before and after of each change. Find a file to correct what was decided on it." filters={filterBar}>
+		<section class="panel mb-5" aria-labelledby="find-title">
+			<div class="panel-header"><h2 id="find-title" class="panel-title">Find a file to check or change its decisions</h2></div>
+			<div class="panel-body grid gap-2">
+				<input class="field w-full max-w-xl" type="search" placeholder="Part of the file name or folder, for example Test_01 or Injector 14" aria-label="Find a file" bind:value={finder} />
+				{#if finder.trim().length < 2}
+					<p class="text-muted-foreground m-0 text-xs">Each file shows who approved what and when, and lets you change a unit or reopen a decision, with a reason.</p>
+				{:else if !finding && found.length === 0}
+					<p class="text-muted-foreground m-0 text-sm">No file with a decision matches.</p>
+				{:else}
+					<ul class="m-0 grid list-none gap-1 p-0" aria-label="Files found" aria-busy={finding}>
+						{#each found as file (file.case_key)}
+							<li>
+								<a href={decisionsHref(file.case_key)} class="hover:bg-muted flex flex-wrap items-baseline gap-x-3 rounded-md border px-3 py-2 no-underline">
+									<strong class="text-foreground text-[13px] font-medium">{file.title}</strong>
+									<span class="text-muted-foreground min-w-0 flex-1 truncate text-xs">{file.path ?? ''}</span>
+									<ToneBadge tone="outline">{file.status}</ToneBadge>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		</section>
+
 		{#if error}
 			<Notice tone="error">{error}</Notice>
 		{:else}

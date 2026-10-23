@@ -8,6 +8,9 @@
 	import { around, fmtBytes } from './evidence';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 
+	// Labels that only repeat the heading above them ("Expected: expected") are left out.
+	const REPEATS = new Set(['found', 'detected', 'expected']);
+
 	interface Props {
 		evidence: Evidence | null;
 		suggestion: Suggestion | null;
@@ -171,16 +174,29 @@
 		<pre class="code-block overflow-x-auto text-xs">{evidence.redacted_preview}</pre>
 	{:else if evidence.kind === 'conflict'}
 		<h4 class="m-0 text-[13px]">{evidence.subject}</h4>
-		<div class="grid grid-cols-2 gap-2">
-			{#each [['A', evidence.a], ['B', evidence.b]] as const as [name, side] (name)}
-				<div class="grid content-start gap-1 rounded-md border p-3">
-					<strong class="text-muted-foreground text-xs font-medium">Source {name}: {side.label}</strong>
-					<p class="m-0 font-mono text-base font-semibold">{side.value}</p>
-					<p class="text-muted-foreground m-0 text-xs">{side.provenance}{side.date ? ` · ${side.date}` : ''}</p>
-					{#if side.doc_id}<a href="/docs/{side.doc_id}/viewer" class="text-xs">Open document</a>{/if}
-				</div>
-			{/each}
-		</div>
+		{#if evidence.relation === 'note'}
+			<div class="grid content-start gap-1 rounded-md border p-3">
+				<strong class="text-muted-foreground text-xs font-medium">What the system noticed ({evidence.a.label})</strong>
+				<p class="m-0 text-[15px] break-words">{evidence.a.value}</p>
+				<p class="text-muted-foreground m-0 line-clamp-2 text-xs" title={evidence.a.provenance}>{evidence.a.provenance}</p>
+			</div>
+		{:else}
+			{@const found = evidence.relation === 'check_failed'}
+			<div class="grid grid-cols-2 gap-2">
+				{#each [[found ? 'Found' : 'Source A', evidence.a], [found ? 'Expected' : 'Source B', evidence.b]] as const as [heading, side] (heading)}
+					{#if side}
+						<div class="grid content-start gap-1 rounded-md border p-3">
+							<strong class="text-muted-foreground text-xs font-medium"
+								>{heading}{#if !REPEATS.has(side.label.toLowerCase())}: {side.label}{/if}</strong
+							>
+							<p class="m-0 font-mono text-base font-semibold break-words">{side.value}</p>
+							<p class="text-muted-foreground m-0 line-clamp-3 text-xs break-words" title={side.provenance}>{side.provenance}{side.date ? ` · ${side.date}` : ''}</p>
+							{#if side.doc_id}<a href="/docs/{side.doc_id}/viewer" class="text-xs">Open document</a>{/if}
+						</div>
+					{/if}
+				{/each}
+			</div>
+		{/if}
 	{:else if evidence.kind === 'parse_failure'}
 		<p class="text-hard m-0 font-medium">{evidence.error}</p>
 		<dl class="kv">

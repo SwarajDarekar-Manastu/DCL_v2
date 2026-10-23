@@ -36,7 +36,7 @@ async function chooseSetUnit() {
 describe('CaseView', () => {
 	beforeEach(() => {
 		vi.mocked(api.dryRun).mockReset().mockResolvedValue(preview);
-		vi.mocked(api.resolveCase).mockReset().mockResolvedValue({ case_key: CASE_KEY, flags: [], rule: null, resumed_doc_ids: ['d1', 'd2', 'd3'] });
+		vi.mocked(api.resolveCase).mockReset().mockResolvedValue({ case_key: CASE_KEY, flags: [], rule: null, resumed_doc_ids: ['d1'], proposed_files: 0 });
 		vi.mocked(api.rejectCase).mockReset().mockResolvedValue(detail());
 	});
 
@@ -52,8 +52,7 @@ describe('CaseView', () => {
 		await waitFor(() => expect(screen.getByText('pt_ain0_bar_g')).toBeTruthy());
 		expect(vi.mocked(api.dryRun).mock.calls[0][0]).toEqual({
 			case_key: CASE_KEY,
-			resolution: { flag_id: 'flag-unit', resolution: unitFlag().suggested_resolution!.resolution },
-			rule: null
+			resolution: { flag_id: 'flag-unit', resolution: unitFlag().suggested_resolution!.resolution }
 		});
 		expect((applyButton() as HTMLButtonElement).disabled).toBe(false);
 
@@ -61,28 +60,35 @@ describe('CaseView', () => {
 		await waitFor(() => expect(onChanged).toHaveBeenCalledOnce());
 		expect(vi.mocked(api.resolveCase)).toHaveBeenCalledWith(CASE_KEY, {
 			resolutions: [{ flag_id: 'flag-unit', resolution: unitFlag().suggested_resolution!.resolution }],
-			rule: null
+			rule_scope: null
 		});
-		expect(screen.getByRole('status').textContent).toBe('Resolved. 3 documents resuming.');
+		expect(screen.getByRole('status').textContent).toBe('Resolved. This file is resuming.');
 	});
 
-	it('resolves a folder-wide unit case in one action with a folder-scoped rule', async () => {
+	it('approves this file and also proposes its units to the other files of the folder', async () => {
+		vi.mocked(api.resolveCase).mockResolvedValue({ case_key: CASE_KEY, flags: [], rule: null, resumed_doc_ids: ['d1'], proposed_files: 11 } as unknown as api.ResolveResponse);
 		render(CaseView, { detail: detail(), me: 'asha@manastuspace.com', onChanged: () => {} });
 		await chooseSetUnit();
 		await fireEvent.click(screen.getByRole('button', { name: 'Preview conversion' }));
 		await waitFor(() => expect(screen.getByText('pt_ain0_bar_g')).toBeTruthy());
 
-		await fireEvent.click(screen.getByLabelText('this folder'));
-		expect((applyButton() as HTMLButtonElement).disabled).toBe(true);
-		expect(screen.getByText(/The draft changed since the preview/)).toBeTruthy();
-		await fireEvent.click(screen.getByRole('button', { name: 'Preview conversion' }));
-		await waitFor(() => expect(applyButton().textContent).toContain('(116 files)'));
-		const rule = vi.mocked(api.dryRun).mock.calls[1][0].rule;
-		expect(rule).toMatchObject({ rule_type: 'unit_mapping', scope: { scope_root: 'APU Heater', scope_folder_id: 'FOLDER-TP30' } });
-
+		await fireEvent.click(screen.getByLabelText('the other files in this folder'));
+		expect(screen.getByText(/a person still checks and applies each one/)).toBeTruthy();
 		await fireEvent.click(applyButton());
 		await waitFor(() => expect(api.resolveCase).toHaveBeenCalledOnce());
-		expect(vi.mocked(api.resolveCase).mock.calls[0][1].rule).toEqual(rule);
+		expect(vi.mocked(api.resolveCase).mock.calls[0][1].rule_scope).toEqual({ scope_root: 'APU Heater', scope_folder_id: 'FOLDER-TP30' });
+		expect(vi.mocked(api.resolveCase).mock.calls[0][1]).not.toHaveProperty('rule');
+		expect(await screen.findByText(/11 other files now show these units as a proposal/)).toBeTruthy();
+	});
+
+	it('asks for a file name pattern before it proposes to matching files', async () => {
+		render(CaseView, { detail: detail(), me: 'asha@manastuspace.com', onChanged: () => {} });
+		await chooseSetUnit();
+		await fireEvent.click(screen.getByRole('button', { name: 'Preview conversion' }));
+		await waitFor(() => expect(screen.getByText('pt_ain0_bar_g')).toBeTruthy());
+		await fireEvent.click(screen.getByLabelText('files in this folder named'));
+		expect(screen.getByText('Type a file name pattern such as T*.dat.')).toBeTruthy();
+		expect((applyButton() as HTMLButtonElement).disabled).toBe(true);
 	});
 
 	it('marks the file as junk and reports backend errors in words', async () => {
@@ -96,10 +102,10 @@ describe('CaseView', () => {
 	it('offers folder scopes only when the case has a folder id, and undo only after a resolution', async () => {
 		const noFolder = detail([unitFlag()], { locations: [{ ...detail().locations[0], folder_id: null }] });
 		render(CaseView, { detail: noFolder, me: 'asha@manastuspace.com', onChanged: () => {} });
-		expect(screen.queryByLabelText('this folder')).toBeNull();
+		expect(screen.queryByLabelText('the other files in this folder')).toBeNull();
 		await chooseSetUnit();
-		expect((screen.getByLabelText('this file') as HTMLInputElement).disabled).toBe(false);
-		expect((screen.getByLabelText('this folder') as HTMLInputElement).disabled).toBe(true);
+		expect((screen.getByLabelText('no other file') as HTMLInputElement).disabled).toBe(false);
+		expect((screen.getByLabelText('the other files in this folder') as HTMLInputElement).disabled).toBe(true);
 		expect((screen.getByRole('button', { name: 'Undo last resolution' }) as HTMLButtonElement).disabled).toBe(true);
 	});
 

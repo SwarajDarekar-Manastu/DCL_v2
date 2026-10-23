@@ -6,6 +6,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
+# The screenshots the in-app guides show live in the repository's asset/ folder (named build context `asset`,
+# see backend/devops/compose.yaml); svelte.config.js aliases it as $asset (../../asset from /app).
+COPY --from=asset . /asset
 ARG VITE_API_BASE_URL=""
 ARG VITE_AUTH_MODE="msal"
 ARG VITE_ENTRA_TENANT_ID=""

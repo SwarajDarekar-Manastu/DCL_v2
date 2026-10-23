@@ -12,6 +12,9 @@
 	import { hasRole } from '$lib/auth/roles';
 	import { session } from '$lib/auth/session.svelte';
 	import RuleForm from '$lib/components/review/RuleForm.svelte';
+	import RuleWizard from '$lib/components/review/RuleWizard.svelte';
+	import { RULE_TYPE_HELP } from '$lib/components/review/rules_guide';
+	import RulesGuide from '$lib/components/review/RulesGuide.svelte';
 	import { rulesYaml } from '$lib/components/review/rules_export';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import { Button } from '$lib/components/ui/button';
@@ -26,6 +29,7 @@
 	let notice = $state('');
 	let busy = $state(false);
 	let showInactive = $state(false);
+	let guideOpen = $state(false);
 	let simulations = $state<Record<string, RuleSimulation>>({});
 	let reload = $state(0);
 	let isAdmin = $derived(hasRole(session.user?.roles ?? [], 'admin'));
@@ -36,7 +40,7 @@
 
 	$effect(() => {
 		void reload;
-		listRules()
+		listRules('rules')
 			.then((list) => {
 				rules = list.items;
 				error = '';
@@ -68,8 +72,13 @@
 		}
 	}
 
-	const create = (draft: RuleDraft) => act(async () => `Rule ${(await createRule(draft)).rule_id} created.`);
-	const deactivate = (rule: RuleView) => act(async () => (await deactivateRule(rule.rule_id), 'Rule deactivated.'));
+	const create = (draft: RuleDraft) =>
+		act(async () => {
+			const made = await createRule(draft);
+			return `Rule saved.${made.proposed_files ? ` ${made.proposed_files} file${made.proposed_files === 1 ? ' now shows' : 's now show'} it as a proposal.` : ''}`;
+		});
+	const deactivate = (rule: RuleView) =>
+		act(async () => (await deactivateRule(rule.rule_id), 'Rule switched off. Approved files are unchanged.'));
 	async function simulate(rule: RuleView) {
 		try {
 			simulations[rule.rule_id] = await simulateRule(rule.rule_id);
@@ -78,33 +87,35 @@
 		}
 	}
 	const scopeText = (r: RuleView) =>
-		[r.scope.scope_root, r.scope.scope_folder_id && `folder ${r.scope.scope_folder_id}`, r.scope.scope_filename_glob, r.scope.scope_extension]
+		[r.scope.scope_root, r.scope.scope_folder_id && (r.scope_folder_path ?? `folder ${r.scope.scope_folder_id}`), r.scope.scope_filename_glob, r.scope.scope_extension]
 			.filter(Boolean)
 			.join(' · ') || 'everywhere';
 </script>
 
 <RoleGate roles={session.user?.roles ?? []} role="reviewer">
-	<Page title="Rules" description="Operator and learned rules that resolve flags automatically. The most specific scope wins." width="full">
+	<Page
+		title="Rules: proposals"
+		description="A rule proposes an answer once, such as the unit of each column in one folder. Every waiting file in it, and every matching file that arrives later, shows that answer; a person checks and applies it file by file. The closest rule wins."
+		width="full"
+	>
 		{#snippet actions()}
+			<RulesGuide bind:open={guideOpen} />
 			<label class="text-muted-foreground flex items-center gap-2 text-[13px]"><input type="checkbox" bind:checked={showInactive} /> show inactive</label>
 			<Button variant="outline" size="sm" disabled={!exportable} onclick={download}>Export YAML</Button>
 			<Button variant="outline" size="sm" href="/review"><ArrowLeftIcon />Queue</Button>
 		{/snippet}
-		{#snippet details()}
-			<section class="panel" aria-labelledby="new-rule-title">
-				<div class="panel-header"><h2 id="new-rule-title" class="panel-title">New operator rule</h2></div>
-				<div class="panel-body grid gap-4">
-					<p class="text-muted-foreground m-0 text-xs">Operator rules are immutable; a change creates a new rule that supersedes the old one.</p>
-					<RuleForm {busy} onSubmit={create} />
-				</div>
-			</section>
-		{/snippet}
-
-		<div class="grid gap-3">
+		<div class="grid gap-6">
 			{#if error}<Notice tone="error">{error}</Notice>{/if}
 			{#if notice}<Notice tone="success">{notice}</Notice>{/if}
+			<RuleWizard onSaved={() => (reload += 1)} />
+
+			<section class="grid gap-3" aria-labelledby="saved-rules-title">
+				<h2 id="saved-rules-title" class="m-0 text-base font-semibold">Saved rules</h2>
 			{#if shown.length === 0 && !error}
-				<EmptyState title="No rules yet." description="Rules appear here when a reviewer applies a resolution to a folder, or creates one on the right." />
+				<EmptyState
+					title="No rules yet."
+					description="Create one above: choose a folder, say what its columns are, and save. It shows up here the moment it exists."
+				/>
 			{:else if shown.length}
 				<div class="panel">
 					<table class="data-table">
@@ -125,6 +136,7 @@
 										<div class="flex flex-wrap items-center gap-1.5">
 											<strong class="font-mono text-[13px] font-medium">{rule.rule_type}</strong>
 											<ToneBadge>{rule.origin}</ToneBadge>
+											{#if RULE_TYPE_HELP[rule.rule_type].effect === 'stored'}<ToneBadge tone="outline">stored only</ToneBadge>{/if}
 											{#if !rule.active}<ToneBadge tone="outline">inactive</ToneBadge>{/if}
 										</div>
 										<details class="mt-1">
@@ -134,8 +146,13 @@
 									</td>
 									<td class="max-w-[22rem] break-words">{scopeText(rule)}</td>
 									<td class="num font-mono">{rule.precedence}</td>
-									<td class="text-muted-foreground num text-xs whitespace-nowrap">
-										{rule.flags_resolved} flags resolved<br />{rule.runs_mapped} runs mapped
+									<td class="text-muted-foreground text-xs">
+										{#if RULE_TYPE_HELP[rule.rule_type].effect === 'stored'}
+											Nothing reads this kind yet.
+										{:else}
+											<span class="num whitespace-nowrap">{rule.flags_proposed} proposed · {rule.flags_decided} decided · {rule.files_waiting} file{rule.files_waiting === 1 ? '' : 's'} waiting</span>
+											{#if rule.files_waiting}<br /><a href="/review?proposed_by_rule_id={rule.rule_id}">Review the waiting files</a>{/if}
+										{/if}
 									</td>
 									<td class="text-muted-foreground text-xs">
 										{rule.created_by}, <span class="font-mono">{rule.created_at.slice(0, 10)}</span>
@@ -144,7 +161,7 @@
 									<td>
 										<div class="flex justify-end gap-1.5">
 											<Button variant="outline" size="xs" onclick={() => simulate(rule)}>Simulate</Button>
-											{#if isAdmin && rule.active}<Button variant="destructive" size="xs" disabled={busy} onclick={() => deactivate(rule)}>Deactivate</Button>{/if}
+											{#if rule.active}<Button variant="outline" size="xs" disabled={busy} title="Stops new proposals. Files a person has already approved are never changed." onclick={() => deactivate(rule)}>{RULE_TYPE_HELP[rule.rule_type].effect === 'stored' ? 'Deactivate' : 'Stop proposing'}</Button>{/if}
 										</div>
 									</td>
 								</tr>
@@ -153,7 +170,7 @@
 									<tr class="hover:bg-transparent">
 										<td colspan="6" class="bg-muted/40">
 											<p class="m-0 text-[13px] font-medium">
-												Matches {sim.matched_documents} documents: {sim.would_resume} would resume, {sim.would_reprocess} would be re-processed.
+												Reaches {sim.matched_documents} file{sim.matched_documents === 1 ? '' : 's'}: {sim.waiting_documents} waiting, {sim.finished_documents} already processed (never changed by a rule).
 											</p>
 											{#if sim.sample.length}
 												<ul class="m-0 mt-1 grid list-none gap-0.5 p-0 text-xs">
@@ -168,6 +185,17 @@
 					</table>
 				</div>
 			{/if}
+			</section>
+
+			<details class="panel">
+				<summary class="panel-header cursor-pointer"><span class="panel-title">Advanced: write a rule as JSON</span></summary>
+				<div class="panel-body grid max-w-xl gap-4">
+					<p class="text-muted-foreground m-0 text-xs">
+						For rule kinds the steps above do not cover. Only channel maps and unit rules change files today; the rest are saved and listed.
+					</p>
+					<RuleForm {busy} onSubmit={create} />
+				</div>
+			</details>
 		</div>
 	</Page>
 </RoleGate>

@@ -88,10 +88,20 @@ export type RuleDraft = Schemas['RuleDraft'];
 export type RuleView = Schemas['RuleView'];
 export type RuleList = Schemas['RuleList'];
 export type RuleSimulation = Schemas['RuleSimulation'];
+export type RuleCreated = Schemas['RuleCreated'];
+export type RulePreview = Schemas['RulePreview'];
+export type RulePreviewRequest = Schemas['RulePreviewRequest'];
+export type FolderChoice = Schemas['FolderChoice'];
+export type FolderList = Schemas['FolderList'];
+export type OpenChannel = Schemas['OpenChannel'];
 export type ResolveRequest = Schemas['ResolveRequest'];
 export type ResolveResponse = Schemas['ResolveResponse'];
 export type RejectRequest = Schemas['RejectRequest'];
 export type UndoResponse = Schemas['UndoResponse'];
+export type EditRequest = Schemas['EditRequest'];
+export type EditResponse = Schemas['EditResponse'];
+export type ReopenRequest = Schemas['ReopenRequest'];
+export type ReopenResponse = Schemas['ReopenResponse'];
 export type DryRunRequest = Schemas['DryRunRequest'];
 export type DryRunResponse = Schemas['DryRunResponse'];
 export type ChannelPreview = Schemas['ChannelPreview'];
@@ -377,19 +387,39 @@ export function undoCase(caseKey: string): Promise<UndoResponse> {
 	return request<UndoResponse>('POST', `${casePath(caseKey)}/undo`);
 }
 
+/** POST /review/cases/{case_key}/reopen: take decisions of any flag type back so the file is decided again. */
+export function reopenCase(caseKey: string, body: ReopenRequest): Promise<ReopenResponse> {
+	return request<ReopenResponse>('POST', `${casePath(caseKey)}/reopen`, body);
+}
+
+/** POST /review/cases/{case_key}/edit: change the unit of channels already decided, with a reason. */
+export function editCase(caseKey: string, body: EditRequest): Promise<EditResponse> {
+	return request<EditResponse>('POST', `${casePath(caseKey)}/edit`, body);
+}
+
 /** POST /review/dry-run */
 export function dryRun(body: DryRunRequest): Promise<DryRunResponse> {
 	return request<DryRunResponse>('POST', '/review/dry-run', body);
 }
 
-/** GET /review/rules */
-export function listRules(): Promise<RuleList> {
-	return request<RuleList>('GET', '/review/rules');
+/** GET /review/rules. `rules`: proposals and the kinds nothing reads yet; `decisions`: the approvals of files. */
+export function listRules(kind?: 'rules' | 'decisions'): Promise<RuleList> {
+	return request<RuleList>('GET', `/review/rules${kind ? `?kind=${kind}` : ''}`);
 }
 
-/** POST /review/rules */
-export function createRule(draft: RuleDraft): Promise<RuleView> {
-	return request<RuleView>('POST', '/review/rules', draft);
+/** POST /review/rules: saves a proposal. The waiting files it matches show its units; none is approved. */
+export function createRule(draft: RuleDraft): Promise<RuleCreated> {
+	return request<RuleCreated>('POST', '/review/rules', draft);
+}
+
+/** POST /review/rules/preview: what a rule would do before it is saved. */
+export function previewRule(body: RulePreviewRequest): Promise<RulePreview> {
+	return request<RulePreview>('POST', '/review/rules/preview', body);
+}
+
+/** GET /review/folders: folders to scope a rule to (no query: the ones holding halted telemetry files). */
+export function listFolders(q = ''): Promise<FolderList> {
+	return request<FolderList>('GET', `/review/folders?q=${encodeURIComponent(q)}`);
 }
 
 /** POST /review/rules/{rule_id}/simulate */

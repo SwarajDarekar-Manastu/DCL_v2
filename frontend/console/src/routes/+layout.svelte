@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
+	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import LayersIcon from '@lucide/svelte/icons/layers';
 	import LoaderCircleIcon from '@lucide/svelte/icons/loader-circle';
@@ -11,6 +12,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { documentTitle } from '$lib/components/shell/breadcrumbs';
+	import { crumb } from '$lib/components/shell/crumb.svelte';
 	import LoginForm from '$lib/components/shell/LoginForm.svelte';
 	import Notice from '$lib/components/shell/Notice.svelte';
 	import Sidebar from '$lib/components/shell/Sidebar.svelte';
@@ -18,6 +20,14 @@
 	import { startTheme } from '$lib/theme.svelte';
 
 	let { children } = $props();
+
+	// How many steps the reviewer has moved inside the Console: Back is offered only while there is a page to return to.
+	let depth = $state(0);
+	afterNavigate((navigation) => {
+		if (navigation.type === 'enter') depth = 0;
+		else if (navigation.type === 'popstate') depth = Math.max(0, depth + (navigation.delta ?? 0));
+		else depth += 1;
+	});
 
 	onMount(() => {
 		startSession();
@@ -81,7 +91,7 @@
 				onSignOut={() => session.signOut()}
 			/>
 			<div class="flex min-w-0 flex-1 flex-col">
-				<TopBar pathname={page.url.pathname} />
+				<TopBar pathname={page.url.pathname} search={page.url.search} leaf={crumb.leaf} canGoBack={depth > 0} onBack={() => history.back()} />
 				<main id="main" tabindex="-1" class="flex min-w-0 flex-1 flex-col outline-none [--sticky-top:3rem]">
 					{@render children()}
 				</main>

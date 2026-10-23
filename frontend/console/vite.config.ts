@@ -7,6 +7,7 @@ import { defineConfig } from 'vitest/config';
 // (VITE_AUTH_MODE=local by default, src/lib/config.ts); no token is defined here.
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), svelteTesting()],
+	server: { fs: { allow: ['../../asset'] } },
 	test: {
 		environment: 'jsdom',
 		include: ['tests/**/*.test.ts']

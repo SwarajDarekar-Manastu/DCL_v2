@@ -523,6 +523,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/review/cases/{case_key}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit Case
+         * @description Change the unit of channels already decided; the file is rebuilt. The reason and actor are audited.
+         */
+        post: operations["edit_case_review_cases__case_key__edit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/review/cases/{case_key}/reject": {
         parameters: {
             query?: never;
@@ -534,6 +554,26 @@ export interface paths {
         put?: never;
         /** Reject Case */
         post: operations["reject_case_review_cases__case_key__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/review/cases/{case_key}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Case
+         * @description Take back decisions of any flag type so the file is decided again; reason and actor are audited.
+         */
+        post: operations["reopen_case_review_cases__case_key__reopen_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -591,6 +631,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/review/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Folders
+         * @description Folders to scope a rule to; without ``q`` the ones that hold halted telemetry files, most first.
+         */
+        get: operations["list_folders_review_folders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/review/rules": {
         parameters: {
             query?: never;
@@ -598,11 +658,38 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Rules */
+        /**
+         * List Rules
+         * @description ``kind=rules``: proposals and kinds nothing reads yet; ``kind=decisions``: the approvals of files.
+         */
         get: operations["list_rules_review_rules_get"];
         put?: never;
-        /** Create Rule */
+        /**
+         * Create Rule
+         * @description Save a rule. A unit rule is a proposal: the waiting files it matches show its units and stay open until
+         *     a person approves each. A channel map is a file's approval and is never made by a rule.
+         */
         post: operations["create_rule_review_rules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/review/rules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Rule
+         * @description What a rule would do before it is saved: files matched, files that resume, the columns they wait on.
+         */
+        post: operations["preview_rule_review_rules_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1100,6 +1187,44 @@ export interface components {
              */
             options: components["schemas"]["AnswerOptions"];
         };
+        /**
+         * AppliedUnit
+         * @description A unit a rule applied to a channel while no person decided it (the old flow, before rules only
+         *     proposed): shown so a person can confirm or correct it.
+         */
+        AppliedUnit: {
+            /** Ambient Condition */
+            ambient_condition: string | null;
+            /** Canonical Name */
+            canonical_name: string | null;
+            /** Channel */
+            channel: string;
+            /**
+             * Flag Id
+             * Format: uuid
+             */
+            flag_id: string;
+            /** Gauge Or Abs */
+            gauge_or_abs: string;
+            /** Quantity */
+            quantity: string;
+            /** Rule Active */
+            rule_active: boolean;
+            /**
+             * Rule Created At
+             * Format: date-time
+             */
+            rule_created_at: string;
+            /** Rule Created By */
+            rule_created_by: string;
+            /**
+             * Rule Id
+             * Format: uuid
+             */
+            rule_id: string;
+            /** Unit */
+            unit: string;
+        };
         /** AppliedView */
         AppliedView: {
             after: components["schemas"]["JsonValue"];
@@ -1386,6 +1511,12 @@ export interface components {
         };
         /** CaseDetail */
         CaseDetail: {
+            /**
+             * Applied Units
+             * @description units a rule applied to flags that closed without a person (AUTO_RESOLVED)
+             * @default []
+             */
+            applied_units: components["schemas"]["AppliedUnit"][];
             /** Document Status */
             document_status: string | null;
             /** Flags */
@@ -1504,6 +1635,12 @@ export interface components {
             flag_counts: {
                 [key: string]: number;
             };
+            /**
+             * Has Rule Proposal
+             * @description an open flag carries a rule's proposal
+             * @default false
+             */
+            has_rule_proposal: boolean;
             /** Has Suggestion */
             has_suggestion: boolean;
             /** Location Id */
@@ -1749,16 +1886,26 @@ export interface components {
         };
         /**
          * ConflictEvidence
-         * @description CONFLICT: two sources disagree.
+         * @description CONFLICT: what the route found, and how the reviewer should read the sides.
+         *
+         *     ``sources_disagree``: ``a`` and ``b`` are two sources that state different values.
+         *     ``check_failed``: ``a`` is what was found, ``b`` what the check expected (a limit or a rule).
+         *     ``note``: ``a`` is a finding the system wants a person to confirm; there is no second side.
          */
         ConflictEvidence: {
             a: components["schemas"]["ConflictSide"];
-            b: components["schemas"]["ConflictSide"];
+            b?: components["schemas"]["ConflictSide"] | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             kind: "conflict";
+            /**
+             * Relation
+             * @default sources_disagree
+             * @enum {string}
+             */
+            relation: "sources_disagree" | "check_failed" | "note";
             /** Subject */
             subject: string;
         };
@@ -1868,6 +2015,33 @@ export interface components {
             preview: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * EditRequest
+         * @description Change decisions already made on a file (the Audit page). Every edit says why.
+         */
+        EditRequest: {
+            /**
+             * Reason
+             * @description written reason, kept with the actor in the audit log
+             */
+            reason: string;
+            /** Resolutions */
+            resolutions: components["schemas"]["FlagResolution"][];
+        };
+        /** EditResponse */
+        EditResponse: {
+            /** Case Key */
+            case_key: string;
+            /** Flags */
+            flags: components["schemas"]["FlagView"][];
+            /**
+             * Rebuild Doc Id
+             * @description the document is rebuilt with the new decision
+             */
+            rebuild_doc_id: string | null;
+            /** Resumed Doc Ids */
+            resumed_doc_ids: string[];
         };
         /** EntityPage */
         EntityPage: {
@@ -2119,6 +2293,8 @@ export interface components {
              */
             flag_id: string;
             flag_type: components["schemas"]["FlagType"];
+            /** Proposed By Rule Id */
+            proposed_by_rule_id: string | null;
             /** Resolution */
             resolution: (components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"]) | null;
             /** Resolution Rule Id */
@@ -2131,6 +2307,33 @@ export interface components {
             severity: components["schemas"]["FlagSeverity"];
             status: components["schemas"]["FlagStatus"];
             suggested_resolution: components["schemas"]["Suggestion"] | null;
+        };
+        /** FolderChoice */
+        FolderChoice: {
+            /**
+             * Files
+             * @description files directly in this folder
+             */
+            files: number;
+            /**
+             * Folder Id
+             * @description Graph item id (RuleScope.scope_folder_id)
+             */
+            folder_id: string;
+            /** Path */
+            path: string;
+            /** Root Name */
+            root_name: string;
+            /**
+             * Waiting
+             * @description halted telemetry documents directly in this folder
+             */
+            waiting: number;
+        };
+        /** FolderList */
+        FolderList: {
+            /** Items */
+            items: components["schemas"]["FolderChoice"][];
         };
         /**
          * GaugeOrAbs
@@ -2448,6 +2651,16 @@ export interface components {
             /** Web Url */
             web_url: string;
         };
+        /** OpenChannel */
+        OpenChannel: {
+            /** Channel */
+            channel: string;
+            /**
+             * Files
+             * @description matched documents that wait for a unit on this channel
+             */
+            files: number;
+        };
         /** OpsSummary */
         OpsSummary: {
             /** Documents By Status */
@@ -2619,6 +2832,25 @@ export interface components {
             /** Comment */
             comment?: string | null;
         };
+        /**
+         * ReopenRequest
+         * @description Take decisions back so the file can be decided again (every flag type).
+         */
+        ReopenRequest: {
+            /** Flag Ids */
+            flag_ids: string[];
+            /** Reason */
+            reason: string;
+        };
+        /** ReopenResponse */
+        ReopenResponse: {
+            /** Case Key */
+            case_key: string;
+            /** Rebuild Doc Id */
+            rebuild_doc_id: string | null;
+            /** Reopened Flag Ids */
+            reopened_flag_ids: string[];
+        };
         /** ResolveRequest */
         ResolveRequest: {
             /** Comment */
@@ -2626,6 +2858,8 @@ export interface components {
             /** Resolutions */
             resolutions: components["schemas"]["FlagResolution"][];
             rule?: components["schemas"]["RuleDraft"] | null;
+            /** @description with telemetry unit decisions: also propose them, as one rule with this scope, to the other waiting files it matches (they stay open until a person approves each). This file is always approved on its own. */
+            rule_scope?: components["schemas"]["RuleScope"] | null;
         };
         /** ResolveResponse */
         ResolveResponse: {
@@ -2634,10 +2868,17 @@ export interface components {
             /** Flags */
             flags: components["schemas"]["FlagView"][];
             /**
+             * Proposed Files
+             * @description other files that now show the saved proposal
+             * @default 0
+             */
+            proposed_files: number;
+            /**
              * Resumed Doc Ids
-             * @description this document and every halted sibling matched by the rule
+             * @description this document, when its approval lets it resume; never another file
              */
             resumed_doc_ids: string[];
+            /** @description the proposal rule saved with this approval, if any */
             rule: components["schemas"]["RuleView"] | null;
         };
         /** ResultView */
@@ -2764,6 +3005,74 @@ export interface components {
          * @enum {string}
          */
         Route: "A1" | "A2" | "B" | "C" | "D" | "E" | "F" | "G";
+        /** RuleCreated */
+        RuleCreated: {
+            /** Active */
+            active: boolean;
+            /** Body */
+            body: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /**
+             * Files Waiting
+             * @description files with an open flag that still carries this proposal
+             * @default 0
+             */
+            files_waiting: number;
+            /**
+             * Flags Decided
+             * @description of those, flags a person has since decided (approved or skipped)
+             * @default 0
+             */
+            flags_decided: number;
+            /**
+             * Flags Proposed
+             * @description flags this proposal rule has filled in, open or decided
+             * @default 0
+             */
+            flags_proposed: number;
+            /**
+             * Flags Resolved
+             * @description derived from review_flags.resolution_rule_id (v_rule_usage)
+             */
+            flags_resolved: number;
+            origin: components["schemas"]["RuleOrigin"];
+            /** Precedence */
+            precedence: number;
+            /**
+             * Proposed Files
+             * @description files that now show this rule's units as a proposal
+             */
+            proposed_files: number;
+            /**
+             * Rule Id
+             * Format: uuid
+             */
+            rule_id: string;
+            rule_type: components["schemas"]["RuleType"];
+            /**
+             * Runs Mapped
+             * @description derived from telemetry_runs.channel_map_rule_id (v_rule_usage)
+             */
+            runs_mapped: number;
+            scope: components["schemas"]["RuleScope"];
+            /**
+             * Scope Folder Path
+             * @description the folder of scope_folder_id, as a path
+             */
+            scope_folder_path?: string | null;
+            /** Source Blob Sha256 */
+            source_blob_sha256: string | null;
+            /** Supersedes Rule Id */
+            supersedes_rule_id: string | null;
+        };
         /**
          * RuleDraft
          * @description An operator rule to create (operator rules are immutable; a change supersedes).
@@ -2796,6 +3105,51 @@ export interface components {
          * @enum {string}
          */
         RuleOrigin: "operator" | "cfg" | "header" | "config_json" | "tdms_props";
+        /** RulePreview */
+        RulePreview: {
+            /**
+             * Effect
+             * @description proposes: waiting files show its units for a person to approve; stored: kept and listed, no route reads this kind yet
+             * @enum {string}
+             */
+            effect: "proposes" | "stored";
+            /**
+             * Finished Documents
+             * @description matched files already processed; a rule never changes them
+             */
+            finished_documents: number;
+            /** Matched Documents */
+            matched_documents: number;
+            /**
+             * Open Channels
+             * @description the columns the matched files wait for a unit on
+             */
+            open_channels: components["schemas"]["OpenChannel"][];
+            /**
+             * Problem
+             * @description why the body cannot be saved, when it cannot
+             */
+            problem: string | null;
+            /** Sample */
+            sample: components["schemas"]["AffectedDocument"][];
+            /**
+             * Waiting Documents
+             * @description matched files halted on a question the rule can answer
+             */
+            waiting_documents: number;
+        };
+        /**
+         * RulePreviewRequest
+         * @description A rule that does not exist yet: its scope and, once the reviewer has written it, its body.
+         */
+        RulePreviewRequest: {
+            /** Body */
+            body?: {
+                [key: string]: unknown;
+            } | null;
+            rule_type: components["schemas"]["RuleType"];
+            scope: components["schemas"]["RuleScope"];
+        };
         /**
          * RuleScope
          * @description The four scope columns; all null means global.
@@ -2812,23 +3166,32 @@ export interface components {
         };
         /**
          * RuleSimulation
-         * @description What a rule would touch before it is confirmed ("this will re-process 116 runs").
+         * @description What a rule would touch ("12 files wait for it") before it is saved.
          */
         RuleSimulation: {
+            /**
+             * Finished Documents
+             * @description matched files already processed; a rule never changes them
+             */
+            finished_documents: number;
             /** Matched Documents */
             matched_documents: number;
             /** Sample */
             sample: components["schemas"]["AffectedDocument"][];
-            /** Would Reprocess */
-            would_reprocess: number;
-            /** Would Resume */
-            would_resume: number;
+            /**
+             * Waiting Documents
+             * @description matched files halted on a question the rule can answer
+             */
+            waiting_documents: number;
         };
         /**
          * RuleType
+         * @description ``channel_map`` is a person's approval of one file's columns: only a case's "Apply" writes it, and
+         *     Route C reads nothing else as an answer. ``channel_proposal`` is what a rule is: it pre-fills the units of
+         *     the files it matches and a person still approves each file (DECISIONS 2026-10-24).
          * @enum {string}
          */
-        RuleType: "channel_map" | "unit_mapping" | "schema_mapping" | "supersession" | "ignore_pattern" | "origin_override";
+        RuleType: "channel_map" | "channel_proposal" | "unit_mapping" | "schema_mapping" | "supersession" | "ignore_pattern" | "origin_override";
         /** RuleView */
         RuleView: {
             /** Active */
@@ -2844,6 +3207,24 @@ export interface components {
             created_at: string;
             /** Created By */
             created_by: string;
+            /**
+             * Files Waiting
+             * @description files with an open flag that still carries this proposal
+             * @default 0
+             */
+            files_waiting: number;
+            /**
+             * Flags Decided
+             * @description of those, flags a person has since decided (approved or skipped)
+             * @default 0
+             */
+            flags_decided: number;
+            /**
+             * Flags Proposed
+             * @description flags this proposal rule has filled in, open or decided
+             * @default 0
+             */
+            flags_proposed: number;
             /**
              * Flags Resolved
              * @description derived from review_flags.resolution_rule_id (v_rule_usage)
@@ -2864,6 +3245,11 @@ export interface components {
              */
             runs_mapped: number;
             scope: components["schemas"]["RuleScope"];
+            /**
+             * Scope Folder Path
+             * @description the folder of scope_folder_id, as a path
+             */
+            scope_folder_path?: string | null;
             /** Source Blob Sha256 */
             source_blob_sha256: string | null;
             /** Supersedes Rule Id */
@@ -3083,6 +3469,11 @@ export interface components {
             ambient_condition?: components["schemas"]["AmbientCondition"] | null;
             /** Ambient Pressure Bar Abs */
             ambient_pressure_bar_abs?: number | null;
+            /**
+             * Canonical Name
+             * @description what the rest of the system calls the channel; the file's own column name when absent (a rule's proposal carries the name its author chose)
+             */
+            canonical_name?: string | null;
             /** Channel */
             channel: string;
             /**
@@ -4685,6 +5076,12 @@ export interface operations {
                 assignee?: string | null;
                 status?: components["schemas"]["CaseStatus"] | null;
                 has_suggestion?: boolean | null;
+                /** @description only the cases with an open flag that this proposal rule filled in */
+                proposed_by_rule_id?: string | null;
+                /** @description words that must all appear in the file's title or path */
+                q?: string | null;
+                /** @description true: only cases with at least one decided flag, whatever their status (the Audit page finds files here); false: only cases where none is decided */
+                decided?: boolean | null;
                 older_than_days?: number | null;
                 sort?: "impact" | "age" | "severity";
                 limit?: number;
@@ -4782,6 +5179,41 @@ export interface operations {
             };
         };
     };
+    edit_case_review_cases__case_key__edit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reject_case_review_cases__case_key__reject_post: {
         parameters: {
             query?: never;
@@ -4804,6 +5236,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_case_review_cases__case_key__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReopenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReopenResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4916,10 +5383,43 @@ export interface operations {
             };
         };
     };
+    list_folders_review_folders_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_rules_review_rules_get: {
         parameters: {
             query?: {
                 active?: boolean | null;
+                kind?: ("rules" | "decisions") | null;
             };
             header?: never;
             path?: never;
@@ -4966,7 +5466,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RuleView"];
+                    "application/json": components["schemas"]["RuleCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_rule_review_rules_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulePreview"];
                 };
             };
             /** @description Validation Error */

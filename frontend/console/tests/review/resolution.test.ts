@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Resolution } from '../../src/lib/api_endpoint';
-import { allowedActions, missing, needsPreview, ruleFor, startDraft } from '../../src/lib/components/review/resolution';
+import { allowedActions, canBecomeRule, caseRuleScope, missing, needsPreview, startDraft } from '../../src/lib/components/review/resolution';
 import { detail, unitFlag } from './fixtures';
 import { reactive } from './state.svelte';
 
@@ -46,29 +46,6 @@ describe('resolution drafts', () => {
 	it('previews only the actions that change numbers', () => {
 		expect(['set_unit', 'map_columns', 'skip', 'choose_source'].filter((a) => needsPreview(a as never))).toEqual(['set_unit', 'map_columns']);
 	});
-
-	it('turns a folder-scoped unit decision into one unit_mapping rule', () => {
-		const resolution = startDraft('set_unit', unitFlag());
-		expect(ruleFor(resolution, 'file', where)).toBeNull();
-		expect(ruleFor(resolution, 'folder', where)).toEqual({
-			rule_type: 'unit_mapping',
-			scope: { scope_root: 'APU Heater', scope_folder_id: 'FOLDER-TP30' },
-			body: {
-				channel: 'AIN0',
-				unit: 'psi',
-				quantity: 'pressure',
-				gauge_or_abs: 'gauge',
-				ambient_condition: 'SEA_LEVEL',
-				ambient_pressure_bar_abs: 1.01325,
-				expression: null
-			},
-			precedence: 0
-		});
-		expect(ruleFor(resolution, 'folder_pattern', where, ' T*.dat ')?.scope.scope_filename_glob).toBe('T*.dat');
-		expect(() => ruleFor(resolution, 'folder_pattern', where, '')).toThrow('enter a filename pattern');
-		expect(() => ruleFor(resolution, 'folder', { ...where, folder_id: null })).toThrow('folder id');
-		expect(ruleFor({ action: 'skip' }, 'folder', where)).toBeNull();
-	});
 });
 
 describe('startDraft with reactive data', () => {
@@ -76,5 +53,18 @@ describe('startDraft with reactive data', () => {
 		const flag = unitFlag();
 		const draft = startDraft('set_unit', reactive(flag));
 		expect(draft).toEqual(flag.suggested_resolution!.resolution);
+	});
+
+	it('offers to propose only a unit decision, the one kind of rule a route fills in from', () => {
+		expect(['set_unit', 'map_columns', 'skip', 'choose_source'].filter((a) => canBecomeRule(a as never))).toEqual(['set_unit']);
+	});
+
+	it('scopes a whole case to its file, its folder or the files of the folder that match', () => {
+		const where = { root_name: 'APU', folder_id: 'F1', file_name: 'a.dat', extension: '.dat' };
+		expect(caseRuleScope('file', where)).toBeNull();
+		expect(caseRuleScope('folder', where)).toEqual({ scope_root: 'APU', scope_folder_id: 'F1' });
+		expect(caseRuleScope('folder_pattern', where, ' T*.dat ')).toEqual({ scope_root: 'APU', scope_folder_id: 'F1', scope_filename_glob: 'T*.dat' });
+		expect(() => caseRuleScope('folder_pattern', where, '')).toThrow('enter a filename pattern');
+		expect(() => caseRuleScope('folder', { ...where, folder_id: null })).toThrow('folder id');
 	});
 });

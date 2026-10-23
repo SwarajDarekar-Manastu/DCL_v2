@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import FlagGuide from '../../src/lib/components/review/FlagGuide.svelte';
-import { FLAG_GUIDE } from '../../src/lib/components/review/flag_guide';
-import { groupLocations, shortFolder } from '../../src/lib/components/review/locations';
+import { FLAG_GUIDE, guideKeyFor, guideWords } from '../../src/lib/components/review/flag_guide';
+import { ACTION_LABEL, NOT_BUILT } from '../../src/lib/components/review/resolution';
+import { groupLocations } from '../../src/lib/components/review/locations';
 import type { CaseLocation } from '../../src/lib/api_endpoint';
 
 const loc = (path: string, web_url: string | null): CaseLocation =>
@@ -16,8 +17,22 @@ const loc = (path: string, web_url: string | null): CaseLocation =>
 	}) as CaseLocation;
 
 describe('flag guide text', () => {
-	it('covers all nine flag types with a decision and at least one choice', () => {
-		expect(Object.keys(FLAG_GUIDE)).toHaveLength(9);
+	it('covers the nine flag types and the two other readings of a conflict', () => {
+		expect(Object.keys(FLAG_GUIDE).sort()).toEqual(
+			[
+				'CLOUD_RESTRICTED',
+				'CONFLICT',
+				'CONFLICT_CHECK',
+				'CONFLICT_NOTE',
+				'HELD_LARGE_FILE',
+				'LOW_CONFIDENCE_EXTRACTION',
+				'PARSE_FAILURE',
+				'SCHEMA_UNKNOWN',
+				'SENSITIVE_CONTENT',
+				'UNIT_AMBIGUITY',
+				'UNSUPPORTED_FORMAT'
+			].sort()
+		);
 		for (const guide of Object.values(FLAG_GUIDE)) {
 			expect(guide.what.length).toBeGreaterThan(20);
 			expect(guide.decide.length).toBeGreaterThan(10);
@@ -27,21 +42,47 @@ describe('flag guide text', () => {
 	});
 
 	it('keeps every guide short enough to read at a glance', () => {
+		for (const guide of Object.values(FLAG_GUIDE)) expect(guideWords(guide)).toBeLessThanOrEqual(75);
+	});
+
+	it('only names actions the console has, and never one it cannot carry out yet', () => {
 		for (const guide of Object.values(FLAG_GUIDE)) {
-			const words = [guide.what, guide.decide, ...guide.choices, guide.unsure].join(' ').split(/\s+/).length;
-			expect(words).toBeLessThanOrEqual(75);
+			for (const { action } of guide.choices) {
+				if (action === null) continue;
+				expect(action in ACTION_LABEL).toBe(true);
+				expect(NOT_BUILT).not.toContain(action);
+			}
 		}
 	});
 
+	it('reads a conflict by what its evidence says it is', () => {
+		const side = { label: 'x', value: 'y', provenance: 'p' };
+		const conflict = (relation: 'sources_disagree' | 'check_failed' | 'note') => ({
+			flag_type: 'CONFLICT' as const,
+			evidence: { kind: 'conflict' as const, subject: 's', relation, a: side, b: relation === 'note' ? null : side }
+		});
+		expect(guideKeyFor(conflict('sources_disagree'))).toBe('CONFLICT');
+		expect(guideKeyFor(conflict('check_failed'))).toBe('CONFLICT_CHECK');
+		expect(guideKeyFor(conflict('note'))).toBe('CONFLICT_NOTE');
+		expect(guideKeyFor({ flag_type: 'UNIT_AMBIGUITY', evidence: null })).toBe('UNIT_AMBIGUITY');
+	});
+
 	it('opens a popover with what is wrong and what to decide', async () => {
-		render(FlagGuide, { flagType: 'CONFLICT' });
+		render(FlagGuide, { topic: 'CONFLICT' });
 		await fireEvent.click(
 			screen.getByRole('button', {
 				name: /what should i do with a CONFLICT flag/i
 			})
 		);
-		expect(await screen.findByText(/Two sources disagree/)).toBeTruthy();
-		expect(screen.getByText(/Say which source is right/)).toBeTruthy();
+		expect(await screen.findByText(/Two sources state different values/)).toBeTruthy();
+		expect(screen.getByText(/Say which one is right/)).toBeTruthy();
+	});
+
+	it('explains a note in its own words, not as two sources', async () => {
+		render(FlagGuide, { topic: 'CONFLICT_NOTE' });
+		await fireEvent.click(screen.getByRole('button', { name: /what should i do with a CONFLICT flag/i }));
+		expect(await screen.findByText(/LaTeX files that no main file includes/)).toBeTruthy();
+		expect(screen.queryByText(/Two sources/)).toBeNull();
 	});
 });
 
@@ -69,7 +110,19 @@ describe('OneDrive links', () => {
 		});
 	});
 
-	it('tells copies apart by the last two folder names', () => {
-		expect(shortFolder('APU/Test Campaign 1/Test Plan 18/APU - Firing/Tables/Observations_Test')).toBe('Tables / Observations_Test');
+	it('tells copies apart by their whole folder, even when they differ only in a test plan high up', () => {
+		const groups = groupLocations([
+			loc('APU/Test Campaign 1/Test Plan 10/A/APU - Firing/Main_Files/3_Test_setup_BASE.tex', 'https://x/1'),
+			loc('APU/Test Campaign 1/Test Plan 10/B/APU - Firing/Main_Files/3_Test_setup_BASE.tex', 'https://x/2'),
+			loc('APU/Test Campaign 1/Test Plan 11/APU - Firing/Main_Files/3_Test_setup_BASE.tex', 'https://x/3'),
+			loc('APU/Test Campaign 1/Test Plan 12/APU - Firing/Main_Files/3_Test_setup_BASE.tex', 'https://x/4')
+		]);
+		expect(groups.primary?.folder).toBe('Test Campaign 1/Test Plan 10/A/APU - Firing/Main_Files');
+		expect(groups.others.map((l) => l.folder)).toEqual([
+			'Test Campaign 1/Test Plan 10/B/APU - Firing/Main_Files',
+			'Test Campaign 1/Test Plan 11/APU - Firing/Main_Files',
+			'Test Campaign 1/Test Plan 12/APU - Firing/Main_Files'
+		]);
+		expect(new Set(groups.others.map((l) => l.folder)).size).toBe(3);
 	});
 });

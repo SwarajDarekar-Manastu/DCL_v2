@@ -2,7 +2,7 @@
 
 import type { CaseFilters } from '$lib/api_endpoint';
 
-const KEYS = ['severity', 'flag_type', 'route', 'root_name', 'test_plan_id', 'assignee', 'status', 'has_suggestion', 'older_than_days', 'sort'] as const;
+const KEYS = ['severity', 'flag_type', 'route', 'root_name', 'test_plan_id', 'assignee', 'status', 'has_suggestion', 'older_than_days', 'proposed_by_rule_id', 'q', 'sort'] as const;
 
 export function filtersFromUrl(params: URLSearchParams): CaseFilters {
 	const filters: Record<string, unknown> = {};

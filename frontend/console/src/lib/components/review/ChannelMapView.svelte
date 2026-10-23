@@ -2,15 +2,19 @@
 	// One telemetry file with several channels without a unit, as a reviewer who never saw the pipeline needs it:
 	// what is wrong (banner), the file itself with the channel boxed, one row per channel with a unit picker,
 	// a preview of the converted values, and one "Apply all and resume".
-	import { ApiError, dryRun, resolveCase, type CaseDetail, type DryRunResponse } from '$lib/api_endpoint';
+	import { untrack } from 'svelte';
+	import { ApiError, dryRun, previewRule, resolveCase, type CaseDetail, type DryRunResponse, type RulePreview } from '$lib/api_endpoint';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import { Button } from '$lib/components/ui/button';
 	import Notice from '$lib/components/shell/Notice.svelte';
 	import FlagGuide from './FlagGuide.svelte';
+	import { caseRuleScope, type ScopeChoice } from './resolution';
 	import {
+		AMBIENT_OPTIONS,
 		candidateChoices,
 		channelRows,
 		choiceFor,
+		proposedRows,
 		columnOf,
 		displayRange,
 		findChoice,
@@ -27,9 +31,13 @@
 		detail: CaseDetail;
 		onChanged: () => void;
 		onDetails: () => void;
+		/** skip the file or mark it junk (the case view owns the call) */
+		onReject?: (action: 'skip' | 'mark_junk') => void;
+		/** the case view is busy with another action */
+		locked?: boolean;
 	}
 
-	let { detail, onChanged, onDetails }: Props = $props();
+	let { detail, onChanged, onDetails, onReject, locked = false }: Props = $props();
 	let rows = $derived(channelRows(detail));
 	let picked = $state<Record<string, string>>({});
 	let ambient = $state<Ambient>('SEA_LEVEL');
@@ -38,8 +46,13 @@
 	let busy = $state(false);
 	let error = $state('');
 	let notice = $state('');
+	let scopeChoice = $state<ScopeChoice>('file');
+	let pattern = $state('');
+	let reach = $state<RulePreview | null>(null);
+	let where = $derived(detail.locations[0] ?? null);
 
-	// Start each channel on its suggestion; a new case starts clean.
+	// Start each channel on its suggestion; a new case starts clean. When a rule proposes units, show what they
+	// convert to at once, so the reviewer sees the numbers before applying.
 	let caseKey = $derived(detail.summary.case_key);
 	$effect(() => {
 		void caseKey;
@@ -48,7 +61,36 @@
 		selected = rows[0]?.flag.flag_id ?? null;
 		error = '';
 		notice = '';
+		scopeChoice = 'file';
+		pattern = '';
+		reach = null;
+		if (untrack(() => proposed.length)) queueMicrotask(() => void previewAll());
 	});
+
+	let proposed = $derived(proposedRows(rows));
+	let unchanged = $derived(proposed.length > 0 && proposed.every((r) => picked[r.flag.flag_id] === (choiceFor(r)?.id ?? '')));
+	let proposalChecked = $derived(proposed.length > 0 && proposed.every((r) => typeof previews[r.flag.flag_id] === 'object'));
+	let proposalOutOfRange = $derived(proposed.filter((r) => inSanity(r.flag.flag_id) === false).map((r) => r.channel));
+	let proposalNote = $derived(proposed.find((r) => r.rationale)?.rationale ?? '');
+
+	// How many files the chosen reach would free, before anything is saved.
+	let scope = $derived.by(() => {
+		try {
+			return where ? caseRuleScope(scopeChoice, where, pattern) : null;
+		} catch {
+			return null;
+		}
+	});
+	$effect(() => {
+		const chosen = scope;
+		if (!chosen) {
+			reach = null;
+			return;
+		}
+		const timer = setTimeout(() => previewRule({ rule_type: 'channel_proposal', scope: chosen }).then((p) => (reach = p)).catch(() => (reach = null)), 250);
+		return () => clearTimeout(timer);
+	});
+	let scopeMissing = $derived(scopeChoice !== 'file' && !scope);
 
 	let active = $derived(rows.find((r) => r.flag.flag_id === selected) ?? rows[0] ?? null);
 	let table = $derived(active ? sourceTable(active.evidence) : { columns: [], rows: [] });
@@ -84,23 +126,34 @@
 		busy = false;
 	}
 
-	async function applyAll() {
+	async function applyRows(which: typeof rows) {
 		busy = true;
 		error = '';
 		notice = '';
 		try {
 			const response = await resolveCase(caseKey, {
-				resolutions: chosen.map((r) => ({ flag_id: r.flag.flag_id, resolution: resolutionOf(r.flag.flag_id)! })),
+				resolutions: which.map((r) => ({ flag_id: r.flag.flag_id, resolution: resolutionOf(r.flag.flag_id)! })),
+				rule_scope: scope,
 				comment: 'channel map'
 			});
-			const resumed = response.resumed_doc_ids.length;
-			notice = `Units set for ${chosen.length} channels. ${resumed} document${resumed === 1 ? '' : 's'} resuming.`;
+			const proposed = response.proposed_files;
+			notice = `Approved the units of ${which.length} channel${which.length === 1 ? '' : 's'}${response.resumed_doc_ids.length ? '. This file is resuming' : ''}${proposed ? `. ${proposed} other file${proposed === 1 ? '' : 's'} now show${proposed === 1 ? 's' : ''} these units as a proposal, waiting for a person` : ''}.`;
 			onChanged();
 		} catch (e) {
 			error = describe(e);
 		} finally {
 			busy = false;
 		}
+	}
+	const applyAll = () => applyRows(chosen);
+	const applyProposed = () => applyRows(proposed);
+
+	function restoreProposal() {
+		for (const r of proposed) {
+			picked[r.flag.flag_id] = choiceFor(r)?.id ?? '';
+			delete previews[r.flag.flag_id];
+		}
+		void previewAll();
 	}
 
 	const converted = (flagId: string) => {
@@ -119,7 +172,7 @@
 	<div class="bg-warn-bg border-warn-border rounded-lg border px-4 py-3" role="status">
 		<p class="m-0 flex items-center gap-1.5 font-medium">
 			This file has {rows.length} columns with no unit. Pick the unit for each so processing can continue.
-			<FlagGuide flagType="UNIT_AMBIGUITY" />
+			<FlagGuide topic="UNIT_AMBIGUITY" />
 		</p>
 		<p class="text-muted-foreground m-0 mt-1 text-[13px]">
 			Each column is a measurement <abbr title="A channel is one column of a test-data file: one sensor recorded over time.">channel</abbr>. Until every channel has a unit the file is
@@ -128,6 +181,30 @@
 				: ' only in part'}{hard ? ' (' : ''}{#if hard}<abbr title="HARD flags stop the file until they are resolved; SOFT flags only warn and the file stays usable.">HARD</abbr>){/if}.
 		</p>
 	</div>
+
+	{#if proposed.length}
+		<div class="border-info-border bg-info-bg grid gap-2 rounded-lg border px-4 py-3" role="region" aria-label="Proposed by a rule">
+			<p class="m-0 font-medium">A rule proposes the units of {proposed.length} of {rows.length} columns.</p>
+			<p class="text-muted-foreground m-0 text-[13px]">
+				{proposalNote ? `${proposalNote[0].toUpperCase()}${proposalNote.slice(1)}.` : ''} Nothing is approved yet: check the converted numbers below, then apply it or skip the file.
+			</p>
+			{#if proposalOutOfRange.length}
+				<Notice tone="warning">These look wrong once converted: {proposalOutOfRange.join(', ')}. Choose another unit, or skip the file.</Notice>
+			{/if}
+			<div class="flex flex-wrap items-center gap-2">
+				{#if unchanged}
+					<Button disabled={busy || locked || !proposalChecked || proposalOutOfRange.length > 0} onclick={applyProposed}>
+						<CheckIcon />Apply proposed rule{proposed.length < rows.length ? ` (${proposed.length} of ${rows.length} columns)` : ''}
+					</Button>
+					{#if !proposalChecked}<span class="text-muted-foreground text-xs">Checking the numbers…</span>{/if}
+				{:else}
+					<Button variant="outline" disabled={busy || locked} onclick={restoreProposal}>Back to the proposed units</Button>
+					<span class="text-muted-foreground text-xs">You changed a proposed unit, so apply with "Apply all and resume" below.</span>
+				{/if}
+				{#if onReject}<Button variant="outline" disabled={busy || locked} onclick={() => onReject('skip')}>Skip file</Button>{/if}
+			</div>
+		</div>
+	{/if}
 
 	{#if table.columns.length}
 		<section aria-label="The file as it was read" class="grid gap-1.5">
@@ -198,7 +275,7 @@
 									<optgroup label={g.label}>{#each g.choices as c (c.id)}<option value={c.id}>{c.label}</option>{/each}</optgroup>
 								{/each}
 							</select>
-							{#if r.suggestion}<span class="text-muted-foreground block text-[11px]">suggested · confidence {Math.round((r.confidence ?? 0) * 100)}%</span>{/if}
+							{#if r.byRule}<span class="text-info block text-[11px]">proposed by a rule</span>{:else if r.suggestion}<span class="text-muted-foreground block text-[11px]">suggested · confidence {Math.round((r.confidence ?? 0) * 100)}%</span>{/if}
 							{#if r.evidence.scaling_equation}<span class="text-muted-foreground block font-mono text-[11px]" title={r.evidence.scaling_source ?? ''}>.cfg: {r.evidence.scaling_equation}</span>{/if}
 						</td>
 						<td class="px-2.5 py-1.5 text-xs {inSanity(r.flag.flag_id) === false ? 'text-hard' : inSanity(r.flag.flag_id) ? 'text-ok' : ''}">{converted(r.flag.flag_id)}</td>
@@ -212,17 +289,37 @@
 		<label class="field-label grid w-fit gap-1"
 			>Gauge readings are relative to
 			<select class="field w-56" bind:value={ambient} onchange={() => (previews = {})}>
-				<option value="SEA_LEVEL">sea-level air (1.013 bar)</option>
-				<option value="AMBIENT_RECORDED">the ambient recorded in the run</option>
-				<option value="VACUUM_CHAMBER">a vacuum chamber</option>
-				<option value="UNKNOWN">not known</option>
+				{#each AMBIENT_OPTIONS as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
 			</select>
 		</label>
 	{/if}
 
+	<fieldset class="m-0 grid gap-1.5 rounded-md border px-4 py-3">
+		<legend class="px-1 text-[13px] font-medium">Also propose to</legend>
+		<div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
+			<label class="flex items-center gap-1.5"><input type="radio" bind:group={scopeChoice} value="file" /> no other file</label>
+			<label class="flex items-center gap-1.5"><input type="radio" bind:group={scopeChoice} value="folder" disabled={!where?.folder_id} /> the other files in this folder</label>
+			<label class="flex items-center gap-1.5"
+				><input type="radio" bind:group={scopeChoice} value="folder_pattern" disabled={!where?.folder_id} /> files in this folder named
+				<input class="field h-7 w-28 font-mono" bind:value={pattern} placeholder="T*.dat" disabled={scopeChoice !== 'folder_pattern'} aria-label="File name pattern" /></label
+			>
+		</div>
+		{#if scopeChoice === 'file'}
+			<p class="text-muted-foreground m-0 text-xs">Only this file is decided. Other files keep waiting for their own check.</p>
+		{:else if reach}
+			<p class="m-0 text-xs" aria-live="polite">
+				Saved as a proposal rule for the folder: it reaches {reach.matched_documents} file{reach.matched_documents === 1 ? '' : 's'}, {reach.waiting_documents} waiting (this one included). They show
+				these units and files that arrive later do too, but none is approved until a person applies it.
+			</p>
+		{:else if scopeMissing}
+			<p class="text-muted-foreground m-0 text-xs">Type a file name pattern such as T*.dat.</p>
+		{/if}
+	</fieldset>
+
 	<footer class="flex flex-wrap items-center gap-2">
 		<Button variant="outline" disabled={busy || !chosen.length} onclick={previewAll}>Preview all</Button>
-		<Button disabled={busy || !previewed} onclick={applyAll}><CheckIcon />Apply all and resume</Button>
+		<Button disabled={busy || locked || !previewed || scopeMissing} onclick={applyAll}><CheckIcon />Apply all and resume</Button>
+		{#if onReject && !proposed.length}<Button variant="outline" disabled={busy || locked} onclick={() => onReject('skip')}>Skip file</Button>{/if}
 		<span class="text-muted-foreground text-xs">
 			{chosen.length} of {rows.length} channels have a unit{!previewed && chosen.length ? '; preview first to see the converted values' : ''}.
 		</span>

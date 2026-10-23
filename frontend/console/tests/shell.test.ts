@@ -20,6 +20,20 @@ describe('breadcrumbs', () => {
 		expect(breadcrumbs('/docs/doc-7/viewer')).toEqual([{ label: 'Documents' }, { label: 'doc-7' }, { label: 'Viewer' }]);
 	});
 
+	it('names an open review case and links back to the queue with its filters', () => {
+		expect(breadcrumbs('/review', '?severity=HARD&flag_type=UNIT_AMBIGUITY&case=abc%3A', 'Test_01_02Bar_i_0')).toEqual([
+			{ label: 'Review', href: '/review?severity=HARD&flag_type=UNIT_AMBIGUITY' },
+			{ label: 'Test_01_02Bar_i_0' }
+		]);
+		expect(breadcrumbs('/review', '?case=abc%3A')).toEqual([{ label: 'Review', href: '/review' }, { label: 'Case' }]);
+		expect(breadcrumbs('/review', '?severity=HARD')).toEqual([{ label: 'Review' }]);
+	});
+
+	it('names one file in the Audit tab and links back to the audit', () => {
+		expect(breadcrumbs('/audit/case/abc%3A', '', 'Test_01_02Bar_i_0')).toEqual([{ label: 'Audit', href: '/audit' }, { label: 'Test_01_02Bar_i_0' }]);
+		expect(breadcrumbs('/audit/case/abc%3A').at(-1)).toEqual({ label: 'File' });
+	});
+
 	it('builds the document title from the trail', () => {
 		expect(documentTitle('/')).toBe('DCL Console');
 		expect(documentTitle('/review/rules')).toBe('Rules · Review · DCL Console');

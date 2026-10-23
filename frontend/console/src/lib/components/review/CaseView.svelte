@@ -8,8 +8,7 @@
 		undoCase,
 		type CaseDetail,
 		type DryRunResponse,
-		type Resolution,
-		type RuleDraft
+		type Resolution
 	} from '$lib/api_endpoint';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import { Button } from '$lib/components/ui/button';
@@ -18,7 +17,7 @@
 	import ChannelMapView from './ChannelMapView.svelte';
 	import FlagConsole from './FlagConsole.svelte';
 	import { isChannelMapCase } from './channel_map';
-	import { canBecomeRule, missing, needsPreview, ruleFor, type ScopeChoice } from './resolution';
+	import { canBecomeRule, caseRuleScope, missing, needsPreview, type ScopeChoice } from './resolution';
 
 	interface Props {
 		detail: CaseDetail;
@@ -64,19 +63,23 @@
 		Object.entries(drafts).filter((entry): entry is [string, Resolution] => entry[1] !== null)
 	);
 	let ruleCandidates = $derived(chosen.filter(([, r]) => canBecomeRule(r.action)));
-	let ruleFlagId = $derived(ruleCandidates.length === 1 ? ruleCandidates[0][0] : null);
-	let rule = $derived.by((): { draft: RuleDraft | null; error: string } => {
-		if (scope === 'file' || !ruleFlagId) return { draft: null, error: '' };
-		if (!where) return { draft: null, error: 'This case has no OneDrive location to scope a rule to.' };
+	// "Also propose to": the scope of the proposal rule saved with this approval; null is this file only.
+	let ruleScope = $derived.by(() => {
 		try {
-			return { draft: ruleFor(drafts[ruleFlagId]!, scope, where, pattern), error: '' };
-		} catch (e) {
-			return { draft: null, error: (e as Error).message };
+			return where && ruleCandidates.length ? caseRuleScope(scope, where, pattern) : null;
+		} catch {
+			return null;
 		}
 	});
+	let scopeError = $derived(
+		ruleCandidates.length && scope !== 'file' && !ruleScope
+			? where
+				? 'Type a file name pattern such as T*.dat.'
+				: 'This case has no OneDrive location to scope a proposal to.'
+			: ''
+	);
 
-	const signatureOf = (flagId: string) =>
-		JSON.stringify({ draft: drafts[flagId], rule: flagId === ruleFlagId ? rule.draft : null });
+	const signatureOf = (flagId: string) => JSON.stringify({ draft: drafts[flagId] });
 
 	function previewState(flagId: string) {
 		const p = previews[flagId];
@@ -96,8 +99,7 @@
 		try {
 			const result = await dryRun({
 				case_key: caseKey,
-				resolution: { flag_id: flagId, resolution },
-				rule: flagId === ruleFlagId ? rule.draft : null
+				resolution: { flag_id: flagId, resolution }
 			});
 			previews[flagId] = { result, error: '', signature, busy: false };
 		} catch (e) {
@@ -111,8 +113,7 @@
 			const gap = missing(r);
 			if (gap) return `Missing: ${gap}.`;
 		}
-		if (scope !== 'file' && ruleCandidates.length > 1) return 'A folder scope applies to one resolution at a time.';
-		if (rule.error) return rule.error;
+		if (scopeError) return scopeError;
 		for (const [flagId, r] of chosen) {
 			if (needsPreview(r.action) && !(previewState(flagId).current && !previews[flagId]?.error && previews[flagId]?.result)) {
 				return 'Preview the conversion before applying.';
@@ -120,10 +121,6 @@
 		}
 		return '';
 	});
-
-	let affected = $derived(
-		ruleFlagId && previews[ruleFlagId]?.result ? previews[ruleFlagId]!.result!.affected_documents : null
-	);
 
 	function describe(e: unknown): string {
 		return e instanceof ApiError ? (e.status === 501 ? 'The review backend is not connected yet.' : e.detail) : String(e);
@@ -147,10 +144,10 @@
 		run(async () => {
 			const response = await resolveCase(caseKey, {
 				resolutions: chosen.map(([flag_id, resolution]) => ({ flag_id, resolution })),
-				rule: rule.draft
+				rule_scope: ruleScope
 			});
-			const resumed = response.resumed_doc_ids.length;
-			return `Resolved. ${resumed} document${resumed === 1 ? '' : 's'} resuming${response.rule ? ' under the new rule' : ''}.`;
+			const proposed = response.proposed_files;
+			return `Resolved${response.resumed_doc_ids.length ? '. This file is resuming' : ''}${proposed ? `. ${proposed} other file${proposed === 1 ? '' : 's'} now show${proposed === 1 ? 's' : ''} these units as a proposal` : ''}.`;
 		});
 	const reject = (action: 'skip' | 'mark_junk') =>
 		run(async () => {
@@ -173,7 +170,7 @@
 	<CaseHeader {detail} {me} {busy} onAssign={assign} onUndo={undo} />
 
 	{#if isChannelMapCase(detail) && !details}
-		<ChannelMapView {detail} {onChanged} onDetails={() => (details = true)} />
+		<ChannelMapView {detail} {onChanged} onDetails={() => (details = true)} onReject={reject} locked={busy} />
 	{:else}
 	{#if isChannelMapCase(detail)}
 		<button type="button" class="text-link w-fit cursor-pointer border-0 bg-transparent p-0 text-xs" onclick={() => (details = false)}>Back to the channel map</button>
@@ -187,19 +184,19 @@
 	<footer class="bg-background/95 sticky bottom-0 z-10 -mx-5 grid gap-2 border-t px-5 py-3 backdrop-blur">
 		{#if ruleCandidates.length}
 			<fieldset class="m-0 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-0 p-0 text-[13px]">
-				<legend class="field-label float-left mr-2">Apply to</legend>
-				<label class="flex items-center gap-1.5"><input type="radio" bind:group={scope} value="file" /> this file</label>
-				<label class="flex items-center gap-1.5"><input type="radio" bind:group={scope} value="folder" disabled={!where?.folder_id} /> this folder</label>
+				<legend class="field-label float-left mr-2">Also propose to</legend>
+				<label class="flex items-center gap-1.5"><input type="radio" bind:group={scope} value="file" /> no other file</label>
+				<label class="flex items-center gap-1.5"><input type="radio" bind:group={scope} value="folder" disabled={!where?.folder_id} /> the other files in this folder</label>
 				<label class="flex items-center gap-1.5"
-					><input type="radio" bind:group={scope} value="folder_pattern" disabled={!where?.folder_id} /> this folder, files matching
+					><input type="radio" bind:group={scope} value="folder_pattern" disabled={!where?.folder_id} /> files in this folder named
 					<input class="field h-7 w-28 font-mono" bind:value={pattern} placeholder="T*.dat" disabled={scope !== 'folder_pattern'} /></label
 				>
 			</fieldset>
-			{#if scope !== 'file'}<Notice tone="info">Saved as an operator rule; matching halted files resume too.</Notice>{/if}
+			{#if scope !== 'file'}<Notice tone="info">Saved as a proposal rule: the other waiting files show these units, and a person still checks and applies each one.</Notice>{/if}
 		{/if}
 		<div class="flex flex-wrap items-center gap-2">
 			<Button disabled={busy || !!blocker} onclick={apply}>
-				<CheckIcon />Apply & resume{affected !== null ? ` (${affected} file${affected === 1 ? '' : 's'})` : ''}
+				<CheckIcon />Apply & resume
 			</Button>
 			<Button variant="outline" disabled={busy} onclick={() => reject('mark_junk')}>Mark junk</Button>
 			<Button variant="outline" disabled={busy} onclick={() => reject('skip')}>Skip file</Button>

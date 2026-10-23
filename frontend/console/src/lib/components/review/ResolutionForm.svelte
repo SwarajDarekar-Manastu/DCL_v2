@@ -7,9 +7,11 @@
 
 	interface Props {
 		draft: Resolution;
+		/** The documents of the disagreement, for "mark superseded". */
+		documents?: { doc_id: string; label: string }[];
 	}
 
-	let { draft = $bindable() }: Props = $props();
+	let { draft = $bindable(), documents = [] }: Props = $props();
 
 	function pickPressure(label: string) {
 		if (draft.action !== 'set_unit') return;
@@ -184,7 +186,12 @@
 		<label class={CHIP}><input type="radio" class="sr-only" bind:group={draft.choice} value="B" /> Source B</label>
 	</div>
 {:else if draft.action === 'mark_superseded'}
-	<label class={FIELD}><span class="field-label">Superseded document id</span> <input class="field font-mono" bind:value={draft.superseded_doc_id} placeholder="uuid" /></label>
+	<div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Superseded document">
+		<span class="field-label">The older one is</span>
+		{#each documents as doc (doc.doc_id)}
+			<label class={CHIP}><input type="radio" class="sr-only" bind:group={draft.superseded_doc_id} value={doc.doc_id} /> {doc.label}</label>
+		{/each}
+	</div>
 {:else if draft.action === 'use_replacement'}
 	<p class="text-muted-foreground m-0 text-[13px]">Uploading a readable copy needs the upload endpoint, which does not exist yet. Skip or mark junk instead.</p>
 {:else if draft.action === 'redact'}

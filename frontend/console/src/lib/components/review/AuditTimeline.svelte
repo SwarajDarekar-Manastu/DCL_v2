@@ -2,7 +2,7 @@
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import type { AuditItem } from '$lib/api_endpoint';
 	import EmptyState from '$lib/components/shell/EmptyState.svelte';
-	import { changedKeys, entityHref } from './audit';
+	import { changedKeys, decisionsHref, entityHref } from './audit';
 
 	interface Props {
 		items: AuditItem[];
@@ -16,7 +16,8 @@
 {#if items.length === 0}
 	<EmptyState title="No audit events match these filters." description="Widen the date range or clear the filters." />
 {:else}
-	<div class="panel overflow-hidden">
+	<!-- overflow-clip, not overflow-hidden: hidden makes the panel a scroll box and pins the sticky header 3rem down inside it -->
+	<div class="panel overflow-clip">
 		<div
 			class="{COLS} bg-background text-muted-foreground sticky top-[var(--sticky-top,0px)] z-10 h-8 border-b px-4 text-xs leading-8 font-medium"
 			aria-hidden="true"
@@ -35,6 +36,7 @@
 						<span class="text-muted-foreground text-xs">{item.entity_type}</span>
 						<span class="min-w-0 break-all">
 							{#if href}<a {href} class="font-mono text-xs">{item.entity_id}</a>{:else}<code>{item.entity_id}</code>{/if}
+							{#if item.entity_type === 'case'}<a href={decisionsHref(item.entity_id)} class="ml-2 text-xs whitespace-nowrap">Decisions and edit</a>{/if}
 						</span>
 					</div>
 					{#if changed.length}

@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { Popover } from 'bits-ui';
 	import HelpIcon from '@lucide/svelte/icons/circle-help';
-	import type { FlagView } from '$lib/api_endpoint';
-	import { guideFor } from './flag_guide';
+	import { guideFor, type GuideKey } from './flag_guide';
 
 	interface Props {
-		flagType: FlagView['flag_type'];
+		topic: GuideKey;
 	}
-	let { flagType }: Props = $props();
-	let guide = $derived(guideFor(flagType));
+	let { topic }: Props = $props();
+	let guide = $derived(guideFor(topic));
+	let flagType = $derived(topic.startsWith('CONFLICT') ? 'CONFLICT' : topic);
 </script>
 
 <Popover.Root>
@@ -28,7 +28,7 @@
 			<p class="m-0"><strong>What is wrong:</strong> {guide.what}</p>
 			<p class="m-0"><strong>You decide:</strong> {guide.decide}</p>
 			<ul class="m-0 list-disc pl-4">
-				{#each guide.choices as choice (choice)}<li>{choice}</li>{/each}
+				{#each guide.choices as choice (choice.text)}<li>{choice.text}</li>{/each}
 			</ul>
 			<p class="text-muted-foreground m-0"><strong>Not sure?</strong> {guide.unsure}</p>
 		</Popover.Content>

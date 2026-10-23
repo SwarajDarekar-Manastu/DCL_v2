@@ -28,6 +28,9 @@ export function auditUrl(filters: AuditFilters): string {
 	return text ? `/audit?${text}` : '/audit';
 }
 
+/** One file's decisions and the means to correct them (the Audit page for a case). */
+export const decisionsHref = (caseKey: string): string => `/audit/case/${encodeURIComponent(caseKey)}`;
+
 /** Where an audit entry's entity can be opened in the Console, if anywhere. */
 export function entityHref(item: Pick<AuditItem, 'entity_type' | 'entity_id'>): string | null {
 	if (item.entity_type === 'case') return caseHref(item.entity_id);
