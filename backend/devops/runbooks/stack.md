@@ -72,6 +72,15 @@ Tasks are acknowledged late and rejected on worker loss, so the task returns to 
 
 The delegated token expired or was revoked. Run S1's device-code sign-in CLI from the main checkout; it writes the encrypted cache into `DCL_TOKEN_DIR`. The next `dcl.sync.token_health` run (every 15 minutes) clears the alert.
 
+## Benchmark worker (benchmark)
+
+`worker-benchmark` runs `dcl.benchmark.*` (S2's runner) with the Answer Engine in process: one prefork child, soft limit 950 s, hard limit 1000 s, 2 GB, child recycled past 1.5 GB. Beat sends `dcl.benchmark.sweep` to it every 60 s. A case that hits the hard limit is killed and redelivered; after `MAX_DELIVERIES` it is dead-lettered. Benchmark load never waits behind sync work on `io_light`.
+
+```bash
+docker compose -p dcl-v2 logs --since 10m worker-benchmark
+docker compose -p dcl-v2 exec worker-benchmark celery -A backend.celery_redis.app inspect active --timeout 10
+```
+
 ## Parse workers (cpu_parse)
 
 `worker-cpu-parse` runs the `parse` image: Docling, RapidOCR (models baked in) and Tesseract with OSD and the Latin, Cyrillic, Devanagari and Arabic script models, on CPU torch. Docling's layout and TableFormer models download into the `hf-cache` volume on first use with `HF_HUB_DISABLE_XET=1`, because Xet downloads stall on this network. The first conversion after a fresh volume takes about a minute longer.

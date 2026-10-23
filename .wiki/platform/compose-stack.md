@@ -10,7 +10,7 @@
 
 ## Purpose
 
-All services of file 01 §6 in compose project `dcl-v2`: ParadeDB pg17, Redis, MinIO built from the archived pinned tag, LibreOffice headless, the models role on the only GPU reservation, the API role, beat, one Celery worker per queue of file 10 §4, and the one-shot `minio-init` and `migrate` jobs. Observability services (collector, Tempo, Prometheus, Alertmanager, Grafana) are part of it; The Console production build runs on 8601 (`console`); Open WebUI comes in M9.
+All services of file 01 §6 in compose project `dcl-v2`: ParadeDB pg17, Redis, MinIO built from the archived pinned tag, LibreOffice headless, the models role on the only GPU reservation, the API role, beat, one Celery worker per queue of file 10 §4 plus `benchmark` (DECISIONS 2026-10-22), and the one-shot `minio-init` and `migrate` jobs. Observability services (collector, Tempo, Prometheus, Alertmanager, Grafana) are part of it; The Console production build runs on 8601 (`console`); Open WebUI comes in M9.
 
 ## Location
 
@@ -82,6 +82,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S4 | RustFS adoption step 1: `minio-init` sets the app policy with `policy_set` (RustFS answers `attach_policy` with AEAD id 2); full init twice + policy scope verified on RustFS 1.0.3 and MinIO |
 | 2026-10-22 | S4 | Console container on 8601 from S3's Dockerfile (msal build; args `DCL_API_BASE_URL`, `DCL_TENANT_ID`, `DCL_CONSOLE_SPA_CLIENT_ID`, `DCL_CONSOLE_API_SCOPE`) |
+| 2026-10-23 | S4 | Seventh queue `benchmark` (prefork 1, 950/1000 s, 2 GB) and `worker-benchmark` on the backend image; `TASK_ROUTES` sends `dcl.benchmark.*` there unless a task names its own queue; beat `benchmark-sweep` moved to it; load-test worker list updated |
 | 2026-10-22 | S4 | `backend.benchmark.tasks` in `TASK_MODULES`; beat `benchmark-sweep` (`dcl.benchmark.sweep`, 60 s, io_light) for S2's runner |
 | 2026-10-22 | S4 | Network exposure split: Postgres, Redis, MinIO S3 on `DCL_DATA_BIND_HOST` (default loopback); Redis `requirepass` from `DCL_REDIS_PASSWORD`, verified live on a throwaway project (NOAUTH without, PONG with, healthy) |
 | 2026-10-22 | S4 | Object-store evaluation (`backend/devops/object_store_evaluation.md`, `backend/devops/ci/s3_compat_check.py`): RustFS 1.0.3 recommended over SeaweedFS 4.48 and Garage v2.4.1 |
