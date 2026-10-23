@@ -94,9 +94,9 @@ Why not ingest everything at the start: the metadata crawl and even the download
 | Queue | Workers | Memory limit | Tasks |
 |-------|---------|--------------|-------|
 | `io_light` | 4 (threads) | 1 GB | delta, downloads, webhook jobs, token health, presign, resume dispatch |
-| `cpu_parse` | 4 (processes) | 6 GB each, soft 3,600 s / hard 3,900 s per task (raised 2026-10-23 for long standards) | Docling, Route A1/A2/B/E/G, enrichment, index commit, resume_from_staged |
+| `cpu_parse` | 1 (process; was 4, user decision 2026-10-23) | 6 GB, soft 3,600 s / hard 3,900 s per task | Docling, Route A1/A2/B/E/G, enrichment, index commit, resume_from_staged |
 | `telemetry_stream` | 2 | 3 GB each, `--max-memory-per-child` | Route C Parquet streaming, DuckDB stats |
-| `media` | 2 | 4 GB | HEIC conversion, FFmpeg, whisper (CPU) |
+| `media` | 1 (was 2; two Whisper jobs exceeded 4 GiB, 2026-10-23) | 4 GB | HEIC conversion, FFmpeg, whisper (CPU) |
 | `vision_batch` | 2 (async) | 1 GB | Gemini vision/enrichment batch orchestration (I/O bound) |
 | `embed` | 1–2 | 2 GB | batches to the embedding service (GPU) |
 | `benchmark` | 1 (prefork) | 2 GB, child recycled past 1.5 GB | benchmark runner (`dcl.benchmark.*`), Answer Engine in process, soft 950 s / hard 1000 s (added 2026-10-23) |
