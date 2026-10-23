@@ -963,6 +963,16 @@ Next: A1 counts and the M2 live check when the batch ends; item 6 (review dry ru
 Merged / ready: (6) the prompt registry API (file 08 §3.3) over the prompt files: list with latest/in_use/variables, show, diff, and run on sample (reviewers; one Gemini call logged as `console.prompt_preview`). Plan sheet skipped (small).
 Blocked on: nothing
 Next: (7) translation, then derived_blobs in A1.9, then the answer_traces writer
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready:
+- A2 twin through S2's `process_twin` (7b83583). Nodes get `page_no` from the twin; page renders and PDF-only appendix pages come from `twin_appendix`. My page_map.py is removed.
+- Route B (bc8db82): `process_code` for .py/.c/.h/.m (Tree-sitter), .ipynb, .md, .txt/.bat/.cmd and requirements files.
+Test: `uv run pytest -q` exit 0 (on main f6238e4 merged). B: 15 tests pass, A2: 28.
+Blocked on: nothing.
+Needs from others:
+- S1: B adapter and runner.
+- S2: twin.page_map maps every heading to a contents page that lists them (headings 1, 2, 2.1 all land on page 2). A page that matches many headings should be skipped.
+Next: Route E (plan sheet open), then G.
 
 ## 2026-10-23 13:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: config/gate.yaml no longer lists `.c` as junk (Lead ruling after S1's finding); `.o`, `.a`, `.so` stay junk and C sources under Tier-1 environment folders are still skipped; gate tests pin all four against the documented rule and S1's gate_item. Test: `uv run pytest -q` (exit 0)
