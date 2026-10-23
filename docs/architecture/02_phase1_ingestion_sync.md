@@ -124,7 +124,7 @@ If any segment of the computed path matches: `.venv`, `venv`, `env`, `site-packa
 
 ### Tier 2 — Extensions (never download)
 
-- Compiled/environment: `.pyc .pyi .pyd .typed .dll .exe .lib .a .so .o .qml .qmltypes .qm .pak .metainfo .mesh .frag .bin .h .c .cpp .pxd .pyx .f90 .f .f95 .pyf .inc .f2py_f2cmap .afm .ttf .mplstyle .ico .icns .ani .cls .bas .xlam .xlsm(when under library) .applescript .asp .pys .vbs .sct .idl .rc .chm .pyw .tab .zi .tpl .tmpl .template .build .cmake .toml .pc .pth .spec .whl .rst .apache .bsd .python .external .ps1 .fish .pem .lua .xrc .al .g4 .lark .gitignore .iml`
+- Compiled/environment (`.c` removed 2026-10-23, C sources go to Route B): `.pyc .pyi .pyd .typed .dll .exe .lib .a .so .o .qml .qmltypes .qm .pak .metainfo .mesh .frag .bin .h .cpp .pxd .pyx .f90 .f .f95 .pyf .inc .f2py_f2cmap .afm .ttf .mplstyle .ico .icns .ani .cls .bas .xlam .xlsm(when under library) .applescript .asp .pys .vbs .sct .idl .rc .chm .pyw .tab .zi .tpl .tmpl .template .build .cmake .toml .pc .pth .spec .whl .rst .apache .bsd .python .external .ps1 .fish .pem .lua .xrc .al .g4 .lark .gitignore .iml`
 - LaTeX intermediates: `.aux .log .toc .lof .lot .out .fls .fdb_latexmk .synctex .synctex(busy) .synctex.gz .bbl .blg .nav .snm .vrb` (exception, data-driven: archive members are gated with a `parent_kind`, and the gate key `kept_endings_by_parent_kind` (seeded from `config/gate.yaml`, default `{wbpz: [.out]}`) names the endings kept under each kind, so ANSYS solver logs survive, file 03 §11)
 - Redundant companions: `.bkp` (draw.io backups), `.tdms_index`
 - OS/editor noise: `.DS_Store`, `Thumbs.db`, `desktop.ini`, names starting with `~$` (Office lock files), `.tmp`, `.crdownload`, `.part`
