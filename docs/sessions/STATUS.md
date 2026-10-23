@@ -914,3 +914,11 @@ Latency profile (run 1: 225–236 s per answered case):
 Blocked on: S4 (through the Lead): `capabilities: [gpu]` (or `[gpu, compute, utility]`) on the models service, then recreate it. Verify `/models/health` reports `"device":"cuda","dtype":"bfloat16"`.
 Needs from others: S1's A1 re-run
 Next: re-time one live case after the GPU fix to get the Gemini share; then the OCR-per-script and cost report after S1's A1 re-run; then the handwriting calibration
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: targeted synthesis repair (DECISIONS 2026-10-23).
+- Only the claims the verifier rejected go back to Gemini, each with its evidence items (`repair.v1`, thinking MEDIUM). The corrected sentence replaces the old one in place, a null removes it, and only the changed claims are verified again. The verifier's rules are unchanged.
+- TP23 question on the stack, one run each: before 110.6 s (repair synthesis 75.4 s), after 45.6 s (repair 16.8 s). Gemini is 97–99 % of answer time.
+- Warm query embedding on the GPU: 0.02–0.03 s (first call 0.14–0.26 s).
+Blocked on: nothing
+Next: A1.9–A1.10 office formats and the twin page map, then the queue (D/F readiness, A1 report, handwriting calibration, Gemini split, trace writer, prompt registry, translation, re-embed counts)

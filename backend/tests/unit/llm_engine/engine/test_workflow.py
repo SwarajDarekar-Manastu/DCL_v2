@@ -497,7 +497,8 @@ def test_telemetry_question_without_a_quantity_skips_t2(searches, monkeypatch):
     client = Client(
         query_analysis=[{"intents": ["telemetry_metric"], "test_plan_ids": ["TP7"]}],
         telemetry_args=[{"channels": []}],
-        synthesis=[SYNTH, SYNTH],  # the claim cites E1, the empty catalog result: one repair pass
+        synthesis=[SYNTH],
+        repair=[{"claims": [{"index": 0, "text": None}]}],  # the claim cites E1, the empty catalog result
         verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]}] * 2,
     )
     _, done, traces = run(client, "Which runs of TP7 had a sensor fault?")
@@ -590,7 +591,8 @@ def test_a_halted_run_is_named_in_the_answer(searches, monkeypatch):
     client = Client(
         query_analysis=[FACT | {"intents": ["telemetry_metric"]}],
         telemetry_args=[{"channels": ["chamber_pressure"], "metrics": ["mean"]}],
-        synthesis=[SYNTH, SYNTH],  # E1 is the empty T2 result: one repair pass
+        synthesis=[SYNTH],
+        repair=[{"claims": [{"index": 0, "text": None}]}],  # E1 is the empty T2 result
         verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]}] * 2,
     )
     events, done, _ = run(client, "Mean chamber pressure of TP7 run 1?")

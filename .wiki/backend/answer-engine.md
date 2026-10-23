@@ -17,7 +17,7 @@ LlamaIndex Workflow under DBOS: query analysis, planner, tools T1–T6 and U1–
 Code:
 - `backend/llm_engine/engine/analysis.py` (step 1: `QueryAnalysis`, `analyze`, `resolve`: entities via aliases, test ids via the dispatcher's patterns, unit-checked bounds, web policy)
 - `backend/llm_engine/engine/synthesis.py` (steps 5–6: numbered evidence, `SynthesisOutput` with claims citing evidence ids, numeric string check, entailment verdicts, one repair pass, removal of what still fails)
-- `backend/llm_engine/prompts/engine/` (`query_analysis.v1`, `synthesis.v1`, `verify.v1`, `physics_args.v1`, `chitchat.v2`, `external_intent.v1`, `external_search.v1`, `telemetry_args.v1`); `backend/llm_engine/prompts/vision/relook.v1.md` (T3 relook)
+- `backend/llm_engine/prompts/engine/` (`query_analysis.v1`, `synthesis.v1`, `verify.v1`, `repair.v1`, `physics_args.v1`, `chitchat.v2`, `external_intent.v1`, `external_search.v1`, `telemetry_args.v1`); `backend/llm_engine/prompts/vision/relook.v1.md` (T3 relook)
 - `backend/llm_engine/engine/playbooks.py` (step 2: `build_plan(question, analysis) -> Plan{calls, caveats, needs_physics_args, read_top_document}`; one playbook per intent; telemetry metric and run comparison plan T2 (arguments from `telemetry_args.v1`) plus a tables-only report search to cross-check; a failure investigation with a test plan also runs T2; visual lookup and failure investigation plan T3)
 - `backend/llm_engine/engine/workflow.py` (`AnswerWorkflow`: analysis → plan → tools in parallel → insufficient-evidence check → synthesis + verification → frames and trace; chit-chat, clarification, extractive fallback on `GeminiError`; `EngineDeps`; `build_runtime` for DBOS; `ordered` restores frame order)
 - `backend/llm_engine/engine/tools/` (`__init__.py`: `ToolResult`, `Source`, `Provenance`, `provenance_of`, `tool_spec`; `search.py` T1; `documents.py` U1, U2; `code_diagrams.py` T4; `physics.py` T5; `external.py` T6; `visuals.py` T3; `telemetry.py` T2)
@@ -96,6 +96,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-23 | S2 | Targeted repair (DECISIONS 2026-10-23): only the rejected claims go back with their evidence items (`repair.v1`, thinking MEDIUM), the corrected sentence replaces the old in place, only changed claims are re-verified; TP23 question on the stack 110.6 s → 45.6 s (repair call 75.4 s → 16.8 s); warm query embedding 0.02–0.03 s on the GPU |
 | 2026-10-23 | S2 | `chitchat.v2`: small talk stays `chitchat`, an out-of-scope question is refused in mode `insufficient_evidence`; a tool warning "halted for review" becomes a caveat and a `> Note:` line in the answer; 2 tests |
 | 2026-10-23 | S2 | `engine_deps(settings)` shared with the benchmark runner; trace `tool_calls[].display` (≤ 4000 chars); T2 pressure units `barg`/`bara` (pint-parsable; "bar g" read as bar·gram) |
 | 2026-10-23 | S2 | Playbook hint: `AnswerOptions.playbook_hint`, `apply_hint`, `dcl-playbook` front matter and tag; 13 + 2 tests |

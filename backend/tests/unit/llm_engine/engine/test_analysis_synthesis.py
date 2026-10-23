@@ -160,29 +160,35 @@ def test_verified_answer_maps_evidence_ids_to_citations():
     assert str(client.calls[0][2]["thinking"]) == "high"
 
 
-def test_a_rounded_number_triggers_one_resynthesis_and_is_removed_if_it_persists():
+def test_a_rounded_number_is_repaired_alone_and_removed_if_it_persists():
     rounded = [{"text": "Steady-state mean 12 bar(a).", "kind": "numeric", "evidence_ids": ["E3"]}]
     entailed = {"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "ok"}]}
     client = Client(
-        synthesis=[synthesis(rounded, "Steady-state mean 12 bar(a). [E3]")] * 2, verify=[entailed] * 2
+        synthesis=[synthesis(rounded, "Steady-state mean 12 bar(a). [E3]")],
+        repair=[{"claims": [{"index": 0, "text": "Steady-state mean 12 bar(a).", "evidence_ids": ["E3"]}]}],
+        verify=[entailed] * 2,
     )
     out = asyncio.run(answer(client, "q", {}, [TELEMETRY]))
     assert out.passes == 2
-    assert "rejected" in client.calls[2][1] and "12" in client.calls[2][1]
+    repair_prompt = client.calls[2][1]
+    assert [c[0] for c in client.calls] == [
+        "engine.synthesis",
+        "engine.verify",
+        "engine.repair",
+        "engine.verify",
+    ]
+    assert "Claim 0: Steady-state mean 12 bar(a)." in repair_prompt and "[E1] TP07_T04" in repair_prompt
+    assert str(client.calls[2][2]["thinking"]) == "medium"
     assert out.claims == [] and "12 bar(a)" not in out.markdown
     assert any("could not be verified" in c for c in out.caveats)
 
 
 def test_contradicted_claim_is_fixed_on_the_second_pass():
     wrong = [{"text": "The valve is rated 400 bar.", "kind": "factual", "evidence_ids": ["E2"]}]
-    right = [
-        {"text": "The valve is rated 300 bar (vendor claim).", "kind": "factual", "evidence_ids": ["E2"]}
-    ]
+    good = "The valve is rated 300 bar (vendor claim)."
     client = Client(
-        synthesis=[
-            synthesis(wrong, "The valve is rated 400 bar. [E2]"),
-            synthesis(right, "The valve is rated 300 bar (vendor claim). [E2]"),
-        ],
+        synthesis=[synthesis(wrong, "The valve is rated 400 bar. [E2]")],
+        repair=[{"claims": [{"index": 0, "text": good, "evidence_ids": ["E2"]}]}],
         verify=[
             {"verdicts": [{"claim_index": 0, "verdict": "contradicted", "reason": "says 300"}]},
             {"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]},
