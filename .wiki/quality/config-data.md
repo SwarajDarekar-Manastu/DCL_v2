@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S5 |
 | Spec | docs/architecture/04 §3.3, §8; 03 §1.3, §A2.1, §C.1; 06 §8; 10 §2 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-23 |
 
 ## Purpose
 
@@ -87,6 +87,7 @@ Verification: `uv run pytest backend/tests/unit/config_data && uv run ruff check
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-23 | S5 | gate.yaml: `.c` no longer junk (Lead: C sources go to Route B); tests pin `.c` accepted, `.o`/`.a`/`.so` and C under site-packages still junk |
 | 2026-10-22 | S5 | `units.txt`: National Instruments spellings `Deg C`/`Deg F`/`Deg K` (TDMS unit_string, S1 request) |
 | 2026-10-22 | S5 | proposals carry `status: proposed` per rule (S1's final ExportedRule shape) |
 | 2026-10-22 | S5 | proposed channel-map rules for E1–E3 in `config/rules/proposed/` (Lead ruling: never applied until confirmed); `test_config_rules.py` |

@@ -38,6 +38,7 @@ from backend.dispatcher.contract import (
 from backend.dispatcher.folder_context import FolderContext
 from backend.llm_engine.gemini_types import Image
 from backend.postgres.enums import AssetKind, DocKind, FlagSeverity, FlagType, NodeSource, NodeType, Route
+from backend.routes.a1_office.preflight import image_fields
 
 PARSER_VERSION = 1
 SAMPLE_FPS = 2
@@ -421,7 +422,10 @@ def process_video(
 def _frame_asset(path: Path, t_ms: int, blob_sha256: str, put_asset) -> tuple[ProcessedAsset, bytes]:
     jpeg = frame_at(path, t_ms)
     uri = put_asset(f"frames/{blob_sha256}/{t_ms}.jpg", jpeg)
-    return ProcessedAsset(ref=f"frame:{t_ms}", kind=AssetKind.VIDEO_FRAME, minio_uri=uri, t_ms=t_ms), jpeg
+    size = image_fields(jpeg)
+    return ProcessedAsset(
+        ref=f"frame:{t_ms}", kind=AssetKind.VIDEO_FRAME, minio_uri=uri, t_ms=t_ms, **size
+    ), jpeg
 
 
 def _test_cell(path, info, folder, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id):

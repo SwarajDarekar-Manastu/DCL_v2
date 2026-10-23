@@ -30,7 +30,7 @@ from backend.dispatcher.folder_context import FolderContext
 from backend.llm_engine.gemini_types import GeminiError, Image
 from backend.postgres.enums import AssetKind, NodeSource, NodeType, Route
 from backend.routes.a1_office.metadata import extract_metadata, humanize
-from backend.routes.a1_office.preflight import render_page
+from backend.routes.a1_office.preflight import image_fields, render_page
 
 log = logging.getLogger(__name__)
 
@@ -190,6 +190,7 @@ def process_slides(
                     kind=AssetKind.PAGE_RENDER,
                     minio_uri=uri,
                     page_no=slide.number,
+                    **image_fields(png),
                 )
             )
     language = None

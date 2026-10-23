@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("pikepdf")  # f_video imports a1_office.preflight; S2 moves image_fields out
+
 from backend.dispatcher.folder_context import build_folder_context
 from backend.postgres.enums import AssetKind, DocKind, FlagSeverity, FlagType, NodeType
 from backend.routes.f_video import (

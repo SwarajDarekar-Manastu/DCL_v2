@@ -23,7 +23,7 @@ from backend.dispatcher.contract import (
 )
 from backend.llm_engine.gemini_types import Image
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType
-from backend.routes.a1_office.preflight import render_crop
+from backend.routes.a1_office.preflight import image_fields, render_crop
 
 PLOT_CLASSES = frozenset({"bar_chart", "box_plot", "line_chart", "pie_chart", "scatter_plot"})
 SCHEMATIC_CLASSES = frozenset({"engineering_drawing", "flow_chart"})
@@ -152,6 +152,7 @@ def read_figures(
                     minio_uri=uri,
                     page_no=box.page_no,
                     bbox=box.model_dump(exclude={"page_no"}),
+                    **image_fields(crop),
                 )
             )
         reading, rendered, capability = None, None, None

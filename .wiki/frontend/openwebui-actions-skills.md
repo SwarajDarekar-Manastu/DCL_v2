@@ -67,6 +67,7 @@ uv run python -m pytest backend/tests/unit/openwebui
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Installed live; Show trace, Report issue and Add to benchmark reach the engine and stop at S2's 501 trace routes (notification shown); 13 playbook skills published (S2's script) |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | Show trace and Report issue actions, single-file bundle, tests |
 | 2026-10-22 | S3 | Add to benchmark action against `POST /benchmark/drafts` |
