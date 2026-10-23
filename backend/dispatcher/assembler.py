@@ -8,7 +8,8 @@ text. Output: one ``DocumentPlan`` per logical document, with the primary file, 
   ``\\subfile`` and ``\\import{dir}{file}`` are resolved recursively relative to the master's folder
   (or, when not found there, its nearest ancestor that has the path) and become ``part``s.
   Two masters in one folder: both become documents with a CONFLICT. ``.tex`` files that no master
-  includes are assembled per folder by file name, with a CONFLICT.
+  includes are assembled per folder by file name and the document keeps a note: no person can decide
+  anything about it, and the verdict holds for one folder while a document stands for every copy.
 - A ``.pdf`` with the same stem as a master in its folder is that document's ``visual_twin``.
 - JSON section files (``section_file_sets`` of ``config/report_json_schemas.yaml``): two or more in one
   folder become one document named after the folder, in the configured section order.
@@ -56,6 +57,7 @@ class DocumentPlan:
     title: str
     parts: list[tuple[FileRef, DocumentSourceRole]] = field(default_factory=list)
     conflicts: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
     missing_includes: list[str] = field(default_factory=list)
 
 
@@ -151,10 +153,14 @@ def assemble(
             orphans[f.folder].append(f)
     for folder, group in sorted(orphans.items()):
         group.sort(key=lambda f: f.name)
-        plan = DocumentPlan(primary=group[0], title=PurePosixPath(folder).name or group[0].stem)
+        lone = len(group) == 1
+        plan = DocumentPlan(
+            primary=group[0], title=group[0].stem if lone else PurePosixPath(folder).name or group[0].stem
+        )
         plan.parts = [(f, DocumentSourceRole.PART) for f in group[1:]]
         reason = "not included by any master" if masters else "no master found"
-        plan.conflicts.append(f"{reason} in folder {folder}, assembled by filename")
+        where = "the top folder" if folder == "." else f"folder {folder}"
+        plan.notes.append(f"{reason} in {where}, assembled by filename")
         claimed.update(f.path for f in group)
         plans.append(plan)
 

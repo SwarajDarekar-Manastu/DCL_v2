@@ -50,6 +50,15 @@ class CaseFilters(_Model):
     assignee: str | None = None
     status: CaseStatus | None = None
     has_suggestion: bool | None = None
+    proposed_by_rule_id: uuid.UUID | None = Field(
+        default=None, description="only the cases with an open flag that this proposal rule filled in"
+    )
+    q: str | None = Field(default=None, description="words that must all appear in the file's title or path")
+    decided: bool | None = Field(
+        default=None,
+        description="true: only cases with at least one decided flag, whatever their status (the Audit page "
+        "finds files here); false: only cases where none is decided",
+    )
     older_than_days: int | None = Field(default=None, ge=0)
     sort: Literal["impact", "age", "severity"] = "impact"
     limit: int = Field(default=50, ge=1, le=500)
@@ -73,6 +82,7 @@ class CaseSummary(_Model):
     assignee: str | None
     oldest_created_at: datetime
     has_suggestion: bool
+    has_rule_proposal: bool = Field(default=False, description="an open flag carries a rule's proposal")
     files_unblocked: int | None = Field(description="files the likely rule would resume (impact sort key)")
     preview_asset_id: uuid.UUID | None
 
@@ -99,6 +109,7 @@ class FlagView(_Model):
     suggested_resolution: Suggestion | None
     resolution: Resolution | None
     resolution_rule_id: uuid.UUID | None
+    proposed_by_rule_id: uuid.UUID | None
     assigned_to: str | None
     resolved_by: str | None
     resolved_at: datetime | None
@@ -127,12 +138,32 @@ def allowed_actions_for(flag_type: FlagType, is_admin: bool) -> list[str]:
     return sorted(actions)
 
 
+class AppliedUnit(_Model):
+    """A unit a rule applied to a channel while no person decided it (the old flow, before rules only
+    proposed): shown so a person can confirm or correct it."""
+
+    flag_id: uuid.UUID
+    channel: str
+    unit: str
+    quantity: str
+    gauge_or_abs: str
+    canonical_name: str | None
+    ambient_condition: str | None
+    rule_id: uuid.UUID
+    rule_created_by: str
+    rule_created_at: datetime
+    rule_active: bool
+
+
 class CaseDetail(_Model):
     summary: CaseSummary
     flags: list[FlagView]
     document_status: str | None
     locations: list[CaseLocation]
     siblings: list[str] = Field(default=[], description="file names in the same folder")
+    applied_units: list[AppliedUnit] = Field(
+        default=[], description="units a rule applied to flags that closed without a person (AUTO_RESOLVED)"
+    )
 
 
 class FlagResolution(_Model):
@@ -187,6 +218,18 @@ class RuleView(_Model):
     created_at: datetime
     flags_resolved: int = Field(description="derived from review_flags.resolution_rule_id (v_rule_usage)")
     runs_mapped: int = Field(description="derived from telemetry_runs.channel_map_rule_id (v_rule_usage)")
+    scope_folder_path: str | None = Field(
+        default=None, description="the folder of scope_folder_id, as a path"
+    )
+    flags_proposed: int = Field(
+        default=0, description="flags this proposal rule has filled in, open or decided"
+    )
+    flags_decided: int = Field(
+        default=0, description="of those, flags a person has since decided (approved or skipped)"
+    )
+    files_waiting: int = Field(
+        default=0, description="files with an open flag that still carries this proposal"
+    )
 
 
 class RuleList(_Model):
@@ -201,12 +244,50 @@ class AffectedDocument(_Model):
 
 
 class RuleSimulation(_Model):
-    """What a rule would touch before it is confirmed ("this will re-process 116 runs")."""
+    """What a rule would touch ("12 files wait for it") before it is saved."""
 
     matched_documents: int
-    would_resume: int
-    would_reprocess: int
+    waiting_documents: int = Field(description="matched files halted on a question the rule can answer")
+    finished_documents: int = Field(description="matched files already processed; a rule never changes them")
     sample: list[AffectedDocument]
+
+
+class RulePreviewRequest(_Model):
+    """A rule that does not exist yet: its scope and, once the reviewer has written it, its body."""
+
+    rule_type: RuleType
+    scope: RuleScope
+    body: dict[str, Any] | None = None
+
+
+class OpenChannel(_Model):
+    channel: str
+    files: int = Field(description="matched documents that wait for a unit on this channel")
+
+
+class RulePreview(RuleSimulation):
+    effect: Literal["proposes", "stored"] = Field(
+        description="proposes: waiting files show its units for a person to approve; "
+        "stored: kept and listed, no route reads this kind yet"
+    )
+    open_channels: list[OpenChannel] = Field(description="the columns the matched files wait for a unit on")
+    problem: str | None = Field(description="why the body cannot be saved, when it cannot")
+
+
+class RuleCreated(RuleView):
+    proposed_files: int = Field(description="files that now show this rule's units as a proposal")
+
+
+class FolderChoice(_Model):
+    folder_id: str = Field(description="Graph item id (RuleScope.scope_folder_id)")
+    root_name: str
+    path: str
+    files: int = Field(description="files directly in this folder")
+    waiting: int = Field(description="halted telemetry documents directly in this folder")
+
+
+class FolderList(_Model):
+    items: list[FolderChoice]
 
 
 # ---------------------------------------------------------------- case actions
@@ -219,16 +300,23 @@ class AssignRequest(_Model):
 class ResolveRequest(_Model):
     resolutions: list[FlagResolution] = Field(min_length=1)
     rule: RuleDraft | None = None
+    rule_scope: RuleScope | None = Field(
+        default=None,
+        description="with telemetry unit decisions: also propose them, as one rule with this scope, to the "
+        "other waiting files it matches (they stay open until a person approves each). This file is always "
+        "approved on its own.",
+    )
     comment: str | None = None
 
 
 class ResolveResponse(_Model):
     case_key: str
     flags: list[FlagView]
-    rule: RuleView | None
+    rule: RuleView | None = Field(description="the proposal rule saved with this approval, if any")
     resumed_doc_ids: list[uuid.UUID] = Field(
-        description="this document and every halted sibling matched by the rule"
+        description="this document, when its approval lets it resume; never another file"
     )
+    proposed_files: int = Field(default=0, description="other files that now show the saved proposal")
 
 
 class RejectRequest(_Model):
@@ -237,6 +325,33 @@ class RejectRequest(_Model):
 
 
 class UndoResponse(_Model):
+    case_key: str
+    reopened_flag_ids: list[uuid.UUID]
+    rebuild_doc_id: uuid.UUID | None
+
+
+class EditRequest(_Model):
+    """Change decisions already made on a file (the Audit page). Every edit says why."""
+
+    resolutions: list[FlagResolution] = Field(min_length=1)
+    reason: str = Field(min_length=3, description="written reason, kept with the actor in the audit log")
+
+
+class EditResponse(_Model):
+    case_key: str
+    flags: list[FlagView]
+    rebuild_doc_id: uuid.UUID | None = Field(description="the document is rebuilt with the new decision")
+    resumed_doc_ids: list[uuid.UUID]
+
+
+class ReopenRequest(_Model):
+    """Take decisions back so the file can be decided again (every flag type)."""
+
+    flag_ids: list[uuid.UUID] = Field(min_length=1)
+    reason: str = Field(min_length=3)
+
+
+class ReopenResponse(_Model):
     case_key: str
     reopened_flag_ids: list[uuid.UUID]
     rebuild_doc_id: uuid.UUID | None

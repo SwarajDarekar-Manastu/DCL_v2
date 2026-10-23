@@ -203,6 +203,7 @@ class OriginOverrideBody(_Model):
 
 RULE_BODIES: dict[RuleType, type[_Model]] = {
     RuleType.CHANNEL_MAP: ChannelMapBody,
+    RuleType.CHANNEL_PROPOSAL: ChannelMapBody,
     RuleType.UNIT_MAPPING: UnitMappingBody,
     RuleType.SCHEMA_MAPPING: SchemaMappingBody,
     RuleType.SUPERSESSION: SupersessionBody,

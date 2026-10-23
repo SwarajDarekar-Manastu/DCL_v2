@@ -23,6 +23,7 @@ import zipfile
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from backend.dispatcher.contract import (
@@ -48,11 +49,11 @@ from backend.postgres.enums import (
     NodeType,
     Route,
 )
-from backend.routes.g_archives import cad
+from backend.routes.g_archives import cad, card
 from backend.routes.g_archives.archive import ArchiveBomb, ArchiveEncrypted, Expander, Member, archive_kind
 from backend.sync.gate import GateConfig
 
-PARSER_VERSION = 1
+PARSER_VERSION = 2
 GATE_YAML = Path(__file__).resolve().parents[3] / "config" / "gate.yaml"
 MEMBERS_PER_NODE = 60
 MOSTLY_JUNK = 0.9
@@ -390,10 +391,43 @@ def process_cad(
     )
 
 
-def process(data: bytes, **kwargs) -> ProcessedDocument:
-    """One entry for the runner: CAD by extension, everything else as an archive."""
+def process_full(data: bytes, **kwargs) -> ProcessedDocument:
+    """The unpacking route: CAD by extension, everything else as an archive whose members become documents.
+    Frozen by the user on 2026-10-23 in favour of the metadata card (``process``); kept for later."""
     if kwargs["file_name"].casefold().endswith(CAD_SUFFIXES):
         return process_cad(data, **kwargs)
     for key in ("path", "folder_files", "web_url"):
         kwargs.pop(key, None)
     return process_archive(data, **kwargs)
+
+
+def process(
+    data: bytes,
+    *,
+    blob_sha256: str,
+    file_name: str,
+    folder: FolderContext,
+    stores: Stores,
+    path: str | None = None,
+    folder_files: Sequence[str] = (),
+    web_url: str | None = None,
+    created_at: datetime | None = None,
+    modified_at: datetime | None = None,
+    copies: Sequence[card.Copy] = (),
+) -> ProcessedDocument:
+    """One entry for the runner: every Route G file becomes one metadata card (``card.py``)."""
+    return card.build_card(
+        data,
+        blob_sha256=blob_sha256,
+        file_name=file_name,
+        folder=folder,
+        put_cir=stores.put_cir,
+        parser_version=PARSER_VERSION,
+        cir_uri=_cir_uri(blob_sha256),
+        path=path,
+        folder_files=folder_files,
+        web_url=web_url,
+        created_at=created_at,
+        modified_at=modified_at,
+        copies=copies,
+    )

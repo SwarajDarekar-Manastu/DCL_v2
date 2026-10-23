@@ -27,8 +27,12 @@ from backend.dispatcher.runner import (
     vision_for,
 )
 from backend.indexing.commit import Indexer
+from backend.postgres import pipeline_config
 from backend.postgres.enums import DocumentSourceRole, DocumentStatus, Route
 from backend.postgres.models import Blob, Document, DocumentSource
+
+WHISPER_MODEL = "routes.F.whisper_model"
+WHISPER_DEFAULT = "medium"  # int8 on CPU; large-v3 does not fit the 4 GiB media worker (DECISIONS 2026-10-23)
 
 
 class RepresentativePending(RuntimeError):
@@ -131,11 +135,11 @@ def process_d_document(
     return run_document(session, minio, doc_id, Route.D, d.PARSER_VERSION, build, indexer)
 
 
-@lru_cache(maxsize=1)
-def _transcriber():
+@lru_cache(maxsize=2)
+def _transcriber(model_size: str):
     from backend.routes.f_video import whisper_transcriber
 
-    return whisper_transcriber()
+    return whisper_transcriber(model_size)
 
 
 def process_f_document(
@@ -149,7 +153,7 @@ def process_f_document(
             folder=ctx.folder,
             vision=vision_for(ctx.session),
             put_asset=ctx.put_asset,
-            transcribe=_transcriber(),
+            transcribe=_transcriber(pipeline_config.get(ctx.session, WHISPER_MODEL, default=WHISPER_DEFAULT)),
             **common_options(ctx),
         )
 

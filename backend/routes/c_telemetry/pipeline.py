@@ -46,6 +46,7 @@ from backend.postgres.enums import (
     RuleType,
 )
 from backend.postgres.models import Blob, Document, DocumentSource, DriveFolder, DriveItem, Rule, SyncRoot
+from backend.review.proposals import refresh as refresh_proposals
 from backend.review.rules import RuleRecord, RuleScope, RuleTarget
 from backend.review.staged import GateResult, gate, load_staged
 from backend.routes.c_telemetry.config_file import process_config
@@ -209,6 +210,7 @@ def process_document(
     processed = processed.model_copy(update={"flags": [with_suggestion(f) for f in processed.flags]})
     _apply_fields(document, processed)
     result: GateResult = gate(session, cir, document, processed, stale=_route_c_flag)
+    refresh_proposals(session, [document.doc_id])  # a rule's units are shown, never applied
     plan = None
     if not result.halted and indexer is not None:
         try:
@@ -420,6 +422,7 @@ def _formula_conflict(sheet: str, cells: list[str], note: str | None) -> Flag:
         anchor=FlagAnchor(sheet=sheet),
         evidence=ConflictEvidence(
             subject=f"formula errors in sheet {sheet}",
+            relation="check_failed",
             a=ConflictSide(
                 label="cells", value=", ".join(cells[:50]), provenance="cached values after recalculation"
             ),

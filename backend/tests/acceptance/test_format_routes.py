@@ -106,10 +106,10 @@ def run_e(path: Path):
 
 def run_g(path: Path):
     pytest.importorskip("trimesh")
-    from backend.routes.g_archives.route import Stores, process
+    from backend.routes.g_archives.route import Stores, process_full
 
     data = path.read_bytes()
-    return process(
+    return process_full(
         data,
         blob_sha256=_sha(data),
         file_name=path.name,

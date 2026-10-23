@@ -48,6 +48,7 @@ def session(engine):
             "entity_mentions",
             "numeric_facts",
             "document_nodes",
+            "assets",
             "entity_aliases",
             "entities",
             "audit_events",

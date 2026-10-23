@@ -160,3 +160,14 @@ def test_committed_table_nodes_carry_locators_and_old_ones_are_found(session, mi
     assert unlocated_table_documents(session) == []
     session.execute(update(DocumentNode).where(DocumentNode.doc_id == release.doc_id).values(line_start=None))
     assert unlocated_table_documents(session) == [release.doc_id]
+
+
+def test_formula_errors_are_a_failed_check_not_two_sources():
+    from backend.routes.c_telemetry.pipeline import _formula_conflict
+
+    evidence = _formula_conflict("Sheet1", ["A1", "B2"], None).evidence
+    assert (evidence.relation, evidence.a.value, evidence.b.value) == (
+        "check_failed",
+        "A1, B2",
+        "computed values",
+    )

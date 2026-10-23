@@ -623,6 +623,7 @@ def _normalize(
                 anchor=FlagAnchor(channel=raw_name),
                 evidence=ConflictEvidence(
                     subject=f"t0 alignment for {t0.channel}",
+                    relation="check_failed",
                     a=ConflictSide(
                         label="detected",
                         value=f"t0 at {t0.t_ms:.0f} ms, confidence {t0.confidence:.2f}",

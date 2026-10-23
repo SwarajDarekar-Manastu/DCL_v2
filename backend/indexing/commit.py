@@ -448,6 +448,9 @@ def commit_document(
 
         apply_revisions(session, document)
         result.status = DocumentStatus(document.status)  # SUPERSEDED when a newer revision exists
+    from backend.indexing.near_duplicates import apply_near_duplicates
+
+    apply_near_duplicates(session, document)
     if processed.derived_blobs:
         from backend.storage.derived import register_derived_blobs
 

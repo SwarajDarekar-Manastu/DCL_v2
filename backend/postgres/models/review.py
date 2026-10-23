@@ -135,6 +135,9 @@ class ReviewFlag(Base):
     resolution_rule_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("rules.rule_id"), index=True
     )
+    proposed_by_rule_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rules.rule_id"), index=True
+    )  # the proposal rule whose units the suggestion carries; kept after the flag is resolved
     assigned_to: Mapped[str | None] = mapped_column(Text)
     resolved_by: Mapped[str | None] = mapped_column(Text)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

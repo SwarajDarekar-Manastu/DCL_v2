@@ -200,6 +200,11 @@ class SetUnit(_Model):
     expression: str | None = Field(
         default=None, description="custom conversion, e.g. val * 0.0689476 + 1.01325"
     )
+    canonical_name: str | None = Field(
+        default=None,
+        description="what the rest of the system calls the channel; the file's own column name when absent "
+        "(a rule's proposal carries the name its author chose)",
+    )
 
 
 class SetFactUnit(_Model):
@@ -466,13 +471,28 @@ class ConflictSide(_Model):
     date: str | None = None
 
 
+ConflictRelation = Literal["sources_disagree", "check_failed", "note"]
+
+
 class ConflictEvidence(_Model):
-    """CONFLICT: two sources disagree."""
+    """CONFLICT: what the route found, and how the reviewer should read the sides.
+
+    ``sources_disagree``: ``a`` and ``b`` are two sources that state different values.
+    ``check_failed``: ``a`` is what was found, ``b`` what the check expected (a limit or a rule).
+    ``note``: ``a`` is a finding the system wants a person to confirm; there is no second side.
+    """
 
     kind: Literal["conflict"] = "conflict"
     subject: str
+    relation: ConflictRelation = "sources_disagree"
     a: ConflictSide
-    b: ConflictSide
+    b: ConflictSide | None = None
+
+    @model_validator(mode="after")
+    def _second_side_unless_note(self) -> Self:
+        if (self.relation == "note") != (self.b is None):
+            raise ValueError("a note has no second side; the other relations need one")
+        return self
 
 
 class ParseFailureEvidence(_Model):

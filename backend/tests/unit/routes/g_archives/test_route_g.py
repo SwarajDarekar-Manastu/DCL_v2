@@ -19,7 +19,13 @@ from backend.indexing.anchors import make_anchor  # noqa: E402
 from backend.indexing.chunker import chunk_document  # noqa: E402
 from backend.postgres.enums import DocKind, FlagSeverity, FlagType  # noqa: E402
 from backend.routes.g_archives import archive  # noqa: E402
-from backend.routes.g_archives.route import Stores, can_handle, process, process_archive, process_cad  # noqa: E402
+from backend.routes.g_archives.route import (  # noqa: E402
+    Stores,
+    can_handle,
+    process_archive,
+    process_cad,
+    process_full,
+)
 
 SAMPLES = Path(__file__).resolve().parents[5] / "data" / "samples"
 WEB = SAMPLES / "web"
@@ -55,7 +61,7 @@ def _zip(files: dict[str, bytes], encrypted: set[str] = frozenset()) -> bytes:
 
 def _run(name: str, data: bytes, cir=None, **kwargs) -> ProcessedDocument:
     cir = {} if cir is None else cir
-    processed = process(
+    processed = process_full(
         data,
         blob_sha256=hashlib.sha256(data).hexdigest(),
         file_name=name,

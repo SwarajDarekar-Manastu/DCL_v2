@@ -36,6 +36,8 @@ GATE_PREFIX = "gate."
 DOWNLOAD_SCOPE = "sync.download_scope"
 PROCESSING_SCOPE = "processing.scope"
 FORMULA_ENRICHMENT_MAX = "routes.A1.formula_enrichment_max"
+HELD_KINDS = "routes.held_kinds"
+WHISPER_MODEL = "routes.F.whisper_model"
 FORMULA_ENRICHMENT_DEFAULT = 30  # about 30 s per formula on CPU (DECISIONS 2026-10-23)
 MISSING = object()
 _ABSENT = object()
@@ -218,6 +220,8 @@ KEYS: dict[str, TypeAdapter] = {
     "routes.A1.ocr_engine_by_script": _TEXT_MAP,
     MODEL_PRICES: TypeAdapter(dict[str, PriceSpec]),
     FORMULA_ENRICHMENT_MAX: TypeAdapter(NonNegativeInt),
+    HELD_KINDS: _LIST,
+    WHISPER_MODEL: TypeAdapter(Literal["tiny", "base", "small", "medium", "large-v3"]),
 }
 FAMILIES = ("thresholds.", "chunking.", "models.")  # free-form JSON values per family
 TELEMETRY_PREFIX = "telemetry."  # Route C NormalizeConfig fields, numbers
@@ -307,6 +311,12 @@ def validate_changes(session: Session, changes: Mapping[str, Any]) -> dict[str, 
                 sanity_ranges_from(values[key])
             except (KeyError, TypeError, ValueError) as exc:
                 errors[key] = f"not a sanity_ranges mapping: {exc!r}"
+        elif key == HELD_KINDS:
+            from backend.dispatcher.type_resolution import K
+
+            unknown = sorted(set(values[key]) - set(K))
+            if unknown:
+                errors[key] = f"unknown file kinds {unknown}; known: {', '.join(sorted(K))}"
     if gate_changes:
         merged = {k.removeprefix(GATE_PREFIX): v for k, v in get_prefix(session, GATE_PREFIX).items()}
         merged.update({k.removeprefix(GATE_PREFIX): v for k, v in gate_changes.items()})

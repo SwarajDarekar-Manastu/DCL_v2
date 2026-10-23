@@ -14,7 +14,7 @@ import uuid
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -36,11 +36,13 @@ from backend.postgres.enums import (
 )
 from backend.postgres.models import AuditEvent, Document, DocumentSource, DriveItem, ReviewFlag, Rule
 from backend.review.api_models import (
+    AppliedUnit,
     CaseDetail,
     CaseFilters,
     CaseList,
     CaseLocation,
     CaseSummary,
+    EditRequest,
     FlagView,
     RejectRequest,
     ResolveRequest,
@@ -49,10 +51,14 @@ from backend.review.api_models import (
     allowed_actions_for,
     check_actions,
 )
-from backend.review.rules import ChannelMapBody, RuleScope
+from backend.review.proposals import refresh as refresh_proposals
+from backend.review.proposals import target_of as _target_of
+from backend.review.rules import RULE_BODIES, ChannelMapBody, RuleScope, UnitMappingBody
 
 log = logging.getLogger(__name__)
 OPEN = (FlagStatus.OPEN, FlagStatus.IN_PROGRESS, FlagStatus.REOPENED)
+# Closed flags: by a person, or by the pipeline once a rule answered them (the old flow, no person involved).
+DECIDED = (FlagStatus.RESOLVED, FlagStatus.REJECTED_FILE, FlagStatus.AUTO_RESOLVED)
 SEVERITY_RANK = {FlagSeverity.HARD: 0, FlagSeverity.SOFT: 1}
 
 
@@ -186,6 +192,7 @@ def _summary(case: _Case, ctx: _Context) -> CaseSummary:
         assignee=next((f.assigned_to for f in case.open_flags if f.assigned_to), None),
         oldest_created_at=min(f.created_at for f in case.flags),
         has_suggestion=any(f.suggested_resolution for f in counted),
+        has_rule_proposal=any(f.proposed_by_rule_id for f in case.open_flags),
         files_unblocked=(ctx.halted_by_folder.get(item.parent_item_id, 0) or None)
         if item and hard_open
         else None,
@@ -205,11 +212,18 @@ def _cases(session: Session) -> list[_Case]:
 
 
 def _keep(summary: CaseSummary, case: _Case, ctx: _Context, filters: CaseFilters, now: datetime) -> bool:
-    wanted = (
-        {filters.status} if filters.status else {CaseStatus.OPEN, CaseStatus.IN_PROGRESS, CaseStatus.REOPENED}
-    )
+    if filters.status:
+        wanted = {filters.status}
+    elif filters.decided:
+        wanted = set(CaseStatus)
+    else:
+        wanted = {CaseStatus.OPEN, CaseStatus.IN_PROGRESS, CaseStatus.REOPENED}
     if summary.status not in wanted:
         return False
+    if filters.decided is not None:
+        has_decision = any(f.status in DECIDED for f in case.flags)
+        if has_decision != filters.decided:
+            return False
     counted = case.counted
     if filters.severity and not any(f.severity == filters.severity for f in counted):
         return False
@@ -227,6 +241,14 @@ def _keep(summary: CaseSummary, case: _Case, ctx: _Context, filters: CaseFilters
         return False
     if filters.has_suggestion is not None and summary.has_suggestion != filters.has_suggestion:
         return False
+    if filters.proposed_by_rule_id and not any(
+        f.proposed_by_rule_id == filters.proposed_by_rule_id for f in case.open_flags
+    ):
+        return False
+    if filters.q:
+        haystack = f"{summary.title} {summary.path or ''}".casefold()
+        if not all(word in haystack for word in filters.q.casefold().split()):
+            return False
     if filters.older_than_days is not None:
         if summary.oldest_created_at > now - timedelta(days=filters.older_than_days):
             return False
@@ -283,6 +305,69 @@ def flag_view(flag: ReviewFlag, is_admin: bool) -> FlagView:
     )
 
 
+def _applied_unit_of(rule: Rule, flag: ReviewFlag) -> SetUnit | None:
+    """The unit a channel_map rule gave a channel, as the decision a person would have made."""
+    channel = (flag.anchor or {}).get("channel")
+    entry = (rule.body or {}).get("channels", {}).get(channel) if channel else None
+    if not entry:
+        return None
+    return SetUnit(
+        channel=channel,
+        unit=entry["unit"],
+        quantity=str(entry["physical_quantity"]),
+        gauge_or_abs=entry.get("gauge_or_abs", "n/a"),
+        ambient_condition=rule.body.get("ambient_condition"),
+        ambient_pressure_bar_abs=rule.body.get("ambient_pressure_bar_abs"),
+        expression=entry.get("expression"),
+        canonical_name=entry.get("canonical_name"),
+    )
+
+
+def _applied_units(session: Session, case: _Case) -> list[AppliedUnit]:
+    from backend.postgres.models import TelemetryRun
+
+    auto = [
+        f
+        for f in case.flags
+        if f.status == FlagStatus.AUTO_RESOLVED
+        and f.flag_type == FlagType.UNIT_AMBIGUITY
+        and f.doc_id
+        and (f.anchor or {}).get("channel")
+    ]
+    if not auto:
+        return []
+    rule_ids = {
+        rid
+        for rid in session.scalars(
+            select(TelemetryRun.channel_map_rule_id).where(TelemetryRun.doc_id.in_({f.doc_id for f in auto}))
+        )
+        if rid
+    }
+    rules = {r.rule_id: r for r in session.scalars(select(Rule).where(Rule.rule_id.in_(rule_ids)))}
+    found = []
+    for flag in auto:
+        for rule in rules.values():
+            unit = _applied_unit_of(rule, flag)
+            if unit is not None:
+                found.append(
+                    AppliedUnit(
+                        flag_id=flag.flag_id,
+                        channel=unit.channel,
+                        unit=unit.unit,
+                        quantity=unit.quantity,
+                        gauge_or_abs=str(unit.gauge_or_abs),
+                        canonical_name=unit.canonical_name,
+                        ambient_condition=str(unit.ambient_condition) if unit.ambient_condition else None,
+                        rule_id=rule.rule_id,
+                        rule_created_by=rule.created_by,
+                        rule_created_at=rule.created_at,
+                        rule_active=rule.active,
+                    )
+                )
+                break
+    return found
+
+
 def case_detail(session: Session, case_key: str, is_admin: bool) -> CaseDetail:
     case = _case(session, case_key)
     ctx = _context(session, [case])
@@ -332,6 +417,7 @@ def case_detail(session: Session, case_key: str, is_admin: bool) -> CaseDetail:
             for i in items
         ],
         siblings=siblings,
+        applied_units=_applied_units(session, case),
     )
 
 
@@ -343,6 +429,17 @@ def rule_view(session: Session, rule: Rule) -> RuleView:
 
     from backend.postgres.models import TelemetryRun
 
+    def count(*where) -> int:
+        return session.scalar(select(func.count()).where(*where)) or 0
+
+    from backend.postgres.models import DriveFolder
+
+    proposed = ReviewFlag.proposed_by_rule_id == rule.rule_id
+    folder_path = (
+        session.scalar(select(DriveFolder.path_cached).where(DriveFolder.item_id == rule.scope_folder_id))
+        if rule.scope_folder_id
+        else None
+    )
     return RuleView(
         rule_id=rule.rule_id,
         rule_type=rule.rule_type,
@@ -360,28 +457,85 @@ def rule_view(session: Session, rule: Rule) -> RuleView:
         active=rule.active,
         created_by=rule.created_by,
         created_at=rule.created_at,
-        flags_resolved=session.scalar(
-            select(func.count()).where(ReviewFlag.resolution_rule_id == rule.rule_id)
-        )
-        or 0,
-        runs_mapped=session.scalar(
-            select(func.count()).where(TelemetryRun.channel_map_rule_id == rule.rule_id)
+        flags_resolved=count(ReviewFlag.resolution_rule_id == rule.rule_id),
+        runs_mapped=count(TelemetryRun.channel_map_rule_id == rule.rule_id),
+        scope_folder_path=folder_path,
+        flags_proposed=count(proposed),
+        flags_decided=count(proposed, ReviewFlag.status.in_([FlagStatus.RESOLVED, FlagStatus.REJECTED_FILE])),
+        files_waiting=session.scalar(
+            select(func.count(func.distinct(ReviewFlag.doc_id))).where(proposed, ReviewFlag.status.in_(OPEN))
         )
         or 0,
     )
 
 
-def list_rules(session: Session, active: bool | None) -> list[RuleView]:
+def list_rules(
+    session: Session, active: bool | None, kind: Literal["rules", "decisions"] | None = None
+) -> list[RuleView]:
+    """``rules``: what a person writes (proposals and the kinds nothing reads yet); ``decisions``: a person's
+    approval of one file's columns (``channel_map``), which the Audit page shows."""
     stmt = select(Rule).order_by(Rule.created_at.desc())
     if active is not None:
         stmt = stmt.where(Rule.active.is_(active))
+    if kind == "rules":
+        stmt = stmt.where(Rule.rule_type != RuleType.CHANNEL_MAP)
+    elif kind == "decisions":
+        stmt = stmt.where(Rule.rule_type == RuleType.CHANNEL_MAP)
     return [rule_view(session, r) for r in session.scalars(stmt)]
+
+
+# Rules propose, people approve (DECISIONS 2026-10-24). These kinds fill in the units of the files they match;
+# nothing but a person's approval of a file writes the ``channel_map`` that Route C reads as an answer.
+PROPOSING_RULE_TYPES = frozenset({RuleType.CHANNEL_PROPOSAL, RuleType.UNIT_MAPPING})
+
+
+def _channel_entry(
+    channel: str,
+    quantity: str,
+    unit: str,
+    gauge_or_abs: str,
+    expression: str | None,
+    canonical_name: str | None = None,
+) -> dict[str, Any]:
+    try:
+        known = Quantity(quantity)
+    except ValueError as exc:
+        raise InvalidAction(f"quantity {quantity!r} is not one of {[q.value for q in Quantity]}") from exc
+    entry: dict[str, Any] = {
+        "canonical_name": canonical_name or _slug(channel),
+        "physical_quantity": known,
+        "unit": unit,
+        "gauge_or_abs": gauge_or_abs,
+    }
+    if expression:
+        entry["expression"] = expression
+    return entry
+
+
+def _as_proposal(draft: RuleDraft) -> RuleDraft:
+    """A ``unit_mapping`` (one channel's unit) is a proposal like any other unit rule."""
+    if draft.rule_type != RuleType.UNIT_MAPPING:
+        return draft
+    unit = UnitMappingBody.model_validate(draft.body)
+    body: dict[str, Any] = {
+        "channels": {
+            unit.channel: _channel_entry(
+                unit.channel, unit.quantity, unit.unit, unit.gauge_or_abs, unit.expression
+            )
+        }
+    }
+    if unit.ambient_condition:
+        body["ambient_condition"] = unit.ambient_condition
+    if unit.ambient_pressure_bar_abs is not None:
+        body["ambient_pressure_bar_abs"] = unit.ambient_pressure_bar_abs
+    return draft.model_copy(update={"rule_type": RuleType.CHANNEL_PROPOSAL, "body": body})
 
 
 def create_rule(session: Session, draft: RuleDraft, actor: str) -> Rule:
     """An operator rule (immutable; ``supersedes_rule_id`` deactivates the one it replaces)."""
+    draft = _as_proposal(draft)
     body = draft.body
-    if draft.rule_type == RuleType.CHANNEL_MAP:
+    if draft.rule_type in (RuleType.CHANNEL_MAP, RuleType.CHANNEL_PROPOSAL):
         body = ChannelMapBody.model_validate(body).model_dump(mode="json", exclude_none=True)
     rule = Rule(
         rule_type=draft.rule_type,
@@ -416,7 +570,26 @@ def create_rule(session: Session, draft: RuleDraft, actor: str) -> Rule:
     return rule
 
 
+def propose_rule(session: Session, rule: Rule) -> int:
+    """Show a proposal on the waiting files it reaches; returns how many files carry it now. Nothing is
+    approved: every file still waits for a person."""
+    if rule.rule_type != RuleType.CHANNEL_PROPOSAL:
+        return 0
+    scope = RuleScope(
+        scope_root=rule.scope_root,
+        scope_folder_id=rule.scope_folder_id,
+        scope_filename_glob=rule.scope_filename_glob,
+        scope_extension=rule.scope_extension,
+    )
+    reached = refresh_proposals(
+        session, [d.doc_id for d, _ in _matching_documents(session, scope, RuleType.CHANNEL_PROPOSAL)]
+    )
+    return len(reached.get(rule.rule_id, ()))
+
+
 def deactivate_rule(session: Session, rule_id: uuid.UUID, actor: str) -> Rule:
+    """Switch a rule off. A proposal stops being proposed (the files it reached get the pipeline's own hint
+    back); decisions already made on files are never touched."""
     rule = session.get(Rule, rule_id)
     if rule is None:
         raise CaseNotFound(f"rule {rule_id}")
@@ -431,6 +604,18 @@ def deactivate_rule(session: Session, rule_id: uuid.UUID, actor: str) -> Rule:
             {"active": True},
             {"active": False},
         )
+        if rule.rule_type == RuleType.CHANNEL_PROPOSAL:
+            session.flush()
+            carrying = {
+                doc_id
+                for doc_id in session.scalars(
+                    select(ReviewFlag.doc_id).where(
+                        ReviewFlag.proposed_by_rule_id == rule_id, ReviewFlag.status.in_(OPEN)
+                    )
+                )
+                if doc_id
+            }
+            refresh_proposals(session, carrying)
     session.flush()
     return rule
 
@@ -439,38 +624,36 @@ def _slug(text: str) -> str:
     return re.sub(r"[^0-9a-z]+", "_", text.casefold()).strip("_") or "channel"
 
 
-def _file_scoped_channel_map(units: list[SetUnit], item: DriveItem) -> RuleDraft:
-    """The operator rule a 'this file' unit decision becomes: one channel_map for exactly this file."""
-    channels: dict[str, Any] = {}
-    for u in units:
-        try:
-            quantity = Quantity(u.quantity)
-        except ValueError as exc:
-            raise InvalidAction(
-                f"quantity {u.quantity!r} is not one of {[q.value for q in Quantity]}"
-            ) from exc
-        entry: dict[str, Any] = {
-            "canonical_name": _slug(u.channel),
-            "physical_quantity": quantity,
-            "unit": u.unit,
-            "gauge_or_abs": u.gauge_or_abs,
-        }
-        if u.expression:
-            entry["expression"] = u.expression
-        channels[u.channel] = entry
+def _channels_body(units: list[SetUnit]) -> dict[str, Any]:
+    channels = {
+        u.channel: _channel_entry(
+            u.channel, u.quantity, u.unit, u.gauge_or_abs, u.expression, u.canonical_name
+        )
+        for u in units
+    }
     body: dict[str, Any] = {"channels": channels}
     ambient = next((u for u in units if u.ambient_condition), None)
     if ambient:
         body["ambient_condition"] = ambient.ambient_condition
         if ambient.ambient_pressure_bar_abs is not None:
             body["ambient_pressure_bar_abs"] = ambient.ambient_pressure_bar_abs
+    return ChannelMapBody.model_validate(body).model_dump(mode="json", exclude_none=True)
+
+
+def _approval_draft(units: list[SetUnit], item: DriveItem) -> RuleDraft:
+    """A person's approval of this file's columns: the channel_map Route C reads, for exactly this file."""
     return RuleDraft(
         rule_type=RuleType.CHANNEL_MAP,
         scope=RuleScope(
             scope_root=item.root_name, scope_folder_id=item.parent_item_id, scope_filename_glob=item.name
         ),
-        body=ChannelMapBody.model_validate(body).model_dump(mode="json", exclude_none=True),
+        body=_channels_body(units),
     )
+
+
+def _proposal_draft(units: list[SetUnit], scope: RuleScope) -> RuleDraft:
+    """The same units offered to other files: a proposal, which no route reads as an answer."""
+    return RuleDraft(rule_type=RuleType.CHANNEL_PROPOSAL, scope=scope, body=_channels_body(units))
 
 
 # ---------------------------------------------------------------- actions
@@ -479,8 +662,9 @@ def _file_scoped_channel_map(units: list[SetUnit], item: DriveItem) -> RuleDraft
 @dataclass
 class ResolveOutcome:
     flags: list[ReviewFlag]
-    rule: Rule | None
-    resume_rule_id: uuid.UUID | None
+    rule: Rule | None  # the proposal saved with this approval, if any
+    resume_rule_id: uuid.UUID | None  # this file's approval: resumes this file only
+    proposed_files: int = 0
 
 
 def _settle_document(session: Session, doc_id: uuid.UUID | None) -> None:
@@ -511,6 +695,8 @@ def resolve_case(
             raise InvalidAction(f"{item.resolution.action} needs the admin role")
         if by_id[item.flag_id].status not in OPEN:
             raise InvalidAction(f"flag {item.flag_id} is {by_id[item.flag_id].status}, not open")
+    if request.rule is not None and request.rule.rule_type == RuleType.CHANNEL_MAP:
+        raise InvalidAction("a file's columns are approved on the file, a rule can only propose them")
 
     first = case.flags[0]
     telemetry_units = [
@@ -518,14 +704,19 @@ def resolve_case(
         for r in request.resolutions
         if isinstance(r.resolution, SetUnit) and (by_id[r.flag_id].anchor or {}).get("channel")
     ]
-    draft = request.rule
-    if draft is None and telemetry_units:
+    approval = None
+    if telemetry_units:
         ctx = _context(session, [case])
         item = ctx.items_by_doc.get(first.doc_id) if first.doc_id else None
         if item is None:
-            raise InvalidAction("the case's file has no live location to scope a rule to")
-        draft = _file_scoped_channel_map(telemetry_units, item)
-    rule = create_rule(session, draft, actor) if draft else None
+            raise InvalidAction("the case's file has no live location to scope an approval to")
+        approval = create_rule(session, _approval_draft(telemetry_units, item), actor)
+    proposal = None
+    if request.rule is not None:
+        proposal = create_rule(session, request.rule, actor)
+    elif request.rule_scope is not None and telemetry_units:
+        proposal = create_rule(session, _proposal_draft(telemetry_units, request.rule_scope), actor)
+    recorded = approval or proposal
 
     now = datetime.now(UTC)
     for item in request.resolutions:
@@ -533,9 +724,11 @@ def resolve_case(
         before = {"status": flag.status, "resolution": flag.resolution}
         flag.status = FlagStatus.RESOLVED
         flag.resolution = item.resolution.model_dump(mode="json", exclude_none=True)
-        flag.resolution_rule_id = rule.rule_id if rule else None
+        flag.resolution_rule_id = recorded.rule_id if recorded else None
         flag.resolved_by, flag.resolved_at = actor, now
         after = {"status": flag.status, "resolution": flag.resolution, "comment": request.comment}
+        if flag.proposed_by_rule_id:
+            after["proposed_by_rule_id"] = str(flag.proposed_by_rule_id)
         _audit(session, actor, AuditEntityType.FLAG, str(flag.flag_id), "resolve", before, after)
     _audit(
         session,
@@ -546,13 +739,14 @@ def resolve_case(
         None,
         {
             "flags": [str(r.flag_id) for r in request.resolutions],
-            "rule_id": str(rule.rule_id) if rule else None,
+            "rule_id": str(approval.rule_id) if approval else None,
+            "proposal_rule_id": str(proposal.rule_id) if proposal else None,
         },
     )
     _settle_document(session, first.doc_id)
     session.flush()
-    resume = rule.rule_id if rule is not None and rule.rule_type == RuleType.CHANNEL_MAP else None
-    return ResolveOutcome(case.flags, rule, resume)
+    proposed_files = propose_rule(session, proposal) if proposal is not None else 0
+    return ResolveOutcome(case.flags, proposal, approval.rule_id if approval else None, proposed_files)
 
 
 def reject_case(session: Session, case_key: str, request: RejectRequest, actor: str) -> _Case:
@@ -625,29 +819,6 @@ UNDO_WINDOW = timedelta(days=30)
 SAMPLE = 20
 
 
-def _target_of(session: Session, document: Document):
-    """The rule target of a document's primary file (derived blobs use their parent's location)."""
-    from backend.dispatcher.location import primary_location
-    from backend.review.rules import RuleTarget
-
-    sha = session.scalar(
-        select(DocumentSource.blob_sha256).where(
-            DocumentSource.doc_id == document.doc_id, DocumentSource.role == DocumentSourceRole.PRIMARY
-        )
-    )
-    where = primary_location(session, sha) if sha else None
-    if where is None:
-        return None, None
-    folders: list[str] = []
-    parent = where.parent_item_id
-    from backend.postgres.models import DriveFolder
-
-    while parent and len(folders) < 64:
-        folders.append(parent)
-        parent = session.scalar(select(DriveFolder.parent_item_id).where(DriveFolder.item_id == parent))
-    return RuleTarget(where.root_name, folders, where.name, where.extension), where
-
-
 def _matching_documents(
     session: Session, scope: RuleScope, rule_type: RuleType
 ) -> list[tuple[Document, Any]]:
@@ -661,7 +832,12 @@ def _matching_documents(
         precedence=0,
         created_at=datetime.now(UTC),
     )
-    routes = {RuleType.CHANNEL_MAP: ["C"], RuleType.UNIT_MAPPING: ["C"], RuleType.SCHEMA_MAPPING: ["C"]}
+    routes = {
+        RuleType.CHANNEL_MAP: ["C"],
+        RuleType.CHANNEL_PROPOSAL: ["C"],
+        RuleType.UNIT_MAPPING: ["C"],
+        RuleType.SCHEMA_MAPPING: ["C"],
+    }
     stmt = select(Document).where(Document.status.not_in(["SUPERSEDED", "DELETED", "QUARANTINED"]))
     if rule_type in routes:
         stmt = stmt.where(Document.route.in_(routes[rule_type]))
@@ -673,25 +849,127 @@ def _matching_documents(
     return found
 
 
-def simulate(session: Session, scope: RuleScope, rule_type: RuleType):
-    """What a rule would touch: HALTED documents it resumes, committed ones it re-processes."""
-    from backend.review.api_models import AffectedDocument, RuleSimulation
+def _simulation_fields(found: list[tuple[Document, Any]]) -> dict[str, Any]:
+    from backend.review.api_models import AffectedDocument
 
-    found = _matching_documents(session, scope, rule_type)
-    resume = [d for d, _ in found if d.status == DocumentStatus.HALTED]
-    reprocess = [
+    waiting = [d for d, _ in found if d.status == DocumentStatus.HALTED]
+    finished = [
         d for d, _ in found if d.status in (DocumentStatus.ACTIVE, DocumentStatus.ACTIVE_WITH_SOFT_FLAGS)
     ]
-    return RuleSimulation(
-        matched_documents=len(found),
-        would_resume=len(resume),
-        would_reprocess=len(reprocess),
-        sample=[
+    return {
+        "matched_documents": len(found),
+        "waiting_documents": len(waiting),
+        "finished_documents": len(finished),
+        "sample": [
             AffectedDocument(
                 doc_id=d.doc_id, title=d.title or "", path=w.path_cached if w else None, status=d.status
             )
             for d, w in found[:SAMPLE]
         ],
+    }
+
+
+def simulate(session: Session, scope: RuleScope, rule_type: RuleType):
+    """What a rule reaches: HALTED files that wait for it, files already processed."""
+    from backend.review.api_models import RuleSimulation
+
+    return RuleSimulation(**_simulation_fields(_matching_documents(session, scope, rule_type)))
+
+
+def preview_rule(session: Session, request) -> "Any":
+    """A rule that is not saved yet: which files it reaches, which columns they wait on, and whether the body
+    is acceptable. A unit rule is previewed as the proposal it will be stored as."""
+    from backend.review.api_models import OpenChannel, RulePreview
+
+    rule_type = RuleType(request.rule_type)
+    problem = None
+    if request.body is not None:
+        try:
+            RULE_BODIES[rule_type].model_validate(request.body)
+        except ValueError as exc:
+            problem = str(exc)
+    proposes = rule_type in PROPOSING_RULE_TYPES
+    found = _matching_documents(session, request.scope, RuleType.CHANNEL_PROPOSAL if proposes else rule_type)
+    waiting = Counter()
+    ids = [d.doc_id for d, _ in found]
+    if ids:
+        for anchor in session.scalars(
+            select(ReviewFlag.anchor).where(
+                ReviewFlag.doc_id.in_(ids),
+                ReviewFlag.flag_type == FlagType.UNIT_AMBIGUITY,
+                ReviewFlag.status.in_(OPEN),
+            )
+        ):
+            if (anchor or {}).get("channel"):
+                waiting[anchor["channel"]] += 1
+    return RulePreview(
+        **_simulation_fields(found),
+        effect="proposes" if proposes else "stored",
+        open_channels=[OpenChannel(channel=c, files=n) for c, n in sorted(waiting.items())],
+        problem=problem,
+    )
+
+
+def list_folders(session: Session, query: str, limit: int = 25):
+    """Folders to scope a rule to. Without a query: the folders that hold halted telemetry files, most first;
+    with one: folders whose path contains it."""
+    from sqlalchemy import func
+
+    from backend.postgres.models import DriveFolder
+    from backend.review.api_models import FolderChoice, FolderList
+
+    halted = dict(
+        session.execute(
+            select(DriveItem.parent_item_id, func.count(func.distinct(Document.doc_id)))
+            .join(DocumentSource, DocumentSource.blob_sha256 == DriveItem.blob_sha256)
+            .join(Document, Document.doc_id == DocumentSource.doc_id)
+            .where(
+                Document.route == "C",
+                Document.status == DocumentStatus.HALTED,
+                DocumentSource.role == DocumentSourceRole.PRIMARY,
+                DriveItem.status != DriveItemStatus.DELETED,
+            )
+            .group_by(DriveItem.parent_item_id)
+        ).all()
+    )
+    text = query.strip()
+    if text:
+        pattern = "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        folders = list(
+            session.scalars(
+                select(DriveFolder)
+                .where(DriveFolder.path_cached.ilike(pattern, escape="\\"))
+                .order_by(DriveFolder.path_cached)
+                .limit(limit)
+            )
+        )
+    else:
+        wanted = sorted(halted, key=lambda f: -halted[f])[:limit]
+        by_id = {
+            f.item_id: f for f in session.scalars(select(DriveFolder).where(DriveFolder.item_id.in_(wanted)))
+        }
+        folders = [by_id[f] for f in wanted if f in by_id]
+    counts = dict(
+        session.execute(
+            select(DriveItem.parent_item_id, func.count())
+            .where(
+                DriveItem.parent_item_id.in_([f.item_id for f in folders]),
+                DriveItem.status != DriveItemStatus.DELETED,
+            )
+            .group_by(DriveItem.parent_item_id)
+        ).all()
+    )
+    return FolderList(
+        items=[
+            FolderChoice(
+                folder_id=f.item_id,
+                root_name=f.root_name,
+                path=f.path_cached or f.name,
+                files=counts.get(f.item_id, 0),
+                waiting=halted.get(f.item_id, 0),
+            )
+            for f in folders
+        ]
     )
 
 
@@ -815,40 +1093,89 @@ class UndoOutcome:
     deactivated_rule_id: uuid.UUID | None
 
 
-def undo_case(session: Session, case_key: str, actor: str, now: datetime | None = None) -> UndoOutcome:
-    """Re-open the flags of the case's last resolution (within 30 days, file 06 §6). A rule that only this
-    resolution used is deactivated; a committed document is rebuilt at once without the overlay or rule."""
-    now = now or datetime.now(UTC)
-    case = _case(session, case_key)
-    resolved = [
-        f for f in case.flags if f.status in (FlagStatus.RESOLVED, FlagStatus.REJECTED_FILE) and f.resolved_at
-    ]
-    if not resolved:
-        raise InvalidAction("nothing to undo: no resolved flag in this case")
-    last = max(f.resolved_at for f in resolved)
-    if now - last > UNDO_WINDOW:
-        raise InvalidAction("the last resolution is older than 30 days")
-    batch = [f for f in resolved if f.resolved_at == last]
+def _release_rule(session: Session, rule_id: uuid.UUID, actor: str) -> uuid.UUID | None:
+    """Flags just gave up their reliance on a file approval. If no flag relies on it any more it is switched
+    off (returned); if some still do and it names channels they do not, a narrower approval of only theirs
+    replaces it, so a reopened channel is asked again instead of being answered by the old approval."""
+    old = session.get(Rule, rule_id)
+    if old is None or not old.active:
+        return None
+    remaining = list(
+        session.scalars(
+            select(ReviewFlag).where(
+                ReviewFlag.resolution_rule_id == rule_id, ReviewFlag.status == FlagStatus.RESOLVED
+            )
+        )
+    )
+    if not remaining:
+        deactivate_rule(session, rule_id, actor)
+        return rule_id
+    if old.rule_type != RuleType.CHANNEL_MAP:
+        return None
+    keep = {(f.anchor or {}).get("channel") for f in remaining}
+    channels = {c: e for c, e in old.body["channels"].items() if c in keep}
+    if channels == old.body["channels"]:
+        return None
+    narrower = create_rule(
+        session,
+        RuleDraft(
+            rule_type=RuleType.CHANNEL_MAP,
+            scope=RuleScope(
+                scope_root=old.scope_root,
+                scope_folder_id=old.scope_folder_id,
+                scope_filename_glob=old.scope_filename_glob,
+                scope_extension=old.scope_extension,
+            ),
+            body={**old.body, "channels": channels},
+            supersedes_rule_id=old.rule_id,
+        ),
+        actor,
+    )
+    for flag in remaining:
+        flag.resolution_rule_id = narrower.rule_id
+    return None
+
+
+def _reopen(
+    session: Session,
+    case: _Case,
+    case_key: str,
+    batch: list[ReviewFlag],
+    actor: str,
+    action: str,
+    reason: str | None,
+) -> UndoOutcome:
     junk_ids = {f.flag_id for f in batch if (f.resolution or {}).get("action") == "mark_junk"}
     rule_ids = {f.resolution_rule_id for f in batch if f.resolution_rule_id}
+    # A rule that answered these flags without a person (the old flow) and is still on would answer them
+    # again at once when the file is rebuilt; taking the decision back switches it off.
+    batch_ids = {f.flag_id for f in batch}
+    still_applied = {
+        u.rule_id for u in _applied_units(session, case) if u.flag_id in batch_ids and u.rule_active
+    }
+    why = {"reason": reason} if reason else {}
     for flag in batch:
         before = {"status": flag.status, "resolution": flag.resolution}
         flag.status, flag.resolution, flag.resolution_rule_id = FlagStatus.REOPENED, None, None
         flag.resolved_by = flag.resolved_at = None
         _audit(
-            session, actor, AuditEntityType.FLAG, str(flag.flag_id), "undo", before, {"status": flag.status}
+            session,
+            actor,
+            AuditEntityType.FLAG,
+            str(flag.flag_id),
+            action,
+            before,
+            {"status": flag.status, **why},
         )
+    session.flush()
     deactivated = None
     for rule_id in rule_ids:
-        still_used = session.scalar(
-            select(ReviewFlag.flag_id).where(ReviewFlag.resolution_rule_id == rule_id).limit(1)
-        )
-        if still_used is None:
-            deactivate_rule(session, rule_id, actor)
-            deactivated = rule_id
+        deactivated = _release_rule(session, rule_id, actor) or deactivated
+    for rule_id in still_applied:
+        deactivate_rule(session, rule_id, actor)
+        deactivated = rule_id
     first = case.flags[0]
-    junked = [f for f in batch if f.flag_id in junk_ids]
-    if junked:
+    if [f for f in batch if f.flag_id in junk_ids]:
         _restore_junked_locations(session, first)
     document = session.get(Document, first.doc_id) if first.doc_id else None
     rebuild = None
@@ -864,12 +1191,176 @@ def undo_case(session: Session, case_key: str, actor: str, now: datetime | None 
         actor,
         AuditEntityType.CASE,
         case_key,
-        "undo",
+        action,
         None,
         {
             "flags": [str(f.flag_id) for f in batch],
             "rebuild_doc_id": str(rebuild) if rebuild else None,
+            **why,
         },
     )
     session.flush()
     return UndoOutcome(batch, rebuild, deactivated)
+
+
+def undo_case(session: Session, case_key: str, actor: str, now: datetime | None = None) -> UndoOutcome:
+    """Re-open the flags of the case's last resolution (within 30 days, file 06 §6). A rule that only this
+    resolution used is deactivated; a committed document is rebuilt at once without the overlay or rule."""
+    now = now or datetime.now(UTC)
+    case = _case(session, case_key)
+    resolved = [
+        f for f in case.flags if f.status in (FlagStatus.RESOLVED, FlagStatus.REJECTED_FILE) and f.resolved_at
+    ]
+    if not resolved:
+        raise InvalidAction("nothing to undo: no resolved flag in this case")
+    last = max(f.resolved_at for f in resolved)
+    if now - last > UNDO_WINDOW:
+        raise InvalidAction("the last resolution is older than 30 days")
+    batch = [f for f in resolved if f.resolved_at == last]
+    return _reopen(session, case, case_key, batch, actor, "undo", None)
+
+
+def reopen_flags(
+    session: Session, case_key: str, flag_ids: list[uuid.UUID], reason: str, actor: str
+) -> UndoOutcome:
+    """Take back chosen decisions of any flag type, whenever they were made, so the file is decided again
+    (the Audit page). Unlike undo it is not limited to the last resolution or to 30 days."""
+    case = _case(session, case_key)
+    by_id = {f.flag_id: f for f in case.flags}
+    batch = []
+    for flag_id in dict.fromkeys(flag_ids):
+        flag = by_id.get(flag_id)
+        if flag is None:
+            raise InvalidAction(f"flag {flag_id} is not part of this case")
+        if flag.status not in DECIDED:
+            raise InvalidAction(f"flag {flag_id} is {flag.status}: only a decided flag can be reopened")
+        batch.append(flag)
+    return _reopen(session, case, case_key, batch, actor, "reopen", reason)
+
+
+@dataclass
+class EditOutcome:
+    flags: list[ReviewFlag]
+    rebuild_doc_id: uuid.UUID | None
+    resume_rule_id: uuid.UUID | None
+
+
+def edit_case(session: Session, case_key: str, request: EditRequest, actor: str) -> EditOutcome:
+    """Change the unit of channels a person already decided (the Audit page). The file's approval is replaced
+    by a new one (the old is kept, switched off), each edited flag records the actor and the written reason,
+    and the file is rebuilt with the new units."""
+    case = _case(session, case_key)
+    by_id = {f.flag_id: f for f in case.flags}
+    try:
+        check_actions(request.resolutions, {f.flag_id: FlagType(f.flag_type) for f in case.flags})
+    except ValueError as exc:
+        raise InvalidAction(str(exc)) from exc
+    edited: dict[uuid.UUID, SetUnit] = {}
+    for item in request.resolutions:
+        flag = by_id[item.flag_id]
+        if flag.status not in (FlagStatus.RESOLVED, FlagStatus.AUTO_RESOLVED):
+            raise InvalidAction(f"flag {flag.flag_id} is {flag.status}: only a decided flag is edited here")
+        if not isinstance(item.resolution, SetUnit) or not (flag.anchor or {}).get("channel"):
+            raise InvalidAction(
+                "only the unit of a telemetry channel is edited in place; reopen any other flag"
+            )
+        edited[flag.flag_id] = item.resolution
+    first = case.flags[0]
+    ctx = _context(session, [case])
+    location = ctx.items_by_doc.get(first.doc_id) if first.doc_id else None
+    if location is None:
+        raise InvalidAction("the case's file has no live location to scope an approval to")
+
+    applied = {u.flag_id: u for u in _applied_units(session, case)}
+    decided = [
+        f
+        for f in case.flags
+        if f.flag_type == FlagType.UNIT_AMBIGUITY
+        and (f.anchor or {}).get("channel")
+        and (
+            (f.status == FlagStatus.RESOLVED and (f.resolution or {}).get("action") == "set_unit")
+            or (f.status == FlagStatus.AUTO_RESOLVED and f.flag_id in applied)
+        )
+    ]
+
+    def current(flag: ReviewFlag) -> SetUnit:
+        if flag.status == FlagStatus.RESOLVED:
+            return SetUnit.model_validate(flag.resolution)
+        a = applied[flag.flag_id]
+        return SetUnit(
+            channel=a.channel,
+            unit=a.unit,
+            quantity=a.quantity,
+            gauge_or_abs=a.gauge_or_abs,
+            ambient_condition=a.ambient_condition,
+            canonical_name=a.canonical_name,
+        )
+
+    current_of = {f.flag_id: current(f) for f in decided}
+    approved_by_rule = {fid: u.rule_id for fid, u in applied.items()}
+    units = [edited.get(f.flag_id) or current_of[f.flag_id] for f in decided]
+    old_rule_ids = [rid for rid in dict.fromkeys(f.resolution_rule_id for f in decided) if rid]
+    draft = _approval_draft(units, location)
+    if old_rule_ids:
+        draft = draft.model_copy(update={"supersedes_rule_id": old_rule_ids[0]})
+    approval = create_rule(session, draft, actor)
+    for rule_id in old_rule_ids[1:]:
+        deactivate_rule(session, rule_id, actor)
+
+    now = datetime.now(UTC)
+    for flag in decided:
+        before = {
+            "status": flag.status,
+            "resolution": flag.resolution
+            or current_of[flag.flag_id].model_dump(mode="json", exclude_none=True),
+            "resolved_by": flag.resolved_by,
+            "rule_id": str(flag.resolution_rule_id or approved_by_rule.get(flag.flag_id)),
+        }
+        if flag.flag_id in edited or flag.status == FlagStatus.AUTO_RESOLVED:
+            # the editor now stands behind this unit, whether they changed it or confirmed what a rule applied
+            flag.status = FlagStatus.RESOLVED
+            flag.resolution = (edited.get(flag.flag_id) or current_of[flag.flag_id]).model_dump(
+                mode="json", exclude_none=True
+            )
+            flag.resolved_by, flag.resolved_at = actor, now
+            _audit(
+                session,
+                actor,
+                AuditEntityType.FLAG,
+                str(flag.flag_id),
+                "edit",
+                before,
+                {
+                    "resolution": flag.resolution,
+                    "resolved_by": actor,
+                    "rule_id": str(approval.rule_id),
+                    "reason": request.reason,
+                },
+            )
+        flag.resolution_rule_id = approval.rule_id
+    document = session.get(Document, first.doc_id) if first.doc_id else None
+    rebuild = resume = None
+    if document is not None and document.status in (
+        DocumentStatus.ACTIVE,
+        DocumentStatus.ACTIVE_WITH_SOFT_FLAGS,
+    ):
+        document.status = DocumentStatus.PROCESSING
+        rebuild = document.doc_id
+    elif document is not None and document.status == DocumentStatus.HALTED:
+        resume = approval.rule_id
+    _audit(
+        session,
+        actor,
+        AuditEntityType.CASE,
+        case_key,
+        "edit",
+        {"rule_ids": [str(r) for r in old_rule_ids]},
+        {
+            "flags": [str(f) for f in edited],
+            "rule_id": str(approval.rule_id),
+            "rebuild_doc_id": str(rebuild) if rebuild else None,
+            "reason": request.reason,
+        },
+    )
+    session.flush()
+    return EditOutcome(case.flags, rebuild, resume)

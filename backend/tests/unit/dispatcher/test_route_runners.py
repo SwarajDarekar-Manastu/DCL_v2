@@ -142,7 +142,7 @@ def test_f_hands_the_video_to_process_video_with_the_transcriber(session, minio,
     (release,) = dispatch(session, minio, section_file_sets=()).to_process
     assert (release.task, release.queue) == ("dcl.process.route_f", "media")
     monkeypatch.setattr(media_run, "vision_for", lambda session: "vision")
-    monkeypatch.setattr(media_run, "_transcriber", lambda: "whisper")
+    monkeypatch.setattr(media_run, "_transcriber", lambda size: f"whisper:{size}")
     calls = []
     monkeypatch.setattr(
         f, "process_video", lambda data, **kw: calls.append(kw) or _fake_doc(kw["blob_sha256"], "F")
@@ -150,9 +150,37 @@ def test_f_hands_the_video_to_process_video_with_the_transcriber(session, minio,
     assert process_f_document(session, minio, release.doc_id).status == "WAITING_FOR_ROUTE"
     assert (calls[0]["file_name"], calls[0]["transcribe"], calls[0]["vision"]) == (
         "firing.mp4",
-        "whisper",
+        "whisper:medium",
         "vision",
     )
+
+
+def test_f_reads_the_speech_model_size_from_the_setting(session, minio, monkeypatch):
+    from backend.routes import f_video as f
+
+    _seed_folders_only(session)
+    _file(session, minio, "v2", "F-TP12", "demo.mp4", b"\x00\x00\x00\x18ftypisom" + b"\x00" * 32, "video/mp4")
+    pipeline_config.set_value(session, pipeline_config.PROCESSING_SCOPE, ["F-TP12"], "test")
+    pipeline_config.set_value(session, "routes.F.enabled", True, "test")
+    pipeline_config.set_value(session, "routes.F.whisper_model", "small", "test")
+    session.commit()
+    (release,) = dispatch(session, minio, section_file_sets=()).to_process
+    monkeypatch.setattr(media_run, "vision_for", lambda session: "vision")
+    monkeypatch.setattr(media_run, "_transcriber", lambda size: f"whisper:{size}")
+    calls = []
+    monkeypatch.setattr(
+        f, "process_video", lambda data, **kw: calls.append(kw) or _fake_doc(kw["blob_sha256"], "F")
+    )
+    process_f_document(session, minio, release.doc_id)
+    assert calls[0]["transcribe"] == "whisper:small"
+
+
+def test_the_speech_model_setting_refuses_an_unknown_size(session):
+    with pytest.raises(pipeline_config.InvalidConfig):
+        pipeline_config.validate_changes(session, {"routes.F.whisper_model": "gigantic"})
+    assert pipeline_config.validate_changes(session, {"routes.F.whisper_model": "large-v3"}) == {
+        "routes.F.whisper_model": "large-v3"
+    }
 
 
 def test_a1_releases_word_files_now(session, minio):
@@ -230,12 +258,12 @@ def test_e_reads_a_drawio_diagram_through_s6_process_diagram(session, minio):
     assert "Propellant tank" in text and "SV-01" in text
 
 
-def test_g_archive_members_become_documents_and_cad_references_become_relations(session, minio):
+def test_g_files_become_metadata_cards_and_cad_references_become_relations(session, minio):
     import io
     import zipfile
 
     from backend.dispatcher.source_run import process_g_document
-    from backend.postgres.models import BlobDerivation, DocumentRelation
+    from backend.postgres.models import BlobDerivation, DocumentNode, DocumentRelation
     from backend.tests.unit.routes.c_telemetry.test_pipeline import _fake_indexer
 
     _seed_folders_only(session)
@@ -263,12 +291,10 @@ def test_g_archive_members_become_documents_and_cad_references_become_relations(
         outcome = process_g_document(session, minio, released[title].doc_id, indexer=_fake_indexer)
         session.commit()
         assert outcome.status in ("ACTIVE", "ACTIVE_WITH_SOFT_FLAGS"), title
-    (link,) = session.scalars(select(BlobDerivation)).all()
-    assert (link.member_path, link.kind) == ("run/notes.txt", "archive_member")
-    member = dispatch(session, minio, section_file_sets=()).to_process
-    assert [(session.get(Document, r.doc_id).title, r.task) for r in member] == [
-        ("notes", "dcl.process.route_b")
-    ]
+    assert session.scalars(select(BlobDerivation)).all() == []  # a card lists the members, it extracts none
+    assert dispatch(session, minio, section_file_sets=()).to_process == []
+    card = session.scalars(select(DocumentNode).where(DocumentNode.doc_id == released["bundle"].doc_id)).all()
+    assert any("run/notes.txt" in node.content for node in card)
 
     drawing = session.scalars(
         select(Document).where(Document.title == "bracket", Document.route == "A1")

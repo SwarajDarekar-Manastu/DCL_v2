@@ -10,6 +10,8 @@ from backend.dispatcher.contract import (
     AnchorError,
     BBox,
     ChannelStats,
+    ConflictEvidence,
+    ConflictSide,
     DocumentFields,
     Flag,
     FlagAnchor,
@@ -287,3 +289,33 @@ def test_evidence_and_suggestion_parse_by_their_discriminators_from_a_staged_pay
 def test_unknown_evidence_kind_is_refused():
     with pytest.raises(ValidationError):
         Flag.model_validate({"flag_type": "CONFLICT", "severity": "SOFT", "evidence": {"kind": "free_text"}})
+
+
+def _side(label: str, value: str) -> dict:
+    return {"label": label, "value": value, "provenance": "p"}
+
+
+def test_a_conflict_is_two_sources_unless_it_says_otherwise():
+    legacy = ConflictEvidence.model_validate(
+        {"kind": "conflict", "subject": "s", "a": _side("folder", "TP26"), "b": _side("page 1", "TP24")}
+    )
+    assert legacy.relation == "sources_disagree" and legacy.b is not None
+
+
+def test_a_note_has_no_second_side_and_the_other_relations_need_one():
+    note = ConflictEvidence(
+        subject="s", relation="note", a=ConflictSide(label="assembler", value="v", provenance="p")
+    )
+    assert note.b is None and "b" in note.model_dump()
+    with pytest.raises(ValidationError):
+        ConflictEvidence(
+            subject="s",
+            relation="note",
+            a=ConflictSide(label="x", value="v", provenance="p"),
+            b=ConflictSide(label="y", value="w", provenance="p"),
+        )
+    for relation in ("sources_disagree", "check_failed"):
+        with pytest.raises(ValidationError):
+            ConflictEvidence(
+                subject="s", relation=relation, a=ConflictSide(label="x", value="v", provenance="p")
+            )

@@ -225,9 +225,11 @@ services:
     image: dcl-v2-console:local
     build:
       context: ../../frontend/console
+      additional_contexts:
+        asset: ../../asset
       args:
         VITE_API_BASE_URL: ${DCL_API_BASE_URL:-}
-        VITE_AUTH_MODE: msal
+        VITE_AUTH_MODE: ${VITE_AUTH_MODE:-msal}
         VITE_ENTRA_TENANT_ID: ${DCL_TENANT_ID:-}
         VITE_ENTRA_CLIENT_ID: ${DCL_CONSOLE_SPA_CLIENT_ID:-}
         VITE_ENTRA_API_SCOPE: ${DCL_CONSOLE_API_SCOPE:-}

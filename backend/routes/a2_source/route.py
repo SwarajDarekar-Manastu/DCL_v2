@@ -152,8 +152,8 @@ def conflict_flags(conflicts: Sequence[str], primary: str) -> list[Flag]:
                 anchor=FlagAnchor(content_sha256=_flag_hash("assembler", message)),
                 evidence=ConflictEvidence(
                     subject=message,
+                    relation="note",
                     a=ConflictSide(label="assembled as", value=primary, provenance="folder-level assembler"),
-                    b=ConflictSide(label="reason", value=message, provenance="folder-level assembler"),
                 ),
             )
         )

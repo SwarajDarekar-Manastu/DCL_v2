@@ -96,9 +96,9 @@ def test_a_clip_without_ignition_is_flagged_soft(tmp_path, fake_vision, memory_s
         put_asset=memory_store("s3://dcl-assets/"),
         cloud_allowed=False,
     )
-    assert [(f.flag_type, f.severity) for f in doc.flags] == [
-        (FlagType.LOW_CONFIDENCE_EXTRACTION, FlagSeverity.SOFT)
-    ]
+    assert [(f.flag_type, f.severity) for f in doc.flags] == [(FlagType.CONFLICT, FlagSeverity.SOFT)]
+    evidence = doc.flags[0].evidence
+    assert (evidence.relation, evidence.a.value) == ("check_failed", "no ignition found")
     assert doc.document.catalog["t0_ignition_video_ms"] is None
 
 

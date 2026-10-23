@@ -264,7 +264,12 @@ class CaseStatus(StrEnum):
 
 
 class RuleType(StrEnum):
+    """``channel_map`` is a person's approval of one file's columns: only a case's "Apply" writes it, and
+    Route C reads nothing else as an answer. ``channel_proposal`` is what a rule is: it pre-fills the units of
+    the files it matches and a person still approves each file (DECISIONS 2026-10-24)."""
+
     CHANNEL_MAP = "channel_map"
+    CHANNEL_PROPOSAL = "channel_proposal"
     UNIT_MAPPING = "unit_mapping"
     SCHEMA_MAPPING = "schema_mapping"
     SUPERSESSION = "supersession"

@@ -206,6 +206,7 @@ def test_mostly_unlabeled_edges_mark_the_graph_incomplete():
     subjects = [f.evidence.subject for f in processed.flags]
 
     assert subjects == ["diagram graph incomplete: unlabeled edges"]
+    assert processed.flags[0].evidence.relation == "check_failed"
     assert processed.flags[0].severity == FlagSeverity.SOFT
 
 

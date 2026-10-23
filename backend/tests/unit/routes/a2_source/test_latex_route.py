@@ -257,6 +257,7 @@ def test_two_masters_and_orphans_raise_soft_conflicts(memory, folder):
     conflict = next(f for f in processed.flags if f.flag_type == FlagType.CONFLICT)
     assert conflict.severity == FlagSeverity.SOFT
     assert conflict.evidence.subject.startswith("no master found")
+    assert (conflict.evidence.relation, conflict.evidence.b) == ("note", None)
 
 
 def test_secret_in_the_source_is_a_hard_sensitive_flag(memory, folder):

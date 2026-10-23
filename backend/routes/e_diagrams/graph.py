@@ -175,11 +175,12 @@ def graph_flags(graph: Graph) -> list[Flag]:
                     anchor=FlagAnchor(content_sha256=hashlib.sha256(f"graph|{subject}".encode()).hexdigest()),
                     evidence=ConflictEvidence(
                         subject=f"diagram graph incomplete: {subject}",
+                        relation="check_failed",
                         a=ConflictSide(
                             label=subject, value=f"{count} of {total}", provenance="parsed diagram"
                         ),
                         b=ConflictSide(
-                            label="threshold", value=f"{limit:.0%}", provenance="file 06 §4 (Route E)"
+                            label="limit", value=f"at most {limit:.0%}", provenance="file 06 §4 (Route E)"
                         ),
                     ),
                 )

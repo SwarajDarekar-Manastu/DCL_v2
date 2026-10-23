@@ -118,6 +118,48 @@ def test_parked_documents_are_released_processed_and_halted(session, minio):
     assert dispatch(session, minio, section_file_sets=(), enqueue=queued.append).released == 0
 
 
+def test_a_proposal_shows_its_units_on_a_file_that_arrives_later_and_the_file_still_halts(session, minio):
+    _seed(session, minio, {"TP12_T01.dat": labjack_bytes(rows=300)[0]})
+    pipeline_config.set_value(session, "routes.C.enabled", True, "test")
+    proposal = Rule(
+        rule_type="channel_proposal",
+        origin="operator",
+        scope_folder_id="F-RUN",
+        body={
+            "channels": {
+                "y0": {
+                    "canonical_name": "pt_101_chamber_bar_g",
+                    "physical_quantity": "pressure",
+                    "unit": "bar",
+                    "gauge_or_abs": "gauge",
+                }
+            },
+            "ambient_condition": "SEA_LEVEL",
+        },
+        created_by="asha@manastu.space",
+    )
+    session.add(proposal)
+    session.commit()
+    (release,) = dispatch(session, minio, section_file_sets=()).to_process
+    outcome = process_document(session, minio, release.doc_id)
+    session.commit()
+
+    assert (outcome.status, outcome.hard_flags) == ("HALTED", 2)  # a rule never answers the question
+    flags = {
+        f.anchor["channel"]: f
+        for f in session.scalars(select(ReviewFlag).where(ReviewFlag.doc_id == release.doc_id))
+    }
+    assert {f.status for f in flags.values()} == {"OPEN"}
+    assert flags["y0"].proposed_by_rule_id == proposal.rule_id
+    suggestion = flags["y0"].suggested_resolution
+    assert (suggestion["proposed_by"], suggestion["resolution"]["unit"]) == ("rule", "bar")
+    assert (suggestion["resolution"]["canonical_name"], suggestion["resolution"]["ambient_condition"]) == (
+        "pt_101_chamber_bar_g",
+        "SEA_LEVEL",
+    )
+    assert flags["y1"].proposed_by_rule_id is None  # the proposal names no y1: the pipeline's own hint stays
+
+
 def test_a_rule_for_every_channel_clears_the_gate(session, minio):
     _seed(session, minio, {"TP12_T01.dat": labjack_bytes(rows=300)[0]})
     pipeline_config.set_value(session, "routes.C.enabled", True, "test")

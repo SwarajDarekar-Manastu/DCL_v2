@@ -51,11 +51,12 @@ def test_includes_resolve_recursively_with_import_and_missing_ones_are_recorded(
     assert plan.conflicts == []
 
 
-def test_orphan_tex_files_are_assembled_per_folder_by_name_with_a_conflict():
+def test_orphan_tex_files_are_assembled_per_folder_by_name_and_noted_without_a_conflict():
     plans = assemble([ref("s/b.tex"), ref("s/a.tex")], texts({}))
     (plan,) = plans
     assert (plan.primary.path, [f.path for f, _ in plan.parts]) == ("s/a.tex", ["s/b.tex"])
-    assert plan.conflicts == ["no master found in folder s, assembled by filename"]
+    assert plan.notes == ["no master found in folder s, assembled by filename"]
+    assert plan.conflicts == []
 
 
 def test_json_section_files_form_one_document_named_after_the_folder():
@@ -99,4 +100,11 @@ def test_tex_files_no_master_includes_are_reported_as_such_when_a_master_exists(
     content = {"p/main.tex": "\\documentclass{article}"}
     plans = assemble([ref("p/main.tex"), ref("p/Sections/unused.tex")], texts(content))
     orphan = next(p for p in plans if p.primary.path == "p/Sections/unused.tex")
-    assert orphan.conflicts == ["not included by any master in folder p/Sections, assembled by filename"]
+    assert orphan.notes == ["not included by any master in folder p/Sections, assembled by filename"]
+    assert orphan.conflicts == []
+    assert orphan.title == "unused"  # a lone file is named after itself, not after a folder many plans share
+
+
+def test_several_orphans_in_one_folder_are_named_after_the_folder():
+    plans = assemble([ref("s/b.tex"), ref("s/a.tex")], texts({}))
+    assert [p.title for p in plans] == ["s"]

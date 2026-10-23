@@ -55,7 +55,7 @@ from backend.llm_engine.enrichment.numeric_facts import (
 )
 from backend.llm_engine.gemini_types import StructuredOutputError
 from backend.llm_engine.local_models import EMBEDDING_MODEL_TAG
-from backend.postgres.enums import DocKind, EntityType, MentionSource, NodeType, SourceOrigin
+from backend.postgres.enums import DocKind, EntityType, MentionSource, NodeType, Route, SourceOrigin
 
 EMBED_BATCH = 256
 IMAGE_BATCH = 32
@@ -312,7 +312,7 @@ def index_document(
             else:
                 facts.append(outcome)
 
-    if fields.doc_kind in QUESTION_PROXY_KINDS:
+    if fields.doc_kind in QUESTION_PROXY_KINDS or doc.route == Route.G:
         for parent, result in enriched:
             if result.enrichment.questions_answered:
                 nodes.append(_question_proxy(parent, result.enrichment.questions_answered, len(nodes)))

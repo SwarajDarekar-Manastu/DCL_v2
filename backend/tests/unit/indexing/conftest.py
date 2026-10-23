@@ -4,6 +4,7 @@ import pytest
 
 from backend.dispatcher.contract import DocumentFields, PageBox, ProcessedDocument, ProcessedNode
 from backend.postgres.enums import DocKind, NodeSource, NodeType, SourceOrigin
+from backend.tests.unit.sync.conftest import engine, minio, session  # noqa: F401  (DB tests of this folder)
 
 SHA = "a" * 64
 DOC_ID = "6f1c2a3e-0000-4000-8000-000000000001"

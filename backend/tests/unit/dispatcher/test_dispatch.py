@@ -57,7 +57,7 @@ def _file(session, minio, item_id, folder_id, name, data, mime):
     return sha
 
 
-def _seed(session, minio):
+def _folders(session):
     for item_id, name, parent, path in FOLDERS:
         session.add(
             DriveFolder(
@@ -69,6 +69,10 @@ def _seed(session, minio):
                 path_cached=path,
             )
         )
+
+
+def _seed(session, minio):
+    _folders(session)
     for name in ("report_main.tex", "report_draft.tex"):
         _file(session, minio, name, "F-REPORT", name, (LATEX / name).read_bytes(), "text/x-tex")
     _file(
@@ -88,6 +92,19 @@ def _seed(session, minio):
     _file(session, minio, "outside", "F-OUT", "notes.txt", b"outside the scope\n", "text/plain")
     pipeline_config.set_value(session, pipeline_config.PROCESSING_SCOPE, ["F-TP37", "F-TP12"], "test")
     session.commit()
+
+
+def test_a_tex_no_master_includes_is_noted_on_its_document_and_raises_no_flag(session, minio):
+    _folders(session)
+    _file(session, minio, "stray", "F-TP12", "stray.tex", b"\\section{A loose fragment}\n", "text/x-tex")
+    pipeline_config.set_value(session, pipeline_config.PROCESSING_SCOPE, ["F-TP12"], "test")
+    session.commit()
+    dispatch(session, minio)
+    (stray,) = [d for d in session.scalars(select(Document)) if d.title == "stray"]
+    assert stray.metadata_sources["assembler"]["notes"] == [
+        "no master found in the top folder, assembled by filename"
+    ]
+    assert session.scalars(select(ReviewFlag).where(ReviewFlag.doc_id == stray.doc_id)).all() == []
 
 
 def _docs(session):
@@ -114,6 +131,10 @@ def test_dispatch_assembles_gates_flags_and_skips_out_of_scope(session, minio):
         )
     ).all()
     assert conflicts == ["CONFLICT", "CONFLICT"]
+    notes = session.scalars(
+        select(ReviewFlag.evidence).where(ReviewFlag.doc_id == docs["report_main"].doc_id)
+    ).all()
+    assert [(e["relation"], "b" in e and e["b"]) for e in notes] == [("note", None)]
 
     html = docs["Test_Report_12"]
     assert (html.route, html.status, html.staged_payload_uri is not None) == (None, "HALTED", True)

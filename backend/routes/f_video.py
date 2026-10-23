@@ -10,8 +10,8 @@ not video); audio RMS spikes become acoustic events without interpretation. One 
 as the parent) and one `video_event` per event with its keyframe asset; `documents.catalog` holds
 `t0_ignition_video_ms` and its confidence for the clock alignment of file 03 §C.6.
 
-F.1 workshop (speech): 16 kHz mono audio, transcribed with word timestamps (faster-whisper large-v3 by
-default, injectable); recordings above 30 minutes go in 30-minute parts with 30 s overlap, words of the
+F.1 workshop (speech): 16 kHz mono audio, transcribed with word timestamps (faster-whisper medium int8 on
+CPU by default, injectable); recordings above 30 minutes go in 30-minute parts with 30 s overlap, words of the
 overlap kept once; windows of 60–120 s split at pauses above 2 s and at slide changes (FFmpeg scene
 detection); 10-minute parent sections kept whole with `transcript_window` children; slide frames are assets
 and, when cloud processing is allowed, described by `describe_slide`.
@@ -26,10 +26,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from backend.dispatcher.contract import (
+    ConflictEvidence,
+    ConflictSide,
     DocumentFields,
     Flag,
     FlagAnchor,
-    LowConfidenceEvidence,
     ParseFailureEvidence,
     ProcessedAsset,
     ProcessedDocument,
@@ -251,7 +252,7 @@ Transcriber = Callable[[Path, float, float], list[Word]]
 """`(audio_path, start_s, end_s) -> words` with absolute timestamps."""
 
 
-def whisper_transcriber(model_size: str = "large-v3") -> Transcriber:
+def whisper_transcriber(model_size: str = "medium") -> Transcriber:
     from faster_whisper import WhisperModel
 
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
@@ -506,10 +507,25 @@ def _test_cell(path, info, folder, title, blob_sha256, vision, put_asset, cloud_
     if ignition.t_ignition_ms is None or ignition.confidence < 0.5:
         flags.append(
             Flag(
-                flag_type=FlagType.LOW_CONFIDENCE_EXTRACTION,
+                flag_type=FlagType.CONFLICT,
                 severity=FlagSeverity.SOFT,
                 anchor=FlagAnchor(channel="video_luminance"),
-                evidence=LowConfidenceEvidence(),
+                evidence=ConflictEvidence(
+                    subject="t0 alignment from the video",
+                    relation="check_failed",
+                    a=ConflictSide(
+                        label="detected",
+                        value="no ignition found"
+                        if ignition.t_ignition_ms is None
+                        else f"t0 at {ignition.t_ignition_ms} ms, confidence {ignition.confidence:.2f}",
+                        provenance="luminance jump between sampled frames",
+                    ),
+                    b=ConflictSide(
+                        label="expected",
+                        value="a sharp brightness rise (confidence >= 0.5)",
+                        provenance="file 03 §C.6",
+                    ),
+                ),
             )
         )
     catalog = {

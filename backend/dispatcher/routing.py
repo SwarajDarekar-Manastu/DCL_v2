@@ -88,6 +88,22 @@ def enabled_routes(session: Session) -> set[Route]:
     return {r for r in Route if pipeline_config.get(session, f"routes.{r}.enabled", default=False) is True}
 
 
+@dataclass(frozen=True)
+class RouteGate:
+    """What may run now: the routes that are on, minus the file kinds parked by ``routes.held_kinds``."""
+
+    on: frozenset[Route]
+    held_kinds: frozenset[str] = frozenset()
+
+    def runs(self, route: Route | None, kind: str) -> bool:
+        return route in self.on and kind not in self.held_kinds
+
+
+def route_gate(session: Session) -> RouteGate:
+    held = pipeline_config.get(session, pipeline_config.HELD_KINDS, default=[]) or []
+    return RouteGate(frozenset(enabled_routes(session)), frozenset(held))
+
+
 def _read(minio: Minio, blob: Blob, length: int | None = None) -> bytes:
     bucket, key = parse_uri(blob.minio_uri)
     response = minio.get_object(bucket, key, offset=0, length=length or blob.size_bytes)
@@ -213,8 +229,8 @@ def _conflict_flag(message: str, subject: str) -> Flag:
         anchor=FlagAnchor(content_sha256=digest),
         evidence=ConflictEvidence(
             subject=subject,
-            a=ConflictSide(label="assembler", value=message, provenance="dispatcher"),
-            b=ConflictSide(label="expected", value="one unambiguous document", provenance="file 03 §1.3"),
+            relation="note",
+            a=ConflictSide(label="assembler", value=message, provenance="file 03 §1.3"),
         ),
     )
 
@@ -224,7 +240,7 @@ def _write_plan(
     plan: DocumentPlan,
     by_blob: dict[str, Candidate],
     context: FolderContext,
-    routes_on: set[Route],
+    gate: RouteGate,
     cir: BucketStore,
     head: bytes,
     result: DispatchResult,
@@ -241,12 +257,18 @@ def _write_plan(
             resolved=primary.resolved,
             parts=plan.parts,
             conflicts=[*plan.conflicts, *context.conflicts],
-            metadata={"assembler": {"missing_includes": plan.missing_includes}}
-            if plan.missing_includes
+            metadata={
+                "assembler": {
+                    key: value
+                    for key, value in (("missing_includes", plan.missing_includes), ("notes", plan.notes))
+                    if value
+                }
+            }
+            if plan.missing_includes or plan.notes
             else {},
         ),
         context,
-        routes_on,
+        gate,
         cir,
         head,
         result,
@@ -270,15 +292,16 @@ def _new_document(
     session: Session,
     new: NewDocument,
     context: FolderContext,
-    routes_on: set[Route],
+    gate: RouteGate,
     cir: BucketStore,
     head: bytes,
     result: DispatchResult,
 ) -> Document:
-    """One document for one primary blob: PROCESSING when its route is on and an adapter accepts the file,
-    WAITING_FOR_ROUTE otherwise, HALTED with UNSUPPORTED_FORMAT when no route takes the type."""
+    """One document for one primary blob: PROCESSING when its route is on, its kind is not held and an
+    adapter accepts the file, WAITING_FOR_ROUTE otherwise, HALTED with UNSUPPORTED_FORMAT when no route
+    takes the type."""
     route = new.resolved.route
-    adapter = adapter_for(route, head, new.name) if route in routes_on else None
+    adapter = adapter_for(route, head, new.name) if gate.runs(route, new.resolved.kind) else None
     if route is None:
         status = DocumentStatus.HALTED
     elif adapter is not None:
@@ -340,7 +363,7 @@ GONE = (DocumentStatus.SUPERSEDED, DocumentStatus.DELETED, DocumentStatus.QUARAN
 
 
 def dispatch_derived(
-    session: Session, minio: Minio, routes_on: set[Route], cir: BucketStore, result: DispatchResult
+    session: Session, minio: Minio, gate: RouteGate, cir: BucketStore, result: DispatchResult
 ) -> None:
     """Documents for derived blobs (``blob_derivations``) whose parent is the primary blob of a live
     document: the child keeps the parent's folder context with the parent's title added to the breadcrumb;
@@ -393,7 +416,7 @@ def dispatch_derived(
                 },
             ),
             context,
-            routes_on,
+            gate,
             cir,
             head,
             result,
@@ -405,10 +428,11 @@ def _release(doc_id: uuid.UUID, adapter: Adapter) -> Release:
     return Release(doc_id=doc_id, task=adapter.task, queue=str(adapter.queue))
 
 
-def release_waiting(session: Session, minio: Minio, routes_on: set[Route], result: DispatchResult) -> None:
-    """Parked documents (WAITING_FOR_ROUTE) whose route is now enabled and has an adapter for their
-    primary file become PROCESSING (file 06 §3: re-dispatched automatically when the registry gains one).
-    Documents a route already processed (waiting only for their commit path) stay parked."""
+def release_waiting(session: Session, minio: Minio, gate: RouteGate, result: DispatchResult) -> None:
+    """Parked documents (WAITING_FOR_ROUTE) whose route is now enabled, whose kind is not held and that have
+    an adapter for their primary file become PROCESSING (file 06 §3: re-dispatched automatically when the
+    registry gains one). Documents a route already processed (waiting only for their commit path) stay
+    parked."""
     rows = session.execute(
         select(Document, Blob, DriveItem.name)
         .join(DocumentSource, DocumentSource.doc_id == Document.doc_id)
@@ -417,7 +441,7 @@ def release_waiting(session: Session, minio: Minio, routes_on: set[Route], resul
         .where(
             DocumentSource.role == DocumentSourceRole.PRIMARY,
             Document.status == DocumentStatus.WAITING_FOR_ROUTE,
-            Document.route.in_([r.value for r in routes_on]),
+            Document.route.in_([r.value for r in gate.on]),
             DriveItem.status.not_in(DEAD_LOCATION),
         )
         .order_by(DriveItem.path_cached)
@@ -427,7 +451,10 @@ def release_waiting(session: Session, minio: Minio, routes_on: set[Route], resul
         if document.doc_id in seen or PROCESSED_MARK in (document.metadata_sources or {}):
             continue
         seen.add(document.doc_id)
-        adapter = adapter_for(Route(document.route), _read(minio, blob, HEAD_BYTES), name)
+        head = _read(minio, blob, HEAD_BYTES)
+        if gate.held_kinds and _resolve(minio, blob, name, head).kind in gate.held_kinds:
+            continue
+        adapter = adapter_for(Route(document.route), head, name)
         if adapter is None:
             continue
         document.status = DocumentStatus.PROCESSING
@@ -449,7 +476,7 @@ def dispatch(
     ``enqueue`` after its transaction committed (a worker never sees an uncommitted document)."""
     result = DispatchResult()
     scope = pipeline_config.processing_scope(session)
-    routes_on = enabled_routes(session)
+    gate = route_gate(session)
     sets = load_section_file_sets() if section_file_sets is None else section_file_sets
     roots = {r.root_name: r for r in session.scalars(select(SyncRoot))}
     folders, ancestors = folder_tree(session)
@@ -509,13 +536,11 @@ def dispatch(
         for plan in assemble(refs, read_text, sets):
             primary = by_blob[plan.primary.blob_sha256]
             context = _context(primary, roots, folders, siblings_by_folder[primary.item.parent_item_id])
-            _write_plan(
-                session, plan, by_blob, context, routes_on, cir, heads[plan.primary.blob_sha256], result
-            )
+            _write_plan(session, plan, by_blob, context, gate, cir, heads[plan.primary.blob_sha256], result)
         session.commit()
     result.superseded = apply_supersessions(session)
-    dispatch_derived(session, minio, routes_on, cir, result)
-    release_waiting(session, minio, routes_on, result)
+    dispatch_derived(session, minio, gate, cir, result)
+    release_waiting(session, minio, gate, result)
     session.commit()
     if enqueue is not None:
         for release in result.to_process:

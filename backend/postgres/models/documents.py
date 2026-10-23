@@ -19,6 +19,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     SmallInteger,
     Text,
     text,
@@ -94,6 +95,7 @@ class Document(Base):
         ARRAY(UUID(as_uuid=True)), server_default=text("'{}'::uuid[]")
     )
     search_text: Mapped[str | None] = mapped_column(Text)
+    minhash: Mapped[bytes | None] = mapped_column(LargeBinary)  # 128 × uint32 (indexing/near_duplicates.py)
     cir_uri: Mapped[str | None] = mapped_column(Text)
     staged_payload_uri: Mapped[str | None] = mapped_column(Text)
     parser_version: Mapped[int | None] = mapped_column(Integer)

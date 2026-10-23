@@ -34,6 +34,41 @@ def _extension(name: str) -> str | None:
     return suffix.casefold() or None
 
 
+def _shared_folders(path: str | None, anchor: str) -> int:
+    if not path:
+        return 0
+    shared = 0
+    for a, b in zip(PurePosixPath(path).parent.parts, PurePosixPath(anchor).parent.parts, strict=False):
+        if a != b:
+            break
+        shared += 1
+    return shared
+
+
+def location_near(session: Session, blob_sha256: str, anchor_path: str | None) -> Location | None:
+    """``primary_location`` for a file that belongs to a document with other files: when the same bytes sit
+    in several folders (test plans copy their sections), the copy sharing the most folders with
+    ``anchor_path``, the document's own file, wins, so all of a document's files come from one place."""
+    if anchor_path:
+        items = session.scalars(
+            select(DriveItem)
+            .where(DriveItem.blob_sha256 == blob_sha256, DriveItem.status != DriveItemStatus.DELETED)
+            .order_by(DriveItem.path_cached)
+        ).all()
+        if len(items) > 1:
+            item = max(items, key=lambda i: _shared_folders(i.path_cached, anchor_path))
+            return Location(
+                item.root_name,
+                item.parent_item_id,
+                item.name,
+                item.extension,
+                item.path_cached,
+                None,
+                item.web_url,
+            )
+    return primary_location(session, blob_sha256)
+
+
 def primary_location(session: Session, blob_sha256: str, _depth: int = 0) -> Location | None:
     item = session.scalar(
         select(DriveItem)

@@ -14,7 +14,7 @@ from minio import Minio
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.dispatcher.location import Location, primary_location
+from backend.dispatcher.location import Location, location_near
 from backend.dispatcher.routing import folder_tree, group_key
 from backend.dispatcher.runner import Outcome, RunContext, read_object, run_document, vision_for
 from backend.indexing.commit import Indexer
@@ -23,6 +23,7 @@ from backend.postgres.enums import DocumentSourceRole, DriveItemStatus, Route
 from backend.postgres.models import Blob, DocumentSource, DriveItem
 
 MAX_FOLDER_FILES = 5000
+MAX_COPIES = 200
 
 
 def subtree_base(session: Session, where: Location) -> str:
@@ -45,7 +46,10 @@ def process_a2_document(
     from backend.routes.a2_source import route as a2
 
     def build(ctx: RunContext):
-        base = subtree_base(ctx.session, ctx.where)
+        # The document stands for every copy of its files; read all of them beside the folder it was made in.
+        anchor = (ctx.document.folder_context or {}).get("path_cached") or ctx.where.path_cached
+        where = location_near(ctx.session, ctx.blob.sha256, anchor) or ctx.where
+        base = subtree_base(ctx.session, where)
         rows = ctx.session.execute(
             select(DocumentSource.blob_sha256, DocumentSource.role, Blob.minio_uri)
             .join(Blob, Blob.sha256 == DocumentSource.blob_sha256)
@@ -53,8 +57,8 @@ def process_a2_document(
         ).all()
         files = []
         for sha, role, minio_uri in rows:
-            where = primary_location(ctx.session, sha)
-            path = _relative(where.path_cached or where.name, base) if where else sha
+            copy = location_near(ctx.session, sha, anchor)
+            path = _relative(copy.path_cached or copy.name, base) if copy else sha
             files.append(
                 a2.SourceFile(
                     path=path,
@@ -63,7 +67,7 @@ def process_a2_document(
                     role=DocumentSourceRole(role),
                 )
             )
-        listing_base = base or str(PurePosixPath(ctx.where.path_cached or ctx.where.name).parent)
+        listing_base = base or str(PurePosixPath(where.path_cached or where.name).parent)
         landed = ctx.session.execute(
             select(DriveItem.path_cached, Blob.minio_uri)
             .join(Blob, Blob.sha256 == DriveItem.blob_sha256)
@@ -199,6 +203,13 @@ def process_g_document(
 
     def build(ctx: RunContext):
         base = bases["base"] = subtree_base(ctx.session, ctx.where)
+        live = ctx.session.scalars(
+            select(DriveItem)
+            .where(DriveItem.blob_sha256 == ctx.blob.sha256, DriveItem.status != DriveItemStatus.DELETED)
+            .order_by(DriveItem.path_cached)
+            .limit(MAX_COPIES)
+        ).all()
+        here = next((i for i in live if i.path_cached == ctx.where.path_cached), live[0] if live else None)
         return g.process(
             ctx.data,
             blob_sha256=ctx.blob.sha256,
@@ -208,6 +219,13 @@ def process_g_document(
             path=_relative(ctx.where.path_cached or ctx.where.name, base),
             folder_files=_subtree_listing(ctx, base),
             web_url=ctx.where.web_url,
+            created_at=here.created_at_source if here else None,
+            modified_at=here.last_modified_at if here else None,
+            copies=[
+                g.card.Copy(i.path_cached, i.last_modified_at)
+                for i in live
+                if i is not here and i.path_cached
+            ],
         )
 
     outcome = run_document(session, minio, doc_id, Route.G, g.PARSER_VERSION, build, indexer)
