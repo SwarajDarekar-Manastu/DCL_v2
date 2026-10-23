@@ -38,7 +38,7 @@ from backend.dispatcher.contract import (
 from backend.dispatcher.folder_context import FolderContext
 from backend.llm_engine.gemini_types import Image
 from backend.postgres.enums import AssetKind, DocKind, FlagSeverity, FlagType, NodeSource, NodeType, Route
-from backend.routes.a1_office.preflight import image_fields
+from backend.routes.a1_office.assets import image_fields
 
 PARSER_VERSION = 1
 SAMPLE_FPS = 2

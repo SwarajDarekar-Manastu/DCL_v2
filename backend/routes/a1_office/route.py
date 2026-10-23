@@ -34,6 +34,7 @@ from backend.dispatcher.contract import (
 from backend.dispatcher.folder_context import FolderContext
 from backend.llm_engine.gemini_types import GeminiError, Image
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType, Route
+from backend.routes.a1_office.assets import image_fields
 from backend.routes.a1_office.convert import OcrPlan, Run, RunResult, convert_run, low_ocr_pages, plan_runs
 from backend.routes.a1_office.figures import read_figures
 from backend.routes.a1_office.handwriting import transcribe_regions
@@ -41,7 +42,6 @@ from backend.routes.a1_office.metadata import extract_metadata, humanize, plan_c
 from backend.routes.a1_office.preflight import (
     Preflight,
     PreflightFailure,
-    image_fields,
     preflight,
     render_page,
 )

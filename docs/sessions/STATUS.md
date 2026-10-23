@@ -996,3 +996,9 @@ Test: `uv run pytest -q` exit 0; E: 13 tests pass.
 Blocked on: nothing.
 Needs from others: S1: the E adapter, runner and .svg/.vsdx/.dxf kinds.
 Next: Route G (archives with bomb guard, members as derived_blobs, .wbpz, .scdoc/.dwg as cad_reference, STL/STEP measured with trimesh).
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: the `answer_traces` writer and the trace routes. Each answer's trace is written with question, chat, message and user ids, and with `mode` inside model_config. GET /v1/traces/{id} and GET /v1/traces?chat_id&message_id serve the caller's own traces (404 otherwise). POST /v1/traces/{id}/feedback appends in one statement; `wrong_unit` on a cited page opens a SOFT CONFLICT flag. Live: one stack answer wrote its row. Also in this branch: `image_fields` moved to the dependency-free `a1_office/assets.py`, so Route F imports without the parse group (the Lead's importorskip guard is removed), and the translate test is ruff-formatted.
+Blocked on: nothing
+Needs from others: S6: `test_route_b.py::test_web_samples_c_matlab_notebook` fails in any checkout that has a `data/samples/web` folder without S6's files; it should skip per missing file
+Next: citation markers = citation events, then attachments
