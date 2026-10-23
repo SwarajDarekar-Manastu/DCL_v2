@@ -2,10 +2,12 @@
 
 User order, 2026-10-23 (reframed by the Lead). Rule for every stage: do not start the next one until the "done when" line is true.
 
+## Precondition (not a task)
+
+Resume the agents on the `dcl-role` agent (Sonnet 5.5, xhigh). The user says when. Nothing below starts until then.
+
 ## Tasks
 
-- [ ] **0. Steady ground.** Network steady; agents resumed on the `dcl-role` agent (Sonnet 5.5, xhigh); gateway circuit reset; every Gemini result saved as it arrives so a failed save never repays it (S2 + S1).
-  Done when: the 74 stuck and 29 failed documents re-run with no repeated model calls (cache hits shown in the ledger).
 - [ ] **1. Finish steps 4 and 5 (enrichment, embed and store) for A2, B, E, G.** Audit the shared tail first: does each route's output enrich and embed correctly? Add a route-specific enrichment prompt only where the generic one fails (LaTeX sections, code symbols, diagram components, archive and CAD references). Owner S6 with S2.
   Done when: one real file per route reaches ACTIVE with embedded nodes, in a unit test.
 - [ ] **2. Scratch run, all eight routes.** Throwaway Postgres and MinIO (`backend/devops/ci/test_services.sh up`, separate ports, no link to the real stack). Ingest 1 to 2 real files per route, A1 to G including the live ones. Owner S1 + S5.
@@ -18,12 +20,14 @@ User order, 2026-10-23 (reframed by the Lead). Rule for every stage: do not star
   Done when: each suggestion task has a measured accuracy and a chosen model.
 - [ ] **6. Delete the scratch stores.** Remove the throwaway Postgres and MinIO containers and volumes after tasks 2 to 5 pass. Owner S4.
   Done when: no scratch container or volume remains; the real stack is untouched.
-- [ ] **7. Real ingest of the test folders.** Run all E1 to E13 on the real stack. Map every flag that fires into a table: flag → preset rule → result. Create the preset rules, resolve in the review, re-check counts. Owner S1 + S3 + user (channel units).
+- [ ] **7. Result cache.** Save every Gemini result the moment it arrives, keyed by content, prompt version and model id, so a failed save or a network outage never loses paid work and a re-run reads the cache. Cache hits shown in the ledger. Owner S2 + S1.
+  Done when: killing the gateway connection in the middle of a document and re-running it makes no repeated model call.
+- [ ] **8. Real ingest of the test folders.** Run all E1 to E13 on the real stack. Map every flag that fires into a table: flag → preset rule → result. Create the preset rules, resolve in the review, re-check counts. Owner S1 + S3 + user (channel units).
   Done when: no open flag is left without a decision or a rule, and the table is in `.wiki/quality`.
-- [ ] **8. Sidebar tabs check.** Walk Review, Benchmark, Entities, Settings, Ops, Audit and the viewer against the real data; fix what is missing or wrong. Owner S3.
+- [ ] **9. Sidebar tabs check.** Walk Review, Benchmark, Entities, Settings, Ops, Audit and the viewer against the real data; fix what is missing or wrong. Owner S3.
   Done when: each tab shows real data and every control works, with a screenshot per tab.
-- [ ] **9. Answer engine on good data.** Benchmark run 2, model comparison study results, then tune. Owner S2 + S5.
+- [ ] **10. Answer engine on good data.** Benchmark run 2, model comparison study results, then tune. Owner S2 + S5.
   Done when: pass rate and failure classes are reported against the run 1 baseline.
 
 ## Still waiting on the user
-Resume the agents; gateway per-model prices; alert webhook rotation; Cloudflare domain question; Open WebUI fork question; channel units for the halted telemetry runs (task 7).
+Resume the agents (the precondition above); gateway per-model prices; alert webhook rotation; Cloudflare domain question; Open WebUI fork question; channel units for the halted telemetry runs (task 8).
