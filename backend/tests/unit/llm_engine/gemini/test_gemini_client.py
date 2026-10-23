@@ -407,6 +407,64 @@ async def test_cost_estimate_uses_model_price(records):
     assert records[0].cost_estimate == pytest.approx((100 * 1.0 + 20 * 0.25 + 30 * 4.0) / 1_000_000)
 
 
+PRICE = ModelPrice(input_per_mtok=1.0, output_per_mtok=4.0, cached_per_mtok=0.25)
+OK_COST = (100 * 1.0 + 20 * 0.25 + 30 * 4.0) / 1_000_000
+
+
+async def test_default_ledger_writes_every_call_priced_from_models_prices(monkeypatch):
+    written = []
+    stack = gc.StackLedger(read_prices=lambda: {MODEL: PRICE}, write=written.append)
+    monkeypatch.setattr(gc.StackLedger, "for_settings", classmethod(lambda cls, settings: stack))
+    client = GeminiClient(
+        make_settings(), capabilities=Capabilities.all(), transport=httpx.MockTransport(Gateway(ok()))
+    )
+    await client.generate(model=MODEL, messages=[Message.user("q")], context=CTX)
+    [record] = written
+    assert (record.purpose, record.status, record.input_tokens, record.output_tokens) == (
+        "unit_test",
+        "ok",
+        120,
+        30,
+    )
+    assert record.cost_estimate == pytest.approx(OK_COST)
+
+
+async def test_explicit_prices_win_over_the_configured_ones(monkeypatch):
+    written = []
+    stack = gc.StackLedger(read_prices=lambda: {MODEL: PRICE}, write=written.append)
+    monkeypatch.setattr(gc.StackLedger, "for_settings", classmethod(lambda cls, settings: stack))
+    client = GeminiClient(
+        make_settings(),
+        capabilities=Capabilities.all(),
+        prices={},
+        transport=httpx.MockTransport(Gateway(ok())),
+    )
+    await client.generate(model=MODEL, messages=[Message.user("q")], context=CTX)
+    assert written[0].cost_estimate is None
+
+
+def test_stack_ledger_rereads_prices_after_the_refresh_and_keeps_them_when_the_read_fails():
+    now, reads = [0.0], []
+    answers = [{MODEL: PRICE}, RuntimeError("db down"), {}]
+
+    def read():
+        reads.append(now[0])
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    ledger = gc.StackLedger(read_prices=read, write=lambda _: None, refresh_s=300, clock=lambda: now[0])
+    assert ledger.prices() == {MODEL: PRICE}
+    now[0] = 299
+    assert ledger.prices() == {MODEL: PRICE}
+    now[0] = 300
+    assert ledger.prices() == {MODEL: PRICE}
+    now[0] = 600
+    assert ledger.prices() == {}
+    assert reads == [0.0, 300, 600]
+
+
 async def test_failing_ledger_does_not_break_the_call():
     def broken(_):
         raise RuntimeError("db down")
