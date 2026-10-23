@@ -69,6 +69,7 @@ Consumes:
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S2 | `reembed_impact(session, new_model) -> ReembedImpact(text_nodes, image_nodes, documents)` in `backend/indexing/index_document.py` (`REEMBED_SQL`) for S1's "requires re-embedding N nodes" on a `models.embedding` change; 1 DB test |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S2 | `POST /tokenize/count` and `ModelsClient.count_tokens` for S1's workers |
 | 2026-10-22 | S2 | Unit tests run without torch (dtype check before import, CUDA OOM recognized by name, torch-free fakes); only `test_gpu_models.py` needs torch |

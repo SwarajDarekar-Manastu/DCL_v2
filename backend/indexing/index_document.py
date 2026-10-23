@@ -382,3 +382,32 @@ def _overall_rate(drops: list[Drops]) -> float:
     dropped = sum(d.entities + d.numeric_facts + d.claims + d.identifiers for d in drops)
     total = dropped + sum(d.kept for d in drops)
     return dropped / total if total else 0.0
+
+
+@dataclass(frozen=True)
+class ReembedImpact:
+    """What a change of `models.embedding` costs (file 08 §3.3: "requires re-embedding N nodes")."""
+
+    text_nodes: int
+    image_nodes: int
+    documents: int
+
+    @property
+    def nodes(self) -> int:
+        return self.text_nodes + self.image_nodes
+
+
+REEMBED_SQL = (
+    "SELECT count(*) FILTER (WHERE embedding IS NOT NULL) AS text_nodes, "
+    "count(*) FILTER (WHERE image_embedding IS NOT NULL) AS image_nodes, "
+    "count(DISTINCT doc_id) AS documents FROM document_nodes "
+    "WHERE (embedding IS NOT NULL OR image_embedding IS NOT NULL) "
+    "AND embedding_model IS DISTINCT FROM :model"
+)
+
+
+def reembed_impact(session: Session, new_model: str) -> ReembedImpact:
+    """Nodes whose vectors were made by another model than `new_model` (text and image vectors share the
+    model; spaces of different models are incompatible, file 01 §5). A reranker change re-embeds nothing."""
+    row = session.execute(text(REEMBED_SQL), {"model": new_model}).one()
+    return ReembedImpact(int(row.text_nodes), int(row.image_nodes), int(row.documents))
