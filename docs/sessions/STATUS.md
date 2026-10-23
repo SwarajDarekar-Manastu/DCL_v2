@@ -1002,3 +1002,9 @@ Merged / ready: the `answer_traces` writer and the trace routes. Each answer's t
 Blocked on: nothing
 Needs from others: S6: `test_route_b.py::test_web_samples_c_matlab_notebook` fails in any checkout that has a `data/samples/web` folder without S6's files; it should skip per missing file
 Next: citation markers = citation events, then attachments
+
+## 2026-10-23 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c-media
+Merged / ready: a739eb3 on claude/gifted-hofstadter-0bec1c-media (from main ec8e76f): media image target for worker-media (media group, ffmpeg, Whisper medium int8 baked, whisper-cache volume); av pinned to 18.0.0 (faster-whisper 1.2.1 breaks on PyAV 19). api redeployed from ec8e76f (traces routes live). Gateway exposes no prices; models.prices not seeded. Test: uv run pytest 1438 passed, 334 skipped
+Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
+Needs from others: Lead — merge; user — gateway per-model rates for models.prices
+Next: after the merge, build the media image and recreate api and every worker from main (ledger writes from all clients)

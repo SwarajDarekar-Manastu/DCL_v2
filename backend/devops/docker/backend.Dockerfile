@@ -1,6 +1,7 @@
 # One image for every backend process (docs/architecture/10 §2.1): target `backend` runs the API role,
 # Celery workers, beat and the one-shot jobs; target `models` adds the GPU dependency group for DCL_ROLE=models;
-# target `parse` adds the CPU `parse` group (Docling, RapidOCR) and Tesseract for the cpu_parse workers.
+# target `parse` adds the CPU `parse` group (Docling, RapidOCR) and Tesseract for the cpu_parse workers;
+# target `media` adds the `media` group, ffmpeg/ffprobe and the Whisper model for the media worker (Routes D, F).
 # Dependencies are compiled in a builder stage; runtime images carry the virtualenv only, no compiler.
 # Build context: repository root. Secrets come from the runtime environment, never from the image.
 
@@ -17,6 +18,10 @@ RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-default-grou
 FROM builder AS deps-parse
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-default-groups --group parse --no-install-project
+
+FROM builder AS deps-media
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-default-groups --group media --no-install-project
 
 FROM builder AS deps-models
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -52,6 +57,22 @@ COPY backend ./backend
 COPY config ./config
 USER app
 RUN python /opt/parse_models.py verify
+CMD ["python", "-m", "backend.main"]
+
+FROM runtime AS media
+# Route F speech model (DECISIONS 2026-10-23): pipeline_config routes.F.whisper_model, int8 on CPU.
+ARG WHISPER_MODEL=medium
+ENV HF_HOME=/home/app/.cache/huggingface HF_HUB_DISABLE_XET=1
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+COPY --from=deps-media /opt/venv /opt/venv
+RUN python -c "import sys; from faster_whisper import download_model; download_model(sys.argv[1])" "$WHISPER_MODEL" \
+    && chown -R app:app /home/app/.cache
+COPY backend ./backend
+COPY config ./config
+USER app
+RUN ffmpeg -version >/dev/null && ffprobe -version >/dev/null \
+    && HF_HUB_OFFLINE=1 python -c "import sys; from faster_whisper import WhisperModel; \
+WhisperModel(sys.argv[1], device='cpu', compute_type='int8')" "$WHISPER_MODEL"
 CMD ["python", "-m", "backend.main"]
 
 FROM runtime AS models

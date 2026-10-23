@@ -230,3 +230,23 @@ def test_open_webui_is_pinned_persistent_and_on_the_stack_network():
     assert "open-webui-data" in stack["volumes"]
     assert "networks" not in service and "networks" not in stack["services"]["api"]
     assert service["environment"]["WEBUI_URL"].startswith("${DCL_OPENWEBUI_URL:-")
+
+
+def test_media_worker_runs_the_media_image_with_a_whisper_cache_volume():
+    stack = compose("compose.yaml")
+    service = stack["services"]["worker-media"]
+    assert (service["image"], service["build"]["target"]) == ("dcl-v2-media:local", "media")
+    assert service["volumes"] == ["whisper-cache:/home/app/.cache/huggingface"]
+    assert "whisper-cache" in stack["volumes"]
+    dockerfile = (DEVOPS / "docker/backend.Dockerfile").read_text()
+    media = dockerfile.split("FROM runtime AS media", 1)[1].split("\nFROM ", 1)[0]
+    assert "ENV HF_HOME=/home/app/.cache/huggingface HF_HUB_DISABLE_XET=1" in media
+    assert "--group media" in dockerfile and "ffmpeg" in media and "ARG WHISPER_MODEL=medium" in media
+
+
+def test_media_group_keeps_pyav_below_19_for_faster_whisper():
+    import tomllib
+
+    project = tomllib.loads((DEVOPS.parents[1] / "pyproject.toml").read_text())
+    media = project["dependency-groups"]["media"]
+    assert "faster-whisper==1.2.1" in media and "av==18.0.0" in media
