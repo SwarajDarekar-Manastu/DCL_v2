@@ -1056,3 +1056,19 @@ Test: `uv run pytest -q` exit 0; E: 14 tests pass.
 Blocked on: nothing.
 Needs from others: nothing.
 Next: idle until messaged.
+
+## 2026-10-23 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready (merge requests, one per item):
+- Route tolerance (b7ab8ed): a flag whose route is not a Route (S2 once wrote "answer") opens with route null and a warning.
+- Items 8 and 9 (45caa72):
+  - `GET /sync/roots` serves Sources and the Ops page: auth, delta times, webhook or poll, counts, waiting files, errors.
+  - Device-code sign-in through `dcl.sync.sign_in` on io_light (`POST|GET /sync/sign-in`).
+  - `POST /sync/process-everything` goes through the audited settings path.
+  - `GET|POST /sync/redispatch?route=X` counts, then re-runs a route's committed documents.
+- Item 10 (1a706e2): `GET /entities`, `POST /entities/merge`, `POST /entities/split`, with audit rows.
+- Item 11 (339722b): the settings preview counts the nodes an embedding-model change re-embeds.
+Test: `uv run pytest -q --ignore=backend/tests/integration/benchmark/test_runner_db.py` with test servers: 1,993 tests, 0 failures, 88 skipped.
+Live: A1 re-run in progress. ECSS-E-ST-35-06C FAILED on the cpu_parse soft time limit (1,800 s) during formula enrichment on CPU.
+Blocked on: nothing
+Needs from others: S4: cpu_parse time limit for large standards (or S2 caps formula enrichment); redeploy, after which I switch on A2/B/E/G.
+Next: A1 counts and the M2 check when the batch drains; A2/B/E/G on the stack after S4's word
