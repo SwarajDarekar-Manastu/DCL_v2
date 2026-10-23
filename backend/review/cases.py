@@ -603,3 +603,259 @@ def assign_case(session: Session, case_key: str, assignee: str | None, actor: st
 
 def summary_of(session: Session, case: _Case) -> CaseSummary:
     return _summary(case, _context(session, [case]))
+
+
+# ---------------------------------------------------------------- simulate, dry run, undo
+
+UNDO_WINDOW = timedelta(days=30)
+SAMPLE = 20
+
+
+def _target_of(session: Session, document: Document):
+    """The rule target of a document's primary file (derived blobs use their parent's location)."""
+    from backend.dispatcher.location import primary_location
+    from backend.review.rules import RuleTarget
+
+    sha = session.scalar(
+        select(DocumentSource.blob_sha256).where(
+            DocumentSource.doc_id == document.doc_id, DocumentSource.role == DocumentSourceRole.PRIMARY
+        )
+    )
+    where = primary_location(session, sha) if sha else None
+    if where is None:
+        return None, None
+    folders: list[str] = []
+    parent = where.parent_item_id
+    from backend.postgres.models import DriveFolder
+
+    while parent and len(folders) < 64:
+        folders.append(parent)
+        parent = session.scalar(select(DriveFolder.parent_item_id).where(DriveFolder.item_id == parent))
+    return RuleTarget(where.root_name, folders, where.name, where.extension), where
+
+
+def _matching_documents(
+    session: Session, scope: RuleScope, rule_type: RuleType
+) -> list[tuple[Document, Any]]:
+    from backend.review.rules import RuleRecord, matches
+
+    record = RuleRecord(
+        rule_id=uuid.uuid4(),
+        rule_type=rule_type,
+        origin=RuleOrigin.OPERATOR,
+        scope=scope,
+        precedence=0,
+        created_at=datetime.now(UTC),
+    )
+    routes = {RuleType.CHANNEL_MAP: ["C"], RuleType.UNIT_MAPPING: ["C"], RuleType.SCHEMA_MAPPING: ["C"]}
+    stmt = select(Document).where(Document.status.not_in(["SUPERSEDED", "DELETED", "QUARANTINED"]))
+    if rule_type in routes:
+        stmt = stmt.where(Document.route.in_(routes[rule_type]))
+    found = []
+    for document in session.scalars(stmt.order_by(Document.title)):
+        target, where = _target_of(session, document)
+        if target is not None and matches(record, target):
+            found.append((document, where))
+    return found
+
+
+def simulate(session: Session, scope: RuleScope, rule_type: RuleType):
+    """What a rule would touch: HALTED documents it resumes, committed ones it re-processes."""
+    from backend.review.api_models import AffectedDocument, RuleSimulation
+
+    found = _matching_documents(session, scope, rule_type)
+    resume = [d for d, _ in found if d.status == DocumentStatus.HALTED]
+    reprocess = [
+        d for d, _ in found if d.status in (DocumentStatus.ACTIVE, DocumentStatus.ACTIVE_WITH_SOFT_FLAGS)
+    ]
+    return RuleSimulation(
+        matched_documents=len(found),
+        would_resume=len(resume),
+        would_reprocess=len(reprocess),
+        sample=[
+            AffectedDocument(
+                doc_id=d.doc_id, title=d.title or "", path=w.path_cached if w else None, status=d.status
+            )
+            for d, w in found[:SAMPLE]
+        ],
+    )
+
+
+def simulate_rule(session: Session, rule_id: uuid.UUID):
+    rule = session.get(Rule, rule_id)
+    if rule is None:
+        raise CaseNotFound(f"rule {rule_id}")
+    scope = RuleScope(
+        scope_root=rule.scope_root,
+        scope_folder_id=rule.scope_folder_id,
+        scope_filename_glob=rule.scope_filename_glob,
+        scope_extension=rule.scope_extension,
+    )
+    return simulate(session, scope, RuleType(rule.rule_type))
+
+
+def dry_run(session: Session, request) -> "Any":
+    """Apply a candidate resolution to what the route staged, commit nothing: for a telemetry ``set_unit``
+    the channel's recorded stats converted to SI and checked against S5's sanity range; for a rule, the
+    number of documents it would touch. Other actions have no numeric preview yet."""
+    from backend.dispatcher.contract import UnitTelemetryEvidence
+    from backend.postgres import pipeline_config
+    from backend.review.api_models import ChannelPreview, DryRunResponse
+    from backend.review.rules import ChannelMapEntry
+    from backend.routes.c_telemetry.normalize import (
+        PlanProblem,
+        matching_range,
+        plan_channel,
+        sanity_ranges_from,
+    )
+
+    case = _case(session, request.case_key)
+    flag = next((f for f in case.flags if f.flag_id == request.resolution.flag_id), None)
+    if flag is None:
+        raise InvalidAction(f"flag {request.resolution.flag_id} is not part of this case")
+    check_actions([request.resolution], {flag.flag_id: FlagType(flag.flag_type)})
+    resolution = request.resolution.resolution
+    channels, messages = [], []
+    if isinstance(resolution, SetUnit) and (flag.anchor or {}).get("channel"):
+        evidence = UnitTelemetryEvidence.model_validate(flag.evidence or {"channel": resolution.channel})
+        try:
+            quantity = Quantity(resolution.quantity)
+        except ValueError as exc:
+            raise InvalidAction(f"quantity {resolution.quantity!r} is not a known quantity") from exc
+        entry = ChannelMapEntry(
+            canonical_name=_slug(resolution.channel),
+            physical_quantity=quantity,
+            unit=resolution.unit,
+            gauge_or_abs=resolution.gauge_or_abs,
+            expression=resolution.expression,
+        )
+        plan = plan_channel(
+            resolution.channel, entry, resolution.ambient_condition, resolution.ambient_pressure_bar_abs
+        )
+        if isinstance(plan, PlanProblem):
+            messages.append(plan.reason)
+        else:
+            import numpy as np
+
+            stats = evidence.stats
+            raw = np.array(
+                [v if v is not None else np.nan for v in (stats.min, stats.max, stats.mean, stats.p99)]
+            )
+            low, high, mean, p99 = (None if np.isnan(v) else float(v) for v in plan.convert(raw))
+            ranges = sanity_ranges_from(
+                pipeline_config.get(session, pipeline_config.SANITY_RANGES, default=None)
+            )
+            sanity = matching_range(ranges, quantity.value, entry.canonical_name)
+            s_low = s_high = None
+            within = None
+            if sanity is not None:
+                from backend.common.units import to_canonical
+
+                s_low, s_high = (
+                    to_canonical(sanity.min, sanity.unit)[0],
+                    to_canonical(sanity.max, sanity.unit)[0],
+                )
+                within = all(v is None or s_low <= v <= s_high for v in (low, high))
+            channels.append(
+                ChannelPreview(
+                    canonical_name=entry.canonical_name,
+                    unit_si=plan.unit_si,
+                    stat_min=low,
+                    stat_max=high,
+                    stat_mean=mean,
+                    stat_p99=p99,
+                    sanity_min=s_low,
+                    sanity_max=s_high,
+                    within_sanity=within,
+                )
+            )
+            if stats.n is None:
+                messages.append("the flag carries no recorded stats; the preview converts nothing")
+    else:
+        messages.append(f"no numeric preview for {resolution.action}")
+    affected = 1
+    if request.rule is not None:
+        affected = simulate(session, request.rule.scope, request.rule.rule_type).matched_documents
+    return DryRunResponse(channels=channels, affected_documents=affected, messages=messages)
+
+
+def _restore_junked_locations(session: Session, first: ReviewFlag) -> None:
+    """Undo of "mark junk": locations the review quarantined go back to LANDED."""
+    if first.doc_id:
+        items = session.scalars(
+            select(DriveItem)
+            .join(DocumentSource, DocumentSource.blob_sha256 == DriveItem.blob_sha256)
+            .where(DocumentSource.doc_id == first.doc_id, DocumentSource.role == DocumentSourceRole.PRIMARY)
+        ).all()
+    else:
+        items = [i for i in [session.get(DriveItem, first.location_id)] if i]
+    for item in items:
+        if item.gate_reason == "REVIEW:mark_junk":
+            item.status, item.gate_reason = DriveItemStatus.LANDED, None
+
+
+@dataclass
+class UndoOutcome:
+    reopened: list[ReviewFlag]
+    rebuild_doc_id: uuid.UUID | None
+    deactivated_rule_id: uuid.UUID | None
+
+
+def undo_case(session: Session, case_key: str, actor: str, now: datetime | None = None) -> UndoOutcome:
+    """Re-open the flags of the case's last resolution (within 30 days, file 06 §6). A rule that only this
+    resolution used is deactivated; a committed document is rebuilt at once without the overlay or rule."""
+    now = now or datetime.now(UTC)
+    case = _case(session, case_key)
+    resolved = [
+        f for f in case.flags if f.status in (FlagStatus.RESOLVED, FlagStatus.REJECTED_FILE) and f.resolved_at
+    ]
+    if not resolved:
+        raise InvalidAction("nothing to undo: no resolved flag in this case")
+    last = max(f.resolved_at for f in resolved)
+    if now - last > UNDO_WINDOW:
+        raise InvalidAction("the last resolution is older than 30 days")
+    batch = [f for f in resolved if f.resolved_at == last]
+    junk_ids = {f.flag_id for f in batch if (f.resolution or {}).get("action") == "mark_junk"}
+    rule_ids = {f.resolution_rule_id for f in batch if f.resolution_rule_id}
+    for flag in batch:
+        before = {"status": flag.status, "resolution": flag.resolution}
+        flag.status, flag.resolution, flag.resolution_rule_id = FlagStatus.REOPENED, None, None
+        flag.resolved_by = flag.resolved_at = None
+        _audit(
+            session, actor, AuditEntityType.FLAG, str(flag.flag_id), "undo", before, {"status": flag.status}
+        )
+    deactivated = None
+    for rule_id in rule_ids:
+        still_used = session.scalar(
+            select(ReviewFlag.flag_id).where(ReviewFlag.resolution_rule_id == rule_id).limit(1)
+        )
+        if still_used is None:
+            deactivate_rule(session, rule_id, actor)
+            deactivated = rule_id
+    first = case.flags[0]
+    junked = [f for f in batch if f.flag_id in junk_ids]
+    if junked:
+        _restore_junked_locations(session, first)
+    document = session.get(Document, first.doc_id) if first.doc_id else None
+    rebuild = None
+    if document is not None and document.status in (
+        DocumentStatus.ACTIVE,
+        DocumentStatus.ACTIVE_WITH_SOFT_FLAGS,
+        DocumentStatus.QUARANTINED,
+    ):
+        document.status = DocumentStatus.PROCESSING
+        rebuild = document.doc_id
+    _audit(
+        session,
+        actor,
+        AuditEntityType.CASE,
+        case_key,
+        "undo",
+        None,
+        {
+            "flags": [str(f.flag_id) for f in batch],
+            "rebuild_doc_id": str(rebuild) if rebuild else None,
+        },
+    )
+    session.flush()
+    return UndoOutcome(batch, rebuild, deactivated)

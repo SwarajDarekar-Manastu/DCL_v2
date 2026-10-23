@@ -49,3 +49,9 @@ def adapter_for(route: Route | None, head: bytes, name: str) -> Adapter | None:
 
 def implemented_routes() -> frozenset[Route]:
     return frozenset(a.route for a in ADAPTERS)
+
+
+def task_for_route(route: Route) -> tuple[str, Queue] | None:
+    """The task and queue that process documents of ``route`` (all adapters of a route share them)."""
+    adapter = next((a for a in ADAPTERS if a.route == route), None)
+    return (adapter.task, adapter.queue) if adapter else None

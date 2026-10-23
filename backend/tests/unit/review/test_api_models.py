@@ -120,10 +120,15 @@ def test_every_review_route_is_published_with_its_response_model():
         assert ok["content"]["application/json"]["schema"]["$ref"].endswith(f"/{model}"), (method, path)
 
 
-def test_undo_dry_run_and_simulate_answer_501_until_built():
+def test_undo_and_simulate_answer_404_for_unknown_ids(monkeypatch):
+    def missing(*args, **kwargs):
+        raise cases.CaseNotFound("x")
+
+    monkeypatch.setattr(cases, "undo_case", missing)
+    monkeypatch.setattr(cases, "simulate_rule", missing)
     client = _app(auth.ConsoleRole.REVIEWER)
-    assert client.post("/review/cases/doc:4/undo").status_code == 501
-    assert client.post(f"/review/rules/{FLAG}/simulate").status_code == 501
+    assert client.post("/review/cases/doc:4/undo").status_code == 404
+    assert client.post(f"/review/rules/{FLAG}/simulate").status_code == 404
 
 
 def test_viewer_cannot_use_review_routes_and_reviewers_may_deactivate_rules(monkeypatch):
