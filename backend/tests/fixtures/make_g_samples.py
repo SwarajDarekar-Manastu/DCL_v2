@@ -178,6 +178,23 @@ def declared(sizes: list[int]) -> bytes:
     return bytes(raw)
 
 
+def corrupt_zip(kind: str) -> bytes:
+    raw = bytearray(zip_of([("data/channels.csv", CHANNELS.encode()), ("readme.md", README)]))
+    central = raw.find(b"PK\x01\x02")
+    if kind == "crc":
+        struct.pack_into("<I", raw, 14, 0xDEADBEEF)
+        struct.pack_into("<I", raw, central + 16, 0xDEADBEEF)
+    elif kind == "deflate":
+        name_length, extra_length = struct.unpack_from("<HH", raw, 26)
+        start = 30 + name_length + extra_length
+        for i in range(start + 8, start + 24):
+            raw[i] ^= 0xFF
+    else:
+        struct.pack_into("<H", raw, 8, 98)
+        struct.pack_into("<H", raw, central + 10, 98)
+    return bytes(raw)
+
+
 def zip_cases() -> None:
     add(
         "zip/normal_cold_flow_bundle.zip",
@@ -278,7 +295,8 @@ def zip_cases() -> None:
         declared([3 * 1024**3, 3 * 1024**3]),
         "edge",
         "two members declare 3 GiB each (6 GiB total)",
-        "PARSE_FAILURE HARD (total uncompressed above 5 GB) before any extraction",
+        "two members held (each above 1 GiB, SOFT); nothing is read, so the 5 GB limit, "
+        "which counts bytes actually read, is not reached",
     )
     add(
         "zip/edge_over_50000_entries.zip",
@@ -286,6 +304,27 @@ def zip_cases() -> None:
         "edge",
         "50,001 entries",
         "PARSE_FAILURE HARD (entries above 50,000) with the manifest so far",
+    )
+    add(
+        "zip/edge_member_crc_mismatch.zip",
+        corrupt_zip("crc"),
+        "edge",
+        "valid directory, wrong CRC-32 on the first member",
+        "PARSE_FAILURE HARD (unreadable archive) naming the member; never a crash",
+    )
+    add(
+        "zip/edge_member_corrupt_deflate.zip",
+        corrupt_zip("deflate"),
+        "edge",
+        "valid directory, damaged compressed data in the first member",
+        "PARSE_FAILURE HARD (unreadable archive); never a crash",
+    )
+    add(
+        "zip/edge_unsupported_compression.zip",
+        corrupt_zip("method"),
+        "edge",
+        "member stored with compression method 98 (PPMd), which Python cannot read",
+        "PARSE_FAILURE HARD (unreadable archive, unsupported compression); never a crash",
     )
     add(
         "zip/EDGE_UPPERCASE_EXTENSION.ZIP",
@@ -363,6 +402,13 @@ def tar_cases() -> None:
         "edge",
         "gzip stream cut off",
         "PARSE_FAILURE HARD (unreadable archive)",
+    )
+    add(
+        "tar/edge_truncated_mid_member.tar",
+        tar_of(members)[:552],
+        "edge",
+        "plain tar cut inside the data of the first member",
+        "PARSE_FAILURE HARD (unreadable archive); never a crash",
     )
     add(
         "tar/edge_empty.tar",
