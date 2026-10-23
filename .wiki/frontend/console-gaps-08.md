@@ -12,8 +12,8 @@ Status: **build** = S3 builds it now (one merge request each, in this order); **
 | # | § | Function the manual names | Console today | Status |
 |---|---|---------------------------|---------------|--------|
 | 1 | 3.2 | "Rollback to version" per **section** | per key and per section | done 2026-10-23 |
-| 2 | 3.2 Sources | roots, auth status, "start device-code sign-in", webhook status, live counts (items held, blobs waiting), "download/process everything" with Gemini cost | scope keys edit with preview counts; cost shown when S1 returns it | API: S1 sync/ops routes (`backend/api/sync.py` has none); cost needs S1's llm_calls price ledger |
-| 3 | 3.2 Routes | "re-process affected documents" button with count | `routes.<X>.enabled` edit with S1's parked-count preview | API: S1 re-dispatch route |
+| 2 | 3.2 Sources | roots, auth status, "start device-code sign-in", webhook status, live counts (items held, blobs waiting), "download/process everything" with Gemini cost | roots table, device-code sign-in, process everything with preview | done 2026-10-23 (cost shown once S1 prices it) |
+| 3 | 3.2 Routes | "re-process affected documents" button with count | re-process by route, count first | done 2026-10-23 |
 | 4 | 3.2 Models | "requires re-embedding N nodes" before an embedding-model change | generic JSON edit, no impact | API: S1/S2 impact for `models.*` |
 | 5 | 3.2 Prompts | versioned prompt texts, diff viewer, "run on sample" | Prompts screen over S2's registry | done 2026-10-23 |
 | 6 | 4.2 QueueList | saved filters | named saved filters per user (this browser) | done 2026-10-23 |

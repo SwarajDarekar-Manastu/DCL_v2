@@ -271,6 +271,35 @@ export const diffPrompts = (area: string, a: string, b: string) =>
 export const runPrompt = (area: string, version: string, body: PromptRunRequest) =>
 	request<PromptRunResult>('POST', `${promptPath(area, version)}/run`, body);
 
+// ---------------------------------------------------------------- sync (backend/api/sync.py, S1)
+
+export type RootStatus = Schemas['RootView'];
+export type SignInState = Schemas['SignInState'];
+export type RedispatchPreview = Schemas['RedispatchPreview'];
+export type RedispatchResult = Schemas['RedispatchResult'];
+
+/** GET /sync/roots (reviewer): auth, delta times, webhook or poll, counts, waiting files, recent errors per root */
+export const listRoots = () => request<RootStatus[]>('GET', '/sync/roots');
+/** POST /sync/sign-in (admin): starts the device-code sign-in; GET polls its state */
+export const startSignIn = () => request<SignInState>('POST', '/sync/sign-in');
+export const signInState = () => request<SignInState>('GET', '/sync/sign-in');
+/** POST /sync/process-everything (admin): processing.scope = [] through the versioned settings path */
+export const processEverything = () => request<ConfigApplied>('POST', '/sync/process-everything');
+export const redispatchPreview = (route: string) => request<RedispatchPreview>('GET', `/sync/redispatch${query({ route })}`);
+export const redispatchRoute = (route: string) => request<RedispatchResult>('POST', `/sync/redispatch${query({ route })}`);
+
+// ---------------------------------------------------------------- entities (backend/api/entities.py, S1)
+
+export type Entity = Schemas['EntityView'];
+export type EntityPage = Schemas['EntityPage'];
+export type EntityType = Entity['type'];
+export const searchEntities = (q: { query?: string; type?: EntityType | ''; limit?: number; offset?: number }) =>
+	request<EntityPage>('GET', `/entities${query({ query: q.query, type: q.type || undefined, limit: q.limit, offset: q.offset })}`);
+export const mergeEntities = (target_entity_id: string, source_entity_ids: string[]) =>
+	request<Entity>('POST', '/entities/merge', { target_entity_id, source_entity_ids });
+export const splitEntity = (entity_id: string, alias_keys: string[], canonical_name: string) =>
+	request<Entity>('POST', '/entities/split', { entity_id, alias_keys, canonical_name });
+
 // ---------------------------------------------------------------- settings (backend/api/settings.py, S1)
 
 /** GET /settings?prefix (admin): current value and version of every key */
