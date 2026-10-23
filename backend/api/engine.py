@@ -671,3 +671,144 @@ async def prompt_run(area: str, version: str, body: dict, user: CurrentUser) -> 
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except GeminiError as exc:
         raise HTTPException(status_code=502, detail=f"gateway: {str(exc)[:300]}") from exc
+
+
+# ---------------------------------------------------------------- on-the-fly translation (file 04 §10)
+
+
+class TranslateRequest(BaseModel):
+    doc_id: uuid.UUID
+    page_no: int | None = Field(default=None, ge=1, description="a page; or")
+    anchor: str | None = Field(default=None, description="a passage: <kind>:<value>:<content_sha256>")
+    target_language: str = Field(default="en", pattern=r"^[a-z]{2}$")
+
+
+class TranslatedPassage(BaseModel):
+    original: str
+    translated: str
+    cached: bool
+
+
+class TranslateResponse(BaseModel):
+    doc_id: uuid.UUID
+    page_no: int | None
+    source_language: str | None
+    target_language: str
+    passages: list[TranslatedPassage]
+    translated_text: str
+    note: str = "Translation of the original; citations point to the original text."
+
+
+def translation_cache() -> Any:
+    from backend.storage.minio import CIR, BucketStore, client_from_settings
+
+    try:
+        return BucketStore(client_from_settings(get_settings()), CIR)
+    except ConfigError as exc:
+        raise HTTPException(status_code=503, detail=f"translation cache unavailable: {exc}") from exc
+
+
+def translation_client() -> Any:
+    from backend.llm_engine.gemini_client import GeminiClient
+
+    return _ENGINE.get("gemini") or GeminiClient(get_settings())
+
+
+TRANSLATABLE = ("child", "parent", "table", "table_row", "slide", "figure", "transcript_window")
+
+
+def _passages(session, request: TranslateRequest) -> tuple[int | None, list[tuple[str, str | None]]]:
+    """(page, [(content, language)]) of the page, or of the passage the anchor resolves to."""
+    from sqlalchemy import ARRAY, bindparam
+    from sqlalchemy import text as sql
+    from sqlalchemy.dialects.postgresql import UUID as PGUUID
+
+    from backend.dispatcher.contract import Anchor
+    from backend.indexing.anchors import resolve_anchor
+
+    page_no = request.page_no
+    if request.anchor:
+        resolution = resolve_anchor(session, Anchor.parse(request.doc_id, request.anchor))
+        if resolution.status == "exact" and resolution.matches:
+            rows = session.execute(
+                sql(
+                    "SELECT content, language FROM document_nodes WHERE node_id = ANY(:ids) ORDER BY ordinal"
+                ).bindparams(bindparam("ids", type_=ARRAY(PGUUID(as_uuid=True)))),
+                {"ids": [m.node_id for m in resolution.matches]},
+            ).all()
+            return resolution.page_no, [(r.content, r.language) for r in rows]
+        page_no = resolution.page_no
+    if page_no is None:
+        raise HTTPException(status_code=422, detail="give a page_no or an anchor")
+    rows = session.execute(
+        sql(
+            "SELECT n.content, n.language FROM document_nodes n WHERE n.doc_id = :doc AND n.page_no = :page "
+            "AND n.node_type = ANY(:types) "
+            "AND NOT EXISTS (SELECT 1 FROM document_nodes c WHERE c.parent_node_id = n.node_id) "
+            "ORDER BY n.ordinal"
+        ),
+        {"doc": request.doc_id, "page": page_no, "types": list(TRANSLATABLE)},
+    ).all()
+    return page_no, [(r.content, r.language) for r in rows]
+
+
+def _cloud_allowed(session, doc_id: uuid.UUID) -> bool:
+    from sqlalchemy import text as sql
+
+    return bool(
+        session.execute(
+            sql(
+                "SELECT bool_or(r.cloud_allowed) FROM document_sources ds "
+                "JOIN drive_items di ON di.blob_sha256 = ds.blob_sha256 AND di.deleted_at IS NULL "
+                "JOIN sync_roots r ON r.root_name = di.root_name "
+                "WHERE ds.doc_id = :doc AND ds.role = 'primary'"
+            ),
+            {"doc": doc_id},
+        ).scalar()
+    )
+
+
+@router.post("/translate")
+def translate(
+    request: TranslateRequest,
+    user: CurrentUser,
+    session: Annotated[Any, Depends(db_session)],
+    cache: Annotated[Any, Depends(translation_cache)],
+    client: Annotated[Any, Depends(translation_client)],
+) -> TranslateResponse:
+    """The viewer's Translate toggle without `content_en`: per page or passage, cached by content hash."""
+    from sqlalchemy import text as sql
+
+    from backend.llm_engine.enrichment.translate import TranslationRefused, translate_passages
+    from backend.llm_engine.gemini_types import GeminiError
+
+    language = session.execute(
+        sql("SELECT language FROM documents WHERE doc_id = :doc"), {"doc": request.doc_id}
+    ).scalar()
+    page_no, found = _passages(session, request)
+    if not found:
+        raise HTTPException(status_code=404, detail="nothing to translate at that location")
+    source = next((lang for _, lang in found if lang), None) or language
+    try:
+        done = translate_passages(
+            client,
+            cache,
+            [content for content, _ in found],
+            source_language=source,
+            target_language=request.target_language,
+            cloud_allowed=_cloud_allowed(session, request.doc_id),
+            doc_id=str(request.doc_id),
+        )
+    except TranslationRefused as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except (GeminiError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"translation failed: {str(exc)[:300]}") from exc
+    passages = [TranslatedPassage(original=t.source, translated=t.text, cached=t.cached) for t in done]
+    return TranslateResponse(
+        doc_id=request.doc_id,
+        page_no=page_no,
+        source_language=source,
+        target_language=request.target_language,
+        passages=passages,
+        translated_text="\n\n".join(p.translated for p in passages),
+    )
