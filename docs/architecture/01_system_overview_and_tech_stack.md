@@ -212,7 +212,7 @@ The shared `.env` lives at the **repository root** (the compose files under `bac
 | Alerts | `DCL_ALERT_WEBHOOK_URL` (Teams, operational alerts only: auth failure, 410 resync, queue stall, budget cap) | ops |
 | Local stack | `DCL_DB_USER`, `DCL_DB_PASSWORD`, `DCL_DB_PORT`, `DCL_DATABASE_URL`, `DCL_BIND_HOST`, Portainer variables | compose |
 | Gemini model ids | `GEMINI_MODEL` (default `gemini-3.8-flash`), `GEMINI_LITE_MODEL` (default `gemini-3.1-flash-lite`); every call site reads them from config, never a literal | gateway client, VisionService, engine |
-| Open WebUI | `DCL_OPENWEBUI_PORT` (compose-only, default 8300 on `DCL_BIND_HOST`); the Pipe reaches the api at `http://api:8200` inside the stack | compose |
+| Open WebUI | `DCL_OPENWEBUI_PORT` (compose-only, default 8300 on `DCL_BIND_HOST`), `DCL_OPENWEBUI_URL` (compose-only, the address users browse, used by Open WebUI for generated links); the Pipe reaches the api at `http://api:8200` inside the stack | compose |
 | Network exposure | `DCL_DATA_BIND_HOST` (default 127.0.0.1; Postgres, Redis and the MinIO S3 port), `DCL_REDIS_PASSWORD` (requirepass; compose carries it in every in-stack `DCL_REDIS_URL`; the host-side URL must carry it too) | compose, loader |
 | Console build | `DCL_CONSOLE_SPA_CLIENT_ID` (→ `VITE_ENTRA_CLIENT_ID`), `DCL_CONSOLE_API_SCOPE` (→ `VITE_ENTRA_API_SCOPE`); empty until the Entra app exists; container on 8601 | compose build args |
 | Local auth (this cycle; Entra ID is future scope) | `DCL_AUTH_SECRET` (≥ 32 chars, signs session JWTs), `DCL_AUTH_TOKEN_TTL_HOURS` (default 12), `DCL_BOOTSTRAP_ADMIN_EMAIL`, `DCL_BOOTSTRAP_ADMIN_PASSWORD` (used only while `users` is empty) | api `auth.py`, Console login |
