@@ -1050,3 +1050,9 @@ Test: `uv run pytest -q --ignore=backend/tests/integration/benchmark/test_runner
 Blocked on: nothing
 Needs from others: S4: redeploy cpu_parse and media after the merge; then the routes can be switched on (A2, B, E, G now; D, F once the media image is live). S5: `.c` out of the gate's junk list.
 Next: the A1 counts and the M2 live check when the batch ends; Console API items 8–11
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: SVG render in Route E. The SVG is rasterized with resvg-py at the draw.io size rule and read_schematic runs on it.
+Test: `uv run pytest -q` exit 0; E: 14 tests pass.
+Blocked on: nothing.
+Needs from others: nothing.
+Next: idle until messaged.
