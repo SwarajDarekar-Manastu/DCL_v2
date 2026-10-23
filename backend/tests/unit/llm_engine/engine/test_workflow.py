@@ -599,3 +599,21 @@ def test_a_halted_run_is_named_in_the_answer(searches, monkeypatch):
     assert done["answer_markdown"].endswith(f"> Note: {warning}")
     assert warning in done["caveats"]
     assert "".join(e["text"] for e in of(events, "token")) == done["answer_markdown"]
+
+
+def test_every_marker_in_the_answer_has_a_citation_event_and_vice_versa(searches):
+    searches(report_hit)
+    two = {
+        "answer_markdown": "Pc reached 12.4 bar [E1]. Unsupported remark [E9].",
+        "claims": [{"text": "Pc reached 12.4 bar", "kind": "numeric", "evidence_ids": ["E1"]}],
+    }
+    client = Client(
+        query_analysis=[FACT],
+        synthesis=[two],
+        verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]}],
+    )
+    events, done, _ = run(client, "What chamber pressure did TP7 run 4 reach?")
+    text = "".join(e["text"] for e in of(events, "token"))
+    markers = {n.strip() for group in re.findall(r"\[([\d, ]+)\]", text) for n in group.split(",")}
+    assert markers == {c["citation_id"] for c in of(events, "citation")} == {"1"}
+    assert "E9" not in text and "E1" not in text

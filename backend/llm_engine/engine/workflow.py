@@ -459,10 +459,14 @@ class AnswerWorkflow(Workflow):
 
     def _extractive(self, ctx, request, analysis, results, ev, error: str) -> StopEvent:
         items = synthesis.evidence_items(results)[:EXTRACTIVE_PASSAGES]
-        blocks = [f"**{i.source.label if i.source else i.tool}**\n\n> {i.text[:1200]}" for i in items]
-        text = (
+        blocks = [
+            f"**{i.source.label if i.source else i.tool}** [{i.id}]\n\n> {i.text[:1200]}" for i in items
+        ]
+        text, cited = synthesis.number_citations(
             "The answer model is unavailable, so here are the most relevant passages as found:\n\n"
-            + "\n\n".join(blocks)
+            + "\n\n".join(blocks),
+            [],
+            items,
         )
         return self._finish(
             ctx,
@@ -474,7 +478,7 @@ class AnswerWorkflow(Workflow):
             None,
             ev.started,
             caveats=[*ev.caveats, f"synthesis unavailable: {error[:200]}"],
-            citations=[i.source for i in items if i.source],
+            citations=cited,
             request=request,
         )
 

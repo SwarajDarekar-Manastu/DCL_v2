@@ -1,10 +1,11 @@
 import asyncio
+import re
 import uuid
 
 import pytest
 
 from backend.llm_engine.engine.analysis import Intent, QueryAnalysis, analyze, resolve
-from backend.llm_engine.engine.synthesis import answer, evidence_items
+from backend.llm_engine.engine.synthesis import Claim, answer, evidence_items
 from backend.llm_engine.engine.tools import Provenance, Source, ToolResult
 from backend.llm_engine.enrichment.entities import AliasIndex
 from backend.llm_engine.gemini_types import GenerateResult, Usage
@@ -208,3 +209,16 @@ def test_claims_citing_nothing_real_produce_no_citations(ids):
     )
     out = asyncio.run(answer(client, "q", {}, [SEARCH]))
     assert out.citations == []
+
+
+def test_markers_are_renumbered_to_the_citation_events_one_to_one():
+    from backend.llm_engine.engine.synthesis import number_citations
+
+    items = evidence_items([SEARCH, TELEMETRY])  # E1 report p.8, E2 Moog p.2, E3 run TP07_T04
+    markdown = "Steady 12.4 bar(a) [E3]. The table lists 12.5 bar [E1, E3]. Rated 300 bar [E2]. Note [E7]."
+    claims = [Claim(text="x", kind="factual", evidence_ids=["E2"])]
+    text, sources = number_citations(markdown, claims, items)
+    assert text == "Steady 12.4 bar(a) [1]. The table lists 12.5 bar [2, 1]. Rated 300 bar [3]. Note."
+    assert [s.label for s in sources] == ["run TP07_T04", "Test Report 07, p. 8", "Moog datasheet, p. 2"]
+    markers = {int(n) for group in re.findall(r"\[([\d, ]+)\]", text) for n in group.split(",")}
+    assert markers == set(range(1, len(sources) + 1))  # every marker has an event and every event a marker

@@ -97,6 +97,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-23 | S2 | Citation markers: `synthesis.number_citations` turns `[E3]`/`[E1, E4]` into `[1]`/`[1, 2]` numbered by first appearance, one number per source, markers without a source dropped, so markers and citation events match one to one (also on the extractive path); 2 tests |
 | 2026-10-23 | S2 | `answer_traces` writer and the trace routes (Show trace, Report issue with the wrong-unit CONFLICT); live: one stack answer wrote its row; 1 DB test |
 | 2026-10-23 | S2 | Prompt registry API (list, show, diff, run on sample) over the prompt files; 4 tests |
 | 2026-10-23 | S2 | Targeted repair (DECISIONS 2026-10-23): only the rejected claims go back with their evidence items (`repair.v1`, thinking MEDIUM), the corrected sentence replaces the old in place, only changed claims are re-verified; TP23 question on the stack 110.6 s → 45.6 s (repair call 75.4 s → 16.8 s); warm query embedding 0.02–0.03 s on the GPU |
