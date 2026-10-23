@@ -42,6 +42,10 @@ MAX_SUMMARY_EDGES = 80
 SEPARATOR = " › "
 
 
+class DiagramError(ValueError):
+    """The file is not a readable diagram (invalid XML, broken package): PARSE_FAILURE HARD."""
+
+
 @dataclass
 class Page:
     number: int

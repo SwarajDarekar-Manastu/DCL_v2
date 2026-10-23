@@ -103,11 +103,6 @@ def test_tp12_report_assembles_with_page_map(memory, folder):
 
 
 @pytest.mark.skipif(not E4.exists(), reason="data/samples/E4 not exported locally")
-@pytest.mark.xfail(
-    strict=False,
-    reason="S2 twin.page_map counts number-stripped headings (Valve, Test) in its contents-page check, "
-    "so body pages are skipped; reported to the Lead 2026-10-23",
-)
 def test_tp12_sections_land_on_their_twin_pages(memory, folder):
     pytest.importorskip("pypdfium2")
     refs, plans = _plans(E4)

@@ -73,6 +73,7 @@ Waiting on others:
 | 2026-10-23 | S6 | Twin through S2's `process_twin` (Lead ruling); own page map removed |
 | 2026-10-23 | S6 | Route built: LaTeX (assembly, macros, walker, tables, figures, bibliography, twin page map) and JSON; tests on synthetic projects and E3/E4 |
 | 2026-10-23 | S6 | Samples smoke test `backend/tests/unit/routes/test_samples_smoke.py` (every accepted file in data/samples, vision off) |
+| 2026-10-23 | S6 | Import-light: the `route` module and `can_handle` need only the standard library and Pillow (the dispatcher's io_light image); parse libraries load inside the process functions. Guarded by `backend/tests/unit/routes/test_routes_import_light.py` |
 
 ## Related
 

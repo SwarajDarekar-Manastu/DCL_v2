@@ -47,10 +47,9 @@ from backend.postgres.enums import (
     NodeType,
     Route,
 )
-from backend.routes.e_diagrams import formats
-from backend.routes.e_diagrams.drawio import DiagramError, parse_drawio
 from backend.routes.e_diagrams.graph import (
     SEPARATOR,
+    DiagramError,
     Graph,
     duplicate_tags,
     graph_flags,
@@ -115,6 +114,8 @@ def _failure(blob_sha256: str, file_name: str, error: str, data: bytes) -> Proce
 
 
 def _xsd_nodes(data: bytes, title: str) -> tuple[list[ProcessedNode], list[Mention]]:
+    from backend.routes.e_diagrams import formats
+
     nodes, mentions = [], []
     for section in formats.parse_xsd(data):
         lines = [
@@ -177,6 +178,9 @@ def process_diagram(
     cloud_allowed: bool = False,
     doc_id: str | None = None,
 ) -> ProcessedDocument:
+    from backend.routes.e_diagrams import formats  # parse libraries: imported only when a file is processed
+    from backend.routes.e_diagrams.drawio import parse_drawio
+
     kind = diagram_format(data[:4096], file_name)
     title = PurePosixPath(file_name).stem
     cir_uri = f"s3://dcl-cir/{blob_sha256}/{Route.E}/v{PARSER_VERSION}/"

@@ -1103,3 +1103,10 @@ Merged / ready: c524367 on claude/gifted-hofstadter-0bec1c-cpuconc (from main 4b
 Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
 Needs from others: Lead — merge; S1 — drain signal for cpu_parse; S2 — Route D import fix on main before the media recreate
 Next: recreate cpu_parse from main at S1's signal (or by about 09:55Z, the two-hour cap); recreate worker-media once S2's D fix is on main
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: import-light route modules. The dispatcher's io_light image can import `can_handle` with only the standard library and Pillow. A blocked-modules test guards it.
+- Smoke routes without samples now skip.
+- The TP12 twin xfail is removed; S2's fix makes it pass.
+Test: `uv run pytest -q` exit 0.
+Blocked on: nothing.
+Next: idle until messaged.
