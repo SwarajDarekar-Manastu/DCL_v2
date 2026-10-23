@@ -256,6 +256,10 @@ class TraceView(BaseModel):
     answer_markdown: str
     latency_ms: int | None
     created_at: str
+    gemini: dict = Field(
+        default_factory=dict,
+        description="llm_calls of this answer: calls (purpose, model, latency_ms, tokens), total_ms, share",
+    )
 
 
 class FeedbackKind(StrEnum):
@@ -593,7 +597,30 @@ async def confirm(trace_id: uuid.UUID, reply: ConfirmationReply, identity: Ident
     raise HTTPException(status_code=501, detail="confirmations arrive with the workflow (M8)")
 
 
-def _trace_view(row) -> TraceView:
+GEMINI_CALLS_SQL = (
+    "SELECT purpose, model, latency_ms, input_tokens, output_tokens, cost_estimate, status FROM llm_calls "
+    "WHERE trace_id = :trace ORDER BY at"
+)
+
+
+def gemini_split(session, trace_id: uuid.UUID, answer_ms: int | None) -> dict:
+    """The answer's Gemini calls from `llm_calls` and their share of the answer time (drilldown)."""
+    from sqlalchemy import text as sql
+
+    calls = [dict(r._mapping) for r in session.execute(sql(GEMINI_CALLS_SQL), {"trace": str(trace_id)})]
+    total = sum(c["latency_ms"] or 0 for c in calls)
+    costs = [c["cost_estimate"] for c in calls if c["cost_estimate"] is not None]
+    return {
+        "calls": calls,
+        "total_ms": total,
+        "share": round(total / answer_ms, 3) if answer_ms else None,
+        "tokens_in": sum(c["input_tokens"] or 0 for c in calls),
+        "tokens_out": sum(c["output_tokens"] or 0 for c in calls),
+        "cost_estimate": round(sum(costs), 6) if costs else None,
+    }
+
+
+def _trace_view(row, session=None) -> TraceView:
     return TraceView(
         trace_id=row.trace_id,
         chat_id=row.chat_id,
@@ -609,6 +636,7 @@ def _trace_view(row) -> TraceView:
         answer_markdown=row.answer_markdown or "",
         latency_ms=row.latency_ms,
         created_at=row.created_at.isoformat(),
+        gemini=gemini_split(session, row.trace_id, row.latency_ms) if session is not None else {},
     )
 
 
@@ -632,7 +660,7 @@ def _own_trace(session, identity: PipeIdentity, trace_id: uuid.UUID | None = Non
 
 @router.get("/traces/{trace_id}")
 def trace(trace_id: uuid.UUID, identity: Identity, session: Annotated[Any, Depends(db_session)]) -> TraceView:
-    return _trace_view(_own_trace(session, identity, trace_id))
+    return _trace_view(_own_trace(session, identity, trace_id), session)
 
 
 @router.get("/traces")
@@ -644,7 +672,7 @@ def trace_for_message(
 ) -> TraceView:
     """The trace of one Open WebUI message; the Show-trace Action knows chat and message ids, not the
     trace id. 404 when the message has no trace."""
-    return _trace_view(_own_trace(session, identity, chat_id=chat_id, message_id=message_id))
+    return _trace_view(_own_trace(session, identity, chat_id=chat_id, message_id=message_id), session)
 
 
 def _unit_conflict(trace_row, report: FeedbackRequest, identity: PipeIdentity) -> Any:

@@ -11,7 +11,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
 from backend import config
@@ -97,7 +97,21 @@ def test_the_writer_routes_and_feedback(db, client):
         assert row.model_config_ == {"gemini_model": "gemini-test", "mode": "answered"}
         assert s.scalar(select(AnswerTrace).where(AnswerTrace.chat_id == "c1").limit(1)) is not None
 
+    with Session(db) as s:
+        for purpose, ms in (("engine.query_analysis", 1000), ("engine.synthesis", 3000)):
+            s.execute(
+                text(
+                    "INSERT INTO llm_calls (model, purpose, prompt_version, trace_id, input_tokens, "
+                    "output_tokens, latency_ms, status) "
+                    "VALUES ('gemini-test', :p, 'x.v1', :t, 100, 20, :ms, 'ok')"
+                ),
+                {"p": purpose, "t": mine["trace_id"], "ms": ms},
+            )
+        s.commit()
     shown = client.get(f"/v1/traces/{mine['trace_id']}", headers=signed_headers(b"")).json()
+    gemini = shown["gemini"]
+    assert (gemini["total_ms"], gemini["share"], gemini["tokens_in"]) == (4000, round(4000 / 4200, 3), 200)
+    assert [c["purpose"] for c in gemini["calls"]] == ["engine.query_analysis", "engine.synthesis"]
     assert shown["question"] == mine["question"] and shown["tool_calls"][0]["tool"] == "query_telemetry"
     by_message = client.get("/v1/traces?chat_id=c1&message_id=m1", headers=signed_headers(b"")).json()
     assert by_message["trace_id"] == mine["trace_id"]
