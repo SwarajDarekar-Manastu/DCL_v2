@@ -3,7 +3,9 @@
 Reviewer role. ``GET /review/cases`` lists open cases by default (``status`` selects another), sorted by
 impact (halted files in the same folder), age or severity, with an offset cursor. Resolving a telemetry
 ``set_unit`` writes an operator ``channel_map`` rule (the request's, else one scoped to this file) and
-starts ``dcl.process.resume_for_rule``. Dry run and undo answer 501 until they are built.
+starts ``dcl.process.resume_for_rule``. Undo re-opens the last resolution (30 days) and rebuilds a
+committed document; dry run previews a unit decision against the sanity ranges; simulate counts what a
+rule touches.
 """
 
 import logging
@@ -121,14 +123,53 @@ def reject_case(user: Reviewer, session: Db, case_key: str, body: RejectRequest)
     return cases.summary_of(session, case)
 
 
+def start_rebuild(doc_id: uuid.UUID, route: str | None) -> bool:
+    """Best effort: the document is PROCESSING; a missed start is picked up by a re-dispatch."""
+    from backend.dispatcher.adapters import task_for_route
+    from backend.postgres.enums import Route
+
+    found = task_for_route(Route(route)) if route else None
+    if found is None:
+        return False
+    try:
+        from backend.celery_redis.app import app
+
+        app.send_task(found[0], args=[str(doc_id)], queue=str(found[1]))
+        return True
+    except Exception:
+        log.warning("could not start the rebuild of %s", doc_id, exc_info=True)
+        return False
+
+
 @router.post("/cases/{case_key}/undo")
-def undo_case(user: Reviewer, case_key: str) -> UndoResponse:
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "undo is not built yet")
+def undo_case(user: Reviewer, session: Db, case_key: str) -> UndoResponse:
+    try:
+        outcome = cases.undo_case(session, case_key, _actor(user))
+    except cases.CaseNotFound as exc:
+        raise _not_found(exc) from exc
+    except cases.InvalidAction as exc:
+        session.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    session.commit()
+    if outcome.rebuild_doc_id is not None:
+        from backend.postgres.models import Document
+
+        start_rebuild(outcome.rebuild_doc_id, session.get(Document, outcome.rebuild_doc_id).route)
+    return UndoResponse(
+        case_key=case_key,
+        reopened_flag_ids=[f.flag_id for f in outcome.reopened],
+        rebuild_doc_id=outcome.rebuild_doc_id,
+    )
 
 
 @router.post("/dry-run")
-def dry_run(user: Reviewer, body: DryRunRequest) -> DryRunResponse:
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "dry run is not built yet")
+def dry_run(user: Reviewer, session: Db, body: DryRunRequest) -> DryRunResponse:
+    try:
+        return cases.dry_run(session, body)
+    except cases.CaseNotFound as exc:
+        raise _not_found(exc) from exc
+    except (cases.InvalidAction, ValueError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.get("/rules")
@@ -150,8 +191,11 @@ def create_rule(user: Reviewer, session: Db, body: RuleDraft) -> RuleView:
 
 
 @router.post("/rules/{rule_id}/simulate")
-def simulate_rule(user: Reviewer, rule_id: uuid.UUID) -> RuleSimulation:
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "simulate is not built yet")
+def simulate_rule(user: Reviewer, session: Db, rule_id: uuid.UUID) -> RuleSimulation:
+    try:
+        return cases.simulate_rule(session, rule_id)
+    except cases.CaseNotFound as exc:
+        raise _not_found(exc) from exc
 
 
 @router.post("/rules/{rule_id}/deactivate")

@@ -217,3 +217,85 @@ def test_assign_then_reject_as_junk(session, seeded):
     assert [c.title for c in cases.list_cases(session, CaseFilters(status="REJECTED_FILE")).items] == [
         "T02.dat"
     ]
+
+
+def test_simulate_counts_the_halted_files_a_folder_rule_resumes(session, seeded):
+    from backend.review.rules import RuleScope
+
+    result = cases.simulate(session, RuleScope(scope_folder_id="F-E3"), "channel_map")
+    assert (result.matched_documents, result.would_resume, result.would_reprocess) == (2, 2, 0)
+    assert sorted(d.title for d in result.sample) == ["T01.dat", "T02.dat"]
+    assert cases.simulate(session, RuleScope(scope_folder_id="F-E9"), "channel_map").matched_documents == 1
+
+
+def test_dry_run_converts_the_recorded_stats_without_writing(session, seeded):
+    from backend.review.api_models import DryRunRequest
+
+    key = f"{seeded['dat'].doc_id}:"
+    flag = next(
+        f
+        for f in session.scalars(select(ReviewFlag).where(ReviewFlag.case_key == key))
+        if f.anchor["channel"] == "y0"
+    )
+    flag.evidence = {
+        **flag.evidence,
+        "stats": {"n": 100, "min": 0.0, "max": 145.0377, "mean": 72.51885, "p99": 140.0},
+    }
+    session.commit()
+    request = DryRunRequest(
+        case_key=key,
+        resolution=FlagResolution(
+            flag_id=flag.flag_id,
+            resolution=SetUnitModel(channel="y0", unit="psi", quantity="pressure", gauge_or_abs="gauge"),
+        ),
+    )
+    response = cases.dry_run(session, request)
+    (channel,) = response.channels
+    assert (
+        channel.canonical_name,
+        channel.unit_si,
+        round(channel.stat_max, 3),
+        round(channel.stat_mean, 3),
+    ) == ("y0", "bar", 10.0, 5.0)
+    assert (response.affected_documents, response.messages) == (1, [])
+    assert session.get(ReviewFlag, flag.flag_id).status == "OPEN"
+
+
+def test_undo_reopens_the_last_resolution_and_retires_its_file_rule(session, seeded):
+    key = f"{seeded['dat'].doc_id}:"
+    flags = {
+        f.anchor["channel"]: f for f in session.scalars(select(ReviewFlag).where(ReviewFlag.case_key == key))
+    }
+    request = ResolveRequest(
+        resolutions=[
+            FlagResolution(
+                flag_id=flags[c].flag_id,
+                resolution=SetUnitModel(channel=c, unit="bar", quantity="pressure", gauge_or_abs="gauge"),
+            )
+            for c in ("y0", "y1")
+        ]
+    )
+    outcome = cases.resolve_case(session, key, request, "asha@x", is_admin=False)
+    session.commit()
+    undone = cases.undo_case(session, key, "asha@x")
+    session.commit()
+    assert {f.status for f in undone.reopened} == {"REOPENED"} and len(undone.reopened) == 2
+    assert (undone.deactivated_rule_id, undone.rebuild_doc_id) == (
+        outcome.resume_rule_id,
+        None,
+    )  # still HALTED
+    assert session.get(Rule, outcome.resume_rule_id).active is False
+    with pytest.raises(cases.InvalidAction, match="nothing to undo"):
+        cases.undo_case(session, key, "asha@x")
+
+
+def test_undo_of_mark_junk_restores_the_file_and_rebuilds(session, seeded):
+    key = f"{seeded['other'].doc_id}:"
+    cases.reject_case(session, key, RejectRequest(action="mark_junk"), "lead@x")
+    session.commit()
+    undone = cases.undo_case(session, key, "lead@x")
+    session.commit()
+    item = session.scalars(select(DriveItem).where(DriveItem.name == "T02.dat")).one()
+    assert (item.status, item.gate_reason) == ("LANDED", None)
+    assert undone.rebuild_doc_id == seeded["other"].doc_id
+    assert session.get(Document, seeded["other"].doc_id).status == "PROCESSING"

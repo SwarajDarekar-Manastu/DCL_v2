@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/06_review_flags_and_halt_policy.md; 05 §4.5 |
-| Last updated | 2026-10-22 |
+| Last updated | 2026-10-23 |
 
 ## Purpose
 
@@ -16,7 +16,7 @@ Flag models with deterministic fingerprints and case keys, staged payloads for h
 
 Code:
 - `backend/review/api_models.py` (published: queue, case detail, resolutions, rules, dry-run models)
-- `backend/api/review.py` (routes of file 08 §4.4, reviewer role; cases, detail, assign, resolve, reject, rules list/create/deactivate are live; dry-run, undo and simulate answer 501)
+- `backend/api/review.py` (routes of file 08 §4.4, reviewer role; every route of file 08 §4.4 live, including dry-run (set_unit stats converted to SI against the sanity range), undo (last resolution within 30 days; file rules retired; committed documents rebuilt; junked locations restored) and simulate)
 - `backend/review/cases.py` (case grouping and derived status, queue filters and impact/age/severity sort, detail with locations and siblings, `resolve_case` (operator rule: the request's or a file-scoped channel_map from `set_unit`), `reject_case` (QUARANTINED, mark_junk quarantines locations), `assign_case`, `create_rule`/`deactivate_rule`, audit rows)
 - `backend/review/flags.py` (`upsert_location_flag`, `upsert_document_flag`: by fingerprint, status and resolution kept)
 - `backend/review/models.py` (planned)
@@ -60,7 +60,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 - [ ] Re-indexing a document does not duplicate or reopen its flags
 - [ ] A folder-wide unit rule resumes every halted sibling
-- [ ] Undo re-opens the flag and removes the overlay on rebuild
+- [x] Undo re-opens the flag and removes the overlay on rebuild (`test_cases.py`: rule retired, junk restored, rebuild started)
 - [x] Every human action writes audit_events (assign, resolve, reject, rule create/deactivate; `test_cases.py`)
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
 
@@ -75,6 +75,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | Validation gate and staged payload (`staged.py`); `resolve_where` |
 | 2026-10-22 | S1 | `ExportedRule.status` (operator / proposed, default proposed), `load_rules_dir` (top level only, operator rules only); `ChannelMapEntry.open_threshold`; quantities typed |
 | 2026-10-22 | S1 | Review API live: queue, detail, resolve with operator rules and resume_for_rule, reject, assign, rules; 13 DB tests |
+| 2026-10-23 | S1 | Review dry run, undo and simulate (no 501 left); `task_for_route()` in the adapter table for rebuilds |
 
 ## Related
 

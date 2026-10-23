@@ -133,3 +133,52 @@ def test_a_png_that_holds_jpeg_bytes_is_jpeg_with_a_mismatch():
 def test_spaceclaim_documents_are_zip_containers_without_a_mismatch():
     resolved = resolve_type(b"PK\x03\x04" + b"\x00" * 30, "Geometry - O-ring Seal Analysis.scdoc", ["a.xml"])
     assert (resolved.kind, resolved.route, resolved.ext_mismatch) == ("scdoc", Route.G, False)
+
+
+@pytest.mark.parametrize(
+    ("head", "name", "zip_names", "kind", "route", "by"),
+    [
+        (
+            b"0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1015\n0\nENDSEC\n",
+            "plate.dxf",
+            None,
+            "dxf",
+            "E",
+            "extension",
+        ),
+        (b"AutoCAD Binary DXF\r\n\x1a\x00", "plate.dxf", None, "dxf", "E", "magic"),
+        (
+            b'<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+            "fig.svg",
+            None,
+            "svg",
+            "E",
+            "magic",
+        ),
+        (b"PK\x03\x04", "flow.vsdx", ["[Content_Types].xml", "visio/document.xml"], "vsdx", "E", "magic"),
+        (b"solid part\n facet normal 0 0 1\n outer loop\n", "nozzle.stl", None, "stl", "G", "extension"),
+        (b"\x00" * 80 + b"\x02\x00\x00\x00", "nozzle.stl", None, "stl", "G", "extension"),
+        (
+            b"ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('x'),'2;1');\n",
+            "bracket.step",
+            None,
+            "step",
+            "G",
+            "extension",
+        ),
+        (b"ISO-10303-21;\nHEADER;\n", "bracket.stp", None, "step", "G", "extension"),
+        (b"AC1032\x00\x00\x00\x00", "assy.dwg", None, "dwg", "G", "magic"),
+        (b"function y = f(x)\n% thrust\ny = x * 2;\nend\n", "calc.m", None, "matlab", "B", "extension"),
+        (
+            b"#include <stdio.h>\nint main(void) { return 0; }\n",
+            "probe.c",
+            None,
+            "c_source",
+            "B",
+            "extension",
+        ),
+    ],
+)
+def test_cad_diagram_and_source_kinds(head, name, zip_names, kind, route, by):
+    resolved = resolve_type(head, name, zip_names)
+    assert (resolved.kind, resolved.route, resolved.by) == (kind, route, by)

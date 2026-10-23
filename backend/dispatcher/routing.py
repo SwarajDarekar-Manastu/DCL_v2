@@ -179,7 +179,7 @@ def folder_tree(session: Session) -> tuple[dict[str, DriveFolder], dict[str, lis
     return folders, ancestors
 
 
-def _group_key(scope: Sequence[str], root_name: str, folder_chain: Sequence[str]) -> str:
+def group_key(scope: Sequence[str], root_name: str, folder_chain: Sequence[str]) -> str:
     for folder_id in folder_chain:
         if folder_id in scope:
             return folder_id
@@ -479,7 +479,7 @@ def dispatch(
         if item.blob_sha256 in collected:
             continue  # another copy of the same content (any subtree): one document, first path wins
         collected.add(item.blob_sha256)
-        group = groups[_group_key(scope, item.root_name, chain)]
+        group = groups[group_key(scope, item.root_name, chain)]
         blob = session.get(Blob, item.blob_sha256)
         heads[item.blob_sha256] = _read(minio, blob, HEAD_BYTES)
         folder_names = item.path_cached.split("/")[:-1]

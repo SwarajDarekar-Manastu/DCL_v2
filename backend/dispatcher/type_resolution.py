@@ -56,6 +56,15 @@ K = {
         Kind("mp4", "video/mp4", Route.F),
         Kind("mov", "video/quicktime", Route.F),
         Kind("scdoc", "application/x-spaceclaim", Route.G),
+        Kind("vsdx", "application/vnd.ms-visio.drawing", Route.E),
+        Kind("dxf", "image/vnd.dxf", Route.E, text=True),
+        Kind("svg", "image/svg+xml", Route.E, text=True),
+        Kind("stl", "model/stl", Route.G, text=True),
+        Kind("step", "model/step", Route.G, text=True),
+        Kind("dwg", "image/vnd.dwg", Route.G),
+        Kind("iges", "model/iges", Route.G, text=True),
+        Kind("matlab", "text/x-matlab", Route.B, text=True),
+        Kind("c_source", "text/x-c", Route.B, text=True),
         Kind("html", "text/html", None, text=True),
         Kind("json", "application/json", Route.A2, text=True),
         Kind("tex", "text/x-tex", Route.A2, text=True),
@@ -85,6 +94,7 @@ EXTENSION_KINDS: dict[str, str] = {
     ".pkl": "pickle",
     ".tdms": "tdms",
     ".drawio": "drawio",
+    ".dio": "drawio",
     ".xsd": "xsd",
     ".gz": "gzip",
     ".heic": "heic",
@@ -94,6 +104,19 @@ EXTENSION_KINDS: dict[str, str] = {
     ".mp4": "mp4",
     ".mov": "mov",
     ".scdoc": "scdoc",
+    ".vsdx": "vsdx",
+    ".dxf": "dxf",
+    ".svg": "svg",
+    ".stl": "stl",
+    ".step": "step",
+    ".stp": "step",
+    ".dwg": "dwg",
+    ".igs": "iges",
+    ".iges": "iges",
+    ".m": "matlab",
+    ".c": "c_source",
+    ".h": "c_source",
+    ".pyw": "python",
     ".html": "html",
     ".htm": "html",
     ".json": "json",
@@ -111,7 +134,7 @@ EXTENSION_KINDS: dict[str, str] = {
     ".ini": "telemetry_text",
 }
 OLE2_BY_EXTENSION = {".doc": "doc", ".ppt": "ppt", ".xls": "xls"}
-NO_SIGNATURE_KINDS = frozenset({"scdoc"})  # trusted by extension: no sniffer can confirm them
+NO_SIGNATURE_KINDS = frozenset({"scdoc", "stl"})  # trusted by extension (binary STL has no signature)
 DELIMITERS = (",", ";", "\t", "|")
 GENERIC_TEXT = frozenset({"text", "delimited"})
 
@@ -157,6 +180,8 @@ def _zip_kind(names: Sequence[str] | None) -> str:
                 return kind
     if any(n.startswith("dp0/") or n.endswith(".wbpj") for n in names):
         return "wbpz"
+    if any(n.startswith("visio/") for n in names):
+        return "vsdx"
     return "zip"
 
 
@@ -187,6 +212,10 @@ def _sniff(head: bytes, extension: str, zip_names: Sequence[str] | None) -> str 
             return "mp4"
         if brand == b"qt  ":
             return "mov"
+    if head.startswith(b"AutoCAD Binary DXF"):
+        return "dxf"
+    if head[:4] == b"AC10" and head[4:6].isdigit():
+        return "dwg"
     if head.startswith(b"\xff\xd8\xff"):
         return "jpeg"
     if head.startswith(b"\x89PNG"):
@@ -206,6 +235,10 @@ def _sniff_text(text: str) -> str:
         return "xsd"
     if lowered.startswith("<!doctype html") or lowered.startswith("<html"):
         return "html"
+    if "<svg" in lowered and (
+        lowered.startswith("<?xml") or lowered.startswith("<svg") or "<!doctype svg" in lowered
+    ):
+        return "svg"
     lines = [line for line in text.splitlines()[:-1] if line.strip()][:20]
     for delimiter in DELIMITERS:
         counts = {line.count(delimiter) for line in lines[-10:]}
