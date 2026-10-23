@@ -94,11 +94,13 @@ def test_tp12_report_assembles_with_page_map(memory, folder):
     assert "<td>Through put [grams]</td><td>433.81</td>" in text
 
     page_map = json.loads(memory.cir["page_map.json"])
-    assert page_map["pages"] == 45
-    assert page_map["sections"]["1 Overview"] == 6
-    assert page_map["sections"]["3 Test Setup"] == 8
-    pages = [page for page in page_map["sections"].values() if page is not None]
-    assert pages == sorted(pages) and len(pages) >= 0.9 * len(page_map["sections"])
+    pages = {h["heading"]: h["page_no"] for h in page_map["headings"]}
+    assert processed.document.page_count == 45
+    assert pages["1 Overview"] == 6
+    assert pages["3 Test Setup"] == 8
+    assert list(pages.values()) == sorted(pages.values())
+    overview = next(n for n in processed.nodes if n.breadcrumb.endswith("› 1 Overview"))
+    assert overview.page_no == 6
     structure = json.loads(memory.cir["structure.json"])
     assert structure["missing_includes"] == []
     assert set(structure["unresolved_refs"]) <= {"cref:Apdx:B", "cref:P&ID"}  # undefined in the source too
