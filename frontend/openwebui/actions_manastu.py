@@ -59,6 +59,12 @@ HEIGHT_SCRIPT = (
 NUMBER_WITH_UNIT = re.compile(r"(-?\d+(?:\.\d+)?)\s*([A-Za-z%°µ][A-Za-z0-9%°µ/()·^-]*)")
 
 
+def page_of(anchor: Any) -> int | None:
+    """The page of a serialized stable anchor 'page:<n>:<hash>' (file 04 §4.4); None for other kinds."""
+    parts = anchor.split(":", 2) if isinstance(anchor, str) else []
+    return int(parts[1]) if len(parts) >= 2 and parts[0] == "page" and parts[1].isdigit() else None
+
+
 def draft_from_trace(trace: dict, suite: str) -> dict:
     """A draft benchmark case prefilled from the answer (file 08 §2.2); a reviewer checks it."""
     tools = sorted(
@@ -84,9 +90,10 @@ def draft_from_trace(trace: dict, suite: str) -> dict:
             )
     citations, seen = [], set()
     for citation in trace.get("citations") or []:
-        anchor = citation.get("anchor") if isinstance(citation.get("anchor"), dict) else {}
+        raw = citation.get("anchor")
+        anchor = raw if isinstance(raw, dict) else {}
         doc_id = anchor.get("doc_id") or citation.get("doc_id")
-        page = anchor.get("page_no") or anchor.get("page") or citation.get("page_no")
+        page = anchor.get("page_no") or anchor.get("page") or citation.get("page_no") or page_of(raw)
         if doc_id and (doc_id, page) not in seen:
             seen.add((doc_id, page))
             citations.append({"doc_id": doc_id, "page": page})

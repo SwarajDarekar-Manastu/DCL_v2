@@ -203,6 +203,31 @@ def test_cited_source(comment, expected):
     assert actions_manastu.cited_source(comment) == expected
 
 
+def test_draft_reads_the_page_from_a_serialized_anchor():
+    trace = {
+        "trace_id": TRACE_ID,
+        "question": "Max firing duration in TP-23?",
+        "claims": [],
+        "citations": [
+            {"doc_id": "3f68c08a-6494-4323-bcca-90385ac0297b", "anchor": "page:1:1d1d401de82dbc5d"},
+            {"doc_id": "3f68c08a-6494-4323-bcca-90385ac0297b", "anchor": "page:9:6c7e93f8afcfaac4"},
+            {"doc_id": "9a1b0000-0000-4000-8000-000000000001", "anchor": "line:40:abcd"},
+        ],
+    }
+    cited = actions_manastu.draft_from_trace(trace, "from-chat")["spec"]["expected_citations"]
+    assert [(c["doc_id"][:8], c["page"]) for c in cited] == [
+        ("3f68c08a", 1),
+        ("3f68c08a", 9),
+        ("9a1b0000", None),
+    ]
+    assert [actions_manastu.page_of(a) for a in ("page:12:ab", "page::", "t:83500:ab", None)] == [
+        12,
+        None,
+        None,
+        None,
+    ]
+
+
 def test_bundle_is_current():
     assert BUNDLED.read_text() == bundle("actions_manastu.py")
 
