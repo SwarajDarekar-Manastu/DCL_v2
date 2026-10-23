@@ -1,0 +1,35 @@
+version: 1
+rules:
+  - status: "operator"
+    rule_type: "unit_mapping"
+    scope:
+      scope_root: "APU Injector"
+      scope_filename_glob: "*.dat"
+    precedence: 10
+    body:
+      channel: "AIN0"
+      unit: "bar"
+      quantity: "pressure"
+      gauge_or_abs: "gauge"
+    created_by: "asha@manastuspace.com"
+  - status: "operator"
+    rule_type: "channel_map"
+    scope:
+      scope_folder_id: "01RDWVU4ZUFFI75KMFFJEJNIOEECPJM6RB"
+    precedence: 0
+    body:
+      channels:
+        "y0 (N2)":
+          canonical_name: "p_feed_n2_supply_bar_g"
+          physical_quantity: "pressure"
+          unit: "bar"
+          gauge_or_abs: "gauge"
+      ambient_pressure_bar_abs: 1.013
+    created_by: "ravi@manastuspace.com"
+  - status: "operator"
+    rule_type: "ignore_pattern"
+    scope: {}
+    precedence: 0
+    body:
+      reason: "Kalibrierung: \"alt\" – ignore"
+    created_by: "asha@manastuspace.com"

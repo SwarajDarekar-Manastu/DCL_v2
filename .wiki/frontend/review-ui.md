@@ -79,6 +79,7 @@ uv run python -m pytest backend/tests/unit/api
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Rules page "Export YAML": active operator rules in S1's `RulesFile` format (`rules_export.ts`); contract fixture checked by vitest and by S1's `load_yaml` (`backend/tests/unit/api/test_rules_export_contract.py`) |
 | 2026-10-23 | S3 | Evidence panes for every kind of S1's contract: `low_confidence` (crops with reading, confidence, alternatives, zoom; tables A/B with cell diff, HTML read as text only), `unit_fact`, `json_schema`, `file_facts`, `sensitive` (`LowConfidencePane.svelte`, `evidence.ts`) |
 | 2026-10-23 | S3 | Saved queue filters (file 08 §4.2): named filter sets per user in this browser (`saved_filters.ts`, `SavedFilters.svelte`) |
 | 2026-10-21 | Lead | Map created from the architecture manual |

@@ -21,7 +21,7 @@ Status: **build** = S3 builds it now (one merge request each, in this order); **
 | 8 | 4.2 ResolutionConsole | "preview conversion" (dry run) | wired to `POST /review/dry-run` | API: S1 (answers 501) |
 | 9 | 4.2 CaseHeader | "undo last resolution" | wired to `POST /review/cases/{id}/undo` | API: S1 (answers 501) |
 | 10 | 4.2 RulesPage | "simulate" | wired to `POST /review/rules/{id}/simulate` | API: S1 (answers 501) |
-| 11 | 4.2 RulesPage | export YAML | missing | build: download the rules as YAML (client side) |
+| 11 | 4.2 RulesPage | export YAML | "Export YAML" in S1's RulesFile format | done 2026-10-23 |
 | 12 | 4.2 EntitiesPage | search canonicals, merge/split aliases, counts | placeholder | API: S1 (`backend/api/entities.py` has no routes) |
 | 13 | 4.2 OpsPage | queue depths, token/cost today, halted/soft counts, last benchmark pass rate | failed tasks only | build: `GET /ops/summary` in S3's ops.py (Redis queue lengths, llm_calls today, review counts, last runs) and the page |
 | 14 | 4.2 OpsPage | sync status per root; failed-task retry | missing | API: S1 sync status; retry needs S4 to store replayable task args |
