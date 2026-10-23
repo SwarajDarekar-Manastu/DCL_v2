@@ -15,7 +15,7 @@ Status: **build** = S3 builds it now (one merge request each, in this order); **
 | 2 | 3.2 Sources | roots, auth status, "start device-code sign-in", webhook status, live counts (items held, blobs waiting), "download/process everything" with Gemini cost | scope keys edit with preview counts; cost shown when S1 returns it | API: S1 sync/ops routes (`backend/api/sync.py` has none); cost needs S1's llm_calls price ledger |
 | 3 | 3.2 Routes | "re-process affected documents" button with count | `routes.<X>.enabled` edit with S1's parked-count preview | API: S1 re-dispatch route |
 | 4 | 3.2 Models | "requires re-embedding N nodes" before an embedding-model change | generic JSON edit, no impact | API: S1/S2 impact for `models.*` |
-| 5 | 3.2 Prompts | versioned prompt texts, diff viewer, "run on sample" | key list only | API: S2 prompt registry routes |
+| 5 | 3.2 Prompts | versioned prompt texts, diff viewer, "run on sample" | Prompts screen over S2's registry | done 2026-10-23 |
 | 6 | 4.2 QueueList | saved filters | named saved filters per user (this browser) | done 2026-10-23 |
 | 7 | 4.2 EvidencePane | PageViewer (page render, bbox per flag, zoom, crop lightbox, OCR text toggle) for `low_confidence`; TablePreview (A/B side by side, cell diff) for `json_schema` / table conflicts; panes for `unit_fact`, `file_facts`, `sensitive`; PhotoView | dedicated panes for `unit_telemetry`, `array_schema`, `conflict`, `parse_failure`; the other five kinds fall back to a generic JSON pane | done 2026-10-23 (component tests; no live flags of these kinds yet). OCR-text toggle waits for OCR text in the evidence (S1) |
 | 8 | 4.2 ResolutionConsole | "preview conversion" (dry run) | wired to `POST /review/dry-run` | API: S1 (answers 501) |
