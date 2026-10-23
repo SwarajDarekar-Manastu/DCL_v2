@@ -22,7 +22,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/dispatcher-and-route-gating` | in-progress | S1 | [Dispatcher, type resolution, folder context, assembler, route gating](backend/dispatcher-and-route-gating.md) |
 | `backend/route-c-telemetry` | in-progress | S1 | [Route C: telemetry, LabVIEW, spreadsheets, arrays](backend/route-c-telemetry.md) |
 | `backend/route-a2-source` | in-progress | S6 | [Route A2: JSON report sections and LaTeX sources](backend/route-a2-source.md) |
-| `backend/route-b-code` | planned | S1 | [Route B: Python scripts and tooling docs](backend/route-b-code.md) |
+| `backend/route-b-code` | in-progress | S6 | [Route B: Python scripts and tooling docs](backend/route-b-code.md) |
 | `backend/route-e-diagrams` | planned | S1 | [Route E: draw.io diagrams and XSD](backend/route-e-diagrams.md) |
 | `backend/route-g-archives` | planned | S1 | [Route G: archives and ANSYS packages](backend/route-g-archives.md) |
 | `backend/review-backend` | in-progress | S1 | [Review backend: flags, fingerprints, staged payloads, rules, resume](backend/review-backend.md) |

@@ -38,3 +38,20 @@ describe('ImageWithRegions keyboard access', () => {
 		expect(regions.every((r) => r.tabIndex === 0)).toBe(true);
 	});
 });
+
+describe('ImageWithRegions without recorded dimensions', () => {
+	it('takes the image size and still places regions by percentage', () => {
+		const { container } = render(ImageWithRegions, {
+			src: 'p.png',
+			alt: 'page 3',
+			width: null,
+			height: null,
+			regions: [{ bbox: [0.1, 0.2, 0.5, 0.4], kind: 'cited', label: 'x', confidence: null }]
+		});
+		const img = screen.getByRole('img');
+		expect(img.hasAttribute('width')).toBe(false);
+		expect((container.firstElementChild as HTMLElement).getAttribute('style') ?? '').not.toContain('aspect-ratio');
+		const { left, top, width, height } = screen.getByTestId('region').style;
+		expect([left, top, width, height]).toEqual(['10%', '20%', '40%', '20%']);
+	});
+});

@@ -13,6 +13,7 @@
 
 	let { evidence }: Props = $props();
 	let zoomed = $state<string | null>(null);
+	let showOcr = $state(false);
 	let a = $derived(tableCells(evidence.table_a_html));
 	let b = $derived(tableCells(evidence.table_b_html));
 	let diff = $derived(cellDiff(a, b));
@@ -37,6 +38,7 @@
 					<span class="text-muted-foreground text-xs">{` · confidence ${pct(crop.confidence)}`}</span>
 				</p>
 				{#if crop.alternatives.length}<p class="text-muted-foreground m-0 text-xs">Also possible: {crop.alternatives.join(', ')}</p>{/if}
+				{#if crop.ocr_text}<p class="text-muted-foreground m-0 text-xs">OCR read: <span class="text-foreground font-mono">{crop.ocr_text}</span></p>{/if}
 			</li>
 		{/each}
 	</ul>
@@ -62,6 +64,15 @@
 		{/each}
 	</div>
 	<p class="text-muted-foreground m-0 text-xs">{diff.size} {diff.size === 1 ? 'cell differs' : 'cells differ'} between the two readings.</p>
+{/if}
+
+{#if evidence.page_ocr_text}
+	<div class="grid gap-1.5">
+		<button type="button" class="text-link w-fit cursor-pointer border-0 bg-transparent p-0 text-xs" aria-expanded={showOcr} onclick={() => (showOcr = !showOcr)}
+			>{showOcr ? 'Hide page OCR text' : 'Show page OCR text'}</button
+		>
+		{#if showOcr}<pre class="code-block m-0 max-h-72 overflow-auto text-xs whitespace-pre-wrap" aria-label="Page OCR text">{evidence.page_ocr_text}</pre>{/if}
+	</div>
 {/if}
 
 {#if zoomed}

@@ -1,7 +1,7 @@
 """backend/api/ops.py summary queries on the real schema. Needs DCL_TEST_DATABASE_URL (an empty ParadeDB)."""
 
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from backend.api import ops
-from backend.postgres.models import BenchmarkRun
+from backend.postgres.models import BenchmarkRun, LlmCall
 from backend.postgres.session import normalize_url
 
 ALEMBIC_INI = Path(__file__).resolve().parents[3] / "postgres" / "alembic.ini"
@@ -49,3 +49,31 @@ def test_summary_queries_run_on_the_real_schema(session):
     assert ops._documents_by_status(session) == {}
     assert ops._open_flags(session) == {"HARD": 0, "SOFT": 0}
     assert [(r.suite, r.pass_rate) for r in ops._last_runs(session)] == [("code", 0.0), ("telemetry", 0.75)]
+
+
+def test_model_calls_today_sum_only_today(session):
+    now = datetime.now(UTC)
+
+    def call(at, tokens_in, tokens_out, cached, cost):
+        return LlmCall(
+            at=at,
+            model="gemini-3.8-flash",
+            purpose="synthesis",
+            input_tokens=tokens_in,
+            output_tokens=tokens_out,
+            cached_tokens=cached,
+            cost_estimate=cost,
+            status="ok",
+        )
+
+    session.add_all(
+        [
+            call(now, 1000, 200, 50, 0.01),
+            call(now, 500, 100, 0, None),
+            call(now - timedelta(days=2), 9, 9, 9, 9.0),
+        ]
+    )
+    session.flush()
+    today = ops._llm_today(session)
+    assert (today.calls, today.input_tokens, today.output_tokens, today.cached_tokens) == (2, 1500, 300, 50)
+    assert today.cost_estimate == 0.01

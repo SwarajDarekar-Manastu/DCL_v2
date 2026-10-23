@@ -82,6 +82,7 @@ def test_gateway_calls_record_calls_tokens_and_budget_stops():
         settings,
         capabilities=Capabilities.all(),
         budget=DailyTokenBudget(limit_tokens=1),
+        ledger=None,
         transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body)),
     )
     ctx = CallContext(purpose="metrics_test")
