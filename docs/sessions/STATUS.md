@@ -901,3 +901,16 @@ Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest -q`: 
 Blocked on: nothing
 Needs from others: Lead: merge. S4: apply 0011 on the stack.
 Next: the A1 re-run counts and the M2 live check. Then on claude/competent-brahmagupta-3a5541: locators, NUL guard, 0012 (answer_traces, llm_calls, prices; my llm_calls migration moves from 0011 to 0012), Route A2, Route B.
+## 2026-10-23 11:40 — DCL S2 ML — claude/infallible-swartz-58c96b
+Ready for merge: the runner findings of S5's BASELINE.md, with main 61f228c (S1's 0011) merged in.
+- `dcl.benchmark.start`, `case` and `sweep` run on the `benchmark` queue (S4's prefork worker, soft limit 950 s). The stale-run heartbeat is 30 min.
+- Test: `DCL_TEST_DATABASE_URL=<disposable paradedb:0.26.2-pg17> uv run pytest` gives 1769 tests, 0 failed, 120 skipped (MinIO, sample exports, live stack). `test_runner_db` passes on the new CHECK. `ruff check backend` is clean.
+Latency profile (run 1: 225–236 s per answered case):
+- The models container runs bge-reranker and EmbeddingGemma on CPU in float32 (`/models/health`: `"device":"cpu"`).
+- The cause is compose `models` → `deploy.resources.reservations.devices.capabilities: [gpu, utility]`. Without `compute` the NVIDIA runtime mounts only nvidia-smi and NVML. `libcuda.so` is a 0-byte file, `/dev/nvidia-uvm` is missing, and torch reports "no NVIDIA driver".
+- Run 1 in Tempo: 58 `/rerank` spans, p50 20.6 s, all between 20 and 23 s. `/embed/text` has p50 66 ms, but its tail reaches 217 s while it queues behind rerank on the one model lock.
+- Same image and code, 50 passages of 2400 chars: CPU float32 takes 35.6 s per rerank (30 passages: 22–27 s). GPU bf16 (`--gpus all`) takes 0.56 s (30 passages: 0.32 s).
+- Each answer runs one rerank per search call, plus the time spent waiting on other cases' reranks. The Gemini time cannot be separated for run 1: no `llm_calls` table, traces only logged, no benchmark spans in Tempo.
+Blocked on: S4 (through the Lead): `capabilities: [gpu]` (or `[gpu, compute, utility]`) on the models service, then recreate it. Verify `/models/health` reports `"device":"cuda","dtype":"bfloat16"`.
+Needs from others: S1's A1 re-run
+Next: re-time one live case after the GPU fix to get the Gemini share; then the OCR-per-script and cost report after S1's A1 re-run; then the handwriting calibration
