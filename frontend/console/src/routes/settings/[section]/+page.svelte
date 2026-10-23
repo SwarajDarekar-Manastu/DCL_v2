@@ -14,5 +14,5 @@
 		<dt>When a change applies</dt>
 		<dd>{section.apply}</dd>
 	</dl>
-	<SettingsEditor patterns={section.keys} />
+	<SettingsEditor patterns={section.keys} title={section.title} />
 </div>

@@ -16,3 +16,4 @@
 | Page | Purpose |
 |------|---------|
 | [M9 pilot walk-through](m9-pilot-walkthrough.md) | Steps a pilot engineer runs in Open WebUI and the Console to accept M9 (file 10 §5) |
+| [Console against file 08](console-gaps-08.md) | Every function file 08 names that the Console lacks, with status and blockers (build-out tracking) |

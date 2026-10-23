@@ -93,3 +93,41 @@ export function summary(value: unknown, max = 120): string {
 	const text = typeof value === 'string' ? value : JSON.stringify(value);
 	return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
+
+/** A moment in a section's history: one write of one key. */
+export interface SectionPoint {
+	at: string;
+	key: string;
+	version: number;
+	by: string;
+	description: string | null;
+}
+
+/** Every write to the section's keys, newest first. */
+export function sectionTimeline(histories: Record<string, ConfigEntry[]>): SectionPoint[] {
+	return Object.values(histories)
+		.flat()
+		.map((e) => ({ at: e.updated_at, key: e.key, version: e.version, by: e.updated_by, description: e.description }))
+		.sort((a, b) => b.at.localeCompare(a.at) || a.key.localeCompare(b.key));
+}
+
+export interface SectionRestore {
+	/** key → the version that was current at the chosen moment, only where it differs from today's value */
+	versions: Record<string, number>;
+	/** keys first written after that moment: a rollback cannot remove a key, so they keep today's value */
+	newer: string[];
+}
+
+/** What restoring the section to the state just after `at` writes. */
+export function restoreAt(histories: Record<string, ConfigEntry[]>, at: string): SectionRestore {
+	const versions: Record<string, number> = {};
+	const newer: string[] = [];
+	for (const [key, entries] of Object.entries(histories)) {
+		const sorted = [...entries].sort((a, b) => b.version - a.version);
+		const current = sorted[0];
+		const then = sorted.find((e) => e.updated_at <= at);
+		if (!then) newer.push(key);
+		else if (current && !sameValue(then.value, current.value)) versions[key] = then.version;
+	}
+	return { versions, newer: newer.sort() };
+}
