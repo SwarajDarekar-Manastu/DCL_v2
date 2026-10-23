@@ -40,6 +40,9 @@ class FakeVision:
     def inspect_hardware_photo(self, image, **kw):
         return self._out("inspect_hardware_photo", schemas.HardwarePhotoReading, **kw)
 
+    def describe_slide(self, image, **kw):
+        return self._out("describe_slide", schemas.SlideReading, **kw)
+
 
 class MemoryStore:
     def __init__(self, prefix):

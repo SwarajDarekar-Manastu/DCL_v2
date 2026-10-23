@@ -927,3 +927,13 @@ Merged / ready: public samples for formats the corpus lacks in git-ignored data/
 Blocked on: nothing
 Needs from others: S6: index the web samples so the formats suite can run
 Next: idle until messaged
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: A1.9–A1.10 and A1.0.
+- `process_office` is the A1 entry for every format. Word-family files go LibreOffice → PDF → the PDF pipeline (ruling a), with tracked changes, comments, footnotes and embedded objects read from the DOCX.
+- Slides (PPTX, PPT, ODP) are read natively: one slide node per slide, chart data from the chart XML, speaker notes, `describe_slide` when graphics cover more than 25 % of the slide.
+- `twin.py` gives S6's Route A2 the page map, the page renders, and the PDF-only pages run through A1 as an appendix.
+- Live: 2 real DOCX from the corpus in the parse worker (17 pages in 122 s, 16 pages in 62 s); Apache POI's public PPTX, PPT and pie-chart samples (data/samples/web, URLs in SOURCES.md) through the stack's LibreOffice and Gemini.
+Blocked on: nothing
+Needs from others: S1: in `office_run`, build = `process_office` and lift the PDF-only gate, so the six waiting DOCX process. S6: call `twin.process_twin` from A2 for visual twins.
+Next: Routes D/F readiness on the stack, then the queue
