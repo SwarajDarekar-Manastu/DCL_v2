@@ -79,6 +79,7 @@ uv run python -m pytest backend/tests/unit/api
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-23 | S3 | Evidence panes for every kind of S1's contract: `low_confidence` (crops with reading, confidence, alternatives, zoom; tables A/B with cell diff, HTML read as text only), `unit_fact`, `json_schema`, `file_facts`, `sensitive` (`LowConfidencePane.svelte`, `evidence.ts`) |
 | 2026-10-23 | S3 | Saved queue filters (file 08 §4.2): named filter sets per user in this browser (`saved_filters.ts`, `SavedFilters.svelte`) |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S3 | `GET /audit` over audit_events and the Audit page; case History link |
