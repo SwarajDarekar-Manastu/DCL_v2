@@ -996,3 +996,13 @@ Test: `uv run pytest -q` exit 0; E: 13 tests pass.
 Blocked on: nothing.
 Needs from others: S1: the E adapter, runner and .svg/.vsdx/.dxf kinds.
 Next: Route G (archives with bomb guard, members as derived_blobs, .wbpz, .scdoc/.dwg as cad_reference, STL/STEP measured with trimesh).
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready:
+- Route G (4e0a981): archives with the bomb guard and the gate, members as derived_blobs, .wbpz, .scdoc/.dwg cad_reference, STL/STEP measured.
+- Same commit: Lead's test-hygiene fix. Sample tests skip per missing file; the C and MATLAB grammar imports are guarded.
+Test: `uv run pytest -q` exit 0. G: 19 tests. One xfail: TP12 exact twin pages.
+Blocked on: nothing.
+Needs from others:
+- S1: G adapter and runner, register_derived_blobs, REFERENCES relations from catalog.references, and kinds for .stl/.step/.stp/.igs/.iges/.dwg. Today .step resolves to Route C, and .c/.m members resolve to C.
+- S2: twin.page_map's contents-page check counts number-stripped headings, so TP12 Overview maps to page 1 instead of 6.
+Next: all four S6 routes are built; idle until messaged.
