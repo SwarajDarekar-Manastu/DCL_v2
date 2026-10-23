@@ -973,3 +973,9 @@ Needs from others:
 - S1: B adapter and runner.
 - S2: twin.page_map maps every heading to a contents page that lists them (headings 1, 2, 2.1 all land on page 2). A page that matches many headings should be skipped.
 Next: Route E (plan sheet open), then G.
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: Route E. `process_diagram` reads draw.io, XSD, SVG, .vsdx and DXF into one graph in `documents.catalog`, with page summaries, component nodes, renders and a read_schematic cross-check.
+Test: `uv run pytest -q` exit 0; E: 13 tests pass.
+Blocked on: nothing.
+Needs from others: S1: the E adapter, runner and .svg/.vsdx/.dxf kinds.
+Next: Route G (archives with bomb guard, members as derived_blobs, .wbpz, .scdoc/.dwg as cad_reference, STL/STEP measured with trimesh).
