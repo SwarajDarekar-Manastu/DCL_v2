@@ -1018,3 +1018,17 @@ Needs from others:
 - S1: G adapter and runner, register_derived_blobs, REFERENCES relations from catalog.references, and kinds for .stl/.step/.stp/.igs/.iges/.dwg. Today .step resolves to Route C, and .c/.m members resolve to C.
 - S2: twin.page_map's contents-page check counts number-stripped headings, so TP12 Overview maps to page 1 instead of 6.
 Next: all four S6 routes are built; idle until messaged.
+
+## 2026-10-23 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready (merge requests, stacked on the branch):
+- Review API, item 6 (5f42ee4): dry run (a telemetry set_unit's stats converted to SI against S5's sanity range), undo (the last resolution within 30 days; a rule only that resolution used is retired; junked locations restored; committed documents rebuilt), simulate. No review route answers 501 now.
+- File kinds (2e8761a): DXF/SVG/VSDX → E; STL/STEP/IGES/DWG → G; .m/.c/.h → B.
+- Runners and adapters for all eight routes (aafb9d3): one shared runner; A1 on `process_office` (the DOCX released); A2, B, E, G (S6) and D, F (S2) tasks.
+  - G's archive members are registered as derived blobs; CAD references become REFERENCES relations.
+  - D: one model reading per photo burst.
+- Revision supersession (274e0d2): the newer revision of a drawing in the same folder SUPERSEDES the older; equal revisions raise CONFLICT SOFT.
+- Live: the locator backfill is done. 0 of 567 Route C table/row nodes lack a locator.
+Test: `uv run pytest -q --ignore=backend/tests/integration/benchmark/test_runner_db.py` with test servers: 1,963 tests, 0 failures, 83 skipped. S2's file leaves a Session open (line 174), which hangs the teardown downgrade; reported.
+Blocked on: nothing
+Needs from others: S4: redeploy cpu_parse and media after the merge; then the routes can be switched on (A2, B, E, G now; D, F once the media image is live). S5: `.c` out of the gate's junk list.
+Next: the A1 counts and the M2 live check when the batch ends; Console API items 8–11
