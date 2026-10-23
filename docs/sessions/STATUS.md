@@ -888,3 +888,9 @@ Merged / ready: redeploy from main 71ac337: backend, parse and media images rebu
 Blocked on: time. The RustFS step 2 lifecycle watch is due by 2026-10-24 00:00Z
 Needs from others: Lead — when to rebuild telemetry_stream and cpu_parse for fad9cbb (S1's 4ab27e1)
 Next: lifecycle_watch.py check after 2026-10-24 00:00Z, then the merge request for this branch
+
+## 2026-10-23 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c
+Merged / ready: redeploy from main cf02d3d: api, beat, io_light, telemetry_stream, media, vision_batch, embed, benchmark rebuilt and healthy; code byte-identical to cf02d3d; the dispatcher's adapters import on io_light without lxml; worker-media has pillow_heif, imagehash, faster_whisper and ffmpeg 5.1.9; 11 stack tests green (the httpfs test waits for this branch's merge)
+Blocked on: S1's A1-drain signal for cpu_parse; time for the RustFS lifecycle watch (interim check 2026-10-23 07:38Z: 3 PENDING, 3 controls ok; due 2026-10-24 00:00Z)
+Needs from others: user — gateway per-model rates for models.prices (the gateway exposes none)
+Next: recreate cpu_parse from main when S1 signals; after 2026-10-24 00:00Z the watch check, then the merge request for this branch
