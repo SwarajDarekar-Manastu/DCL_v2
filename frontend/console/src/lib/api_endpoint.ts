@@ -225,6 +225,52 @@ export function listAudit(filters: AuditFilters = {}): Promise<AuditPage> {
 	return request<AuditPage>('GET', `/audit${text ? `?${text}` : ''}`);
 }
 
+// ---------------------------------------------------------------- prompt registry (backend/api/engine.py, S2)
+// The routes answer untyped JSON; these mirror backend/llm_engine/prompts/registry.py.
+
+export interface PromptVersion {
+	area: string;
+	name: string;
+	version: string;
+	number: number;
+	latest: boolean;
+	in_use: boolean;
+	variables: string[];
+	chars: number;
+}
+export interface PromptText extends PromptVersion {
+	system: string;
+	user_template: string;
+}
+export interface PromptDiff {
+	area: string;
+	a: string;
+	b: string;
+	unified: string;
+}
+export interface PromptRunRequest {
+	variables: Record<string, string>;
+	image_base64?: string | null;
+	tier?: 'flash' | 'lite';
+}
+export interface PromptRunResult {
+	version: string;
+	model: string;
+	text: string;
+	latency_ms: number;
+	input_tokens: number | null;
+	output_tokens: number | null;
+}
+
+const promptPath = (area: string, version: string) => `/v1/prompts/${encodeURIComponent(area)}/${encodeURIComponent(version)}`;
+export const listPrompts = () => request<PromptVersion[]>('GET', '/v1/prompts');
+export const getPrompt = (area: string, version: string) => request<PromptText>('GET', promptPath(area, version));
+export const diffPrompts = (area: string, a: string, b: string) =>
+	request<PromptDiff>('GET', `/v1/prompts/${encodeURIComponent(area)}/diff/${encodeURIComponent(a)}/${encodeURIComponent(b)}`);
+/** Run on sample: one real model call (reviewer or admin; it costs tokens). */
+export const runPrompt = (area: string, version: string, body: PromptRunRequest) =>
+	request<PromptRunResult>('POST', `${promptPath(area, version)}/run`, body);
+
 // ---------------------------------------------------------------- settings (backend/api/settings.py, S1)
 
 /** GET /settings?prefix (admin): current value and version of every key */

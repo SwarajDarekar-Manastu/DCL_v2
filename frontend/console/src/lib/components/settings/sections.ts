@@ -87,8 +87,8 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 		id: 'prompts',
 		title: 'Prompts',
 		summary: 'Versioned prompt texts for enrichment, vision, synthesis and the verifier; diff viewer; run on a sample.',
-		keys: ['prompt versions'],
-		apply: 'A new version applies to new calls; llm_calls records the prompt version.'
+		keys: [],
+		apply: 'Prompts are files in the repository: a new version file applies to new calls once the code pins it; llm_calls records the prompt version.'
 	}
 ];
 
