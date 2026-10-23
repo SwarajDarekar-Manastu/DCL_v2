@@ -206,3 +206,12 @@ def test_similar_images_rank_by_image_embedding_and_skip_the_reference(engine, i
     assert "Catalyst screen intact before T01" in readings
     assert all("halted" not in r for r in readings)
     assert result.result["visuals"][0]["similarity"] > 0.9
+
+
+def test_an_attached_photo_searches_by_its_own_embedding(engine, ids):
+    result = run(
+        engine, similar_to_vector=vec("screen", 0.05), kinds=["hardware_photo"], test_plan_ids=["TP07"]
+    )
+    readings = [v["reading"] for v in result.result["visuals"]]
+    assert readings[0].startswith("Catalyst screen deformed")  # nearest: tilt 0.0 vs the query's 0.05
+    assert "Catalyst screen of TP08 thruster" not in readings and all("halted" not in r for r in readings)

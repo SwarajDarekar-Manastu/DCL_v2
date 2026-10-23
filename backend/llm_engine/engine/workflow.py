@@ -16,6 +16,7 @@ import asyncio
 import dataclasses
 import html
 import itertools
+import logging
 import re
 import time
 import uuid
@@ -29,9 +30,10 @@ from workflows.events import Event, StartEvent, StopEvent
 
 from backend.config import ThinkingLevel
 from backend.llm_engine.engine import playbooks, synthesis
-from backend.llm_engine.engine.analysis import Analysis, QueryAnalysis, analyze
+from backend.llm_engine.engine.analysis import Analysis, Intent, QueryAnalysis, analyze
 from backend.llm_engine.engine.playbooks import PlannedCall
 from backend.llm_engine.engine.tools import Source, ToolResult
+from backend.llm_engine.engine.tools import attachments as attachment_tools
 from backend.llm_engine.engine.tools import external as external_tools
 from backend.llm_engine.engine.tools import telemetry as telemetry_tools
 from backend.llm_engine.engine.tools import visuals as visual_tools
@@ -51,6 +53,9 @@ TOKEN_CHUNK = 160
 EXTRACTIVE_PASSAGES = 5
 
 
+log = logging.getLogger(__name__)
+
+
 @dataclass
 class EngineDeps:
     gemini: Any
@@ -59,6 +64,10 @@ class EngineDeps:
     rerank: Callable | None
     alias_index: Callable[[Any], Any]
     external_policy: Callable[[Any], ExternalPolicy] = lambda session: ExternalPolicy(enabled=False)
+    fetch_attachment: Callable[[str], bytes] = attachment_tools.fetch  # presigned upload URL → bytes (capped)
+    embed_image: Callable[[bytes], list[float]] | None = (
+        None  # models role; T3 similarity for attached photos
+    )
     viewer_url: Callable[[uuid.UUID, str | None], str | None] = lambda doc_id, anchor: None
     save_trace: Callable[[dict], None] = lambda trace: None
     telemetry_connect: Callable[[], Any] | None = None  # DuckDB connection that reads the stored Parquet URIs
@@ -178,6 +187,7 @@ class AnswerWorkflow(Workflow):
             "message_id": ev.get("message_id"),
             "user_id": ev.get("user_id"),
             "history": ev.get("history", ""),
+            "attachments": list(ev.get("attachments") or [])[: attachment_tools.MAX_ATTACHMENTS],
         }
         await ctx.store.set("request", request)
         analysis = await analyze(
@@ -243,7 +253,15 @@ class AnswerWorkflow(Workflow):
             if args is not None:
                 calls.insert(0, PlannedCall(telemetry_tools.NAME, args, "the measured run data"))
         trace_id = request["trace_id"]
+        attached = await self._attachments(ctx, request)
+        visual = Intent.VISUAL_LOOKUP in analysis.raw.intents or analysis.raw.needs_visuals
+        for item in attached:
+            if item.is_image and visual and self.deps.embed_image is not None:
+                vector = await asyncio.to_thread(self.deps.embed_image, item.data)
+                args = playbooks.similar_photos(analysis, request["question"], vector)
+                calls.append(PlannedCall(visual_tools.NAME, args, f"photos similar to {item.name}"))
         results = await asyncio.gather(*(self._call(ctx, trace_id, i, c) for i, c in enumerate(calls)))
+        results = [*await self._read_attachments(ctx, request, attached), *results]
         if plan.read_top_document:
             top = next((r for r in results if r.tool == "search_documents" and r.provenance), None)
             if top is not None and top.provenance[0].doc_id:
@@ -299,6 +317,31 @@ class AnswerWorkflow(Workflow):
             )
             _step(ctx, trace_id, step_id, "tool", description, True, tool=external_tools.NAME)
             results.append(result)
+        return results
+
+    async def _attachments(self, ctx: Context, request: dict) -> list[attachment_tools.Attached]:
+        """The files the user attached (answer-time only): fetched once, size-capped; a failure is skipped."""
+        out = []
+        for i, item in enumerate(request.get("attachments") or []):
+            try:
+                data = await asyncio.to_thread(self.deps.fetch_attachment, item["url"])
+            except Exception as exc:  # noqa: BLE001 — an unreadable upload must not fail the answer
+                log.warning("attachment %s of %s not fetched: %s", i, request["trace_id"], exc)
+                continue
+            out.append(attachment_tools.Attached(item["name"], item.get("mime_type") or "", data))
+        return out
+
+    async def _read_attachments(self, ctx, request: dict, attached) -> list[ToolResult]:
+        results = []
+        for i, item in enumerate(attached):
+            step_id, description = f"attachment{i}", f"Reading your attachment {item.name}"
+            _step(ctx, request["trace_id"], step_id, "tool", description, False, tool=attachment_tools.NAME)
+            results.append(
+                await attachment_tools.read_attachment(
+                    self.deps.gemini, item, request["question"], trace_id=request["trace_id"]
+                )
+            )
+            _step(ctx, request["trace_id"], step_id, "tool", description, True, tool=attachment_tools.NAME)
         return results
 
     async def _extract(self, request: dict, name: str, schema: type[BaseModel]) -> Any:

@@ -93,6 +93,13 @@ def _visuals(analysis: Analysis, question: str, *, kinds=(), relook: str | None 
     )
 
 
+def similar_photos(analysis: Analysis, question: str, vector: list[float]) -> InspectVisualsArgs:
+    """T3 for a photo the user attached (file 07 §9.7): nearest hardware photos by image embedding."""
+    return _visuals(analysis, question, kinds=["hardware_photo"]).model_copy(
+        update={"similar_to_vector": vector, "query": ""}
+    )
+
+
 def _tags(analysis: Analysis) -> list[str]:
     tag_types = {EntityType.SENSOR_TAG, EntityType.PART_NUMBER, EntityType.COMPONENT}
     return [e.surface for e in analysis.raw.entities if e.type in tag_types] + analysis.hardware_items

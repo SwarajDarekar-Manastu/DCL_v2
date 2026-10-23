@@ -485,6 +485,7 @@ def engine_deps(settings) -> Any:
         gemini=GeminiClient(settings),
         session_factory=_session_factory(),
         embed_query=lambda q: models.embed_queries([q])[0],
+        embed_image=lambda data: models.embed_images([data])[0],
         rerank=models.rerank,
         alias_index=index_from_db,
         viewer_url=_viewer_url,
@@ -566,6 +567,7 @@ async def answer(
                 if request.options.benchmark
                 else None,
                 playbook_hint=request.options.playbook_hint,
+                attachments=[a.model_dump() for a in request.attachments],
             )
             async for payload in ordered(handler.stream_events()):
                 yield to_sse(EVENTS.validate_python(payload))

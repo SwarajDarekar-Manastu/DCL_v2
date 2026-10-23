@@ -617,3 +617,63 @@ def test_every_marker_in_the_answer_has_a_citation_event_and_vice_versa(searches
     markers = {n.strip() for group in re.findall(r"\[([\d, ]+)\]", text) for n in group.split(",")}
     assert markers == {c["citation_id"] for c in of(events, "citation")} == {"1"}
     assert "E9" not in text and "E1" not in text
+
+
+def test_attachments_become_user_provided_evidence_and_a_photo_searches_similar_ones(searches, monkeypatch):
+    searches(report_hit)
+    seen = []
+    monkeypatch.setattr(
+        wf.visual_tools,
+        "inspect_visuals",
+        lambda session, args, **kw: (
+            seen.append(args) or ToolResult(tool="inspect_visuals", result={}, display="none")
+        ),
+    )
+    uploads = {
+        "https://minio.test/a": b"T04 chamber pressure 12.4 bar\n",
+        "https://minio.test/b": b"\x89PNG photo",
+    }
+    client = Client(
+        query_analysis=[{"intents": ["fact_lookup", "visual_lookup"], "language": "en"}],
+        relook=[],
+        synthesis=[
+            {
+                "answer_markdown": "Your file lists 12.4 bar for T04 [E1].",
+                "claims": [
+                    {"text": "Your file lists 12.4 bar for T04", "kind": "numeric", "evidence_ids": ["E1"]}
+                ],
+            }
+        ],
+        verify=[{"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "stated"}]}],
+        attachment=["A photo of a burned injector mesh."],
+    )
+
+    async def go():
+        deps = wf.EngineDeps(
+            gemini=client,
+            session_factory=contextlib.nullcontext,
+            embed_query=lambda q: [0.0],
+            rerank=None,
+            alias_index=lambda session: AliasIndex(),
+            fetch_attachment=uploads.__getitem__,
+            embed_image=lambda data: [0.5] * 768,
+        )
+        handler = wf.AnswerWorkflow(deps, timeout=30).run(
+            question="Compare with my file and show similar photos",
+            trace_id=str(uuid.uuid4()),
+            groups=[],
+            attachments=[
+                {"name": "pc.csv", "mime_type": "text/csv", "url": "https://minio.test/a"},
+                {"name": "mesh.png", "mime_type": "image/png", "url": "https://minio.test/b"},
+            ],
+        )
+        events = [p async for p in wf.ordered(handler.stream_events())]
+        return events, await handler
+
+    events, done = asyncio.run(go())
+    [citation] = of(events, "citation")
+    assert citation["provenance"] == "user_provided" and citation["label"] == "pc.csv (your attachment)"
+    assert any(s.get("tool") == "user_attachment" for s in of(events, "step"))
+    assert any(a.similar_to_vector == [0.5] * 768 for a in seen)  # the attached photo searched the index
+    assert "attachment" in client.purposes  # the photo was read by Gemini, the CSV was not
+    assert client.purposes.count("attachment") == 1
