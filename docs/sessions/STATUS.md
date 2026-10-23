@@ -1077,3 +1077,12 @@ Live: A1 re-run in progress. ECSS-E-ST-35-06C FAILED on the cpu_parse soft time 
 Blocked on: nothing
 Needs from others: S4: cpu_parse time limit for large standards (or S2 caps formula enrichment); redeploy, after which I switch on A2/B/E/G.
 Next: A1 counts and the M2 check when the batch drains; A2/B/E/G on the stack after S4's word
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: A1 formula and code enrichment cap and per-stage timings. This addresses ECSS-E-ST-35-06C, which FAILED past cpu_parse's soft limit.
+- `process_pdf(enrichment_max=…)` caps Docling's CodeFormula items per document; the default of 200 is the Lead's figure. Skipped items keep their layout text, and a SOFT LOW_CONFIDENCE flag names the count. The parameter is fed from pipeline_config `routes.A1.formula_enrichment_max`.
+- The CIR gets `timings.json`: seconds per route stage, per Docling run (with Docling's own stage profile) and the enrichment counts.
+- Measured on CPU (a 3-formula page): about 30 s per formula. Batching gives no speed-up (batch 1: 79–107 s, batch 5: 113 s, batch 16: 117 s), so Docling's batch size stays. With 200 formulas, enrichment alone would take about 100 minutes.
+Blocked on: nothing
+Needs from others: S1: pass pipeline_config `routes.A1.formula_enrichment_max` from office_run to `process_pdf(enrichment_max=)`. Lead: a lower default (about 30 formulas, roughly 15 min) or GPU enrichment, given about 30 s per formula on CPU
+Next: the four A1 crop defects (clip to the region bbox, handwriting crop gate, table crops, contact sheet)

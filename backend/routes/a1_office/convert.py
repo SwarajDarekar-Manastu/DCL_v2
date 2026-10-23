@@ -15,6 +15,13 @@ Docling runs Tesseract's orientation detection (OSD, `--psm 0`) on every OCR'd p
 the page has too few characters for it; OCR then proceeds with our explicit script model and orientation 0,
 so `QuietOsd` logs that one case as INFO. Other OSD failures stay errors. Rotation comes from triage.
 
+Formula and code enrichment (Docling's CodeFormula VLM on CPU) is capped per document: an
+`EnrichmentBudget` is set around a document's conversions (`enrichment_budget`), the model's elements beyond
+`limit` are skipped (their text stays the layout text) and counted. Batching was measured and does not help
+on CPU (3 formulas: batch 1 79–107 s, batch 5 113 s, batch 16 117 s; about 30 s per formula), so Docling's
+batch size stays. ECSS-E-ST-35-06C ran past the cpu_parse limit in this stage on the live re-run. Docling's
+own stage profile (`timings`) is kept per run so a slow document shows where the time went.
+
 Second pass (A1.3): a scanned page whose `ocr_score` stays below 0.6 is converted again with EasyOCR when
 its script is Latin; a page that is still low goes whole to `transcribe_page` (Gemini, any script).
 """
@@ -22,6 +29,8 @@ its script is Latin; a page that is still low goes whole to `transcribe_page` (G
 import io
 import logging
 from collections.abc import Iterable
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
@@ -66,6 +75,7 @@ class RunResult:
     run: Run
     document: Any  # docling_core DoclingDocument
     page_confidence: dict[int, dict[str, Any]] = field(default_factory=dict)
+    timings: dict[str, float] = field(default_factory=dict)  # Docling stage → seconds (summed)
 
 
 def engine_languages(engine: str, language: str | None, script: str | None = None) -> tuple[str, ...]:
@@ -150,15 +160,76 @@ def quiet_osd() -> None:
         logger.addFilter(QuietOsd())
 
 
+ENRICHMENT_MAX = 200  # default of pipeline_config `routes.A1.formula_enrichment_max`
+
+
+@dataclass
+class EnrichmentBudget:
+    """Formula and code items one document may send to the CodeFormula model."""
+
+    limit: int = ENRICHMENT_MAX
+    used: int = 0
+    skipped: int = 0
+
+
+_BUDGET: ContextVar[EnrichmentBudget | None] = ContextVar("a1_enrichment_budget", default=None)
+
+
+@contextmanager
+def enrichment_budget(limit: int = ENRICHMENT_MAX):
+    budget = EnrichmentBudget(limit=limit)
+    token = _BUDGET.set(budget)
+    try:
+        yield budget
+    finally:
+        _BUDGET.reset(token)
+
+
+def cap_enrichment(model) -> None:
+    """Wrap a Docling enrichment model so the current document's budget decides which elements it gets."""
+    if getattr(model, "_dcl_capped", False):
+        return
+    original = model.prepare_element
+
+    def prepare_element(conv_res, element):
+        prepared = original(conv_res=conv_res, element=element)
+        budget = _BUDGET.get()
+        if prepared is None or budget is None:
+            return prepared
+        if budget.used >= budget.limit:
+            budget.skipped += 1
+            return None
+        budget.used += 1
+        return prepared
+
+    model.prepare_element = prepare_element
+    model._dcl_capped = True
+
+
 @lru_cache(maxsize=CONVERTER_CACHE)
 def _converter(ocr: OcrPlan | None):
     from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.settings import settings
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
     quiet_osd()
-    return DocumentConverter(
+    settings.debug.profile_pipeline_timings = True
+    converter = DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options(ocr))}
     )
+    pipeline = converter._get_pipeline(InputFormat.PDF)  # built now so its enrichment model can be capped
+    for model in pipeline.enrichment_pipe:
+        if type(model).__name__.startswith("CodeFormula"):
+            cap_enrichment(model)
+    return converter
+
+
+def _timings(result) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for key, item in (getattr(result, "timings", None) or {}).items():
+        times = getattr(item, "times", None) or []
+        out[key] = round(float(sum(times)), 3)
+    return out
 
 
 def convert_run(pdf_bytes: bytes, run: Run, name: str = "document.pdf") -> RunResult:
@@ -168,7 +239,7 @@ def convert_run(pdf_bytes: bytes, run: Run, name: str = "document.pdf") -> RunRe
         DocumentStream(name=name, stream=io.BytesIO(pdf_bytes)), page_range=(run.first, run.last)
     )
     pages = result.confidence.model_dump(mode="json").get("pages", {}) if result.confidence else {}
-    return RunResult(run, result.document, {int(k): v for k, v in pages.items()})
+    return RunResult(run, result.document, {int(k): v for k, v in pages.items()}, _timings(result))
 
 
 def low_ocr_pages(result: RunResult) -> list[int]:
