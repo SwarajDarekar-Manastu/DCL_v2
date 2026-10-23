@@ -14,7 +14,7 @@ Status: **build** = S3 builds it now (one merge request each, in this order); **
 | 1 | 3.2 | "Rollback to version" per **section** | per key and per section | done 2026-10-23 |
 | 2 | 3.2 Sources | roots, auth status, "start device-code sign-in", webhook status, live counts (items held, blobs waiting), "download/process everything" with Gemini cost | roots table, device-code sign-in, process everything with preview | done 2026-10-23 (cost shown once S1 prices it) |
 | 3 | 3.2 Routes | "re-process affected documents" button with count | re-process by route, count first | done 2026-10-23 |
-| 4 | 3.2 Models | "requires re-embedding N nodes" before an embedding-model change | generic JSON edit, no impact | API: S1/S2 impact for `models.*` |
+| 4 | 3.2 Models | "requires re-embedding N nodes" before an embedding-model change | re-embed warning with acknowledgement | done 2026-10-23 |
 | 5 | 3.2 Prompts | versioned prompt texts, diff viewer, "run on sample" | Prompts screen over S2's registry | done 2026-10-23 |
 | 6 | 4.2 QueueList | saved filters | named saved filters per user (this browser) | done 2026-10-23 |
 | 7 | 4.2 EvidencePane | PageViewer (page render, bbox per flag, zoom, crop lightbox, OCR text toggle) for `low_confidence`; TablePreview (A/B side by side, cell diff) for `json_schema` / table conflicts; panes for `unit_fact`, `file_facts`, `sensitive`; PhotoView | dedicated panes for `unit_telemetry`, `array_schema`, `conflict`, `parse_failure`; the other five kinds fall back to a generic JSON pane | done 2026-10-23 (component tests; no live flags of these kinds yet). OCR-text toggle done 2026-10-23 over S1's `page_ocr_text` / `ocr_text` |
