@@ -16,6 +16,7 @@ class Queue(StrEnum):
     MEDIA = "media"
     VISION_BATCH = "vision_batch"
     EMBED = "embed"
+    BENCHMARK = "benchmark"
 
 
 @dataclass(frozen=True)
@@ -57,8 +58,12 @@ POOLS: dict[Queue, Pool] = {
         Pool(Queue.MEDIA, "prefork", 2, 4096, 2048, 3600, 3900, 2),
         Pool(Queue.VISION_BATCH, "threads", 2, 1024, None, 900, 1000, 5),
         Pool(Queue.EMBED, "threads", 2, 2048, None, 600, 660, 5),
+        # One benchmark answer at a time, Answer Engine in process; prefork so the time limits are enforced.
+        Pool(Queue.BENCHMARK, "prefork", 1, 2048, 1536, 950, 1000, 1),
     )
 }
+TASK_ROUTES = {"dcl.benchmark.*": {"queue": str(Queue.BENCHMARK)}}
+"""Routes for tasks that do not name a queue themselves (a task's own `queue=` takes precedence)."""
 VISIBILITY_TIMEOUT_S = 2 * max(pool.time_limit_s for pool in POOLS.values())
 
 DEAD_LETTER_KEY = "dcl:dead_letter"

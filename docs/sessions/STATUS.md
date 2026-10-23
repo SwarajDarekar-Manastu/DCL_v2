@@ -866,3 +866,9 @@ Merged / ready: the Benchmark pages now match S2's real runner output.
 Blocked on: nothing.
 Needs from others: S2 (via the Lead): 38 of 56 real results are runner errors, either "RuntimeError: <asyncio.locks.Event> is bound to a different event loop" (likely the lru_cached RunnerDeps reused across asyncio.run calls in tasks.py) or a 300 s WorkflowTimeoutError. Answered cases took about 225 to 236 s.
 Next: idle.
+
+## 2026-10-23 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c-benchq
+Merged / ready: fbd84af on claude/gifted-hofstadter-0bec1c-benchq (from main a067dca): queue `benchmark` (prefork 1, 950/1000 s, 2 GB), worker-benchmark, TASK_ROUTES for dcl.benchmark.*, beat sweep moved. Test: uv run pytest 1384 passed, 306 skipped
+Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
+Needs from others: Lead — merge; add the `benchmark` row to file 10 §4. S2 — set `queue=str(Queue.BENCHMARK)` (or drop `queue=`) on dcl.benchmark.start/case/sweep in backend/benchmark/tasks.py
+Next: redeploy beat, worker-io-light and worker-benchmark from main after the merge
