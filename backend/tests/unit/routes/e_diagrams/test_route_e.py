@@ -259,6 +259,27 @@ def test_svg_english_variant_and_layers():
     assert _component(processed, "Main valve").content == "Main valve (text label). Part of Labels"
 
 
+def test_svg_is_rendered_and_read_by_read_schematic():
+    pytest.importorskip("resvg_py")
+    svg = b"""<svg xmlns="http://www.w3.org/2000/svg" width="300" height="120" viewBox="0 0 300 120">
+  <rect x="10" y="10" width="80" height="40" fill="none" stroke="black"/>
+  <text x="20" y="35">SV-1</text>
+  <image href="../../etc/secret.png" x="0" y="0" width="10" height="10"/>
+</svg>"""
+    assets = {}
+    vision = FakeVision(tags=("SV-1",))
+    processed = _run("valve.svg", svg, assets=assets, vision=vision, cloud_allowed=True)
+
+    render = next(a for a in processed.assets if a.kind == "diagram_render")
+    png = assets[render.minio_uri.removeprefix("s3://dcl-assets/")]
+    assert png.startswith(b"\x89PNG") and render.page_no == 1
+    from PIL import Image
+
+    assert Image.open(io.BytesIO(png)).size == (550, 220)  # 300 units / 60 per inch at 110 dpi
+    assert vision.calls == 1 and processed.nodes[0].asset_ref == "render:1"
+    assert not any(f.flag_type == FlagType.CONFLICT for f in processed.flags)
+
+
 def _vsdx(pages: dict[str, str]) -> bytes:
     buffer = io.BytesIO()
     ns = "http://schemas.microsoft.com/office/visio/2012/main"

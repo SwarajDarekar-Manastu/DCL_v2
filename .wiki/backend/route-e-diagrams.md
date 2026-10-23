@@ -29,11 +29,11 @@ Provides:
 - `process_diagram(data, *, blob_sha256, file_name, folder, stores, vision=None, cloud_allowed=False, doc_id=None)` → `ProcessedDocument` (route E, parser_version 1); extensions `.drawio .dio .xsd .svg .vsdx .dxf` and XML that starts `<mxfile`/`<mxGraphModel`
 - `documents.catalog`: `{diagram_format, pages, nodes, edges, groups, notes, extra, duplicate_tags}`; CIR `graph.json` (catalog + schematic readings)
 - Nodes: `diagram_summary` per page (`page{n}`), `diagram_component` per labeled component (`c{page}:{id}`), `figure` (source vlm) per schematic reading; XSD: one `child` per element/type. `page_no` on every diagram node, `line_start` where the XML has one
-- Assets: `diagrams/{sha256}/{page:02d}.png` (`diagram_render`), linked from the page summary
+- Assets: `diagrams/{sha256}/{page:02d}.png` (`diagram_render`) for draw.io pages, SVG and DXF, linked from the page summary
 - Mentions: `tag` (PT-101, SV-1, T7), `quantity` (ranges such as 0–250 bar), `enumeration` (XSD)
 - Flags: PARSE_FAILURE HARD (invalid XML, unreadable package/DXF); CONFLICT SOFT (> 30 % unlabeled connections, > 20 % orphan components; tags read by `read_schematic` that the file lacks)
 
-Consumes: VisionService `read_schematic` (renders and embedded images, cloud only), `figures.render_schematic` (S2); lxml, ezdxf 1.4.4, matplotlib.
+Consumes: VisionService `read_schematic` (renders and embedded images, cloud only), `figures.render_schematic` (S2); lxml, ezdxf 1.4.4, matplotlib, resvg-py 0.5.0.
 
 Waiting on others: S1 registers the adapter (`dcl.process.route_e`) and runner; S1 adds `.svg .vsdx .dxf` kinds.
 
@@ -53,7 +53,7 @@ Waiting on others: S1 registers the adapter (`dcl.process.route_e`) and runner; 
 
 ## Notes
 
-- No draw.io CLI on the workers: the render is drawn from the parsed geometry (rotations ignored). SVG has no rasterizer in the dependencies, so no render or `read_schematic` for SVG.
+- No draw.io CLI on the workers: the render is drawn from the parsed geometry (rotations ignored). SVG is rasterized by resvg-py 0.5.0 (English `<switch>` variants, relative image links not resolved) at the draw.io size rule, and `read_schematic` reads it.
 - Edge medium (dashed = electrical, solid = fluid) only on P&ID pages (`mxgraph.pid` shapes); fault trees and flow charts get none.
 - Lines with neither end attached (dimension and leader lines) are counted as free lines, not connections, and do not count toward the unlabeled-edge check.
 - The two real thruster drawings (E5, E6) are cross-sections whose labels are text cells, so they index as notes and raise the incomplete-graph CONFLICT (SOFT), as the manual's thresholds say.
@@ -66,6 +66,7 @@ Waiting on others: S1 registers the adapter (`dcl.process.route_e`) and runner; 
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-23 | S6 | Route built: draw.io, XSD, SVG, Visio, DXF; renders and read_schematic cross-check; tests on synthetic and real samples |
 | 2026-10-23 | S6 | Samples smoke test `backend/tests/unit/routes/test_samples_smoke.py` (every accepted file in data/samples, vision off) |
+| 2026-10-23 | S6 | SVG render with resvg-py; read_schematic on it |
 
 ## Related
 

@@ -30,6 +30,8 @@ class Client:
     async def generate(self, *, model, messages, context, schema, **options):
         self.calls.append((context.purpose, messages[-1].parts[0].text, options))
         reply = self.replies[context.purpose.split(".")[1]].pop(0)
+        if isinstance(reply, Exception):
+            raise reply
         return GenerateResult(
             text="",
             parsed=schema.model_validate(reply),
@@ -222,3 +224,18 @@ def test_markers_are_renumbered_to_the_citation_events_one_to_one():
     assert [s.label for s in sources] == ["run TP07_T04", "Test Report 07, p. 8", "Moog datasheet, p. 2"]
     markers = {int(n) for group in re.findall(r"\[([\d, ]+)\]", text) for n in group.split(",")}
     assert markers == set(range(1, len(sources) + 1))  # every marker has an event and every event a marker
+
+
+def test_a_failed_or_cut_repair_removes_the_claim_instead_of_failing_the_answer():
+    from backend.llm_engine.gemini_types import StructuredOutputError
+
+    rounded = [{"text": "Steady-state mean 12 bar(a).", "kind": "numeric", "evidence_ids": ["E3"]}]
+    entailed = {"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "ok"}]}
+    client = Client(
+        synthesis=[synthesis(rounded, "Steady-state mean 12 bar(a). [E3]")],
+        repair=[StructuredOutputError("cut at max_output_tokens", raw_text="{")],
+        verify=[entailed],
+    )
+    out = asyncio.run(answer(client, "q", {}, [TELEMETRY]))
+    assert out.claims == [] and "12 bar(a)" not in out.markdown
+    assert client.calls[2][2]["max_output_tokens"] == 2048

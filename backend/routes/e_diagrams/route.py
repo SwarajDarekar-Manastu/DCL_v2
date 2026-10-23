@@ -6,8 +6,8 @@ in the CIR too, and the text nodes are a ``diagram_summary`` per page plus a ``d
 labeled component with its neighbourhood. DXF adds the layers, dimensions, blocks and table texts to its
 summary. XSD becomes a section tree (one node per element or type) with ``enumeration`` mentions.
 
-Renders (``render.py``): each draw.io page and the DXF modelspace as ``diagram_render`` assets
-(``diagrams/{sha256}/{page:02d}.png``). When cloud processing is allowed, ``read_schematic`` reads each
+Renders (``render.py``): each draw.io page, the SVG drawing and the DXF modelspace as ``diagram_render``
+assets (``diagrams/{sha256}/{page:02d}.png``). When cloud processing is allowed, ``read_schematic`` reads each
 render and each image embedded in a draw.io page; its reading becomes a ``vlm`` node, and tags the model
 reads that the file does not contain raise ``CONFLICT`` SOFT (labels drawn as free text or mislabeled).
 
@@ -202,6 +202,16 @@ def process_diagram(
                         renders.append((page.number, png))
             elif kind == "svg":
                 graph = formats.parse_svg(data)
+                try:
+                    from backend.routes.e_diagrams.drawio import parse_xml
+                    from backend.routes.e_diagrams.render import render_svg, svg_size
+
+                    png = render_svg(data, svg_size(parse_xml(data)))
+                except Exception as exc:  # noqa: BLE001 — a failed render loses only the picture
+                    log.warning("render of %s failed: %s", file_name, exc)
+                    png = None
+                if png:
+                    renders.append((1, png))
             elif kind == "vsdx":
                 graph = formats.parse_vsdx(data)
             elif kind == "dxf":
