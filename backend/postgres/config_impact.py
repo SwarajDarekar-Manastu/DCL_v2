@@ -206,6 +206,35 @@ def _gate_impact(session: Session, gate_changes: Mapping[str, Any]) -> Impact:
     )
 
 
+def _models_impact(session: Session, key: str) -> Impact:
+    """file 08 §3.2 Models: an embedding-model change "requires re-embedding N nodes" (vectors from one
+    model never mix with another's); other model keys apply to new calls only."""
+    from sqlalchemy import func
+
+    from backend.postgres.models import DocumentNode
+
+    if "embedding" not in key:
+        return Impact(key, "applies to new calls; nothing is re-processed", {})
+    text, images, distinct = session.execute(
+        select(
+            func.count(DocumentNode.embedding),
+            func.count(DocumentNode.image_embedding),
+            func.count(func.distinct(DocumentNode.embed_text_hash)),
+        )
+    ).one()
+    return Impact(
+        key,
+        f"requires re-embedding {text + images} nodes ({text} text, {images} image; "
+        f"{distinct} distinct texts) through the local embedding service",
+        {
+            "reembed_nodes": text + images,
+            "text_nodes": text,
+            "image_nodes": images,
+            "distinct_texts": distinct,
+        },
+    )
+
+
 def preview(session: Session, values: Mapping[str, Any]) -> list[Impact]:
     """Impact of validated ``values`` (``pipeline_config.validate_changes``) against the current state."""
     impacts = []
@@ -217,6 +246,8 @@ def preview(session: Session, values: Mapping[str, Any]) -> list[Impact]:
             impacts.append(_processing_scope_impact(session, key, list(value)))
         elif key.startswith("routes.") and key.endswith(".enabled"):
             impacts.append(_route_impact(session, key, bool(value)))
+        elif key.startswith("models."):
+            impacts.append(_models_impact(session, key))
     if gate_changes:
         impacts.append(_gate_impact(session, gate_changes))
     return impacts

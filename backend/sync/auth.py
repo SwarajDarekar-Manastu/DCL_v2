@@ -195,12 +195,16 @@ class TokenProvider:
             raise ReauthRequired(f"silent token acquisition failed ({error}); run the device-code sign-in")
         return result["access_token"]
 
-    def sign_in(self, show: Callable[[str], None]) -> str:
-        """Device-code flow. ``show`` receives MSAL's message with the code and verification URL."""
+    def sign_in(self, show: Callable[[str], None], on_flow: Callable[[dict], None] | None = None) -> str:
+        """Device-code flow. ``show`` receives MSAL's message with the code and verification URL;
+        ``on_flow`` (the Console's sign-in task) receives the flow itself (``user_code``,
+        ``verification_uri``, ``expires_in``)."""
         flow = self._app.initiate_device_flow(scopes=self._config.scopes)
         if "user_code" not in flow:
             raise AuthError(f"device flow could not start ({flow.get('error', 'unknown')})")
         show(flow["message"])
+        if on_flow is not None:
+            on_flow(flow)
         with self._lock:
             result = self._app.acquire_token_by_device_flow(flow)
             if "access_token" not in result:

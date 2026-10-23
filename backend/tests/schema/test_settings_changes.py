@@ -263,3 +263,51 @@ def test_processing_scope_preview_estimates_cost_from_the_ledger(client, session
         0.02,
         "mean $0.0200 per document over 5 documents",
     )
+
+
+def test_an_embedding_model_change_counts_the_nodes_to_re_embed(client, session):
+    from backend.postgres.models import Document, DocumentNode
+
+    doc = Document(route="A1", status="ACTIVE", title="r")
+    session.add(doc)
+    session.flush()
+    vector = [0.01] * 768
+    session.add_all(
+        [
+            DocumentNode(
+                doc_id=doc.doc_id,
+                node_type="child",
+                ordinal=i,
+                content=f"c{i}",
+                source="printed",
+                embedding=vector,
+                embed_text_hash=("a" if i < 2 else "b") * 64,
+            )
+            for i in range(3)
+        ]
+        + [
+            DocumentNode(
+                doc_id=doc.doc_id,
+                node_type="photo",
+                ordinal=3,
+                content="p",
+                source="vlm",
+                image_embedding=vector,
+            )
+        ]
+    )
+    session.commit()
+    batch = {
+        "changes": [
+            {"key": "models.embedding", "value": "embeddinggemma-3@768"},
+            {"key": "models.reasoning", "value": "gemini-3.8-flash"},
+        ]
+    }
+    impacts = {i["key"]: i for i in client.post("/settings/preview", json=batch).json()["impacts"]}
+    assert impacts["models.embedding"]["counts"] == {
+        "reembed_nodes": 4,
+        "text_nodes": 3,
+        "image_nodes": 1,
+        "distinct_texts": 2,
+    }
+    assert impacts["models.reasoning"]["counts"] == {}

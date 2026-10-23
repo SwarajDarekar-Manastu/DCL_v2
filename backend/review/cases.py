@@ -8,6 +8,7 @@ matches re-run from their staged data. Dry run and undo are not here yet (the ro
 """
 
 import json
+import logging
 import re
 import uuid
 from collections import Counter
@@ -50,8 +51,20 @@ from backend.review.api_models import (
 )
 from backend.review.rules import ChannelMapBody, RuleScope
 
+log = logging.getLogger(__name__)
 OPEN = (FlagStatus.OPEN, FlagStatus.IN_PROGRESS, FlagStatus.REOPENED)
 SEVERITY_RANK = {FlagSeverity.HARD: 0, FlagSeverity.SOFT: 1}
+
+
+def _route(value: str | None, where: str) -> Route | None:
+    """A stored route value, or None (logged) when a row carries one that is not a route."""
+    if value is None:
+        return None
+    try:
+        return Route(value)
+    except ValueError:
+        log.warning("unexpected route %r on %s; shown without a route", value, where)
+        return None
 
 
 class CaseNotFound(LookupError):
@@ -164,9 +177,9 @@ def _summary(case: _Case, ctx: _Context) -> CaseSummary:
         title=(document.title if document and document.title else None) or (item.name if item else case.key),
         path=item.path_cached if item else None,
         root_name=item.root_name if item else None,
-        route=Route(document.route)
+        route=_route(document.route, f"document {document.doc_id}")
         if document and document.route
-        else (Route(first.route) if first.route else None),
+        else _route(first.route, f"flag {first.flag_id}"),
         status=case.status,
         max_severity=max_severity,
         flag_counts=dict(Counter(FlagType(f.flag_type) for f in counted)),
@@ -263,7 +276,8 @@ def _case(session: Session, case_key: str) -> _Case:
 def flag_view(flag: ReviewFlag, is_admin: bool) -> FlagView:
     return FlagView.model_validate(
         {
-            **{c: getattr(flag, c) for c in FlagView.model_fields if c != "allowed_actions"},
+            **{c: getattr(flag, c) for c in FlagView.model_fields if c not in ("allowed_actions", "route")},
+            "route": _route(flag.route, f"flag {flag.flag_id}"),
             "allowed_actions": allowed_actions_for(FlagType(flag.flag_type), is_admin),
         }
     )

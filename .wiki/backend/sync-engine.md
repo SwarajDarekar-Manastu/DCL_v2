@@ -15,6 +15,7 @@ Enumerate the four shared OneDrive folders through Microsoft Graph delta, react 
 ## Location
 
 Code:
+- `backend/sync/status.py` (`root_views`: per-root status for the Console) and the Console routes in `backend/api/sync.py`
 - `backend/sync/webhooks.py` (file 02 §3.3, off until `sync.webhooks_enabled` and `DCL_GRAPH_WEBHOOK_URL`/`_CLIENT_STATE`: `SubscriptionClient` (only `/subscriptions`), `ensure_subscriptions` (create, renew at 70% of 3 days, recreate when gone), `roots_to_sync` (clientState check), `debounce` (one delta per root per 30 s)); receiver `POST /sync/webhook` in `backend/api/sync.py`; tasks `dcl.sync.poll_deltas` (every 5 min: settled, unlocked roots) and `dcl.sync.renew_subscriptions` (hourly) in `backend/celery_redis/tasks_sync.py`
 - `backend/sync/graph_client.py` (GET-only Graph client; relative paths or absolute Graph links only)
 - `backend/sync/auth.py` (encrypted MSAL cache, `TokenProvider` silent-first + device-code sign-in, `check_access`, CLI)
@@ -82,6 +83,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | Celery tasks (tasks_sync.py): budgeted delta with resume and lock, downloads, token health; 8 tests |
 | 2026-10-22 | S1 | 410/forced resync in `delta.py` (no separate resync.py); generation = max(resync_gen)+1 per root committed with the first page |
 | 2026-10-23 | S1 | Real-time sync: 5-minute delta poll, Graph subscriptions and webhook receiver behind a flag; 8 tests |
+| 2026-10-23 | S1 | Console routes: `GET /sync/roots` (Sources and Ops: auth, delta times, webhook or poll, counts, waiting files, errors; `backend/sync/status.py`), device-code sign-in via `dcl.sync.sign_in` on io_light (`POST|GET /sync/sign-in`), `POST /sync/process-everything`, `GET|POST /sync/redispatch`; `test_sync_routes.py` |
 
 ## Related
 
