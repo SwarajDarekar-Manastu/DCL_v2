@@ -1042,3 +1042,38 @@ Merged / ready: 9db42e9 (the chat-feedback flag uses the document's route; Gemin
 Blocked on: S1's A1 re-run. On the stack, 26 A1 documents are still PROCESSING, 7 are ACTIVE with a language, and the parse worker logged no vision call in the last 30 min.
 - So far llm_calls holds only engine and test calls, nothing with doc_id. Once the re-run runs, I check that the workers' vision calls reach llm_calls with doc_id; per-document tokens depend on it.
 Next: the A1 OCR-per-script and token report, then the handwriting calibration (medium vs high) on the TP7 sheets
+## 2026-10-23 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready (merge requests, stacked on the branch):
+- Review API, item 6 (5f42ee4): dry run (a telemetry set_unit's stats converted to SI against S5's sanity range), undo (the last resolution within 30 days; a rule only that resolution used is retired; junked locations restored; committed documents rebuilt), simulate. No review route answers 501 now.
+- File kinds (2e8761a): DXF/SVG/VSDX → E; STL/STEP/IGES/DWG → G; .m/.c/.h → B.
+- Runners and adapters for all eight routes (aafb9d3): one shared runner; A1 on `process_office` (the DOCX released); A2, B, E, G (S6) and D, F (S2) tasks.
+  - G's archive members are registered as derived blobs; CAD references become REFERENCES relations.
+  - D: one model reading per photo burst.
+- Revision supersession (274e0d2): the newer revision of a drawing in the same folder SUPERSEDES the older; equal revisions raise CONFLICT SOFT.
+- Live: the locator backfill is done. 0 of 567 Route C table/row nodes lack a locator.
+Test: `uv run pytest -q --ignore=backend/tests/integration/benchmark/test_runner_db.py` with test servers: 1,963 tests, 0 failures, 83 skipped. S2's file leaves a Session open (line 174), which hangs the teardown downgrade; reported.
+Blocked on: nothing
+Needs from others: S4: redeploy cpu_parse and media after the merge; then the routes can be switched on (A2, B, E, G now; D, F once the media image is live). S5: `.c` out of the gate's junk list.
+Next: the A1 counts and the M2 live check when the batch ends; Console API items 8–11
+## 2026-10-23 — DCL S6 Routes — claude/s6-routes
+Merged / ready: SVG render in Route E. The SVG is rasterized with resvg-py at the draw.io size rule and read_schematic runs on it.
+Test: `uv run pytest -q` exit 0; E: 14 tests pass.
+Blocked on: nothing.
+Needs from others: nothing.
+Next: idle until messaged.
+
+## 2026-10-23 — DCL S1 Backend — claude/competent-brahmagupta-3a5541
+Merged / ready (merge requests, one per item):
+- Route tolerance (b7ab8ed): a flag whose route is not a Route (S2 once wrote "answer") opens with route null and a warning.
+- Items 8 and 9 (45caa72):
+  - `GET /sync/roots` serves Sources and the Ops page: auth, delta times, webhook or poll, counts, waiting files, errors.
+  - Device-code sign-in through `dcl.sync.sign_in` on io_light (`POST|GET /sync/sign-in`).
+  - `POST /sync/process-everything` goes through the audited settings path.
+  - `GET|POST /sync/redispatch?route=X` counts, then re-runs a route's committed documents.
+- Item 10 (1a706e2): `GET /entities`, `POST /entities/merge`, `POST /entities/split`, with audit rows.
+- Item 11 (339722b): the settings preview counts the nodes an embedding-model change re-embeds.
+Test: `uv run pytest -q --ignore=backend/tests/integration/benchmark/test_runner_db.py` with test servers: 1,993 tests, 0 failures, 88 skipped.
+Live: A1 re-run in progress. ECSS-E-ST-35-06C FAILED on the cpu_parse soft time limit (1,800 s) during formula enrichment on CPU.
+Blocked on: nothing
+Needs from others: S4: cpu_parse time limit for large standards (or S2 caps formula enrichment); redeploy, after which I switch on A2/B/E/G.
+Next: A1 counts and the M2 check when the batch drains; A2/B/E/G on the stack after S4's word

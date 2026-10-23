@@ -2,10 +2,13 @@
 
 There is no draw.io CLI on the workers, so a draw.io page is drawn from its parsed geometry with matplotlib
 (boxes, labels, connections, notes); a DXF modelspace is drawn with ezdxf's matplotlib backend. Both use the
-object-oriented ``Figure`` API, so no global pyplot state is touched.
+object-oriented ``Figure`` API, so no global pyplot state is touched. An SVG is rasterized by resvg (no system
+libraries), English ``<switch>`` variants first, at the draw.io size rule: 1 inch per 60 drawing units at
+``RENDER_DPI``, the long side at most ``MAX_SIDE_INCHES`` and at least 4 inches.
 """
 
 import io
+import tempfile
 
 from backend.routes.e_diagrams.graph import Graph
 
@@ -84,3 +87,50 @@ def render_dxf(document) -> bytes | None:
     axes = figure.add_axes((0, 0, 1, 1))
     Frontend(RenderContext(document), MatplotlibBackend(axes)).draw_layout(modelspace, finalize=True)
     return _png(figure)
+
+
+def _length(value: str | None) -> float | None:
+    import re
+
+    match = re.match(r"\s*([\d.]+)\s*(px|pt|mm|cm|in)?\s*$", value or "")
+    if not match:
+        return None
+    factor = {"px": 1.0, None: 1.0, "pt": 96 / 72, "mm": 96 / 25.4, "cm": 96 / 2.54, "in": 96.0}[
+        match.group(2)
+    ]
+    return float(match.group(1)) * factor
+
+
+def svg_size(root) -> tuple[float, float] | None:
+    width, height = _length(root.get("width")), _length(root.get("height"))
+    if width and height:
+        return width, height
+    box = (root.get("viewBox") or "").replace(",", " ").split()
+    if len(box) == 4:
+        try:
+            return float(box[2]), float(box[3])
+        except ValueError:
+            return None
+    return None
+
+
+def render_svg(data: bytes, size: tuple[float, float] | None) -> bytes | None:
+    import resvg_py
+
+    width, height = size or (800.0, 600.0)
+    longest = max(width, height, 1.0)
+    pixels = min(longest * RENDER_DPI / 60, MAX_SIDE_INCHES * RENDER_DPI)
+    pixels = max(pixels, 4.0 * RENDER_DPI)
+    zoom = pixels / longest
+    with tempfile.TemporaryDirectory() as empty:  # relative image links resolve to nothing on the worker
+        try:
+            png = resvg_py.svg_to_bytes(
+                svg_string=data.decode("utf-8", errors="replace"),
+                background="#ffffff",
+                zoom=zoom,
+                languages=["en"],
+                resources_dir=empty,
+            )
+        except ValueError:
+            return None
+    return bytes(png) if png else None

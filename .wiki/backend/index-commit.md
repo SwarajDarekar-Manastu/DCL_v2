@@ -52,6 +52,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S1 | First commit path (Route C first): entities, nodes, mentions, facts, telemetry catalog, documents row, run-label collisions |
 | 2026-10-23 | S1 | `strip_nul()` over the ProcessedDocument and IndexPlan at the start of `commit_document` (PostgreSQL refuses NUL); `backend/tests/unit/indexing/test_commit_nul.py` |
+| 2026-10-23 | S1 | `revision_marker` written on commit; `backend/indexing/revisions.py` `apply_revisions`: newer revision of a drawing in the same folder SUPERSEDES the older, equal claims raise CONFLICT SOFT (file 02 §5.1); `test_revisions.py` |
 
 ## Related
 

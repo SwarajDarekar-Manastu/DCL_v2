@@ -179,7 +179,7 @@ def folder_tree(session: Session) -> tuple[dict[str, DriveFolder], dict[str, lis
     return folders, ancestors
 
 
-def _group_key(scope: Sequence[str], root_name: str, folder_chain: Sequence[str]) -> str:
+def group_key(scope: Sequence[str], root_name: str, folder_chain: Sequence[str]) -> str:
     for folder_id in folder_chain:
         if folder_id in scope:
             return folder_id
@@ -479,7 +479,7 @@ def dispatch(
         if item.blob_sha256 in collected:
             continue  # another copy of the same content (any subtree): one document, first path wins
         collected.add(item.blob_sha256)
-        group = groups[_group_key(scope, item.root_name, chain)]
+        group = groups[group_key(scope, item.root_name, chain)]
         blob = session.get(Blob, item.blob_sha256)
         heads[item.blob_sha256] = _read(minio, blob, HEAD_BYTES)
         folder_names = item.path_cached.split("/")[:-1]
@@ -674,3 +674,34 @@ if __name__ == "__main__":
     import sys
 
     sys.exit(main(sys.argv[1:]))
+
+
+REPROCESSABLE = (DocumentStatus.ACTIVE, DocumentStatus.ACTIVE_WITH_SOFT_FLAGS)
+
+
+def redispatch_candidates(session: Session, route: Route, statuses=REPROCESSABLE) -> list[Document]:
+    """The documents "re-process affected documents" would run again (file 08 §3.2 Routes)."""
+    return list(
+        session.scalars(
+            select(Document)
+            .where(Document.route == route.value, Document.status.in_([str(s) for s in statuses]))
+            .order_by(Document.title)
+        )
+    )
+
+
+def redispatch(session: Session, route: Route, statuses=REPROCESSABLE) -> list[Release]:
+    """Set those documents PROCESSING and return the releases; the caller commits, then enqueues."""
+    from backend.dispatcher.adapters import task_for_route
+
+    found = task_for_route(route)
+    if found is None:
+        return []
+    task, queue = found
+    releases = []
+    for document in redispatch_candidates(session, route, statuses):
+        document.status = DocumentStatus.PROCESSING
+        document.staged_payload_uri = None
+        releases.append(Release(doc_id=document.doc_id, task=task, queue=str(queue)))
+    session.flush()
+    return releases

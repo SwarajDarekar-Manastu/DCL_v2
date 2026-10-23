@@ -26,6 +26,7 @@ class Location:
     extension: str | None
     path_cached: str | None
     member_path: str | None = None  # set for a derived blob
+    web_url: str | None = None  # the OneDrive link (the parent's for a derived blob)
 
 
 def _extension(name: str) -> str | None:
@@ -41,7 +42,15 @@ def primary_location(session: Session, blob_sha256: str, _depth: int = 0) -> Loc
         .limit(1)
     )
     if item is not None:
-        return Location(item.root_name, item.parent_item_id, item.name, item.extension, item.path_cached)
+        return Location(
+            item.root_name,
+            item.parent_item_id,
+            item.name,
+            item.extension,
+            item.path_cached,
+            None,
+            item.web_url,
+        )
     if _depth >= MAX_DEPTH:
         return None
     link = session.scalar(
@@ -57,4 +66,12 @@ def primary_location(session: Session, blob_sha256: str, _depth: int = 0) -> Loc
         return None
     name = PurePosixPath(link.member_path).name
     path = f"{parent.path_cached}/{link.member_path}" if parent.path_cached else None
-    return Location(parent.root_name, parent.parent_item_id, name, _extension(name), path, link.member_path)
+    return Location(
+        parent.root_name,
+        parent.parent_item_id,
+        name,
+        _extension(name),
+        path,
+        link.member_path,
+        parent.web_url,
+    )

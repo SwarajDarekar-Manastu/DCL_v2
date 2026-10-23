@@ -122,23 +122,12 @@ def _a1_build():
     return default_build()
 
 
-@app.task(
-    name="dcl.process.route_a1",
-    queue=CPU_PARSE,
-    autoretry_for=RETRYABLE,
-    retry_backoff=30,
-    max_retries=POOLS[Queue.CPU_PARSE].max_retries,
-)
-def route_a1(doc_id: str) -> dict[str, object]:
-    """One Route A1 document (PDF) through S2's ``process_pdf``, then the gate and the commit path."""
-    from backend.dispatcher.office_run import process_a1_document
-
+def _run(doc_id: str, process) -> dict[str, object]:
+    """One document through a route runner; transient errors retry, anything else marks it FAILED."""
     minio = client_from_settings(get_settings())
     with Session(_engine(), expire_on_commit=False) as session:
         try:
-            outcome = process_a1_document(
-                session, minio, uuid.UUID(doc_id), _a1_build(), indexer=_indexer(minio)
-            )
+            outcome = process(session, minio, uuid.UUID(doc_id), _indexer(minio))
         except RETRYABLE:
             session.rollback()
             raise
@@ -155,20 +144,76 @@ def route_a1(doc_id: str) -> dict[str, object]:
     }
 
 
-@app.task(name="dcl.process.relocate_route_c_tables", queue=IO_LIGHT)
-def relocate_route_c_tables() -> dict[str, int]:
-    """One-off backfill: re-run Route C for committed documents whose table/row nodes have no locator, so
-    the commit rewrites the nodes with sheet + cell_range or file lines (vectors reused by hash)."""
-    from backend.routes.c_telemetry.pipeline import unlocated_table_documents
+def _route_task(name: str, queue: Queue, retryable=RETRYABLE):
+    return app.task(
+        name=name,
+        queue=str(queue),
+        autoretry_for=retryable,
+        retry_backoff=30,
+        max_retries=POOLS[queue].max_retries,
+    )
 
-    with Session(_engine(), expire_on_commit=False) as session:
-        doc_ids = unlocated_table_documents(session)
-        for doc_id in doc_ids:
-            session.get(Document, doc_id).status = DocumentStatus.PROCESSING
-        session.commit()
-    for doc_id in doc_ids:
-        app.send_task("dcl.process.route_c", args=[str(doc_id)], queue=TELEMETRY_STREAM)
-    return {"documents": len(doc_ids)}
+
+@_route_task("dcl.process.route_a1", Queue.CPU_PARSE)
+def route_a1(doc_id: str) -> dict[str, object]:
+    """Route A1 (PDF, Word family, slides) through S2's ``process_office``."""
+    from backend.dispatcher.office_run import process_a1_document
+
+    return _run(doc_id, lambda s, m, d, i: process_a1_document(s, m, d, _a1_build(), indexer=i))
+
+
+@_route_task("dcl.process.route_a2", Queue.CPU_PARSE)
+def route_a2(doc_id: str) -> dict[str, object]:
+    """Route A2 (LaTeX projects, report JSON) through S6's ``backend.routes.a2_source``."""
+    from backend.dispatcher.source_run import process_a2_document
+
+    return _run(doc_id, process_a2_document)
+
+
+@_route_task("dcl.process.route_b", Queue.CPU_PARSE)
+def route_b(doc_id: str) -> dict[str, object]:
+    """Route B (Python, C, MATLAB, notebooks, Markdown, text) through S6's ``backend.routes.b_code``."""
+    from backend.dispatcher.source_run import process_b_document
+
+    return _run(doc_id, process_b_document)
+
+
+@_route_task("dcl.process.route_e", Queue.CPU_PARSE)
+def route_e(doc_id: str) -> dict[str, object]:
+    """Route E (diagrams and drawings) through S6's ``backend.routes.e_diagrams``."""
+    from backend.dispatcher.source_run import process_e_document
+
+    return _run(doc_id, process_e_document)
+
+
+@_route_task("dcl.process.route_g", Queue.CPU_PARSE)
+def route_g(doc_id: str) -> dict[str, object]:
+    """Route G (archives, ANSYS packages, CAD) through S6's ``backend.routes.g_archives``."""
+    from backend.dispatcher.source_run import process_g_document
+
+    return _run(doc_id, process_g_document)
+
+
+def _media_retryable():
+    from backend.dispatcher.media_run import RepresentativePending
+
+    return (*RETRYABLE, RepresentativePending)
+
+
+@_route_task("dcl.process.route_d", Queue.MEDIA, _media_retryable())
+def route_d(doc_id: str) -> dict[str, object]:
+    """Route D (photos) through S2's ``process_photo``; burst members wait for their representative."""
+    from backend.dispatcher.media_run import process_d_document
+
+    return _run(doc_id, process_d_document)
+
+
+@_route_task("dcl.process.route_f", Queue.MEDIA)
+def route_f(doc_id: str) -> dict[str, object]:
+    """Route F (videos) through S2's ``process_video`` with the local Whisper transcriber."""
+    from backend.dispatcher.media_run import process_f_document
+
+    return _run(doc_id, process_f_document)
 
 
 @app.task(name="dcl.process.resume_for_rule", queue=IO_LIGHT)

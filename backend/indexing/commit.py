@@ -421,6 +421,7 @@ def commit_document(
     document.unit_count = fields.unit_count
     document.page_count = fields.page_count
     document.language = fields.language
+    document.revision_marker = fields.revision_marker or document.revision_marker
     document.catalog = fields.catalog
     document.enrichment = aggregated.get("enrichment", {})
     document.entity_ids = list(
@@ -442,6 +443,11 @@ def commit_document(
     if plan.warnings:
         sources["index_warnings"] = plan.warnings[:50]
     document.metadata_sources = sources
+    if document.revision_marker:
+        from backend.indexing.revisions import apply_revisions
+
+        apply_revisions(session, document)
+        result.status = DocumentStatus(document.status)  # SUPERSEDED when a newer revision exists
     if processed.derived_blobs:
         from backend.storage.derived import register_derived_blobs
 
