@@ -15,6 +15,7 @@ EXPECTED_FILE_10 = {
     Queue.MEDIA: ("prefork", 2, 4096),
     Queue.VISION_BATCH: ("threads", 2, 1024),
     Queue.EMBED: ("threads", 2, 2048),
+    Queue.BENCHMARK: ("prefork", 1, 2048),
 }
 
 
@@ -30,6 +31,8 @@ def test_pools_match_file_10_section_4():
     assert {q: (p.pool, p.concurrency, p.memory_limit_mb) for q, p in POOLS.items()} == EXPECTED_FILE_10
     assert POOLS[Queue.TELEMETRY_STREAM].max_memory_per_child_mb == 3072
     assert POOLS[Queue.CPU_PARSE].max_memory_per_child_mb == 6144
+    benchmark = POOLS[Queue.BENCHMARK]
+    assert (benchmark.soft_time_limit_s, benchmark.time_limit_s) == (950, 1000)
 
 
 def test_every_pool_has_sane_time_limits():
@@ -167,7 +170,7 @@ def test_only_existing_task_modules_are_included(monkeypatch):
     assert celery_app.present_task_modules() == ["backend.celery_redis.tasks_sync"]
 
 
-def test_beat_schedule_runs_the_sync_tasks_on_io_light_in_local_time():
+def test_beat_schedule_runs_sync_on_io_light_and_the_benchmark_sweep_on_its_queue_in_local_time():
     from celery.schedules import crontab
 
     schedule = celery_app.app.conf.beat_schedule
@@ -179,7 +182,9 @@ def test_beat_schedule_runs_the_sync_tasks_on_io_light_in_local_time():
         "dcl.process.sweep_documents",
         "dcl.benchmark.sweep",
     }
-    assert all(e["options"]["queue"] == "io_light" for e in schedule.values())
+    queues = {name: e["options"]["queue"] for name, e in schedule.items()}
+    assert queues.pop("benchmark-sweep") == "benchmark"
+    assert set(queues.values()) == {"io_light"}
     daily = schedule["sync-delta-all-daily"]["schedule"]
     assert isinstance(daily, crontab) and daily.hour == {2} and daily.minute == {0}
     assert schedule["sync-token-health"]["schedule"] == 900.0
@@ -197,3 +202,9 @@ def test_every_scheduled_task_is_registered_by_an_included_module():
     scheduled = {e["task"] for e in celery_app.app.conf.beat_schedule.values()}
     assert scheduled - set(celery_app.app.tasks) == set()
     assert celery_app.app.tasks["dcl.benchmark.sweep"].queue == "io_light"
+
+
+def test_benchmark_tasks_without_their_own_queue_route_to_the_benchmark_queue():
+    router = celery_app.app.amqp.router
+    assert router.route({}, "dcl.benchmark.case")["queue"].name == "benchmark"
+    assert router.route({}, "dcl.sync.delta_all")["queue"].name == "io_light"

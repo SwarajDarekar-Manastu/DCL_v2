@@ -24,6 +24,7 @@ from backend.celery_redis.queues import (
     DEAD_LETTER_KEY,
     DEAD_LETTER_MAX,
     MAX_DELIVERIES,
+    TASK_ROUTES,
     VISIBILITY_TIMEOUT_S,
     Queue,
 )
@@ -132,6 +133,7 @@ def create_celery() -> Celery:
         broker_connection_retry_on_startup=True,
         broker_transport_options={"visibility_timeout": VISIBILITY_TIMEOUT_S},
         beat_schedule=BEAT_SCHEDULE,
+        task_routes=TASK_ROUTES,
     )
     return app
 

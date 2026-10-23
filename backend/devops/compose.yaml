@@ -357,6 +357,17 @@ services:
         limits:
           memory: 2048M
 
+  worker-benchmark:
+    <<: *backend
+    command: ["celery", "-A", "backend.celery_redis.app", "worker", "--hostname", "benchmark@%h", "--loglevel", "INFO", "--queues", "benchmark", "--pool", "prefork", "--concurrency", "1", "--soft-time-limit", "950", "--time-limit", "1000", "--max-memory-per-child", "1572864"]
+    healthcheck:
+      <<: *worker-health
+      test: ["CMD-SHELL", "celery -A backend.celery_redis.app inspect ping --timeout 10 -d benchmark@$$HOSTNAME"]
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+
 volumes:
   pgdata:
   tempo-data:

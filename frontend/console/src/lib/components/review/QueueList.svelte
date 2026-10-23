@@ -63,7 +63,7 @@
 					<span class="flex min-w-0 items-start gap-2">
 						<SeverityBadge severity={item.max_severity} class="mt-px" />
 						<span class="min-w-0 flex-1 text-[13px] leading-5 font-medium break-words"
-							>{item.title}{#if item.page_or_sheet}<span class="text-muted-foreground font-normal"> · {item.page_or_sheet}</span>{/if}</span
+							>{item.title}{#if item.page_or_sheet}<span class="text-muted-foreground font-normal">{` · ${item.page_or_sheet}`}</span>{/if}</span
 						>
 						{#if item.has_suggestion}<span class="text-info mt-0.5" title="has a suggested resolution"
 								><SparklesIcon class="size-3.5" aria-hidden="true" /><span class="sr-only">has suggestion</span></span

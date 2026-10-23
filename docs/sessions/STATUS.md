@@ -877,3 +877,21 @@ Ready, waiting on S1's enum migration: the runner findings of S5's BASELINE.md.
 Blocked on: S1: MISSING_DOCUMENT, INSUFFICIENT_EVIDENCE, TIMEOUT, HALTED_DATA in `FailureClass` and its CHECK (migration)
 Needs from others: S4 (through the Lead): a `benchmark` queue with a limit of at least 1000 s
 Next: answer latency (225–236 s per answered case on run 1 against 76 s in my single live check) needs a profile; then the OCR and cost report and the handwriting calibration after S1's A1 re-run
+## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
+Merged / ready: the Benchmark pages now match S2's real runner output.
+- Checked against the six real runs.
+- The aggregate and metric keys match the runner's; recall was never shown before.
+- Runner errors are their own outcome, and a running run's pass rate says how much is scored so far.
+- The drilldown follows score_case.
+- Compare counts only cases scored in both runs and warns about cross-suite comparisons.
+- A whitespace bug in four components is fixed.
+- Tests: Console 138, backend pytest exit 0, compare integration tests pass on a scratch DB.
+Blocked on: nothing.
+Needs from others: S2 (via the Lead): 38 of 56 real results are runner errors, either "RuntimeError: <asyncio.locks.Event> is bound to a different event loop" (likely the lru_cached RunnerDeps reused across asyncio.run calls in tasks.py) or a 300 s WorkflowTimeoutError. Answered cases took about 225 to 236 s.
+Next: idle.
+
+## 2026-10-23 — DCL S4 DevOps — claude/gifted-hofstadter-0bec1c-benchq
+Merged / ready: fbd84af on claude/gifted-hofstadter-0bec1c-benchq (from main a067dca): queue `benchmark` (prefork 1, 950/1000 s, 2 GB), worker-benchmark, TASK_ROUTES for dcl.benchmark.*, beat sweep moved. Test: uv run pytest 1384 passed, 306 skipped
+Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
+Needs from others: Lead — merge; add the `benchmark` row to file 10 §4. S2 — set `queue=str(Queue.BENCHMARK)` (or drop `queue=`) on dcl.benchmark.start/case/sweep in backend/benchmark/tasks.py
+Next: redeploy beat, worker-io-light and worker-benchmark from main after the merge

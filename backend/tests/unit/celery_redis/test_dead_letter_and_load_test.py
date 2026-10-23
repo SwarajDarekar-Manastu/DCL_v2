@@ -90,10 +90,11 @@ def test_dead_letter_list_is_capped(fake, monkeypatch):
 
 
 def test_plan_spreads_tasks_and_failure_kinds():
-    plan = load_test.make_plan(tasks=600, transient=0.05, permanent=0.01, oom_tasks=2, seed=1)
+    tasks = 100 * len(load_test.NOOP_QUEUES)
+    plan = load_test.make_plan(tasks=tasks, transient=0.05, permanent=0.01, oom_tasks=2, seed=1)
     queues = [q for q, _ in plan.noops.values()]
     assert {queues.count(q) for q in load_test.NOOP_QUEUES} == {100}
-    assert plan.permanent and plan.transient and plan.oom == [600, 601]
+    assert plan.permanent and plan.transient and plan.oom == [tasks, tasks + 1]
 
 
 def test_verify_passes_only_when_every_task_is_accounted_for_and_routed():

@@ -57,7 +57,14 @@
 		}
 	}
 
-	const passRate = (r: BenchmarkRun) => r.aggregate?.pass_rate;
+	// While a run is going, its pass rate covers only the finished cases: say how many.
+	const passRate = (r: BenchmarkRun) => {
+		const { pass_rate, cases_done, cases_total } = r.aggregate ?? {};
+		const value = percent(pass_rate);
+		return typeof cases_done === 'number' && typeof cases_total === 'number' && cases_done < cases_total && value !== '—'
+			? `${value} of ${cases_done}/${cases_total}`
+			: value;
+	};
 	function toggle(runId: string) {
 		picked = picked.includes(runId) ? picked.filter((p) => p !== runId) : [...picked, runId].slice(-2);
 	}
@@ -119,7 +126,7 @@
 							<td>{r.suite}</td>
 							<td><ToneBadge tone={RUN_TONE[r.status]}>{r.status}</ToneBadge></td>
 							<td class="num font-mono">{Object.keys(r.case_versions).length}</td>
-							<td class="num font-mono">{percent(passRate(r))}</td>
+							<td class="num font-mono">{passRate(r)}</td>
 							<td><code class="text-muted-foreground">{r.git_commit?.slice(0, 8) ?? ''}</code></td>
 							<td class="num text-muted-foreground whitespace-nowrap">{r.started_at?.slice(0, 16).replace('T', ' ') ?? 'queued'}</td>
 						</tr>

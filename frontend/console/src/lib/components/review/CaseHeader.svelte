@@ -32,7 +32,7 @@
 	<div class="min-w-0">
 		<h2 class="m-0 text-base leading-6 break-words">
 			{#if summary.root_name}<span class="text-muted-foreground font-normal">{summary.root_name} / </span>{/if}{summary.title}{#if summary.page_or_sheet}<span
-					class="text-muted-foreground font-normal"> · {summary.page_or_sheet}</span
+					class="text-muted-foreground font-normal">{` · ${summary.page_or_sheet}`}</span
 				>{/if}
 		</h2>
 		<p class="text-muted-foreground m-0 mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
