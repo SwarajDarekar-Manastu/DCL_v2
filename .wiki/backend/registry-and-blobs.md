@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/02_phase1_ingestion_sync.md §5–§7; 05_storage_schema.md §4.1 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-23 |
 
 ## Purpose
 
@@ -15,6 +15,7 @@ Download accepted items into MinIO keyed by SHA-256, verify quickXorHash, dedupl
 ## Location
 
 Code:
+- `backend/storage/derived.py` (`register_derived_blobs(session, raw, parent_sha, blobs)`: one path for embedded objects, archive members and attachments: dcl-raw, `blobs`, `blob_derivations`; called by the commit path for `ProcessedDocument.derived_blobs`) and `backend/dispatcher/location.py` (`primary_location()`: a derived blob inherits its parent's OneDrive location)
 - `backend/sync/downloader.py` (`land_item()`: zero-download link by (quickXorHash, size), 302 target fetched without the token, one-pass SHA-256 + quickXorHash, verify, server-side copy to the content address, conflict-safe blob insert, item LANDED)
 - `backend/postgres/models/registry.py` (M1 tables, done with backend/schema-and-migrations)
 - `backend/sync/export_blobs.py` (read-only export of landed blobs of folder subtrees; CLI)
@@ -70,6 +71,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-21 | S1 | Downloader core and job keys; 6 tests, green against ParadeDB pg17 + pinned MinIO |
 | 2026-10-22 | S1 | presign_put for user uploads; temp version removal on the versioned dcl-raw; parallel host downloads |
 | 2026-10-22 | S1 | Host download CLI and read-only export; live: the 247 accepted files of the 11 allowlisted subtrees landed in the stack MinIO, all quickXorHash-verified |
+| 2026-10-23 | S1 | Derived blobs: contract `DerivedBlob`, `register_derived_blobs`, `dispatch_derived` (child documents with the parent's folder context), `primary_location`; `test_derived.py` |
 
 ## Related
 

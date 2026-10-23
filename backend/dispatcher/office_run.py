@@ -6,6 +6,7 @@ role unreachable (or no indexer) a clean result is kept as ``processed.json`` an
 Only PDFs for now: DOCX/PPTX/PPT stay WAITING_FOR_ROUTE until A1.9–A1.10 exist.
 """
 
+import logging
 import mimetypes
 import uuid
 from collections.abc import Callable
@@ -18,16 +19,19 @@ from sqlalchemy.orm import Session
 
 from backend.dispatcher.contract import ProcessedDocument
 from backend.dispatcher.folder_context import FolderContext
+from backend.dispatcher.location import primary_location
 from backend.dispatcher.routing import PROCESSED_MARK
 from backend.indexing.commit import Indexer, commit_document
 from backend.llm_engine.local_models import ModelServerUnavailable
 from backend.postgres import pipeline_config
-from backend.postgres.enums import DocumentSourceRole, DocumentStatus, DriveItemStatus
-from backend.postgres.models import Blob, Document, DocumentSource, DriveItem, SyncRoot
+from backend.postgres.enums import DocumentSourceRole, DocumentStatus
+from backend.postgres.models import Blob, Document, DocumentSource, SyncRoot
 from backend.review.staged import gate
-from backend.storage.minio import ASSETS, CIR, BucketStore, parse_uri
+from backend.storage.minio import ASSETS, CIR, RAW, BucketStore, parse_uri
 
 PIPELINE_VERSION = 1
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -91,12 +95,7 @@ def process_a1_document(
         .join(DocumentSource, DocumentSource.blob_sha256 == Blob.sha256)
         .where(DocumentSource.doc_id == doc_id, DocumentSource.role == DocumentSourceRole.PRIMARY)
     )
-    item = session.scalar(
-        select(DriveItem)
-        .where(DriveItem.blob_sha256 == blob.sha256, DriveItem.status != DriveItemStatus.DELETED)
-        .order_by(DriveItem.path_cached)
-        .limit(1)
-    )
+    item = primary_location(session, blob.sha256)
     if item is None:
         raise LookupError(f"no live location holds the primary blob of {doc_id}")
     cloud_allowed = bool(
@@ -127,10 +126,13 @@ def process_a1_document(
     if not result.halted and indexer is not None:
         try:
             plan = indexer(session, result.document, document.doc_id, cloud_allowed)
-        except ModelServerUnavailable:
+        except ModelServerUnavailable as exc:
+            log.warning("models role unreachable for %s; the clean result is parked: %s", doc_id, exc)
             plan = None
     if plan is not None:
-        committed = commit_document(session, document, result.document, plan, PIPELINE_VERSION)
+        committed = commit_document(
+            session, document, result.document, plan, PIPELINE_VERSION, raw=BucketStore(minio, RAW)
+        )
         return OfficeOutcome(doc_id, committed.status, 0, result.soft)
     if not result.halted:
         uri = cir.put(prefix + "processed.json", processed.model_dump_json().encode(), "application/json")

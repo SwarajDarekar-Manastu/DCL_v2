@@ -17,6 +17,7 @@ import uuid
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
 
 from minio import Minio
 from sqlalchemy import select
@@ -39,6 +40,7 @@ from backend.postgres.enums import (
 )
 from backend.postgres.models import (
     Blob,
+    BlobDerivation,
     Document,
     DocumentRelation,
     DocumentSource,
@@ -228,18 +230,65 @@ def _write_plan(
     result: DispatchResult,
 ) -> None:
     primary = by_blob[plan.primary.blob_sha256]
-    route = primary.resolved.route
-    adapter = adapter_for(route, head, primary.item.name) if route in routes_on else None
+    _new_document(
+        session,
+        NewDocument(
+            sha=plan.primary.blob_sha256,
+            title=plan.title,
+            name=primary.item.name,
+            extension=primary.item.extension,
+            size_bytes=primary.item.size_bytes,
+            resolved=primary.resolved,
+            parts=plan.parts,
+            conflicts=[*plan.conflicts, *context.conflicts],
+            metadata={"assembler": {"missing_includes": plan.missing_includes}}
+            if plan.missing_includes
+            else {},
+        ),
+        context,
+        routes_on,
+        cir,
+        head,
+        result,
+    )
+
+
+@dataclass
+class NewDocument:
+    sha: str
+    title: str
+    name: str
+    extension: str | None
+    size_bytes: int | None
+    resolved: ResolvedType
+    parts: Sequence = ()
+    conflicts: Sequence[str] = ()
+    metadata: dict = field(default_factory=dict)
+
+
+def _new_document(
+    session: Session,
+    new: NewDocument,
+    context: FolderContext,
+    routes_on: set[Route],
+    cir: BucketStore,
+    head: bytes,
+    result: DispatchResult,
+) -> Document:
+    """One document for one primary blob: PROCESSING when its route is on and an adapter accepts the file,
+    WAITING_FOR_ROUTE otherwise, HALTED with UNSUPPORTED_FORMAT when no route takes the type."""
+    route = new.resolved.route
+    adapter = adapter_for(route, head, new.name) if route in routes_on else None
     if route is None:
         status = DocumentStatus.HALTED
     elif adapter is not None:
         status = DocumentStatus.PROCESSING
     else:
         status = DocumentStatus.WAITING_FOR_ROUTE
-    sha = plan.primary.blob_sha256
+    sha = new.sha
     document = Document(
         route=route,
-        title=plan.title,
+        title=new.title,
         status=status,
         source_origin=context.source_origin,
         trust_tier=context.trust_tier,
@@ -247,20 +296,18 @@ def _write_plan(
         test_run_id=context.test_run_id,
         hardware_item=context.hardware_item,
         folder_context=context.model_dump(mode="json"),
-        metadata_sources={"assembler": {"missing_includes": plan.missing_includes}}
-        if plan.missing_includes
-        else {},
+        metadata_sources=new.metadata,
     )
     if status == DocumentStatus.HALTED:
         flag = Flag(
             flag_type=FlagType.UNSUPPORTED_FORMAT,
             severity=FlagSeverity.HARD,
             evidence=ParseFailureEvidence(
-                error=f"no adapter for {primary.resolved.mime}",
+                error=f"no adapter for {new.resolved.mime}",
                 magic_bytes_hex=head[:16].hex(),
-                size_bytes=primary.item.size_bytes,
-                detected_mime=primary.resolved.mime,
-                extension=primary.item.extension,
+                size_bytes=new.size_bytes,
+                detected_mime=new.resolved.mime,
+                extension=new.extension,
                 first_kb_preview=head[:1024].decode("utf-8", errors="replace"),
             ),
         )
@@ -271,7 +318,7 @@ def _write_plan(
     session.add(document)
     session.flush()
     session.add(DocumentSource(doc_id=document.doc_id, blob_sha256=sha, role=DocumentSourceRole.PRIMARY))
-    for part, role in plan.parts:
+    for part, role in new.parts:
         session.add(DocumentSource(doc_id=document.doc_id, blob_sha256=part.blob_sha256, role=role))
     if status == DocumentStatus.HALTED:
         upsert_document_flag(session, document.doc_id, flag)
@@ -280,12 +327,78 @@ def _write_plan(
         result.waiting += 1
     else:
         result.to_process.append(_release(document.doc_id, adapter))
-    for message in [*plan.conflicts, *context.conflicts]:
-        upsert_document_flag(session, document.doc_id, _conflict_flag(message, plan.title), route)
+    for message in new.conflicts:
+        upsert_document_flag(session, document.doc_id, _conflict_flag(message, new.title), route)
         result.conflicts += 1
     result.created += 1
     key = route.value if route else "none"
     result.by_route[key] = result.by_route.get(key, 0) + 1
+    return document
+
+
+GONE = (DocumentStatus.SUPERSEDED, DocumentStatus.DELETED, DocumentStatus.QUARANTINED)
+
+
+def dispatch_derived(
+    session: Session, minio: Minio, routes_on: set[Route], cir: BucketStore, result: DispatchResult
+) -> None:
+    """Documents for derived blobs (``blob_derivations``) whose parent is the primary blob of a live
+    document: the child keeps the parent's folder context with the parent's title added to the breadcrumb;
+    ``metadata_sources.derived_from`` names the parent document and the member path."""
+    claimed = select(DocumentSource.blob_sha256)
+    rows = session.execute(
+        select(BlobDerivation, Document)
+        .join(DocumentSource, DocumentSource.blob_sha256 == BlobDerivation.parent_blob_sha256)
+        .join(Document, Document.doc_id == DocumentSource.doc_id)
+        .where(
+            DocumentSource.role == DocumentSourceRole.PRIMARY,
+            BlobDerivation.child_blob_sha256.is_not(None),
+            BlobDerivation.child_blob_sha256.not_in(claimed),
+            Document.status.not_in(GONE),
+        )
+        .order_by(BlobDerivation.parent_blob_sha256, BlobDerivation.member_path)
+    ).all()
+    seen: set[str] = set()
+    for link, parent in rows:
+        sha = link.child_blob_sha256
+        if sha in seen:
+            continue  # the same content inside two parents: one document, first parent wins
+        seen.add(sha)
+        blob = session.get(Blob, sha)
+        head = _read(minio, blob, HEAD_BYTES)
+        name = PurePosixPath(link.member_path).name
+        context = FolderContext.model_validate(parent.folder_context or {})
+        context = context.model_copy(
+            update={
+                "breadcrumb": [*context.breadcrumb, parent.title or ""],
+                "path_cached": f"{context.path_cached}/{link.member_path}",
+                "conflicts": [],  # the parent's conflicts stay on the parent
+            }
+        )
+        _new_document(
+            session,
+            NewDocument(
+                sha=sha,
+                title=PurePosixPath(name).stem,
+                name=name,
+                extension=PurePosixPath(name).suffix.casefold() or None,
+                size_bytes=blob.size_bytes,
+                resolved=_resolve(minio, blob, name, head),
+                metadata={
+                    "derived_from": {
+                        "doc_id": str(parent.doc_id),
+                        "member_path": link.member_path,
+                        "kind": link.kind,
+                    }
+                },
+            ),
+            context,
+            routes_on,
+            cir,
+            head,
+            result,
+        )
+    session.flush()
 
 
 def _release(doc_id: uuid.UUID, adapter: Adapter) -> Release:
@@ -401,6 +514,7 @@ def dispatch(
             )
         session.commit()
     result.superseded = apply_supersessions(session)
+    dispatch_derived(session, minio, routes_on, cir, result)
     release_waiting(session, minio, routes_on, result)
     session.commit()
     if enqueue is not None:

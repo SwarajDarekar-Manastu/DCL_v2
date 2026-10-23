@@ -227,8 +227,12 @@ def commit_document(
     plan: IndexPlan,
     pipeline_version: int,
     now: datetime | None = None,
+    raw: Any = None,
 ) -> CommitResult:
+    """``raw`` is the ``dcl-raw`` BucketStore; required when the document carries ``derived_blobs``."""
     processed, plan = strip_nul(processed), strip_nul(plan)
+    if processed.derived_blobs and raw is None:
+        raise ValueError("derived_blobs need the dcl-raw store")
     if processed.has_hard_flags or any(
         f.severity == FlagSeverity.HARD for f in _open_flags(session, document.doc_id)
     ):
@@ -438,6 +442,10 @@ def commit_document(
     if plan.warnings:
         sources["index_warnings"] = plan.warnings[:50]
     document.metadata_sources = sources
+    if processed.derived_blobs:
+        from backend.storage.derived import register_derived_blobs
+
+        register_derived_blobs(session, raw, processed.blob_sha256, processed.derived_blobs)
     session.flush()
     return result
 

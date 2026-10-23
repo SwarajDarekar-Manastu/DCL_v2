@@ -55,6 +55,7 @@ def session(engine):
             "documents",
             "drive_items",
             "drive_folders",
+            "blob_derivations",
             "blobs",
             "sync_roots",
             "pipeline_config",
