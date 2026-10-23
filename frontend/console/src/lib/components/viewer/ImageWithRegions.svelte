@@ -5,8 +5,9 @@
 	interface Props {
 		src: string;
 		alt: string;
-		width: number;
-		height: number;
+		/** Pixels when the pipeline recorded them; without them the box takes the image's own size. */
+		width?: number | null;
+		height?: number | null;
 		regions: ViewerRegion[];
 	}
 
@@ -22,8 +23,8 @@
 </script>
 
 <!-- Regions use normalized coordinates, so percentages keep them on target at any rendered size. -->
-<div class="bg-background relative w-full overflow-visible rounded-md border shadow-sm" style="aspect-ratio: {width} / {height}">
-	<img class="block h-full w-full" {src} {alt} {width} {height} />
+<div class="bg-background relative w-full overflow-visible rounded-md border shadow-sm" style={width && height ? `aspect-ratio: ${width} / ${height}` : undefined}>
+	<img class={width && height ? "block h-full w-full" : "block h-auto w-full"} {src} {alt} width={width ?? undefined} height={height ?? undefined} />
 	{#each regions as region, i (i)}
 		<!-- A button so keyboard users can Tab through the regions; focus scrolls it into view and shows its label. -->
 		<button
@@ -34,6 +35,7 @@
 				KIND[region.kind]
 			)}
 			data-testid="region"
+			data-region-index={i}
 			data-kind={region.kind}
 			style="left: {pct(region.bbox[0])}; top: {pct(region.bbox[1])}; width: {pct(region.bbox[2] - region.bbox[0])}; height: {pct(region.bbox[3] - region.bbox[1])}"
 			title={label(region)}

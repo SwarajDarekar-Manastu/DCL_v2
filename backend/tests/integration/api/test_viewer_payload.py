@@ -128,6 +128,52 @@ def session():
                         bbox=[{"page_no": page, "x0": 0.1, "y0": 0.3, "x1": 0.9, "y1": 0.35}],
                     )
                 )
+            handwriting = {
+                "bbox": {"page_no": 8, "x0": 0.6, "y0": 0.7, "x1": 0.8, "y1": 0.74},
+                "label": "Tank P",
+                "kind": "value",
+                "value_raw": "13.5",
+                "unit": "barg",
+                "confidence": 0.62,
+                "illegible": False,
+            }
+            s.add(
+                DocumentNode(
+                    doc_id=REPORT,
+                    node_type="child",
+                    ordinal=20,
+                    breadcrumb="3 Results",
+                    content="Tank P: 13.5 barg",
+                    content_sha256=content_hash("Tank P: 13.5 barg"),
+                    page_no=8,
+                    source="vlm",
+                    metadata_={"handwriting": [handwriting]},
+                )
+            )
+            figure = Asset(
+                minio_uri=f"s3://dcl-assets/figures/{PDF_SHA}/fig11.png",
+                blob_sha256=PDF_SHA,
+                kind="figure_crop",
+                page_no=11,
+                width=800,
+                height=500,
+            )
+            s.add(figure)
+            s.flush()
+            s.add(
+                DocumentNode(
+                    doc_id=REPORT,
+                    node_type="child",
+                    ordinal=30,
+                    breadcrumb="3 Results › Figure 4",
+                    content="Chamber pressure over time, peak 12.4 bar at 3.1 s",
+                    content_sha256=content_hash("Chamber pressure over time, peak 12.4 bar at 3.1 s"),
+                    page_no=11,
+                    source="vlm",
+                    asset_id=figure.asset_id,
+                    metadata_={"class": "line_chart", "caption": "Figure 4: chamber pressure, test 4"},
+                )
+            )
             code = "def expansion_ratio(pc, pe):\n    gamma = 1.3\n    return (pc / pe) ** (1 / gamma)"
             s.add(
                 DocumentNode(
@@ -158,7 +204,11 @@ def test_exact_citation_opens_the_page_render_with_the_cited_box(session):
     view = payload.view
     assert view.kind == "page" and (view.page_no, view.page_count) == (8, 12)
     assert view.image_url == f"https://minio.test/dcl-assets/pages/{PDF_SHA}/0008.png?sig=1"
-    assert [r.bbox for r in view.regions] == [(0.1, 0.3, 0.9, 0.35)]
+    assert [(r.kind, r.bbox) for r in view.regions] == [
+        ("cited", (0.1, 0.3, 0.9, 0.35)),
+        ("handwriting", (0.6, 0.7, 0.8, 0.74)),
+    ]
+    assert (view.regions[1].label, view.regions[1].confidence) == ("Tank P: 13.5 barg", 0.62)
     assert view.text == text_of(8)
     assert payload.document.test_ids == ["TP37"]
     assert [loc.path for loc in payload.links.onedrive] == [
@@ -173,7 +223,8 @@ def test_changed_content_falls_back_to_the_page_and_says_so(session):
     payload = build_viewer_payload(session, REPORT, "page:8:00000000deadbeef", False, signed)
     assert payload.resolution.status == "page_fallback"
     assert "changed after re-indexing" in payload.resolution.message
-    assert payload.view.kind == "page" and payload.view.page_no == 8 and payload.view.regions == []
+    assert payload.view.kind == "page" and payload.view.page_no == 8
+    assert [r.kind for r in payload.view.regions] == ["handwriting"]  # no cited box: the passage changed
 
 
 def test_a_reindex_that_moves_the_passage_still_finds_it(session):
@@ -214,3 +265,17 @@ def test_code_line_anchor_highlights_the_line(session):
 def test_unknown_document(session):
     with pytest.raises(DocumentNotFound):
         build_viewer_payload(session, uuid.uuid4(), "", False, signed)
+
+
+def test_a_plain_page_link_opens_the_page_without_a_fallback_notice(session):
+    payload = build_viewer_payload(session, REPORT, "page:8:", False, signed)
+    assert payload.resolution.status == "exact" and payload.resolution.message == ""
+    assert payload.view.kind == "page" and payload.view.page_no == 8
+
+
+def test_a_figure_without_a_page_render_opens_as_an_image(session):
+    anchor = f"page:11:{content_hash('Chamber pressure over time, peak 12.4 bar at 3.1 s')[:16]}"
+    view = build_viewer_payload(session, REPORT, anchor, False, signed).view
+    assert view.kind == "image" and view.image_kind == "plot"
+    assert view.image_url == f"https://minio.test/dcl-assets/figures/{PDF_SHA}/fig11.png?sig=1"
+    assert (view.width, view.height, view.caption) == (800, 500, "Figure 4: chamber pressure, test 4")

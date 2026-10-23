@@ -1939,7 +1939,7 @@ export interface components {
              */
             caption: string;
             /** Height */
-            height: number;
+            height?: number | null;
             /**
              * Image Kind
              * @enum {string}
@@ -1957,8 +1957,11 @@ export interface components {
              * @default []
              */
             regions: components["schemas"]["Region"][];
-            /** Width */
-            width: number;
+            /**
+             * Width
+             * @description pixels; null when the pipeline did not record it
+             */
+            width?: number | null;
         };
         /** ImpactView */
         ImpactView: {
@@ -2161,7 +2164,7 @@ export interface components {
         /** PageView */
         PageView: {
             /** Height */
-            height: number;
+            height?: number | null;
             /** Image Url */
             image_url: string;
             /**
@@ -2183,8 +2186,11 @@ export interface components {
              * @default
              */
             text: string;
-            /** Width */
-            width: number;
+            /**
+             * Width
+             * @description pixels; null when the pipeline did not record it
+             */
+            width?: number | null;
         };
         /**
          * ParseFailureEvidence
