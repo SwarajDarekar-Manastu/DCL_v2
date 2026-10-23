@@ -14,13 +14,16 @@
 	import { Button } from '$lib/components/ui/button';
 	import Notice from '$lib/components/shell/Notice.svelte';
 	import KeyHistory from './KeyHistory.svelte';
+	import SectionHistory from './SectionHistory.svelte';
 	import { fromDraft, kindOf, sameValue, sectionKeys, toDraft, type SectionKey, type ValueKind } from './settings_form';
 
 	interface Props {
 		patterns: string[];
+		title?: string;
 	}
 
-	let { patterns }: Props = $props();
+	let { patterns, title = 'section' }: Props = $props();
+	let sectionHistoryOpen = $state(false);
 	let entries = $state<ConfigEntry[]>([]);
 	let drafts = $state<Record<string, { kind: ValueKind; text: string }>>({});
 	let fieldErrors = $state<Record<string, string>>({});
@@ -122,6 +125,7 @@
 
 	function restored(message: string) {
 		historyOpen = null;
+		sectionHistoryOpen = false;
 		load().then(() => (notice = message));
 	}
 
@@ -138,6 +142,16 @@
 	{#if error}<Notice tone="error">{error}</Notice>{/if}
 	{#if notice}<Notice tone="success">{notice}</Notice>{/if}
 	{#if loaded && rows.length === 0}<p class="text-muted-foreground m-0 text-sm">No keys of this section are set yet.</p>{/if}
+	{#if rows.some((r) => r.entry)}
+		<div>
+			<Button variant="outline" size="sm" aria-expanded={sectionHistoryOpen} onclick={() => (sectionHistoryOpen = !sectionHistoryOpen)}
+				>{sectionHistoryOpen ? 'Hide section history' : 'Section history and rollback'}</Button
+			>
+			{#if sectionHistoryOpen}
+				<div class="mt-2"><SectionHistory keys={rows.filter((r) => r.entry).map((r) => r.key)} {title} onRestored={restored} /></div>
+			{/if}
+		</div>
+	{/if}
 
 	<ul class="m-0 grid gap-3 p-0" aria-label="Configuration keys">
 		{#each rows as row (row.key)}

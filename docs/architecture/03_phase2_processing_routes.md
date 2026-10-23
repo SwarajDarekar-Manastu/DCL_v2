@@ -258,7 +258,7 @@ Handled by A1.3 (printed) + A1.7 (regions). The association rule above binds eac
 
 ### A1.9 DOCX specifics
 
-- Docling parses DOCX natively (headings from styles, lists, tables, images, OMML equations → LaTeX).
+- DOCX, DOC, RTF and ODT are converted to PDF by the LibreOffice service and run the PDF pipeline (pages, renders, figures, table QA, scanned inserts); DOCX-only features are read from the DOCX itself: tracked changes (`has_tracked_changes`, accepted view), comments as `annotation` mentions anchored to their paragraph, footnotes, and the list of embedded objects, which are handed to S1's derivation path as `ProcessedDocument.derived_blobs` (decided 2026-10-23; Docling's native DOCX output has no pages or boxes, so citations could not be anchored) (headings from styles, lists, tables, images, OMML equations → LaTeX).
 - **Tracked changes:** the "accepted" view is used; the presence of unaccepted revisions is recorded (`has_tracked_changes`) and shown as a caution in citations.
 - **Comments** are extracted as `annotation` mentions (author, text, anchor paragraph) — not indexed as body text.
 - **Embedded objects** (Excel sheets, Visio): extracted as their own blobs (`blob_derivations(kind = embedded_object)`); Excel objects go through Route C's sheet triage as separate documents linked to the report by `document_relations(REFERENCES)`.

@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { ApiError, listFailedTasks, type FailedTask } from '$lib/api_endpoint';
+	import { ApiError, getOpsSummary, listFailedTasks, type FailedTask, type OpsSummary } from '$lib/api_endpoint';
+	import OpsOverview from '$lib/components/ops/OpsOverview.svelte';
+	import { live } from '$lib/live.svelte';
 	import { hasRole } from '$lib/auth/roles';
 	import { session } from '$lib/auth/session.svelte';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
@@ -14,6 +16,27 @@
 	let failed = $state<FailedTask[] | null>(null);
 	let error = $state('');
 	let reload = $state(0);
+	let summary = $state<OpsSummary | null>(null);
+	let summaryError = $state('');
+	let tick = $state(0);
+
+	// Counters refresh every 30 s and on live review/run events.
+	$effect(() => {
+		void tick;
+		void reload;
+		void live.reviewCounts;
+		void live.lastRunEvent;
+		getOpsSummary()
+			.then((s) => {
+				summary = s;
+				summaryError = '';
+			})
+			.catch((e) => (summaryError = e instanceof ApiError ? e.detail : String(e)));
+	});
+	$effect(() => {
+		const timer = setInterval(() => (tick += 1), 30_000);
+		return () => clearInterval(timer);
+	});
 
 	$effect(() => {
 		void reload;
@@ -30,6 +53,8 @@
 <RoleGate roles={session.user?.roles ?? []} role="viewer">
 	<Page title="Ops" description="Sync status, queue depths, failed tasks and cost today (file 08 §4.2).">
 		<div class="grid gap-5">
+			{#if summaryError}<Notice tone="error">{summaryError}</Notice>{/if}
+			{#if summary}<OpsOverview {summary} />{/if}
 			{#if isAdmin}
 				<section class="panel" aria-labelledby="failed-title">
 					<div class="panel-header">

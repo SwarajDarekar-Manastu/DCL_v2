@@ -64,6 +64,7 @@ export type AssetUrl = Schemas['AssetUrl'];
 // ops (backend/api/ops.py)
 export type FailedTask = Schemas['FailedTask'];
 export type FailedTasks = Schemas['FailedTasks'];
+export type OpsSummary = Schemas['OpsSummary'];
 
 /** backend/review/api_models.py and backend/dispatcher/contract.py (S1) */
 export type FlagType = Schemas['FlagType'];
@@ -236,6 +237,8 @@ export const rollbackSettings = (body: ConfigRollback) => request<ConfigApplied>
 // ---------------------------------------------------------------- ops (backend/api/ops.py)
 
 /** GET /ops/failed-tasks (admin): the Celery dead-letter list, newest first */
+/** GET /ops/summary (viewer): queue depths, documents by status, open flags, last runs, model calls today */
+export const getOpsSummary = () => request<OpsSummary>('GET', '/ops/summary');
 export const listFailedTasks = (limit = 100) => request<FailedTasks>('GET', `/ops/failed-tasks${query({ limit })}`);
 
 // ---------------------------------------------------------------- benchmark (backend/api/benchmark.py)

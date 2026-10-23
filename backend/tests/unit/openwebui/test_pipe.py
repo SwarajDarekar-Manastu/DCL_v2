@@ -406,3 +406,95 @@ def test_every_engine_provenance_has_a_label():
         "https://console.test",
     )
     assert sources[0]["metadata"][0]["name"] == "[2] Isp at 20 bar (calculation)"
+
+
+TAGS = {"dcl-telemetry-metric": "telemetry_metric", "dcl-standards": "standards_compliance", "my-notes": None}
+
+
+def skill_pipe(module):
+    pipe, recorder = make_pipe(module, ANSWER)
+    looked_up = []
+
+    async def lookup(skill_id):
+        looked_up.append(skill_id)
+        return TAGS.get(skill_id)
+
+    pipe._skill_playbook = lookup
+    return pipe, recorder, looked_up
+
+
+def sent_request(recorder):
+    return json.loads(next(r for r in recorder.requests if r.url.path == "/v1/answer").content)
+
+
+def test_the_first_mentioned_playbook_skill_becomes_the_hint(pipe_module):
+    pipe, recorder, looked_up = skill_pipe(pipe_module)
+    text = (
+        "<$my-notes|My notes> <$dcl-telemetry-metric|Telemetry metric> peak Pc of TP07 T04? "
+        "</dcl-standards|Standards>"
+    )
+    run(pipe, {"messages": [{"role": "user", "content": text}]})
+    sent = sent_request(recorder)
+    assert sent["options"]["playbook_hint"] == "telemetry_metric"
+    assert looked_up == ["my-notes", "dcl-telemetry-metric"]  # stops at the first playbook
+    assert sent["messages"][-1]["content"] == "My notes Telemetry metric peak Pc of TP07 T04? Standards"
+
+
+def test_chat_context_mentions_count_after_the_message_text(pipe_module):
+    pipe, recorder, _ = skill_pipe(pipe_module)
+
+    async def go():
+        async for _ in pipe.pipe(
+            {"messages": [{"role": "user", "content": "Which ECSS clause covers this?"}]},
+            __user__={"id": "u-1", "email": "a@b.c"},
+            __metadata__={
+                "chat_id": "c",
+                "message_id": "m",
+                "chat_context": {"mentioned_skill_ids": ["dcl-standards"]},
+            },
+        ):
+            pass
+
+    asyncio.run(go())
+    assert sent_request(recorder)["options"]["playbook_hint"] == "standards_compliance"
+
+
+def test_no_playbook_skill_means_no_hint(pipe_module):
+    pipe, recorder, _ = skill_pipe(pipe_module)
+    run(pipe, {"messages": [{"role": "user", "content": "<$my-notes|My notes> TP07 summary?"}]})
+    assert "playbook_hint" not in sent_request(recorder)["options"]
+    pipe, recorder, looked_up = skill_pipe(pipe_module)
+    run(pipe)
+    assert "playbook_hint" not in sent_request(recorder)["options"] and looked_up == []
+
+
+def test_the_hint_is_accepted_by_the_engine_contract():
+    from backend.api.engine import AnswerOptions
+
+    for intent in ("telemetry_metric", "standards_compliance"):
+        assert AnswerOptions(playbook_hint=intent).playbook_hint == intent
+
+
+def test_skill_lookup_reads_the_dcl_playbook_tag(monkeypatch):
+    import sys
+    import types
+
+    skills = {
+        "dcl-telemetry-metric": SimpleNamespace(
+            meta=SimpleNamespace(tags=["dcl", "playbook", "dcl-playbook:telemetry_metric"])
+        ),
+        "my-notes": SimpleNamespace(meta=SimpleNamespace(tags=["notes"])),
+    }
+
+    async def get_skill_by_id(skill_id):
+        return skills.get(skill_id)
+
+    module = types.ModuleType("open_webui.models.skills")
+    module.Skills = SimpleNamespace(get_skill_by_id=get_skill_by_id)
+    monkeypatch.setitem(sys.modules, "open_webui", types.ModuleType("open_webui"))
+    monkeypatch.setitem(sys.modules, "open_webui.models", types.ModuleType("open_webui.models"))
+    monkeypatch.setitem(sys.modules, "open_webui.models.skills", module)
+    found = [
+        asyncio.run(api_endpoint.skill_playbook(i)) for i in ("dcl-telemetry-metric", "my-notes", "gone")
+    ]
+    assert found == ["telemetry_metric", None, None]

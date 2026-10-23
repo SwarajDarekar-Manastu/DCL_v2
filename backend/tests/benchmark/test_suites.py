@@ -4,12 +4,20 @@ Templates are committed without measured values or company file names (DECISIONS
 local fragments and the built suites live in the git-ignored data/benchmark/.
 """
 
+import base64
+import html
 import importlib.util
 import json
 import re
+import tarfile
 import typing
+import urllib.parse
+import xml.etree.ElementTree as ET
+import zipfile
+import zlib
 from pathlib import Path
 
+import numpy as np
 import pytest
 import yaml
 
@@ -126,14 +134,94 @@ def _local_file(file_name: str) -> Path:
     return matches[0]
 
 
+def _xml_text(xml: str) -> str:
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", xml)).split())
+
+
+def _office_text(path: Path) -> str:
+    """Text runs of a .docx, .pptx or .vsdx (each run kept whole, so "Col head 1" stays one phrase)."""
+    with zipfile.ZipFile(path) as z:
+        parts = [
+            n
+            for n in z.namelist()
+            if re.match(r"(word/document|ppt/slides/slide\d+|visio/pages/page\d+)\.xml$", n)
+        ]
+        runs = []
+        for name in parts:
+            xml = z.read(name).decode("utf-8", "replace")
+            runs += re.findall(r"<(?:w:t|a:t|Text)[^>]*>(.*?)</(?:w:t|a:t|Text)>", xml, re.S)
+    return " | ".join(_xml_text(r) for r in runs)
+
+
+def _drawio_text(path: Path) -> str:
+    """Labels and styles of every page, compressed pages (base64 + deflate + URL-encoding) decoded."""
+    root = ET.parse(path).getroot()
+    pages = []
+    for diagram in root.iter("diagram"):
+        if len(diagram) == 0 and (diagram.text or "").strip():
+            raw = zlib.decompress(base64.b64decode(diagram.text.strip()), -15).decode()
+            pages.append(urllib.parse.unquote(raw))
+        else:
+            pages.append(ET.tostring(diagram, encoding="unicode"))
+    return " ".join(
+        f"{_xml_text(html.unescape(c.get('value') or ''))} {c.get('style') or ''}"
+        for page in pages
+        for c in ET.fromstring(page).iter("mxCell")
+    )
+
+
+def _stl_text(path: Path) -> str:
+    """Recomputed axis-aligned extents of a binary STL (the adapter's measurement, done independently)."""
+    data = path.read_bytes()
+    count = int.from_bytes(data[80:84], "little")
+    record = np.dtype([("normal", "<f4", 3), ("vertices", "<f4", (3, 3)), ("attr", "<u2")])
+    vertices = np.frombuffer(data[84 : 84 + count * 50], dtype=record)["vertices"].reshape(-1, 3)
+    extents = vertices.max(axis=0) - vertices.min(axis=0)
+    return " ".join(f"{e:.1f} {e:.2f}" for e in extents)
+
+
+def _tdms_text(path: Path) -> str:
+    """Channel names, unit strings and maxima of a TDMS file."""
+    from nptdms import TdmsFile
+
+    tdms = TdmsFile.read(path)
+    return " ".join(
+        f"{c.name} {c.properties.get('unit_string', '')} {float(np.max(c[:])):.3f}"
+        for group in tdms.groups()
+        for c in group.channels()
+    )
+
+
+def _archive_text(path: Path) -> str:
+    if path.suffix.lower() == ".zip":
+        with zipfile.ZipFile(path) as z:
+            return " ".join(z.namelist())
+    with tarfile.open(path) as t:
+        return " ".join(t.getnames())
+
+
 def _cited_text(citation: dict) -> str:
     path = _local_file(citation["file_name"])
-    if path.suffix.lower() == ".pdf":
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
         from pypdf import PdfReader
 
         reader = PdfReader(path)
         pages = [reader.pages[citation["page"] - 1]] if citation.get("page") else reader.pages
         return " ".join(" ".join((p.extract_text() or "").split()) for p in pages)
+    readers = {
+        ".docx": _office_text,
+        ".pptx": _office_text,
+        ".vsdx": _office_text,
+        ".drawio": _drawio_text,
+        ".svg": lambda p: _xml_text(p.read_text(encoding="utf-8")),
+        ".stl": _stl_text,
+        ".tdms": _tdms_text,
+        ".zip": _archive_text,
+        ".gz": _archive_text,
+    }
+    if suffix in readers:
+        return readers[suffix](path)
     return path.read_text(encoding="utf-8", errors="replace")
 
 

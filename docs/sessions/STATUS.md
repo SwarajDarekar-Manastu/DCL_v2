@@ -848,12 +848,35 @@ Merged / ready: owner-password PDFs. A1 pre-flight now decrypts in memory a PDF 
 Blocked on: S1's re-dispatch of the A1 documents with cloud_allowed true (206e1884 and the 8 ECSS standards after this merge)
 Needs from others: S1: re-run; `llm_calls` with the client's ledger hook
 Next: OCR engine per script and cost report, then the M5 handwriting calibration on the TP7 sheets
+
+## 2026-10-23 07:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Committed, not mergeable yet: failure classes after the first scored run (56 cases, 1 passed).
+- The 38 failed results without a class were all engine errors, not unscored misses:
+  - 24 asyncio errors ("Event loop is closed", "bound to a different event loop"). This was my bug: each io_light thread called `asyncio.run` on the shared gateway client. Fixed: one process-wide loop, `tasks.run_async`.
+  - 14 workflow timeouts at 300 s.
+- New classes: MISSING_DOCUMENT (expected document not indexed), INSUFFICIENT_EVIDENCE, ENGINE_ERROR (raised or timed out), and RETRIEVAL_MISS also when no tool returned an expected document. Every failed result now has a class.
+- The DB test fails on `ck_benchmark_results_failure_class` until S1 adds the three values.
+Blocked on: S1: add MISSING_DOCUMENT, INSUFFICIENT_EVIDENCE, ENGINE_ERROR to `FailureClass` with a CHECK migration (and the Lead to file 08 §5.4)
+Needs from others: as above; S1's A1 re-run
+Next: merge this after S1's migration; answer latency (p50 160–230 s on run 1) needs a look; then the OCR and cost report and the handwriting calibration
 ## 2026-10-22 21:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
 Merged / ready: M10 baseline from scored run 1 (`backend/tests/benchmark/BASELINE.md`, summary on `.wiki/quality/benchmark-suites.md`): 56 cases, 1 pass; 26 runner/metric bug, 15 engine error, 14 pipeline gap, 0 confirmed gold error. Five runner findings for S2 (null class on 38 errored cases, RETRIEVAL_MISS unreachable without gold anchors, must_label_external web-only, insufficient-evidence check mode-only, halted data hidden as SYNTHESIS_ERROR). Hold-outs not reported
 Blocked on: E13 indexed (MULTILINGUAL and library cases)
 Needs from others: S2: the runner findings; Lead: is the TP12 report PDF among the 18 indexed A1 PDFs (2 cases depend on it); the weather case's answer text (gold or metric)
 Next: idle until messaged
 
+## 2026-10-23 08:00 — DCL S2 ML — claude/infallible-swartz-58c96b
+Ready, waiting on S1's enum migration: the runner findings of S5's BASELINE.md.
+- (1) All case tasks of a worker share one event loop (`tasks.run_async`); per-answer timeout 900 s (`runner.ANSWER_TIMEOUT_S`).
+- (2) Every errored case has a class: TOOL_ERROR for an exception, TIMEOUT for a timeout.
+- (3) RETRIEVAL_MISS also without gold anchors, when no tool returned an expected document. A document that is not indexed is MISSING_DOCUMENT; an unrequested insufficient-evidence answer is INSUFFICIENT_EVIDENCE.
+- (4) `must_label_external` accepts labelled external_kept library citations.
+- (5) HALTED_DATA when a tool reports the asked run halted.
+- Engine: an out-of-scope question is refused in mode insufficient_evidence (`chitchat.v2`), and a halted-run warning is named in the answer as a `> Note:` line.
+- The integration test `test_runner_db` fails on `ck_benchmark_results_failure_class` until S1 adds the new values.
+Blocked on: S1: MISSING_DOCUMENT, INSUFFICIENT_EVIDENCE, TIMEOUT, HALTED_DATA in `FailureClass` and its CHECK (migration)
+Needs from others: S4 (through the Lead): a `benchmark` queue with a limit of at least 1000 s
+Next: answer latency (225–236 s per answered case on run 1 against 76 s in my single live check) needs a profile; then the OCR and cost report and the handwriting calibration after S1's A1 re-run
 ## 2026-10-22 — DCL S3 Frontend — claude/cranky-rhodes-0cb23f
 Merged / ready: the Benchmark pages now match S2's real runner output.
 - Checked against the six real runs.
@@ -878,3 +901,29 @@ Test: `DCL_TEST_DATABASE_URL=… DCL_TEST_MINIO_ENDPOINT=… uv run pytest -q`: 
 Blocked on: nothing
 Needs from others: Lead: merge. S4: apply 0011 on the stack.
 Next: the A1 re-run counts and the M2 live check. Then on claude/competent-brahmagupta-3a5541: locators, NUL guard, 0012 (answer_traces, llm_calls, prices; my llm_calls migration moves from 0011 to 0012), Route A2, Route B.
+## 2026-10-23 11:40 — DCL S2 ML — claude/infallible-swartz-58c96b
+Ready for merge: the runner findings of S5's BASELINE.md, with main 61f228c (S1's 0011) merged in.
+- `dcl.benchmark.start`, `case` and `sweep` run on the `benchmark` queue (S4's prefork worker, soft limit 950 s). The stale-run heartbeat is 30 min.
+- Test: `DCL_TEST_DATABASE_URL=<disposable paradedb:0.26.2-pg17> uv run pytest` gives 1769 tests, 0 failed, 120 skipped (MinIO, sample exports, live stack). `test_runner_db` passes on the new CHECK. `ruff check backend` is clean.
+Latency profile (run 1: 225–236 s per answered case):
+- The models container runs bge-reranker and EmbeddingGemma on CPU in float32 (`/models/health`: `"device":"cpu"`).
+- The cause is compose `models` → `deploy.resources.reservations.devices.capabilities: [gpu, utility]`. Without `compute` the NVIDIA runtime mounts only nvidia-smi and NVML. `libcuda.so` is a 0-byte file, `/dev/nvidia-uvm` is missing, and torch reports "no NVIDIA driver".
+- Run 1 in Tempo: 58 `/rerank` spans, p50 20.6 s, all between 20 and 23 s. `/embed/text` has p50 66 ms, but its tail reaches 217 s while it queues behind rerank on the one model lock.
+- Same image and code, 50 passages of 2400 chars: CPU float32 takes 35.6 s per rerank (30 passages: 22–27 s). GPU bf16 (`--gpus all`) takes 0.56 s (30 passages: 0.32 s).
+- Each answer runs one rerank per search call, plus the time spent waiting on other cases' reranks. The Gemini time cannot be separated for run 1: no `llm_calls` table, traces only logged, no benchmark spans in Tempo.
+Blocked on: S4 (through the Lead): `capabilities: [gpu]` (or `[gpu, compute, utility]`) on the models service, then recreate it. Verify `/models/health` reports `"device":"cuda","dtype":"bfloat16"`.
+Needs from others: S1's A1 re-run
+Next: re-time one live case after the GPU fix to get the Gemini share; then the OCR-per-script and cost report after S1's A1 re-run; then the handwriting calibration
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: targeted synthesis repair (DECISIONS 2026-10-23).
+- Only the claims the verifier rejected go back to Gemini, each with its evidence items (`repair.v1`, thinking MEDIUM). The corrected sentence replaces the old one in place, a null removes it, and only the changed claims are verified again. The verifier's rules are unchanged.
+- TP23 question on the stack, one run each: before 110.6 s (repair synthesis 75.4 s), after 45.6 s (repair 16.8 s). Gemini is 97–99 % of answer time.
+- Warm query embedding on the GPU: 0.02–0.03 s (first call 0.14–0.26 s).
+Blocked on: nothing
+Next: A1.9–A1.10 office formats and the twin page map, then the queue (D/F readiness, A1 report, handwriting calibration, Gemini split, trace writer, prompt registry, translation, re-embed counts)
+## 2026-10-23 12:30 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: public samples for formats the corpus lacks in git-ignored data/samples/web/ (21 files: STL ×2, STEP, DXF ×2, draw.io ×2, SVG ×2, VSDX ×2, PPTX, DOCX ×2, notebook, MATLAB, C, zip with nested folders and a .DS_Store junk member, tar.gz, synthetic TDMS with unit strings) with SOURCES.md (URL, license, sha256); none for DWG (no permissive source) or .wbpz (no public sample). data/samples (real + web, 286 files) copied to the s6-routes worktree. Formats suite: 13 golden cases (A1, B, C, E, G), answers verified in the local samples. Test: `uv run pytest -q backend/tests/benchmark`
+Blocked on: nothing
+Needs from others: S6: index the web samples so the formats suite can run
+Next: idle until messaged

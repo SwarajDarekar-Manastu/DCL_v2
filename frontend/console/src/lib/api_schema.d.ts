@@ -404,6 +404,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ops/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summary */
+        get: operations["summary_ops_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/review/cases": {
         parameters: {
             query?: never;
@@ -1700,7 +1717,7 @@ export interface components {
          * FailureClass
          * @enum {string}
          */
-        FailureClass: "RETRIEVAL_MISS" | "RERANK_MISS" | "TOOL_MISROUTE" | "TOOL_ERROR" | "SYNTHESIS_ERROR" | "VERIFIER_FALSE_NEGATIVE" | "UNIT_ERROR" | "BEHAVIOR_FAIL";
+        FailureClass: "RETRIEVAL_MISS" | "RERANK_MISS" | "TOOL_MISROUTE" | "TOOL_ERROR" | "SYNTHESIS_ERROR" | "VERIFIER_FALSE_NEGATIVE" | "UNIT_ERROR" | "BEHAVIOR_FAIL" | "MISSING_DOCUMENT" | "INSUFFICIENT_EVIDENCE" | "TIMEOUT" | "HALTED_DATA";
         /**
          * FeedbackKind
          * @description Reasons of the Report-issue Action (file 08 §2.2).
@@ -2004,6 +2021,22 @@ export interface components {
             top_level_keys: string[];
         };
         JsonValue: unknown;
+        /**
+         * LlmToday
+         * @description Today's model calls (UTC) from `llm_calls` (file 05: input/output/cached tokens, cost_estimate).
+         */
+        LlmToday: {
+            /** Cached Tokens */
+            cached_tokens: number;
+            /** Calls */
+            calls: number;
+            /** Cost Estimate */
+            cost_estimate: number | null;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -2105,6 +2138,26 @@ export interface components {
             /** Web Url */
             web_url: string;
         };
+        /** OpsSummary */
+        OpsSummary: {
+            /** Documents By Status */
+            documents_by_status: {
+                [key: string]: number;
+            } | null;
+            /** Last Runs */
+            last_runs: components["schemas"]["SuiteRun"][] | null;
+            llm_today: components["schemas"]["LlmToday"] | null;
+            /** Notes */
+            notes: {
+                [key: string]: string;
+            };
+            /** Open Flags */
+            open_flags: {
+                [key: string]: number;
+            } | null;
+            /** Queues */
+            queues: components["schemas"]["QueueDepth"][] | null;
+        };
         /** PageView */
         PageView: {
             /** Height */
@@ -2168,6 +2221,13 @@ export interface components {
         PreviewResponse: {
             /** Impacts */
             impacts: components["schemas"]["ImpactView"][];
+        };
+        /** QueueDepth */
+        QueueDepth: {
+            /** Queue */
+            queue: string;
+            /** Waiting */
+            waiting: number;
         };
         /**
          * Redact
@@ -2744,6 +2804,25 @@ export interface components {
         SuiteImport: {
             /** Cases */
             cases: components["schemas"]["CaseCreate"][];
+        };
+        /** SuiteRun */
+        SuiteRun: {
+            /** Cases Done */
+            cases_done: number | null;
+            /** Cases Total */
+            cases_total: number | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Pass Rate */
+            pass_rate: number | null;
+            /** Run Id */
+            run_id: string;
+            /** Started At */
+            started_at: string | null;
+            /** Status */
+            status: string;
+            /** Suite */
+            suite: string;
         };
         /** SuiteSummary */
         SuiteSummary: {
@@ -3969,6 +4048,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summary_ops_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsSummary"];
                 };
             };
         };

@@ -4,6 +4,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import AssetImage from './AssetImage.svelte';
 	import GenericEvidence from './GenericEvidence.svelte';
+	import LowConfidencePane from './LowConfidencePane.svelte';
+	import { around, fmtBytes } from './evidence';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 
 	interface Props {
@@ -118,6 +120,55 @@
 		{#if evidence.siblings.length}<p class="m-0">Folder siblings: {evidence.siblings.join(', ')}</p>{/if}
 		{#if evidence.pickle_classes.length}<p class="m-0">Pickle classes (never executed): <span class="font-mono text-xs">{evidence.pickle_classes.join(', ')}</span></p>{/if}
 		{#if evidence.recommendation}<p class="m-0">{evidence.recommendation}</p>{/if}
+	{:else if evidence.kind === 'unit_fact'}
+		{@const marked = around(evidence.context, evidence.value_raw)}
+		<p class="m-0 font-mono text-base font-semibold">{evidence.value_raw}</p>
+		{#if evidence.context}
+			<p class="bg-muted/50 m-0 rounded-md px-3 py-2">
+				{#if marked}{marked.before}<mark class="bg-warn-bg text-warn rounded px-0.5">{marked.match}</mark>{marked.after}{:else}{evidence.context}{/if}
+			</p>
+		{/if}
+		{#if evidence.candidate_units.length}
+			<h4 class="m-0 text-[13px]">Candidate units</h4>
+			<ul class="m-0 grid list-none gap-1 p-0">
+				{#each evidence.candidate_units as c (c.unit + c.gauge_or_abs)}
+					<li class="flex items-center gap-2">
+						<button type="button" class="field cursor-pointer px-2 py-0.5" disabled={!onPickUnit} onclick={() => onPickUnit?.(c.unit, c.gauge_or_abs)}
+							>{c.unit} ({c.gauge_or_abs})</button
+						>
+						<span class="num font-mono text-xs">{c.score.toFixed(2)}</span>
+						<span class="text-muted-foreground text-xs">{c.reason}</span>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	{:else if evidence.kind === 'json_schema'}
+		<dl class="kv">
+			<dt>Top-level keys</dt>
+			<dd class="font-mono text-xs">{evidence.top_level_keys.join(', ') || '—'}</dd>
+			<dt>Closest known schema</dt>
+			<dd>{evidence.closest_schema ?? 'none'}</dd>
+			{#if evidence.missing_keys.length}<dt>Missing for that schema</dt>
+				<dd class="text-hard font-mono text-xs">{evidence.missing_keys.join(', ')}</dd>{/if}
+		</dl>
+		{#if evidence.flattened_sample.length}
+			<pre class="code-block max-h-56 overflow-auto text-xs">{evidence.flattened_sample.join('\n')}</pre>
+		{/if}
+	{:else if evidence.kind === 'low_confidence'}
+		<LowConfidencePane {evidence} />
+	{:else if evidence.kind === 'file_facts'}
+		<dl class="kv">
+			<dt>Size</dt>
+			<dd class="num font-mono">{fmtBytes(evidence.size_bytes)}</dd>
+			<dt>Extension</dt>
+			<dd class="font-mono">{evidence.extension ?? '—'}</dd>
+			<dt>Folder</dt>
+			<dd>{evidence.folder ?? '—'}</dd>
+		</dl>
+		{#if evidence.note}<p class="m-0">{evidence.note}</p>{/if}
+	{:else if evidence.kind === 'sensitive'}
+		<p class="m-0">Matched pattern <code>{evidence.pattern}</code>{evidence.line ? ` on line ${evidence.line}` : ''}{evidence.page ? ` on page ${evidence.page}` : ''}. The secret itself is never stored or shown.</p>
+		<pre class="code-block overflow-x-auto text-xs">{evidence.redacted_preview}</pre>
 	{:else if evidence.kind === 'conflict'}
 		<h4 class="m-0 text-[13px]">{evidence.subject}</h4>
 		<div class="grid grid-cols-2 gap-2">
