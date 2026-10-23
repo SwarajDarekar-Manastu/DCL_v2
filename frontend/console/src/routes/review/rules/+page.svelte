@@ -12,6 +12,7 @@
 	import { hasRole } from '$lib/auth/roles';
 	import { session } from '$lib/auth/session.svelte';
 	import RuleForm from '$lib/components/review/RuleForm.svelte';
+	import { rulesYaml } from '$lib/components/review/rules_export';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/shell/EmptyState.svelte';
@@ -42,6 +43,16 @@
 			})
 			.catch((e) => (error = describe(e)));
 	});
+
+	let exportable = $derived(rules.some((r) => r.origin === 'operator' && r.active));
+
+	function download() {
+		const now = new Date().toISOString();
+		const url = URL.createObjectURL(new Blob([rulesYaml(rules, now)], { type: 'application/yaml' }));
+		const a = Object.assign(document.createElement('a'), { href: url, download: `dcl-operator-rules-${now.slice(0, 10)}.yaml` });
+		a.click();
+		URL.revokeObjectURL(url);
+	}
 
 	async function act(action: () => Promise<string>) {
 		busy = true;
@@ -76,6 +87,7 @@
 	<Page title="Rules" description="Operator and learned rules that resolve flags automatically. The most specific scope wins." width="full">
 		{#snippet actions()}
 			<label class="text-muted-foreground flex items-center gap-2 text-[13px]"><input type="checkbox" bind:checked={showInactive} /> show inactive</label>
+			<Button variant="outline" size="sm" disabled={!exportable} onclick={download}>Export YAML</Button>
 			<Button variant="outline" size="sm" href="/review"><ArrowLeftIcon />Queue</Button>
 		{/snippet}
 		{#snippet details()}
