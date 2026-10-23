@@ -34,7 +34,14 @@ from sqlalchemy.orm import Session
 from backend.dispatcher.contract import ConflictEvidence, ConflictSide, Flag, FlagAnchor, ProcessedDocument
 from backend.indexing.index_document import HaltedDocument, IndexPlan
 from backend.llm_engine.enrichment.entities import EntityRef
-from backend.postgres.enums import DocumentStatus, FlagSeverity, FlagStatus, FlagType, NodeType
+from backend.postgres.enums import (
+    DocumentStatus,
+    EntityCreatedBy,
+    FlagSeverity,
+    FlagStatus,
+    FlagType,
+    NodeType,
+)
 from backend.postgres.models import (
     Asset,
     Document,
@@ -87,7 +94,7 @@ def _entity_ids(session: Session, plan: IndexPlan) -> tuple[dict[EntityRef, uuid
                 type=str(entity.type),
                 canonical_name=entity.canonical_name,
                 canonical_key=entity.canonical_key,
-                created_by="llm",
+                created_by=EntityCreatedBy.SYSTEM,
                 first_seen_doc_id=plan.doc_id,
             )
             .on_conflict_do_nothing(index_elements=["type", "canonical_key"])
