@@ -44,11 +44,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=deps-parse /opt/venv /opt/venv
+COPY backend/devops/docker/parse_models.py /opt/parse_models.py
 RUN python -c "from rapidocr import RapidOCR; RapidOCR()" \
+    && python /opt/parse_models.py prefetch \
     && mkdir -p "$HF_HOME" && chown -R app:app /home/app/.cache
 COPY backend ./backend
 COPY config ./config
 USER app
+RUN python /opt/parse_models.py verify
 CMD ["python", "-m", "backend.main"]
 
 FROM runtime AS models
