@@ -1123,6 +1123,7 @@ Merged / ready: the four A1 crop defects, with S5's conventions.
 - Handwriting candidates are gated: at least 48 px a side, at least 0.3 % of the page, below 12:1, and not inside a table on a page that triage did not call handwritten. Rejections are counted in the CIR `qa/crops.json`.
 - Every table node gets a `table_crop`. A figure covering at least 85 % of the page is `full_page_image`.
 - One contact sheet per document at `qa/{sha}/crops.png`, linked from `documents.catalog.qa`.
+- Crops are stored at 200 dpi (DECISIONS 2026-10-23: 150–200 dpi). The handwriting size gate is still measured at 300 dpi (48 px ≈ 11.5 pt).
 - Before/after sheets were made in the parse worker for the Moog brochure (the bleed on fig9 and fig16 is gone) and ECSS-E-ST-35-06C pp. 80–95 (6 table crops). They are in my scratchpad, `crops/` folder.
 - Tests: A1 unit 97 passed, plus 1 new handwriting-gate test.
 - The handwriting gate was not live-checked: it needs Gemini triage, which comes with S1's re-run.
