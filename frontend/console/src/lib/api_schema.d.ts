@@ -3450,6 +3450,17 @@ export interface components {
             /** Channel */
             channel: string;
             /**
+             * Column Index
+             * @description this channel's position in columns
+             */
+            column_index?: number | null;
+            /**
+             * Columns
+             * @description column names of sample_rows, time column first
+             * @default []
+             */
+            columns: string[];
+            /**
              * Header Lines
              * @default []
              */
@@ -3469,6 +3480,12 @@ export interface components {
             quantity_guess?: string | null;
             /** Raw Unit */
             raw_unit?: string | null;
+            /**
+             * Sample Rows
+             * @description first 20 data rows, parsed
+             * @default []
+             */
+            sample_rows: (number | string | null)[][];
             sanity?: components["schemas"]["SanityBounds"] | null;
             /**
              * Scaling Equation
@@ -3481,6 +3498,15 @@ export interface components {
              */
             scaling_source?: string | null;
             /**
+             * Series
+             * @description about 200 [t_rel_s, value] points, downsampled from raw.parquet
+             * @default []
+             */
+            series: [
+                number,
+                number | null
+            ][];
+            /**
              * Sibling Units
              * @default []
              */
@@ -3489,6 +3515,8 @@ export interface components {
             sparkline_uri?: string | null;
             /** @default {} */
             stats: components["schemas"]["ChannelStats"];
+            /** Time Column */
+            time_column?: string | null;
         };
         /** UploadRequest */
         UploadRequest: {

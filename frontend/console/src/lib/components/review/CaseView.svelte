@@ -15,7 +15,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import Notice from '$lib/components/shell/Notice.svelte';
 	import CaseHeader from './CaseHeader.svelte';
+	import ChannelMapView from './ChannelMapView.svelte';
 	import FlagConsole from './FlagConsole.svelte';
+	import { isChannelMapCase } from './channel_map';
 	import { canBecomeRule, missing, needsPreview, ruleFor, type ScopeChoice } from './resolution';
 
 	interface Props {
@@ -42,6 +44,7 @@
 	let busy = $state(false);
 	let error = $state('');
 	let notice = $state('');
+	let details = $state(false);
 
 	// A different case starts clean.
 	let caseKey = $derived(detail.summary.case_key);
@@ -53,6 +56,7 @@
 		pattern = '';
 		error = '';
 		notice = '';
+		details = false;
 	});
 
 	let where = $derived(detail.locations[0] ?? null);
@@ -168,6 +172,12 @@
 <section class="grid gap-4" aria-label="Case">
 	<CaseHeader {detail} {me} {busy} onAssign={assign} onUndo={undo} />
 
+	{#if isChannelMapCase(detail) && !details}
+		<ChannelMapView {detail} {onChanged} onDetails={() => (details = true)} />
+	{:else}
+	{#if isChannelMapCase(detail)}
+		<button type="button" class="text-link w-fit cursor-pointer border-0 bg-transparent p-0 text-xs" onclick={() => (details = false)}>Back to the channel map</button>
+	{/if}
 	<div class="grid gap-3">
 		{#each detail.flags as flag (flag.flag_id)}
 			<FlagConsole {flag} bind:draft={drafts[flag.flag_id]} preview={previewState(flag.flag_id)} onPreview={() => preview(flag.flag_id)} />
@@ -198,4 +208,5 @@
 		{#if error}<Notice tone="error">{error}</Notice>{/if}
 		{#if notice}<Notice tone="success">{notice}</Notice>{/if}
 	</footer>
+	{/if}
 </section>
