@@ -1036,3 +1036,9 @@ Merged / ready: the samples smoke test (ed1692a), `backend/tests/unit/routes/tes
 Blocked on: Lead: pin `resvg-py==0.5.0` in the parse group for SVG renders (Route E follow-up 1).
 Needs from others: as above.
 Next: SVG render and read_schematic, after the pin.
+
+## 2026-10-23 — DCL S2 ML — claude/infallible-swartz-58c96b
+Merged / ready: 9db42e9 (the chat-feedback flag uses the document's route; Gemini time split in TraceView; repair output capped).
+Blocked on: S1's A1 re-run. On the stack, 26 A1 documents are still PROCESSING, 7 are ACTIVE with a language, and the parse worker logged no vision call in the last 30 min.
+- So far llm_calls holds only engine and test calls, nothing with doc_id. Once the re-run runs, I check that the workers' vision calls reach llm_calls with doc_id; per-document tokens depend on it.
+Next: the A1 OCR-per-script and token report, then the handwriting calibration (medium vs high) on the TP7 sheets
