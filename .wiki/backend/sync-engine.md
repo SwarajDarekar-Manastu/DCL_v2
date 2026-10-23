@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/02_phase1_ingestion_sync.md §1–§3, §8 |
-| Last updated | 2026-10-21 |
+| Last updated | 2026-10-23 |
 
 ## Purpose
 
@@ -15,6 +15,7 @@ Enumerate the four shared OneDrive folders through Microsoft Graph delta, react 
 ## Location
 
 Code:
+- `backend/sync/webhooks.py` (file 02 §3.3, off until `sync.webhooks_enabled` and `DCL_GRAPH_WEBHOOK_URL`/`_CLIENT_STATE`: `SubscriptionClient` (only `/subscriptions`), `ensure_subscriptions` (create, renew at 70% of 3 days, recreate when gone), `roots_to_sync` (clientState check), `debounce` (one delta per root per 30 s)); receiver `POST /sync/webhook` in `backend/api/sync.py`; tasks `dcl.sync.poll_deltas` (every 5 min: settled, unlocked roots) and `dcl.sync.renew_subscriptions` (hourly) in `backend/celery_redis/tasks_sync.py`
 - `backend/sync/graph_client.py` (GET-only Graph client; relative paths or absolute Graph links only)
 - `backend/sync/auth.py` (encrypted MSAL cache, `TokenProvider` silent-first + device-code sign-in, `check_access`, CLI)
 - `backend/sync/delta.py` (`seed_roots`, `run_root` crawl/delta with page checkpoints, `upsert_page`, `finalize_root` paths + gate + scope; 410 and forced resync with generation stamps and per-item 404 confirmation; CLI `crawl | resync`)
@@ -69,6 +70,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - [x] Silent acquisition first; device-code sign-in as any account other than DCL_DELEGATED_USERNAME is rejected and not saved
 - [x] Graph client has no write path; the token is only sent to graph.microsoft.com
 - [ ] Tests listed above pass; status entry written; this map updated; plan sheet deleted
+- [x] Near-real-time: `dcl.sync.poll_deltas` every 5 minutes; webhook receiver and subscription renewal ready behind `sync.webhooks_enabled` (`test_webhooks.py`)
 
 ## Change log
 
@@ -79,6 +81,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 | 2026-10-22 | S1 | Metadata crawl/delta (`delta.py`) and S5's folder listing; 10 tests; live crawl of the four roots run against a disposable DB |
 | 2026-10-22 | S1 | Celery tasks (tasks_sync.py): budgeted delta with resume and lock, downloads, token health; 8 tests |
 | 2026-10-22 | S1 | 410/forced resync in `delta.py` (no separate resync.py); generation = max(resync_gen)+1 per root committed with the first page |
+| 2026-10-23 | S1 | Real-time sync: 5-minute delta poll, Graph subscriptions and webhook receiver behind a flag; 8 tests |
 
 ## Related
 
