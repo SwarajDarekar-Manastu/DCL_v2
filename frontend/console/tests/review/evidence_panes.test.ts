@@ -46,6 +46,20 @@ describe('EvidencePane, remaining kinds', () => {
 		expect(screen.getByText('1 cell differs between the two readings.')).toBeTruthy();
 	});
 
+	it('low_confidence: OCR readings per crop and the page OCR text behind a toggle', async () => {
+		show({
+			kind: 'low_confidence',
+			crops: [{ crop_uri: 's3://dcl-assets/c1.png', model_value: '7.5', alternatives: [], confidence: 0.42, printed_label: null, ocr_text: '7,5' }],
+			table_a_html: null,
+			table_b_html: null,
+			page_ocr_text: 'Test 4  Tank P (barg)  7,5'
+		});
+		expect(screen.getByText('7,5')).toBeTruthy();
+		expect(screen.queryByLabelText('Page OCR text')).toBeNull();
+		await fireEvent.click(screen.getByRole('button', { name: 'Show page OCR text' }));
+		expect(screen.getByLabelText('Page OCR text').textContent).toBe('Test 4  Tank P (barg)  7,5');
+	});
+
 	it('unit_fact: the value marked in its context and pickable units', async () => {
 		const pick = vi.fn();
 		show(
