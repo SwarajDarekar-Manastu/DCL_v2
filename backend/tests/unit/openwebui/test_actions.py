@@ -180,6 +180,29 @@ def test_parse_report(text, expected):
     assert actions_manastu.parse_report(text) == expected
 
 
+def test_report_naming_a_source_sends_its_citation(module):
+    routes = {
+        ("GET", "/v1/traces"): (200, TRACE),
+        ("POST", f"/v1/traces/{TRACE_ID}/feedback"): (202, None),
+    }
+    action, seen = make(module, routes)
+    _, _, calls = run(action, "report_issue", reply="4 [2] the chamber pressure is psia, not psig")
+    assert "add its number in brackets" in calls[0]["data"]["message"]
+    assert json.loads(seen[1].content) == {
+        "kind": "wrong_unit",
+        "comment": "[2] the chamber pressure is psia, not psig",
+        "citation_id": "2",
+    }
+
+
+@pytest.mark.parametrize(
+    ("comment", "expected"),
+    [("the unit in [3] is psia", "3"), ("[1] and [2]", "1"), ("no source named", None), (None, None)],
+)
+def test_cited_source(comment, expected):
+    assert actions_manastu.cited_source(comment) == expected
+
+
 def test_bundle_is_current():
     assert BUNDLED.read_text() == bundle("actions_manastu.py")
 
