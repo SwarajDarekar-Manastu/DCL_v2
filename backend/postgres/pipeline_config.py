@@ -35,6 +35,8 @@ SANITY_RANGES = "sanity_ranges"
 GATE_PREFIX = "gate."
 DOWNLOAD_SCOPE = "sync.download_scope"
 PROCESSING_SCOPE = "processing.scope"
+FORMULA_ENRICHMENT_MAX = "routes.A1.formula_enrichment_max"
+FORMULA_ENRICHMENT_DEFAULT = 30  # about 30 s per formula on CPU (DECISIONS 2026-10-23)
 MISSING = object()
 _ABSENT = object()
 
@@ -126,6 +128,16 @@ def seed_sanity_ranges(session: Session, reseed: bool = False, path: Path = SANI
     )
 
 
+ROUTE_DEFAULTS: dict[str, Any] = {FORMULA_ENRICHMENT_MAX: FORMULA_ENRICHMENT_DEFAULT}
+
+
+def seed_route_defaults(session: Session) -> list[str]:
+    """Route settings with a decided default (first start only; an admin's later value stays)."""
+    return [
+        key for key, value in ROUTE_DEFAULTS.items() if seed_key(session, key, value, "DECISIONS 2026-10-23")
+    ]
+
+
 ANSWER_DEFAULTS: dict[str, Any] = {
     "answer.external_allowed_groups": ["dcl-external-search"],
     "answer.external_search_enabled": True,  # kill switch for external search (S2, Lead 2026-10-22)
@@ -205,6 +217,7 @@ KEYS: dict[str, TypeAdapter] = {
     "answer.external_search_enabled": _BOOL,
     "routes.A1.ocr_engine_by_script": _TEXT_MAP,
     MODEL_PRICES: TypeAdapter(dict[str, PriceSpec]),
+    FORMULA_ENRICHMENT_MAX: TypeAdapter(NonNegativeInt),
 }
 FAMILIES = ("thresholds.", "chunking.", "models.")  # free-form JSON values per family
 TELEMETRY_PREFIX = "telemetry."  # Route C NormalizeConfig fields, numbers
@@ -421,6 +434,7 @@ def main(argv: list[str]) -> int:
             if seed_sanity_ranges(session, reseed=reseed):
                 written.append(SANITY_RANGES)
             written += seed_answer_defaults(session)
+            written += seed_route_defaults(session)
         session.commit()
     print(f"wrote {len(written)} keys" + (f": {', '.join(written)}" if written else ""))
     return 0
