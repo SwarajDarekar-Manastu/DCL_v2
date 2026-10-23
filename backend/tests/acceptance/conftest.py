@@ -44,3 +44,19 @@ def live_minio(m2, live_session):
     ):
         pytest.skip("Parquet checks need DCL_MINIO_ENDPOINT, DCL_MINIO_ACCESS_KEY, DCL_MINIO_SECRET_KEY")
     return m2.minio_getter()
+
+
+@pytest.fixture(scope="session")
+def m5():
+    return _load("m5_state")
+
+
+@pytest.fixture(scope="session")
+def live_minio_exists(m5, live_session):
+    if not all(
+        os.environ.get(k) for k in ("DCL_MINIO_ENDPOINT", "DCL_MINIO_ACCESS_KEY", "DCL_MINIO_SECRET_KEY")
+    ):
+        pytest.skip(
+            "contact-sheet check needs DCL_MINIO_ENDPOINT, DCL_MINIO_ACCESS_KEY, DCL_MINIO_SECRET_KEY"
+        )
+    return m5.minio_exists()

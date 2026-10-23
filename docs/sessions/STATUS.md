@@ -1078,3 +1078,9 @@ Merged / ready: bc4e1fa on claude/gifted-hofstadter-0bec1c-cpulimit (from main c
 Blocked on: nothing for this part; the main S4 branch waits for the lifecycle watch (2026-10-24 00:00Z)
 Needs from others: Lead — merge; update the cpu_parse row in file 10 §4 if it lists limits
 Next: recreate cpu_parse from main after the merge
+
+## 2026-10-23 15:00 — DCL S5 Quality — claude/strange-bhaskara-1dd439
+Merged / ready: M5 crop acceptance (`backend/tests/acceptance/M5.md`, `m5_state.py` with a `report` CLI, live and seeded tests): crops ≥ 48 px a side and ≥ 0.3 % of the page, ≤ 90 % unless full_page_image, a table_crop for every A1 table node, non-empty figure content, a contact sheet `dcl-assets/qa/{sha}/crops.png` per A1 document. Read-only (DB read-only transaction, MinIO HEAD). The two crop rules do not fit the benchmark CaseSpec (it scores answers, not stored assets), so no visual-suite cases were added. Test: `DCL_TEST_DATABASE_URL=<disposable> uv run pytest backend/tests/acceptance`
+Blocked on: S1's re-dispatch and S2's crop fix (Lead says when), then I run the check and report counts
+Needs from others: Lead: stack DATABASE/MINIO credentials for the run (S5 has none), or run `m5_state.py report` from the main checkout
+Next: idle until messaged
