@@ -7,13 +7,14 @@ through ``read_file`` by their path in the same subtree, chosen from ``folder_fi
 
 LaTeX: include resolution with a source map → macro expansion → walk (``latex.py``) → references →
 figures (images linked as assets; a plot goes through ``classify_image`` + ``digitize_plot`` when cloud
-processing is allowed) → page map to the twin → nodes. Every node's ``line_start``/``line_end`` are lines
-of ``assembled.md``; ``metadata.source`` is the ``file:line`` it came from and ``metadata.pdf_page`` the
-twin page of its section.
+processing is allowed) → the twin through S2's ``process_twin`` (page map, page renders, PDF-only appendix
+pages through A1) → nodes. Every node's ``line_start``/``line_end`` are lines of ``assembled.md`` and
+``metadata.source`` is the ``file:line`` it came from; with a twin, ``page_no`` is the twin page of the
+node's section.
 
 CIR (``dcl-cir/{sha256}/A2/v{parser_version}/``): ``assembled.md``, ``structure.json`` (sections, labels,
 figures, unresolved references, missing includes, unknown macros), ``source_map.json`` (Markdown line →
-``file:line``), ``page_map.json`` (section → twin page, when a twin exists).
+``file:line``), ``page_map.json`` (written by ``process_twin``, when a twin exists).
 
 Flags (file 06 §4): ``CONFLICT`` SOFT from the assembler (two masters, no master); ``PARSE_FAILURE`` HARD
 only when the full walk and every per-section walk fail; ``UNIT_AMBIGUITY`` SOFT for a numeric table in a
@@ -364,12 +365,14 @@ def process_latex(
     vision=None,
     cloud_allowed: bool = False,
     doc_id: str | None = None,
+    twin_appendix: Callable[..., ProcessedDocument] | None = None,
 ) -> ProcessedDocument:
+    """``twin_appendix(pdf_bytes, put_asset=…, put_cir=…)`` is a bound A1 ``process_pdf`` for the twin's
+    PDF-only pages (S2's ``process_twin``)."""
     from pylatexenc.latexwalker import LatexWalker
 
     from backend.routes.a2_source import latex
     from backend.routes.a2_source.bib import parse_bib, reference_text
-    from backend.routes.a2_source.page_map import Heading, map_headings, page_texts
 
     primary = next(f for f in files if f.role == DocumentSourceRole.PRIMARY)
     sources = [f for f in files if f.role in (DocumentSourceRole.PRIMARY, DocumentSourceRole.PART)]
@@ -457,29 +460,30 @@ def process_latex(
     bib = {entry.key: entry for entry in bib_entries}
     unresolved = latex.resolve_refs(blocks, walker.labels, bib)
 
-    twin_pages: list[str] = []
-    if twin is not None:
-        try:
-            twin_pages = page_texts(twin.data)
-        except Exception as exc:  # noqa: BLE001 — a broken twin only loses the page map
-            log.warning("twin %s unreadable: %s", twin.path, exc)
     headings = [b for b in blocks if b.kind == "heading"]
-    page_of = (
-        map_headings(
-            [
-                Heading(str(i), b.meta.get("number", ""), b.meta.get("title", b.text))
-                for i, b in enumerate(headings)
-            ],
-            twin_pages,
-        )
-        if twin_pages
-        else {}
-    )
-    heading_page = {id(b): page_of.get(str(i)) for i, b in enumerate(headings)}
+    twin_result = None
+    if twin is not None:
+        from backend.routes.a1_office.twin import process_twin
+
+        try:
+            twin_result = process_twin(
+                twin.data,
+                [b.text for b in headings],
+                "\n".join(b.text for b in blocks if b.kind != "heading"),
+                blob_sha256=twin.blob_sha256,
+                title=doc_title,
+                put_asset=stores.put_asset,
+                put_cir=stores.put_cir,
+                appendix=twin_appendix,
+            )
+        except Exception as exc:  # noqa: BLE001 — a broken twin only loses pages and renders
+            log.warning("twin %s unreadable: %s", twin.path, exc)
+    twin_pages = len(twin_result.assets) if twin_result else 0
+    heading_page = {id(b): twin_result.page_map.get(i) for i, b in enumerate(headings)} if twin_result else {}
 
     context = " / ".join([*folder.breadcrumb, PurePosixPath(primary.path).name])
     built = _Built()
-    current_page: int | None = None
+    current_page: int | None = 1 if twin_result else None
     asset_count = 0
     all_text: list[str] = []
     first_page_text: list[str] = []
@@ -495,8 +499,6 @@ def process_latex(
             built.source_map.append(str(loc))
             continue
         meta: dict[str, Any] = {"source": str(loc)}
-        if current_page is not None:
-            meta["pdf_page"] = current_page
         ref = f"b{len(built.nodes)}"
         node_type, content, source, confidence, asset_ref = (
             NodeType.CHILD,
@@ -566,6 +568,7 @@ def process_latex(
                 breadcrumb=" › ".join(block.breadcrumb),
                 language=None,
                 content=content,
+                page_no=current_page,
                 line_start=start,
                 line_end=start + len(md_lines) - 1,
                 source=source,
@@ -625,11 +628,11 @@ def process_latex(
         furniture=furniture,
         folder=folder,
         page_languages=[language],
-        page_count=len(twin_pages),
+        page_count=twin_pages,
     )
     fields = metadata.fields.model_copy(
         update={
-            "page_count": len(twin_pages) or None,
+            "page_count": twin_pages or None,
             "unit_count": None,
             "catalog": None,
         }
@@ -648,7 +651,7 @@ def process_latex(
                 "title": b.meta.get("title"),
                 "level": b.level,
                 "source": str(assembled.locate(b.pos)),
-                "pdf_page": heading_page.get(id(b)),
+                "page_no": heading_page.get(id(b)),
             }
             for b in headings
         ],
@@ -663,19 +666,15 @@ def process_latex(
     stores.put_cir("assembled.md", "\n".join(built.markdown).encode("utf-8"))
     stores.put_cir("structure.json", json.dumps(structure, ensure_ascii=False, indent=1).encode("utf-8"))
     stores.put_cir("source_map.json", json.dumps(built.source_map, ensure_ascii=False).encode("utf-8"))
-    if twin is not None:
-        page_map = {
-            "twin": twin.path,
-            "twin_blob_sha256": twin.blob_sha256,
-            "pages": len(twin_pages),
-            "sections": {
-                f"{b.meta.get('number') or ''} {b.meta.get('title') or b.text}".strip(): heading_page.get(
-                    id(b)
-                )
-                for b in headings
-            },
-        }
-        stores.put_cir("page_map.json", json.dumps(page_map, ensure_ascii=False, indent=1).encode("utf-8"))
+    assets = built.assets
+    if twin_result is not None:
+        assets = assets + twin_result.assets + twin_result.appendix_assets
+        nodes += [
+            n.model_copy(update={"ordinal": len(nodes) + i}) for i, n in enumerate(twin_result.appendix_nodes)
+        ]
+        flags += twin_result.appendix_flags
+        structure["pdf_only_pages"] = twin_result.pdf_only_pages
+        stores.put_cir("structure.json", json.dumps(structure, ensure_ascii=False, indent=1).encode("utf-8"))
 
     return ProcessedDocument(
         blob_sha256=blob,
@@ -684,7 +683,7 @@ def process_latex(
         cir_uri=cir_uri,
         document=fields,
         nodes=nodes,
-        assets=built.assets,
+        assets=assets,
         mentions=built.mentions,
         flags=_unique_flags(flags),
     )
