@@ -119,11 +119,18 @@ def group_sources(citations: list[dict], console_url: str) -> list[dict]:
         source["metadata"].append(
             {
                 "source": c.get("title", ""),
-                "name": f"[{c.get('citation_id')}] {c.get('label', '')} ({', '.join(m for m in marks if m)})",
+                "name": source_name(c, marks),
                 "url": url,
             }
         )
     return list(grouped.values())
+
+
+def source_name(citation: dict, marks: list[str]) -> str:
+    """'[1] Test Report 37, p. 8 (internal report)'; a mark already in the engine's label is not repeated."""
+    label = str(citation.get("label", ""))
+    extra = [m for m in marks if m and f"({m})" not in label]
+    return f"[{citation.get('citation_id')}] {label}" + (f" ({', '.join(extra)})" if extra else "")
 
 
 def embed_html(event: dict) -> str | None:

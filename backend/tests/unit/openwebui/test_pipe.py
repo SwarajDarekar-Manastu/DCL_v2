@@ -498,3 +498,27 @@ def test_skill_lookup_reads_the_dcl_playbook_tag(monkeypatch):
         asyncio.run(api_endpoint.skill_playbook(i)) for i in ("dcl-telemetry-metric", "my-notes", "gone")
     ]
     assert found == ["telemetry_metric", None, None]
+
+
+def test_a_mark_already_in_the_label_is_not_repeated():
+    for module in (pipe_manastu_engine, load_dist()):
+        attachment = {
+            "citation_id": "1",
+            "label": "s3-attachment-check.txt (your attachment)",
+            "provenance": "user_provided",
+        }
+        report = {
+            "citation_id": "2",
+            "label": "Test Report 37, p. 8",
+            "provenance": "internal_report",
+            "needs_review": True,
+        }
+        names = [
+            m["name"]
+            for g in module.group_sources([attachment, report], "https://console.test")
+            for m in g["metadata"]
+        ]
+        assert names == [
+            "[1] s3-attachment-check.txt (your attachment)",
+            "[2] Test Report 37, p. 8 (internal report, ⚠ unverified extraction)",
+        ]
