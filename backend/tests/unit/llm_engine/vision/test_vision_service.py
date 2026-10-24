@@ -12,12 +12,18 @@ from backend.llm_engine.vision.schemas import HandwritingReading, PageTriage
 from backend.llm_engine.vision.service import (
     EXTRACTION_CAPABILITIES,
     TASKS,
+    FileMetadata,
     VisionCapability,
+    VisionService,
     extraction_safety,
     vision_cache,
 )
 
-VERSIONS = {VisionCapability.TRANSCRIBE_PAGE: 2}  # v2 (2026-10-22): page furniture as its own field
+VERSIONS = {
+    VisionCapability.TRANSCRIBE_PAGE: 2,  # v2 (2026-10-22): page furniture as its own field
+    VisionCapability.READ_SCHEMATIC: 2,  # v2 (2026-10-24): verbatim, mechanical drawings have no connections
+    VisionCapability.VIDEO_TIMELINE: 2,  # v2 (2026-10-24): frames across the clip, what ignition looks like
+}
 
 PNG = Image(b"\x89PNG fake crop bytes", "image/png")
 OTHER_PNG = Image(b"\x89PNG another crop", "image/png")
@@ -42,6 +48,7 @@ HANDWRITING = {
     "illegible": False,
     "notes": None,
 }
+IMAGE_METADATA = {"subject": "Injector face", "setting": "test cell", "hardware": ["INJ-14"]}
 READINGS = {
     VisionCapability.TRIAGE_PAGE: TRIAGE,
     VisionCapability.TRANSCRIBE_PAGE: {"markdown": "# Run sheet", "language": "de", "confidence": 0.8},
@@ -55,6 +62,7 @@ READINGS = {
         "confidence": 0.9,
     },
     VisionCapability.DIGITIZE_PLOT: {
+        "image_metadata": IMAGE_METADATA,
         "plot_type": "line",
         "x_axis": {"label": "t", "unit": "s", "range": [0, 10]},
         "y_axes": [{"label": "Pc", "unit": "bar", "range": [0, 15]}],
@@ -63,11 +71,13 @@ READINGS = {
         "confidence": 0.7,
     },
     VisionCapability.READ_SCHEMATIC: {
+        "image_metadata": IMAGE_METADATA,
         "components": [{"tag": "SV-1", "type": "solenoid valve", "label": None}],
         "connections": [{"from": "F-101", "to": "SV-1", "medium": "propellant", "label": None}],
         "notes": None,
     },
     VisionCapability.INSPECT_HARDWARE_PHOTO: {
+        "image_metadata": IMAGE_METADATA,
         "components_visible": ["injector"],
         "failure_modes": [{"mode": "erosion", "location": "face", "severity": "moderate", "confidence": 0.7}],
         "visible_text": ["INJ-14"],
@@ -75,11 +85,15 @@ READINGS = {
         "description": "Eroded injector face, scale unknown.",
     },
     VisionCapability.DESCRIBE_SLIDE: {
+        "image_metadata": IMAGE_METADATA,
         "summary": "Heater plan.",
         "diagram_description": None,
         "key_numbers": [],
     },
-    VisionCapability.VIDEO_TIMELINE: {"events": [{"t_s": 0.4, "type": "ignition", "description": "flash"}]},
+    VisionCapability.VIDEO_TIMELINE: {
+        "events": [{"t_s": 0.4, "type": "ignition", "description": "flash"}],
+        "image_metadata": IMAGE_METADATA,
+    },
     VisionCapability.CLASSIFY_IMAGE: {
         "image_class": "hardware_photo",
         "confidence": 0.9,
@@ -168,8 +182,9 @@ def test_call_sends_the_prompt_file_the_crop_resolution_thinking_and_temperature
     system, user = call["messages"]
     assert (system.role, user.role) == ("system", "user")
     assert "never invent or complete a digit" in system.parts[0].text
-    assert isinstance(user.parts[0], Text) and "Allowed units for this page: mm, bar" in user.parts[0].text
-    assert user.parts[1] == PNG
+    assert user.parts[0] == Text("About this file:\nnot known")
+    assert isinstance(user.parts[1], Text) and "Allowed units for this page: mm, bar" in user.parts[1].text
+    assert user.parts[2] == PNG
     assert (call["media_resolution"], call["thinking"], call["temperature"]) == (
         "high",
         ThinkingLevel.LOW,
@@ -195,8 +210,8 @@ def test_video_keyframes_are_sent_after_their_timestamps(make_service):
     service, client, _ = make_service(READINGS[VisionCapability.VIDEO_TIMELINE])
     service.video_timeline([(0.0, PNG), (0.5, OTHER_PNG)], folder_context="TP19/cam1.mp4")
     parts = client.calls[0]["messages"][-1].parts
-    assert [type(p).__name__ for p in parts] == ["Text", "Text", "Image", "Text", "Image"]
-    assert [parts[1].text, parts[3].text] == ["t = 0.00 s", "t = 0.50 s"]
+    assert [type(p).__name__ for p in parts] == ["Text", "Text", "Text", "Image", "Text", "Image"]
+    assert [parts[2].text, parts[4].text] == ["t = 0.00 s", "t = 0.50 s"]
 
 
 @pytest.mark.parametrize(
@@ -238,7 +253,7 @@ def test_media_resolution_per_capability_follows_file_03_section_3():
         "read_schematic": "high",
         "inspect_hardware_photo": "medium",
         "describe_slide": "medium",
-        "video_timeline": "low",
+        "video_timeline": "medium",
         "classify_image": "low",
     }
     assert {str(c): t.media_resolution for c, t in TASKS.items()} == expected
@@ -300,3 +315,86 @@ def test_the_config_value_names_capabilities_and_refuses_typos():
         extraction_safety(["triage_page"])
     with pytest.raises(ValueError, match="must be true"):
         extraction_safety("yes")
+
+
+FILE = FileMetadata(
+    file_name="IMG_0042.HEIC",
+    folder_path="APU/Test Campaign 2/Test Plan 19/Photos",
+    site="APU",
+    modified_at="2025-11-20",
+    test_plan_id="TP19",
+    hardware_item="INJ14",
+    other_locations=("APU/Archive/IMG_0042.HEIC",),
+)
+
+
+def test_every_call_starts_with_the_shared_preamble_and_the_files_own_metadata(make_service):
+    service, client, _ = make_service(READINGS[VisionCapability.INSPECT_HARDWARE_PHOTO], file=FILE)
+    service.inspect_hardware_photo(PNG, folder_context="TP19/Photos")
+    system, user = client.calls[0]["messages"]
+    preamble, task = system.parts[0].text.split("\n\n", 1)[0], system.parts[0].text
+    assert "document library of a rocket propulsion team" in preamble
+    assert "You inspect one photo of rocket propulsion hardware" in task
+    assert user.parts[0].text.splitlines() == [
+        "About this file:",
+        "File name: IMG_0042.HEIC",
+        "Folder: APU/Test Campaign 2/Test Plan 19/Photos",
+        "Site: APU",
+        "Test plan: TP19",
+        "Hardware: INJ14",
+        "Last modified: 2025-11-20",
+        "Also stored in: APU/Archive/IMG_0042.HEIC",
+    ]
+
+
+def test_the_same_image_in_two_files_is_two_cache_entries(make_service):
+    reading = READINGS[VisionCapability.INSPECT_HARDWARE_PHOTO]
+    one, client, cache = make_service(reading, reading, file=FILE)
+    other = VisionService(client, cache, file=FileMetadata(file_name="other.jpg"))
+    first = one.inspect_hardware_photo(PNG, folder_context="x")
+    second = other.inspect_hardware_photo(PNG, folder_context="x")
+    assert first.input_sha256 != second.input_sha256 and len(client.calls) == 2
+    assert one.inspect_hardware_photo(PNG, folder_context="x").cached is True
+
+
+def test_image_metadata_comes_back_with_the_reading(make_service):
+    reply = {
+        **READINGS[VisionCapability.INSPECT_HARDWARE_PHOTO],
+        "image_metadata": {
+            "subject": "Injector face after a hot fire",
+            "setting": "test cell",
+            "hardware": ["INJ14"],
+            "test_context": "TP19 post-test",
+            "from_metadata": "test plan and hardware from the folder",
+        },
+    }
+    service, _, _ = make_service(reply, file=FILE)
+    reading = service.inspect_hardware_photo(PNG, folder_context="x").reading
+    assert reading.image_metadata.hardware == ["INJ14"] and reading.image_metadata.setting == "test cell"
+
+
+def test_a_cache_hit_is_a_ledger_row_for_the_same_purpose_and_document(make_service):
+    service, client, _ = make_service(TRIAGE)
+    service.triage_page(PNG, context="p.1", doc_id="doc-1")
+    service.triage_page(PNG, context="p.1", doc_id="doc-2", anchor="page:1")
+    ((model, context),) = client.hits
+    assert (model, context.purpose, context.doc_id, context.node_anchor) == (
+        "gemini-3.1-flash-lite",
+        "vision.triage_page",
+        "doc-2",
+        "page:1",
+    )
+
+
+def test_the_file_metadata_has_no_document_title_so_a_commit_cannot_change_the_cache_key():
+    assert "document_title" not in FileMetadata.__dataclass_fields__
+
+
+def test_a_reply_without_image_metadata_fails_the_schema_and_is_not_cached(make_service):
+    reply = {
+        k: v for k, v in READINGS[VisionCapability.INSPECT_HARDWARE_PHOTO].items() if k != "image_metadata"
+    }
+    service, _, cache = make_service(reply, file=FILE)
+    with pytest.raises(StructuredOutputError):
+        service.inspect_hardware_photo(PNG, folder_context="x")
+    assert cache.objects == {}

@@ -26,7 +26,7 @@ This folder is the compiled, always-current map of what exists in the repository
 | `backend/route-e-diagrams` | in-progress | S6 | [Route E: draw.io diagrams and XSD](backend/route-e-diagrams.md) |
 | `backend/route-g-archives` | in-progress | S6 | [Route G: archives and ANSYS packages](backend/route-g-archives.md) |
 | `backend/review-backend` | in-progress | S1 | [Review backend: flags, fingerprints, staged payloads, rules, resume](backend/review-backend.md) |
-| `backend/index-commit` | planned | S1 | [Index commit path (transaction, overlays, vector reuse)](backend/index-commit.md) |
+| `backend/index-commit` | in-progress | S1 | [Index commit path (transaction, overlays, vector reuse)](backend/index-commit.md) |
 | `backend/vision-service` | in-progress | S2 | [VisionService on Gemini (triage, handwriting, tables, plots, photos, video)](backend/vision-service.md) |
 | `backend/route-a1-office` | in-progress | S2 | [Route A1: PDF, DOCX, PPTX, PPT](backend/route-a1-office.md) |
 | `backend/route-d-photos` | in-progress | S2 | [Route D: hardware inspection photos](backend/route-d-photos.md) |

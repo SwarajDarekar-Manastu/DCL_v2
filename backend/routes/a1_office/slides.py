@@ -277,7 +277,13 @@ def process_slides(
                     page_no=slide.number,
                     source=NodeSource.VLM,
                     asset_ref=f"page:{slide.number}",
-                    metadata={"model": output.model, "prompt_version": output.prompt_version},
+                    metadata={
+                        "model": output.model,
+                        "prompt_version": output.prompt_version,
+                        "image_metadata": reading.image_metadata.model_dump(mode="json")
+                        if reading.image_metadata
+                        else None,
+                    },
                 )
             )
     if put_cir is not None:  # CIR: the slides as read, for re-indexing without the file

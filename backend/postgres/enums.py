@@ -20,6 +20,7 @@ def enum_check(column: str, enum: type[StrEnum]) -> CheckConstraint:
 class LlmCallStatus(StrEnum):
     OK = "ok"
     ERROR = "error"
+    CACHE_HIT = "cache_hit"
 
 
 class UserRole(StrEnum):
@@ -180,6 +181,7 @@ class AssetKind(StrEnum):
     PHOTO_THUMB = "photo_thumb"
     PHOTO_IN_DOC = "photo_in_doc"
     VIDEO_FRAME = "video_frame"
+    VIDEO_PROXY = "video_proxy"
     DIAGRAM_RENDER = "diagram_render"
     SPARKLINE = "sparkline"
 
@@ -275,6 +277,8 @@ class RuleType(StrEnum):
     SUPERSESSION = "supersession"
     IGNORE_PATTERN = "ignore_pattern"
     ORIGIN_OVERRIDE = "origin_override"
+    COLUMN_UNIT = "column_unit"
+    SOURCE_CHOICE = "source_choice"
 
 
 class RuleOrigin(StrEnum):

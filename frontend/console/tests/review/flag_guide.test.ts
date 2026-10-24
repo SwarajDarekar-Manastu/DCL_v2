@@ -81,7 +81,7 @@ describe('flag guide text', () => {
 	it('explains a note in its own words, not as two sources', async () => {
 		render(FlagGuide, { topic: 'CONFLICT_NOTE' });
 		await fireEvent.click(screen.getByRole('button', { name: /what should i do with a CONFLICT flag/i }));
-		expect(await screen.findByText(/LaTeX files that no main file includes/)).toBeTruthy();
+		expect(await screen.findByText(/two test plans named in its folder path/)).toBeTruthy();
 		expect(screen.queryByText(/Two sources/)).toBeNull();
 	});
 });

@@ -402,17 +402,21 @@ export function dryRun(body: DryRunRequest): Promise<DryRunResponse> {
 	return request<DryRunResponse>('POST', '/review/dry-run', body);
 }
 
-/** GET /review/rules. `rules`: proposals and the kinds nothing reads yet; `decisions`: the approvals of files. */
+/** GET /review/rules. `rules`: every rule a person writes; `decisions`: the approvals of files. */
 export function listRules(kind?: 'rules' | 'decisions'): Promise<RuleList> {
 	return request<RuleList>('GET', `/review/rules${kind ? `?kind=${kind}` : ''}`);
 }
 
-/** POST /review/rules: saves a proposal. The waiting files it matches show its units; none is approved. */
+/**
+ * POST /review/rules. A test-data unit rule is a proposal: the waiting files show its units and none is approved.
+ * Every other kind acts at once: it answers the matching open flags or changes the matched documents, and those
+ * files are rebuilt or resumed (`resolved_flags`, `rebuilt_doc_ids`).
+ */
 export function createRule(draft: RuleDraft): Promise<RuleCreated> {
 	return request<RuleCreated>('POST', '/review/rules', draft);
 }
 
-/** POST /review/rules/preview: what a rule would do before it is saved. */
+/** POST /review/rules/preview: what a rule would do before it is saved (`effect`, `resolves_flags`). */
 export function previewRule(body: RulePreviewRequest): Promise<RulePreview> {
 	return request<RulePreview>('POST', '/review/rules/preview', body);
 }
@@ -427,7 +431,7 @@ export function simulateRule(ruleId: string): Promise<RuleSimulation> {
 	return request<RuleSimulation>('POST', `/review/rules/${encodeURIComponent(ruleId)}/simulate`);
 }
 
-/** POST /review/rules/{rule_id}/deactivate (admin) */
+/** POST /review/rules/{rule_id}/deactivate: a rule that acts gives back what it did (its flags reopen, files rebuild). */
 export function deactivateRule(ruleId: string): Promise<RuleView> {
 	return request<RuleView>('POST', `/review/rules/${encodeURIComponent(ruleId)}/deactivate`);
 }

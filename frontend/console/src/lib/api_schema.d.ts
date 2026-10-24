@@ -666,8 +666,10 @@ export interface paths {
         put?: never;
         /**
          * Create Rule
-         * @description Save a rule. A unit rule is a proposal: the waiting files it matches show its units and stay open until
-         *     a person approves each. A channel map is a file's approval and is never made by a rule.
+         * @description Save a rule. A telemetry unit rule is a proposal: the waiting files it matches show its units and stay
+         *     open until a person approves each; a channel map is a file's approval and is never made by a rule. Every
+         *     other kind acts (option A, 2026-10-24): it answers the matching open flags or changes the matched
+         *     documents, and those files are rebuilt or resumed at once.
          */
         post: operations["create_rule_review_rules_post"];
         delete?: never;
@@ -3052,6 +3054,18 @@ export interface components {
              */
             proposed_files: number;
             /**
+             * Rebuilt Doc Ids
+             * @description files rebuilt or resumed to apply it
+             * @default []
+             */
+            rebuilt_doc_ids: string[];
+            /**
+             * Resolved Flags
+             * @description open flags this rule answered when it was saved
+             * @default 0
+             */
+            resolved_flags: number;
+            /**
              * Rule Id
              * Format: uuid
              */
@@ -3109,10 +3123,10 @@ export interface components {
         RulePreview: {
             /**
              * Effect
-             * @description proposes: waiting files show its units for a person to approve; stored: kept and listed, no route reads this kind yet
+             * @description proposes: waiting files show its units for a person to approve (telemetry channels); resolves: it answers the matching open flags the way a person would and the files are rebuilt; applies: it changes the matched documents themselves (origin, supersession) at their rebuild; stored: kept and listed, nothing reads it
              * @enum {string}
              */
-            effect: "proposes" | "stored";
+            effect: "proposes" | "resolves" | "applies" | "stored";
             /**
              * Finished Documents
              * @description matched files already processed; a rule never changes them
@@ -3130,6 +3144,12 @@ export interface components {
              * @description why the body cannot be saved, when it cannot
              */
             problem: string | null;
+            /**
+             * Resolves Flags
+             * @description open flags of the matched files this rule would answer
+             * @default 0
+             */
+            resolves_flags: number;
             /** Sample */
             sample: components["schemas"]["AffectedDocument"][];
             /**
@@ -3191,7 +3211,7 @@ export interface components {
          *     the files it matches and a person still approves each file (DECISIONS 2026-10-24).
          * @enum {string}
          */
-        RuleType: "channel_map" | "channel_proposal" | "unit_mapping" | "schema_mapping" | "supersession" | "ignore_pattern" | "origin_override";
+        RuleType: "channel_map" | "channel_proposal" | "unit_mapping" | "schema_mapping" | "supersession" | "ignore_pattern" | "origin_override" | "column_unit" | "source_choice";
         /** RuleView */
         RuleView: {
             /** Active */

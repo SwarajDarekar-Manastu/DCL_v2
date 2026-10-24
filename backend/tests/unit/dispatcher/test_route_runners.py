@@ -85,7 +85,7 @@ def test_d_burst_members_wait_for_and_reuse_the_representative(session, minio, m
         ).scalar()
         for t, doc in docs.items()
     }
-    monkeypatch.setattr(media_run, "vision_for", lambda session: object())
+    monkeypatch.setattr(media_run, "vision_for", lambda session, file=None: object())
     monkeypatch.setattr(d, "burst_readings", lambda photos: {sha: ("0" * 16, None) for sha, _ in photos})
     seen = []
 
@@ -141,7 +141,8 @@ def test_f_hands_the_video_to_process_video_with_the_transcriber(session, minio,
     session.commit()
     (release,) = dispatch(session, minio, section_file_sets=()).to_process
     assert (release.task, release.queue) == ("dcl.process.route_f", "media")
-    monkeypatch.setattr(media_run, "vision_for", lambda session: "vision")
+    files = []
+    monkeypatch.setattr(media_run, "vision_for", lambda session, file=None: files.append(file) or "vision")
     monkeypatch.setattr(media_run, "_transcriber", lambda size: f"whisper:{size}")
     calls = []
     monkeypatch.setattr(
@@ -153,6 +154,8 @@ def test_f_hands_the_video_to_process_video_with_the_transcriber(session, minio,
         "whisper:medium",
         "vision",
     )
+    (file,) = files  # the image prompt gets this file's own ingestion metadata
+    assert (file.file_name, file.test_plan_id) == ("firing.mp4", "TP12")
 
 
 def test_f_reads_the_speech_model_size_from_the_setting(session, minio, monkeypatch):
@@ -165,7 +168,7 @@ def test_f_reads_the_speech_model_size_from_the_setting(session, minio, monkeypa
     pipeline_config.set_value(session, "routes.F.whisper_model", "small", "test")
     session.commit()
     (release,) = dispatch(session, minio, section_file_sets=()).to_process
-    monkeypatch.setattr(media_run, "vision_for", lambda session: "vision")
+    monkeypatch.setattr(media_run, "vision_for", lambda session, file=None: "vision")
     monkeypatch.setattr(media_run, "_transcriber", lambda size: f"whisper:{size}")
     calls = []
     monkeypatch.setattr(
@@ -302,3 +305,77 @@ def test_g_files_become_metadata_cards_and_cad_references_become_relations(sessi
     cad = session.get(Document, released["bracket"].doc_id)
     pair = tuple(sorted([cad.doc_id, drawing.doc_id], key=str))
     assert session.get(DocumentRelation, (*pair, "REFERENCES")) is not None
+
+
+def test_the_viewer_plays_the_working_copy_from_any_node_of_a_video(session, minio, monkeypatch):
+    """Change 1: the viewer plays Route F's compressed copy, found by the blob (assets have no doc_id), for an
+    event anchor with its content hash and for a time anchor that resolves to the timeline itself."""
+    from backend.api.viewer import build_viewer_payload
+    from backend.dispatcher.contract import ProcessedAsset, ProcessedNode
+    from backend.postgres.enums import AssetKind, DocKind, NodeSource, NodeType
+    from backend.postgres.models import DocumentNode
+    from backend.routes import f_video as f
+    from backend.tests.unit.routes.c_telemetry.test_pipeline import _fake_indexer
+
+    _seed_folders_only(session)
+    _file(
+        session, minio, "v2", "F-TP12", "hotfire.mp4", b"\x00\x00\x00\x18ftypisom" + b"\x01" * 32, "video/mp4"
+    )
+    pipeline_config.set_value(session, pipeline_config.PROCESSING_SCOPE, ["F-TP12"], "test")
+    pipeline_config.set_value(session, "routes.F.enabled", True, "test")
+    session.commit()
+    (release,) = dispatch(session, minio, section_file_sets=()).to_process
+    monkeypatch.setattr(media_run, "vision_for", lambda session, file=None: "vision")
+    monkeypatch.setattr(media_run, "_transcriber", lambda size: None)
+    proxy = {}
+
+    def video(data, **kw):
+        sha = kw["blob_sha256"]
+        proxy["uri"] = f"s3://dcl-assets/videos/{sha}/proxy.mp4"
+        node = dict(language="en", source=NodeSource.STRUCTURED)
+        return ProcessedDocument(
+            blob_sha256=sha,
+            route="F",
+            parser_version=2,
+            cir_uri=f"s3://dcl-cir/{sha}/F/v2/",
+            document=DocumentFields(title="hotfire", doc_kind=DocKind.VIDEO_TIMELINE),
+            nodes=[
+                ProcessedNode(
+                    ref="timeline",
+                    node_type=NodeType.PARENT,
+                    ordinal=0,
+                    breadcrumb="hotfire",
+                    content="Test-cell timeline: ignition at 3.0 s.",
+                    t_start_ms=0,
+                    **node,
+                ),
+                ProcessedNode(
+                    ref="e1",
+                    node_type=NodeType.VIDEO_EVENT,
+                    ordinal=1,
+                    parent_ref="timeline",
+                    breadcrumb="hotfire › ignition",
+                    content="ignition: bright flash",
+                    t_start_ms=3000,
+                    **node,
+                ),
+            ],
+            assets=[ProcessedAsset(ref="video:proxy", kind=AssetKind.VIDEO_PROXY, minio_uri=proxy["uri"])],
+        )
+
+    monkeypatch.setattr(f, "process_video", video)
+    assert process_f_document(session, minio, release.doc_id, _fake_indexer).status == "ACTIVE"
+    session.commit()
+    event = session.scalars(
+        select(DocumentNode).where(
+            DocumentNode.doc_id == release.doc_id, DocumentNode.node_type == "video_event"
+        )
+    ).one()
+
+    def view(anchor):
+        return build_viewer_payload(session, release.doc_id, anchor, False, lambda u: u).view
+
+    cited = view(f"t:3000:{event.content_sha256[:16]}")
+    assert (cited.kind, cited.video_url, cited.t_ms) == ("video", proxy["uri"], 3000)
+    start = view("t:0")
+    assert (start.kind, start.video_url) == ("video", proxy["uri"])

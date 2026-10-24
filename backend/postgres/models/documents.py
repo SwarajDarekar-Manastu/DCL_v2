@@ -102,7 +102,9 @@ class Document(Base):
     pipeline_version: Mapped[int | None] = mapped_column(Integer)
     cloud_processed: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, server_default=text("now()"))
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMPTZ, server_default=text("now()"), onupdate=text("now()")
+    )
     indexed_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
 

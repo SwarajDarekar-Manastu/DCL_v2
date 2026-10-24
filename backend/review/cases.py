@@ -34,7 +34,15 @@ from backend.postgres.enums import (
     RuleOrigin,
     RuleType,
 )
-from backend.postgres.models import AuditEvent, Document, DocumentSource, DriveItem, ReviewFlag, Rule
+from backend.postgres.models import (
+    AuditEvent,
+    Document,
+    DocumentRelation,
+    DocumentSource,
+    DriveItem,
+    ReviewFlag,
+    Rule,
+)
 from backend.review.api_models import (
     AppliedUnit,
     CaseDetail,
@@ -665,6 +673,7 @@ class ResolveOutcome:
     rule: Rule | None  # the proposal saved with this approval, if any
     resume_rule_id: uuid.UUID | None  # this file's approval: resumes this file only
     proposed_files: int = 0
+    resume_doc_id: uuid.UUID | None = None  # a HALTED file of another route whose HARD flags are all decided
 
 
 def _settle_document(session: Session, doc_id: uuid.UUID | None) -> None:
@@ -746,7 +755,31 @@ def resolve_case(
     _settle_document(session, first.doc_id)
     session.flush()
     proposed_files = propose_rule(session, proposal) if proposal is not None else 0
-    return ResolveOutcome(case.flags, proposal, approval.rule_id if approval else None, proposed_files)
+    return ResolveOutcome(
+        case.flags,
+        proposal,
+        approval.rule_id if approval else None,
+        proposed_files,
+        _resumable(session, first.doc_id),
+    )
+
+
+def _resumable(session: Session, doc_id: uuid.UUID | None) -> uuid.UUID | None:
+    """file 06 §7: once no HARD flag of a HALTED document is open, it resumes from its staged payload. Route C
+    resumes through its approval rule instead (``resume_for_rule``)."""
+    document = session.get(Document, doc_id) if doc_id else None
+    if document is None or document.status != DocumentStatus.HALTED or document.route == Route.C:
+        return None
+    open_hard = session.scalar(
+        select(ReviewFlag.flag_id)
+        .where(
+            ReviewFlag.doc_id == doc_id,
+            ReviewFlag.severity == FlagSeverity.HARD,
+            ReviewFlag.status.in_(OPEN),
+        )
+        .limit(1)
+    )
+    return None if open_hard else doc_id
 
 
 def reject_case(session: Session, case_key: str, request: RejectRequest, actor: str) -> _Case:
@@ -819,6 +852,115 @@ UNDO_WINDOW = timedelta(days=30)
 SAMPLE = 20
 
 
+@dataclass
+class RuleEffect:
+    """What saving or switching off an acting rule did: flags answered or reopened, files to rebuild (they
+    were committed) and files to resume (HALTED, no open HARD flag left)."""
+
+    resolved_flags: int = 0
+    reopened_flags: int = 0
+    rebuild: list[uuid.UUID] = field(default_factory=list)
+    resume: list[uuid.UUID] = field(default_factory=list)
+
+
+def _queue_rebuild(session: Session, document: Document, effect: RuleEffect) -> None:
+    if document.doc_id in effect.rebuild or document.doc_id in effect.resume:
+        return
+    if document.status in (DocumentStatus.ACTIVE, DocumentStatus.ACTIVE_WITH_SOFT_FLAGS):
+        document.status = DocumentStatus.PROCESSING
+        effect.rebuild.append(document.doc_id)
+    elif _resumable(session, document.doc_id):
+        effect.resume.append(document.doc_id)
+
+
+def _rule_scope(rule: Rule) -> RuleScope:
+    return RuleScope(
+        scope_root=rule.scope_root,
+        scope_folder_id=rule.scope_folder_id,
+        scope_filename_glob=rule.scope_filename_glob,
+        scope_extension=rule.scope_extension,
+    )
+
+
+def apply_rule(session: Session, rule: Rule) -> RuleEffect:
+    """A saved acting rule answers the open flags of the files it matches now (option A, 2026-10-24); a
+    document rule (origin, supersession) is applied by rebuilding the files it matches."""
+    from backend.review.rule_answers import ANSWERABLE, ANSWERING, DOCUMENT_RULES, answer_flags, load_acting
+
+    rule_type = RuleType(rule.rule_type)
+    effect = RuleEffect()
+    if rule_type not in (*ANSWERING, *DOCUMENT_RULES):
+        return effect
+    acting = load_acting(session) if rule_type in ANSWERING else []
+    for document, _ in _matching_documents(session, _rule_scope(rule), rule_type):
+        if rule_type in ANSWERING:
+            open_flags = list(
+                session.scalars(
+                    select(ReviewFlag).where(
+                        ReviewFlag.doc_id == document.doc_id, ReviewFlag.status.in_(ANSWERABLE)
+                    )
+                )
+            )
+            answered = answer_flags(session, document, open_flags, acting)
+            if not answered:
+                continue
+            effect.resolved_flags += len(answered)
+        session.flush()
+        _queue_rebuild(session, document, effect)
+    session.flush()
+    return effect
+
+
+def switch_off_rule(session: Session, rule_id: uuid.UUID, actor: str) -> tuple[Rule, RuleEffect]:
+    """Switch a rule off and take back what it did: the flags it answered are open again (another active rule
+    may answer them), a document it superseded comes back, and the files it touched are rebuilt."""
+    from backend.review.rule_answers import ANSWERING, DOCUMENT_RULES, answer_flags, load_acting
+
+    rule = deactivate_rule(session, rule_id, actor)
+    effect = RuleEffect()
+    rule_type = RuleType(rule.rule_type)
+    if rule_type in ANSWERING:
+        answered = list(
+            session.scalars(
+                select(ReviewFlag).where(
+                    ReviewFlag.resolution_rule_id == rule_id, ReviewFlag.status == FlagStatus.AUTO_RESOLVED
+                )
+            )
+        )
+        for flag in answered:
+            flag.status, flag.resolution, flag.resolution_rule_id = FlagStatus.OPEN, None, None
+            flag.resolved_by = flag.resolved_at = None
+        effect.reopened_flags = len(answered)
+        session.flush()
+        acting = load_acting(session)
+        for doc_id in dict.fromkeys(f.doc_id for f in answered if f.doc_id):
+            document = session.get(Document, doc_id)
+            if document is None:
+                continue
+            answer_flags(session, document, [f for f in answered if f.doc_id == doc_id], acting)
+            session.flush()
+            _queue_rebuild(session, document, effect)
+    elif rule_type in DOCUMENT_RULES:
+        if rule_type == RuleType.SUPERSESSION:
+            other = session.get(Document, uuid.UUID(str(rule.body["superseded_doc_id"])))
+            if other is not None:
+                for relation in session.scalars(
+                    select(DocumentRelation).where(
+                        DocumentRelation.doc_id_b == other.doc_id,
+                        DocumentRelation.relation == "SUPERSEDES",
+                        DocumentRelation.created_by == "rule",
+                    )
+                ):
+                    session.delete(relation)
+                if other.status == DocumentStatus.SUPERSEDED:
+                    other.status = DocumentStatus.ACTIVE  # the rebuild below settles its real status
+                    _queue_rebuild(session, other, effect)
+        for document, _ in _matching_documents(session, _rule_scope(rule), rule_type):
+            _queue_rebuild(session, document, effect)
+    session.flush()
+    return rule, effect
+
+
 def _matching_documents(
     session: Session, scope: RuleScope, rule_type: RuleType
 ) -> list[tuple[Document, Any]]:
@@ -836,7 +978,6 @@ def _matching_documents(
         RuleType.CHANNEL_MAP: ["C"],
         RuleType.CHANNEL_PROPOSAL: ["C"],
         RuleType.UNIT_MAPPING: ["C"],
-        RuleType.SCHEMA_MAPPING: ["C"],
     }
     stmt = select(Document).where(Document.status.not_in(["SUPERSEDED", "DELETED", "QUARANTINED"]))
     if rule_type in routes:
@@ -888,8 +1029,19 @@ def preview_rule(session: Session, request) -> "Any":
             RULE_BODIES[rule_type].model_validate(request.body)
         except ValueError as exc:
             problem = str(exc)
+    from backend.review.rule_answers import ANSWERABLE, ANSWERING, DOCUMENT_RULES, answer
+
     proposes = rule_type in PROPOSING_RULE_TYPES
     found = _matching_documents(session, request.scope, RuleType.CHANNEL_PROPOSAL if proposes else rule_type)
+    resolves = 0
+    if rule_type in ANSWERING and request.body is not None and problem is None:
+        body = RULE_BODIES[rule_type].model_validate(request.body)
+        ids = [d.doc_id for d, _ in found]
+        if ids:
+            open_flags = session.scalars(
+                select(ReviewFlag).where(ReviewFlag.doc_id.in_(ids), ReviewFlag.status.in_(ANSWERABLE))
+            )
+            resolves = sum(answer(rule_type, body, flag) is not None for flag in open_flags)
     waiting = Counter()
     ids = [d.doc_id for d, _ in found]
     if ids:
@@ -904,7 +1056,14 @@ def preview_rule(session: Session, request) -> "Any":
                 waiting[anchor["channel"]] += 1
     return RulePreview(
         **_simulation_fields(found),
-        effect="proposes" if proposes else "stored",
+        effect="proposes"
+        if proposes
+        else "resolves"
+        if rule_type in ANSWERING
+        else "applies"
+        if rule_type in DOCUMENT_RULES
+        else "stored",
+        resolves_flags=resolves,
         open_channels=[OpenChannel(channel=c, files=n) for c, n in sorted(waiting.items())],
         problem=problem,
     )
@@ -1015,7 +1174,7 @@ def dry_run(session: Session, request) -> "Any":
         except ValueError as exc:
             raise InvalidAction(f"quantity {resolution.quantity!r} is not a known quantity") from exc
         entry = ChannelMapEntry(
-            canonical_name=_slug(resolution.channel),
+            canonical_name=resolution.canonical_name or _slug(resolution.channel),
             physical_quantity=quantity,
             unit=resolution.unit,
             gauge_or_abs=resolution.gauge_or_abs,
@@ -1107,6 +1266,8 @@ def _release_rule(session: Session, rule_id: uuid.UUID, actor: str) -> uuid.UUID
             )
         )
     )
+    if old.rule_type not in (RuleType.CHANNEL_MAP, RuleType.CHANNEL_PROPOSAL, RuleType.UNIT_MAPPING):
+        return None  # an acting rule stays on: the reopened flag waits for a person (rule_answers.ANSWERABLE)
     if not remaining:
         deactivate_rule(session, rule_id, actor)
         return rule_id

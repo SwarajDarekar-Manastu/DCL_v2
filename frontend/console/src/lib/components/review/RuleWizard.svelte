@@ -1,7 +1,7 @@
 <script lang="ts">
 	// "Create a rule" in three steps: which files, what each column is, check and apply.
-	// The rule is a channel_map, the one kind the pipeline reads; saving it sends the matching halted files back
-	// into processing. Everything it will do is shown before the button (POST /review/rules/preview).
+	// The rule is a channel_proposal: saving it makes the matching halted files show these units, and a person
+	// applies each one. Everything it will do is shown before the button (POST /review/rules/preview).
 	import {
 		ApiError,
 		createRule,

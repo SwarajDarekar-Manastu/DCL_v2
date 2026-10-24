@@ -13,6 +13,7 @@
 	import { session } from '$lib/auth/session.svelte';
 	import RuleForm from '$lib/components/review/RuleForm.svelte';
 	import RuleWizard from '$lib/components/review/RuleWizard.svelte';
+	import { deactivatedLine, deactivateLabel, deactivateTitle, savedLine, simulationLine, usageLine } from '$lib/components/review/rule_effect';
 	import { RULE_TYPE_HELP } from '$lib/components/review/rules_guide';
 	import RulesGuide from '$lib/components/review/RulesGuide.svelte';
 	import { rulesYaml } from '$lib/components/review/rules_export';
@@ -73,12 +74,9 @@
 	}
 
 	const create = (draft: RuleDraft) =>
-		act(async () => {
-			const made = await createRule(draft);
-			return `Rule saved.${made.proposed_files ? ` ${made.proposed_files} file${made.proposed_files === 1 ? ' now shows' : 's now show'} it as a proposal.` : ''}`;
-		});
+		act(async () => savedLine(await createRule(draft), RULE_TYPE_HELP[draft.rule_type].effect));
 	const deactivate = (rule: RuleView) =>
-		act(async () => (await deactivateRule(rule.rule_id), 'Rule switched off. Approved files are unchanged.'));
+		act(async () => (await deactivateRule(rule.rule_id), deactivatedLine(RULE_TYPE_HELP[rule.rule_type].effect)));
 	async function simulate(rule: RuleView) {
 		try {
 			simulations[rule.rule_id] = await simulateRule(rule.rule_id);
@@ -94,8 +92,8 @@
 
 <RoleGate roles={session.user?.roles ?? []} role="reviewer">
 	<Page
-		title="Rules: proposals"
-		description="A rule proposes an answer once, such as the unit of each column in one folder. Every waiting file in it, and every matching file that arrives later, shows that answer; a person checks and applies it file by file. The closest rule wins."
+		title="Rules"
+		description="A rule gives an answer once. The unit of each test-data column in a folder is proposed: every waiting file shows it, and a person checks and applies it file by file. Every other kind acts when saved: it answers the open flags it matches or changes the files it matches. The closest rule wins."
 		width="full"
 	>
 		{#snippet actions()}
@@ -136,7 +134,6 @@
 										<div class="flex flex-wrap items-center gap-1.5">
 											<strong class="font-mono text-[13px] font-medium">{rule.rule_type}</strong>
 											<ToneBadge>{rule.origin}</ToneBadge>
-											{#if RULE_TYPE_HELP[rule.rule_type].effect === 'stored'}<ToneBadge tone="outline">stored only</ToneBadge>{/if}
 											{#if !rule.active}<ToneBadge tone="outline">inactive</ToneBadge>{/if}
 										</div>
 										<details class="mt-1">
@@ -147,12 +144,8 @@
 									<td class="max-w-[22rem] break-words">{scopeText(rule)}</td>
 									<td class="num font-mono">{rule.precedence}</td>
 									<td class="text-muted-foreground text-xs">
-										{#if RULE_TYPE_HELP[rule.rule_type].effect === 'stored'}
-											Nothing reads this kind yet.
-										{:else}
-											<span class="num whitespace-nowrap">{rule.flags_proposed} proposed · {rule.flags_decided} decided · {rule.files_waiting} file{rule.files_waiting === 1 ? '' : 's'} waiting</span>
-											{#if rule.files_waiting}<br /><a href="/review?proposed_by_rule_id={rule.rule_id}">Review the waiting files</a>{/if}
-										{/if}
+										<span class="num">{usageLine(rule, RULE_TYPE_HELP[rule.rule_type].effect)}</span>
+										{#if RULE_TYPE_HELP[rule.rule_type].effect === 'proposes' && rule.files_waiting}<br /><a href="/review?proposed_by_rule_id={rule.rule_id}">Review the waiting files</a>{/if}
 									</td>
 									<td class="text-muted-foreground text-xs">
 										{rule.created_by}, <span class="font-mono">{rule.created_at.slice(0, 10)}</span>
@@ -161,7 +154,7 @@
 									<td>
 										<div class="flex justify-end gap-1.5">
 											<Button variant="outline" size="xs" onclick={() => simulate(rule)}>Simulate</Button>
-											{#if rule.active}<Button variant="outline" size="xs" disabled={busy} title="Stops new proposals. Files a person has already approved are never changed." onclick={() => deactivate(rule)}>{RULE_TYPE_HELP[rule.rule_type].effect === 'stored' ? 'Deactivate' : 'Stop proposing'}</Button>{/if}
+											{#if rule.active}<Button variant="outline" size="xs" disabled={busy} title={deactivateTitle(RULE_TYPE_HELP[rule.rule_type].effect)} onclick={() => deactivate(rule)}>{deactivateLabel(RULE_TYPE_HELP[rule.rule_type].effect)}</Button>{/if}
 										</div>
 									</td>
 								</tr>
@@ -169,9 +162,7 @@
 									{@const sim = simulations[rule.rule_id]}
 									<tr class="hover:bg-transparent">
 										<td colspan="6" class="bg-muted/40">
-											<p class="m-0 text-[13px] font-medium">
-												Reaches {sim.matched_documents} file{sim.matched_documents === 1 ? '' : 's'}: {sim.waiting_documents} waiting, {sim.finished_documents} already processed (never changed by a rule).
-											</p>
+											<p class="m-0 text-[13px] font-medium">{simulationLine(sim, RULE_TYPE_HELP[rule.rule_type].effect)}</p>
 											{#if sim.sample.length}
 												<ul class="m-0 mt-1 grid list-none gap-0.5 p-0 text-xs">
 													{#each sim.sample as d (d.doc_id)}<li><span class="font-mono">{d.path ?? d.title}</span> <span class="text-muted-foreground">{d.status}</span></li>{/each}
@@ -191,7 +182,7 @@
 				<summary class="panel-header cursor-pointer"><span class="panel-title">Advanced: write a rule as JSON</span></summary>
 				<div class="panel-body grid max-w-xl gap-4">
 					<p class="text-muted-foreground m-0 text-xs">
-						For rule kinds the steps above do not cover. Only channel maps and unit rules change files today; the rest are saved and listed.
+						For rule kinds the steps above do not cover. A unit proposal waits for a person; every other kind acts when saved: it answers the open flags it matches or changes the files it matches, and those files are rebuilt. Use Preview to see how many flags it would answer.
 					</p>
 					<RuleForm {busy} onSubmit={create} />
 				</div>

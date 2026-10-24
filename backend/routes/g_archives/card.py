@@ -45,7 +45,6 @@ KINDS = (
     (".scdoc", "SpaceClaim document"),
     (".dwg", "AutoCAD drawing (DWG)"),
 )
-MEASURED = (".stl", ".step", ".stp")
 MEASURE_MAX_BYTES = 200 * 1024**2
 TAR_LIST_MAX_BYTES = 300 * 1024**2
 LIST_MAX_ENTRIES = 5000
@@ -189,7 +188,9 @@ def build_card(
 
     measurement = None
     measurement_error = None
-    if suffix in MEASURED and len(data) <= MEASURE_MAX_BYTES:
+    if suffix in cad.MEASURED_SUFFIXES and len(data) > MEASURE_MAX_BYTES:
+        measurement_error = f"larger than {MEASURE_MAX_BYTES // 1024**2} MB, not measured"
+    elif suffix in cad.MEASURED_SUFFIXES:
         try:
             measurement = cad.measure(data, file_name)
         except cad.CadError as exc:

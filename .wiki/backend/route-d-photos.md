@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S2 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §8 |
-| Last updated | 2026-10-22 |
+| Last updated | 2026-10-24 |
 
 ## Purpose
 
@@ -26,6 +26,7 @@ Tests and fixtures:
 Provides:
 - `process_photo(data, blob_sha256=, file_name=, folder=, vision=, put_asset=, cloud_allowed=, doc_id=, representative=, cluster_id=) -> (ProcessedDocument, PhotoReading | None)`; pass a burst representative's reading to its members (no vision call)
 - `cluster_photos([(id, phash, taken_at)]) -> {id: representative_id}` for S1's assembler (pHash distance ≤ 6 within 60 s)
+- flags: SENSITIVE_CONTENT HARD when a visible-text line contains an export marking (`EXPORT_MARKINGS`: EXPORT CONTROLLED, ITAR, RESTRICTED) as a whole word, as Route A1 matches ("SANITARY FITTING" no longer raises ITAR)
 - one `photo` node (page 1, `asset_ref = "photo:web"`) whose image vector `index_document` computes from the web asset; assets `photos/{sha}/web.jpg` (1,600 px) and `thumb.jpg` (256 px) with pHash and GPS-free EXIF
 
 Consumes:
@@ -52,6 +53,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-24 | Lead | Export markings match whole words (`re.search` with `\b`), not substrings |
 | 2026-10-23 | S2 | Import chain fixed for the media image (no PDF stack): `a1_office.figures` imports `preflight` only where a PDF crop is rendered; a test imports `d_photos` and `f_video` with pikepdf, pypdfium2, docling and lxml blocked (65 photos FAILED live) |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S2 | Route D: HEIC, EXIF without GPS, pHash bursts, classify-first routing, photo node, web/thumb assets, flags; 9 tests |

@@ -25,6 +25,17 @@ class Reading(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class ImageMetadata(Reading):
+    """What an image is, from the image and from its file's ingestion metadata (prompt image_context);
+    returned by the capabilities that describe an image and kept with the image's node."""
+
+    subject: str
+    setting: str
+    hardware: list[str] = []
+    test_context: str | None = None
+    from_metadata: str | None = None
+
+
 class PageType(StrEnum):
     DIGITAL_TEXT = "digital_text"
     DIGITAL_WITH_FIGURES = "digital_with_figures"
@@ -165,6 +176,7 @@ class PlotSeries(Reading):
 class PlotReading(Reading):
     """`digitize_plot` (3.8 Flash, figure crop + caption): key points, never a dense trace."""
 
+    image_metadata: ImageMetadata
     plot_type: str
     x_axis: Axis
     y_axes: list[Axis] = Field(default_factory=list)
@@ -191,6 +203,7 @@ class SchematicConnection(Reading):
 class SchematicReading(Reading):
     """`read_schematic` (3.8 Flash, figure crop): components and connections."""
 
+    image_metadata: ImageMetadata
     components: list[SchematicComponent] = Field(default_factory=list)
     connections: list[SchematicConnection] = Field(default_factory=list)
     notes: str | None = None
@@ -229,6 +242,7 @@ class ImageClassification(Reading):
 class HardwarePhotoReading(Reading):
     """`inspect_hardware_photo` (3.8 Flash, medium resolution, photo and folder context), no people."""
 
+    image_metadata: ImageMetadata
     components_visible: list[str] = Field(default_factory=list)
     failure_modes: list[FailureMode] = Field(default_factory=list)
     visible_text: list[str] = Field(default_factory=list)
@@ -239,6 +253,7 @@ class HardwarePhotoReading(Reading):
 class SlideReading(Reading):
     """`describe_slide` (3.8 Flash, slide image + extracted text)."""
 
+    image_metadata: ImageMetadata
     summary: str
     diagram_description: str | None = None
     key_numbers: list[str] = Field(default_factory=list)
@@ -253,5 +268,6 @@ class VideoEvent(Reading):
 class VideoTimeline(Reading):
     """`video_timeline` (3.8 Flash, timestamped keyframes of a test-cell clip)."""
 
+    image_metadata: ImageMetadata
     events: list[VideoEvent] = Field(default_factory=list)
     anomalies: list[str] = Field(default_factory=list)

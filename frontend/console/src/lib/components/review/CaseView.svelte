@@ -16,8 +16,10 @@
 	import CaseHeader from './CaseHeader.svelte';
 	import ChannelMapView from './ChannelMapView.svelte';
 	import FlagConsole from './FlagConsole.svelte';
+	import RuleFromDecision from './RuleFromDecision.svelte';
 	import { isChannelMapCase } from './channel_map';
 	import { canBecomeRule, caseRuleScope, missing, needsPreview, type ScopeChoice } from './resolution';
+	import { offersFor, type RuleOffer } from './rule_from_decision';
 
 	interface Props {
 		detail: CaseDetail;
@@ -44,6 +46,8 @@
 	let error = $state('');
 	let notice = $state('');
 	let details = $state(false);
+	// "Make a rule from this decision": the rules that would repeat what was just applied.
+	let offers = $state<RuleOffer[]>([]);
 
 	// A different case starts clean.
 	let caseKey = $derived(detail.summary.case_key);
@@ -56,6 +60,7 @@
 		error = '';
 		notice = '';
 		details = false;
+		offers = [];
 	});
 
 	let where = $derived(detail.locations[0] ?? null);
@@ -142,10 +147,12 @@
 
 	const apply = () =>
 		run(async () => {
+			const repeatable = offersFor(detail.flags, chosen, where?.file_name ?? '');
 			const response = await resolveCase(caseKey, {
 				resolutions: chosen.map(([flag_id, resolution]) => ({ flag_id, resolution })),
 				rule_scope: ruleScope
 			});
+			offers = repeatable;
 			const proposed = response.proposed_files;
 			return `Resolved${response.resumed_doc_ids.length ? '. This file is resuming' : ''}${proposed ? `. ${proposed} other file${proposed === 1 ? '' : 's'} now show${proposed === 1 ? 's' : ''} these units as a proposal` : ''}.`;
 		});
@@ -180,6 +187,10 @@
 			<FlagConsole {flag} bind:draft={drafts[flag.flag_id]} preview={previewState(flag.flag_id)} onPreview={() => preview(flag.flag_id)} />
 		{/each}
 	</div>
+
+	{#if offers.length}
+		<RuleFromDecision {offers} {where} onSaved={onChanged} onDismiss={() => (offers = [])} />
+	{/if}
 
 	<footer class="bg-background/95 sticky bottom-0 z-10 -mx-5 grid gap-2 border-t px-5 py-3 backdrop-blur">
 		{#if ruleCandidates.length}

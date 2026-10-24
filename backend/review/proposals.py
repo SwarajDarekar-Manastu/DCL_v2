@@ -124,7 +124,8 @@ def refresh(session: Session, doc_ids: Iterable[uuid.UUID] | None = None) -> dic
     """Re-derive the suggestion of the open telemetry unit flags of ``doc_ids`` (all documents when None).
 
     Returns ``rule_id -> documents that now carry its proposal``. A flag no proposal reaches gets the
-    pipeline's own hint back, so switching a rule off leaves nothing of it behind."""
+    pipeline's own hint back, so switching a rule off leaves nothing of it behind; a model proposal the route
+    made (``proposed_by = llm``, file 06 §5) is the pipeline's own hint and is kept."""
     from backend.routes.c_telemetry.suggest import suggest_unit
 
     statement = select(ReviewFlag).where(
@@ -149,6 +150,9 @@ def refresh(session: Session, doc_ids: Iterable[uuid.UUID] | None = None) -> dic
         if found is not None:
             rule_id, suggestion = found
             reached[rule_id].add(flag.doc_id)
+        elif (flag.suggested_resolution or {}).get("proposed_by") == "llm":
+            flag.proposed_by_rule_id = None
+            continue
         else:
             rule_id, suggestion = None, suggest_unit(UnitTelemetryEvidence.model_validate(flag.evidence))
         flag.suggested_resolution = suggestion.model_dump(mode="json")

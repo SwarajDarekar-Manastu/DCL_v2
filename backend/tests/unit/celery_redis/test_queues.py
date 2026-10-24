@@ -12,7 +12,7 @@ EXPECTED_FILE_10 = {
     Queue.IO_LIGHT: ("threads", 4, 1024),
     Queue.CPU_PARSE: ("prefork", 1, 6144),
     Queue.TELEMETRY_STREAM: ("prefork", 2, 2 * 3072),
-    Queue.MEDIA: ("prefork", 1, 4096),
+    Queue.MEDIA: ("prefork", 1, 6144),
     Queue.VISION_BATCH: ("threads", 2, 1024),
     Queue.EMBED: ("threads", 2, 2048),
     Queue.BENCHMARK: ("prefork", 1, 2048),

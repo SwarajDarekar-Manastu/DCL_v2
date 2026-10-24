@@ -7,6 +7,8 @@ carries the folder ``.cfg`` scaling as context, so the reviewer sees why no unit
 Confidence stays below the 0.9 auto-apply threshold: an operator always confirms.
 """
 
+from collections.abc import Callable
+
 from backend.common.units import UnitError, parse_unit
 from backend.dispatcher.contract import Flag, SetUnit, Suggestion, UnitTelemetryEvidence
 from backend.postgres.enums import FlagType
@@ -70,12 +72,19 @@ def suggest_unit(evidence: UnitTelemetryEvidence) -> Suggestion:
     )
 
 
-def with_suggestion(flag: Flag) -> Flag:
-    """The flag with a suggestion, when it is a telemetry UNIT_AMBIGUITY without one."""
+def with_suggestion(flag: Flag, propose: Callable[[UnitTelemetryEvidence], Suggestion] | None = None) -> Flag:
+    """The flag with a suggestion, when it is a telemetry UNIT_AMBIGUITY without one. When no file states a
+    unit, ``propose`` (one model call, file 06 §5; only for roots cleared for cloud processing) may still
+    propose one; a person decides either way."""
     if (
         flag.flag_type != FlagType.UNIT_AMBIGUITY
         or flag.suggested_resolution is not None
         or not isinstance(flag.evidence, UnitTelemetryEvidence)
     ):
         return flag
-    return flag.model_copy(update={"suggested_resolution": suggest_unit(flag.evidence)})
+    suggestion = suggest_unit(flag.evidence)
+    if suggestion.resolution is None and propose is not None:
+        proposed = propose(flag.evidence)
+        if proposed.resolution is not None:
+            suggestion = proposed
+    return flag.model_copy(update={"suggested_resolution": suggestion})

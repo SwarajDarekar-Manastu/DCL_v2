@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §1, §2 |
-| Last updated | 2026-10-23 |
+| Last updated | 2026-10-24 |
 
 ## Purpose
 
@@ -15,14 +15,14 @@ Resolve the real file type from magic bytes, build folder context (test ids, sib
 ## Location
 
 Code:
-- `backend/dispatcher/runner.py` (`run_document(session, minio, doc_id, route, parser_version, build, indexer)`: the shared runner for A1, A2, D, F: location, cloud_allowed, stores, build, gate, index, commit or park; `vision_for(session)`); `office_run.py` (A1 via S2's `process_office`: PDF, Word family, slides), `source_run.py` (A2 via S6's `process_latex`/`process_json`, paths relative to the assembler's subtree), `media_run.py` (D with bursts via `process_photo`, F via `process_video` + Whisper); B (`process_code`), E (`process_diagram`) and G (`g.process` + `write_references`) in `source_run.py`; tasks `dcl.process.route_a1|a2|b|e|g` (cpu_parse), `route_d|route_f` (media)
+- `backend/dispatcher/runner.py` (`run_document(session, minio, doc_id, route, parser_version, build, indexer)`: the shared runner for A1, A2, D, F: location, cloud_allowed, stores, build, gate (with the route's stale-flag predicate `_own_flag(route)`: a re-run closes the route's own open flags it does not raise again as AUTO_RESOLVED, assembler notes excluded), index, commit or park; `resume_staged` (HALTED documents of every route but C, from the staged payload); `vision_for(session, file=)` with `file_metadata(ctx)`); `office_run.py` (A1 via S2's `process_office`: PDF, Word family, slides), `source_run.py` (A2 via S6's `process_latex`/`process_json`, paths relative to the assembler's subtree), `media_run.py` (D with bursts via `process_photo`, F via `process_video` + Whisper); B (`process_code`), E (`process_diagram`) and G (`g.process` + `write_references`) in `source_run.py`; tasks `dcl.process.route_a1|a2|b|e|g` (cpu_parse), `route_d|route_f` (media)
 - `backend/dispatcher/type_resolution.py` (`resolve_type(head, name, zip_names) -> ResolvedType{kind, mime, route, by, ext_mismatch}`)
 - `backend/dispatcher/folder_context.py` (`build_folder_context`: breadcrumb, TP/T/INJ ids with source, conflicts, siblings, folder kind, origin, trust tier)
 - `backend/dispatcher/assembler.py` (`assemble`: LaTeX master + parts + PDF twin, orphan .tex, JSON section sets)
 - `backend/dispatcher/routing.py` (`dispatch`: processing scope, typing, assembly, documents + document_sources, gating, UNSUPPORTED_FORMAT, CONFLICT flags, then `apply_supersessions`, then `release_waiting` (parked documents whose route is enabled and whose adapter accepts the file become PROCESSING; enqueued after the commit through `enqueue`); `sweep_documents`; `retype_waiting`; `reset_waiting`; CLI `dispatch | sweep | retype | reassemble --route X`); ZIP-based files typed by their members
 - `backend/dispatcher/adapters.py` (registry: `Adapter{name, route, task, queue, can_handle}`, `adapter_for(route, head, name)`; a route is implemented kind by kind; Route C: `labjack_dat`, `tdms`, `delimited`, `workbook`, `config_file`; Route A1: `pdf` → `dcl.process.route_a1` on `cpu_parse`)
 - `backend/dispatcher/office_run.py` (`process_a1_document(session, minio, doc_id, build, indexer)`: S1's side of Route A1 around S2's `process_pdf`; stores over `dcl-cir/{sha}/A1/v1/` and `dcl-assets`; gate, index, commit or park; `default_build()` with the production VisionService)
-- `backend/celery_redis/tasks_process.py` (`dcl.process.dispatch` enqueues every PROCESSING document on its adapter's task, `dcl.process.sweep_documents`, io_light; `dcl.process.route_c`)
+- `backend/celery_redis/tasks_process.py` (`dcl.process.dispatch` enqueues every PROCESSING document on its adapter's task, `dcl.process.sweep_documents`, io_light; `dcl.process.route_c`; `dcl.process.resume_staged`; `_settle(session, doc_id, exc, retryable)` decides for every route task after an error: a transient one (`RETRYABLE`, Route D adds `RepresentativePending`, or a `GatewayError` with `retryable`: unreachable, 429, 5xx after the client's own attempts) with retries left schedules `task.retry` with backoff 30 s doubling per retry up to 600 s and the document stays PROCESSING; anything else, or the last retry, leaves it FAILED with the error recorded; file 02 §7)
 - `backend/dispatcher/contract.py` (published: `ProcessedDocument` and parts, `Flag` fingerprint, `Anchor` + `parse_anchor`/`format_anchor`)
 
 Tests and fixtures:
@@ -82,6 +82,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-24 | Lead | `_settle` for all route tasks (a document no longer stays PROCESSING after the last retry; retryable gateway errors count as transient), `_own_flag` stale-flag predicate, `resume_staged` task. Tests `test_task_failures.py`, `test_runner_flags_and_fields.py` |
 | 2026-10-23 | Lead | `routes.held_kinds` (list of type-resolution kinds that wait as WAITING_FOR_ROUTE while their route is on): `RouteGate` and `route_gate()` in `routing.py`, honoured by `_new_document` and `release_waiting`, validated in `pipeline_config.py`; live value zip, gzip, wbpz, iges. `location.location_near()` picks each part's path from the copy beside the document's own file (the A2 `relative_to` error came from the alphabetically first copy in another test plan). Tests `test_held_kinds.py`, `test_a2_copies.py` |
 | 2026-10-23 | Lead | Orphan notes are no longer flags (supersedes the row above for them): "not included by any master" / "no master found" go to `DocumentPlan.notes` and `documents.metadata_sources.assembler.notes`. Root cause found by reading Test Plan 10/A: the verdict was computed in one folder and stored on a document that stands for every byte-identical copy, so it was false for most of its 36 folders, and accept/ignore changed nothing. Two masters in one folder stays a CONFLICT note. Migration 0014 moved the 5 open ones and deleted their flags |
 | 2026-10-23 | Lead | The assembler's doubts (`_conflict_flag`, A2's `conflict_flags`) are CONFLICT `relation = note` with no second side; before, side B was the made-up text "expected: one unambiguous document". A folder holding one loose `.tex` no master includes now gives a document titled after that file, not after the folder (several "Main_Files" rows in the queue could not be told apart). The flag message is unchanged (its hash is the fingerprint). Migration 0014 tags existing rows |

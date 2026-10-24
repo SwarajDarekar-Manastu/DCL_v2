@@ -22,8 +22,9 @@ import math
 import subprocess
 import tempfile
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Protocol
 
 from backend.dispatcher.contract import (
     ConflictEvidence,
@@ -41,7 +42,7 @@ from backend.llm_engine.gemini_types import Image
 from backend.postgres.enums import AssetKind, DocKind, FlagSeverity, FlagType, NodeSource, NodeType, Route
 from backend.routes.a1_office.assets import image_fields
 
-PARSER_VERSION = 1
+PARSER_VERSION = 2  # 2: processes the compressed working copy (video_proxy asset)
 SAMPLE_FPS = 2
 SPEECH_PROBE_S = 60
 SPEECH_SHARE_WORKSHOP = 0.3
@@ -50,7 +51,10 @@ SUSTAIN_SAMPLES = 2
 WINDOW_MIN_S, WINDOW_MAX_S = 60.0, 120.0
 PAUSE_S = 2.0
 SECTION_S = 600.0
-PART_S, PART_OVERLAP_S = 1800.0, 30.0
+SCAN_FRAMES = 16
+# 10-minute parts (2026-10-24): faster-whisper's voice filter holds a whole part in memory; a 30-minute
+# part of a meeting passed 4 GiB, a 10-minute one peaks at 3.5 GiB (research/video_compression.md).
+PART_S, PART_OVERLAP_S = 600.0, 30.0
 SCENE_THRESHOLD = 0.3
 RMS_SPIKE_FACTOR = 6.0
 TEST_CELL_HINTS = ("test plan", "testplan", "run", "hot fire", "hotfire", "firing", "test cell")
@@ -74,6 +78,9 @@ class Probe:
     width: int | None
     height: int | None
     fps: float | None
+    codec: str | None = None
+    bit_rate: int | None = None
+    hdr: bool = False
 
 
 def probe(path: Path) -> Probe:
@@ -87,13 +94,65 @@ def probe(path: Path) -> Probe:
     rate = video.get("avg_frame_rate") or "0/1"
     num, _, den = rate.partition("/")
     fps = float(num) / float(den) if den and float(den) else None
+    rate_bits = video.get("bit_rate") or data["format"].get("bit_rate")
     return Probe(
         float(data["format"].get("duration", 0.0)),
         any(s.get("codec_type") == "audio" for s in streams),
         video.get("width"),
         video.get("height"),
         fps,
+        video.get("codec_name"),
+        int(rate_bits) if rate_bits and str(rate_bits).isdigit() else None,
+        video.get("color_transfer") in HDR_TRANSFERS,
     )
+
+
+# The working copy (user, 2026-10-24; settings and sources: docs/architecture/research/video_compression.md).
+# H.264 High in MP4, long side at most 1280 px, at most 30 fps, CRF 26, AAC mono 64 kbit/s, faststart. One
+# profile for every video, because whether it is a meeting or a test-cell clip is known only after the
+# speech check; 30 fps keeps a sub-second ignition flash, 16 kHz mono speech survives AAC at 64 kbit/s.
+# Two threads and a short lookahead keep ffmpeg near 300 MB.
+PROXY_LONG_SIDE = 1280
+PROXY_MAX_FPS = 30
+PROXY_SKIP_BIT_RATE = 2_000_000
+PROXY_KEEP_RATIO = 0.9
+HDR_TRANSFERS = frozenset({"arib-std-b67", "smpte2084"})
+SCALE = f"scale='if(gt(iw,ih),min({PROXY_LONG_SIDE},iw),-2)':'if(gt(iw,ih),-2,min({PROXY_LONG_SIDE},ih))'"
+TONEMAP = (
+    "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,"
+    "zscale=t=bt709:m=bt709:r=tv"
+)
+PROXY_SETTINGS = "h264 crf 26 preset medium, long side <= 1280, fps <= 30, aac mono 64k, faststart"
+
+
+def compress(path: Path, info: Probe, out_dir: Path) -> tuple[Path, dict]:
+    """The copy Route F processes and the viewer plays, or the original when it is already small (H.264,
+    long side within 1280 px, under 2 Mbit/s) or when the copy would not be at least 10 % smaller."""
+    source_bytes = path.stat().st_size
+    long_side = max(info.width or 0, info.height or 0)
+    if info.codec == "h264" and long_side <= PROXY_LONG_SIDE and (info.bit_rate or 0) < PROXY_SKIP_BIT_RATE:
+        return path, {"compressed": False, "reason": "already small", "source_bytes": source_bytes}
+    out = out_dir / "proxy.mp4"
+    filters = [TONEMAP] if info.hdr else []
+    if info.fps and info.fps > PROXY_MAX_FPS:
+        filters.append(f"fps={PROXY_MAX_FPS}")
+    filters += [SCALE, "format=yuv420p"]
+    _run(
+        ["ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-y", "-threads", "2", "-i", str(path)]
+        + ["-map", "0:v:0", "-map", "0:a:0?", "-vf", ",".join(filters)]
+        + ["-c:v", "libx264", "-preset", "medium", "-crf", "26", "-profile:v", "high", "-threads", "2"]
+        + ["-x264-params", "rc-lookahead=20", "-g", "60", "-c:a", "aac", "-ac", "1", "-b:a", "64k"]
+        + ["-map_metadata", "0", "-movflags", "+faststart", str(out)]
+    )
+    proxy_bytes = out.stat().st_size
+    if proxy_bytes > PROXY_KEEP_RATIO * source_bytes:
+        return path, {"compressed": False, "reason": "copy not smaller", "source_bytes": source_bytes}
+    return out, {
+        "compressed": True,
+        "source_bytes": source_bytes,
+        "bytes": proxy_bytes,
+        "settings": PROXY_SETTINGS,
+    }
 
 
 def luminance(path: Path, fps: int = SAMPLE_FPS) -> list[float]:
@@ -252,28 +311,70 @@ Transcriber = Callable[[Path, float, float], list[Word]]
 """`(audio_path, start_s, end_s) -> words` with absolute timestamps."""
 
 
+def audio_slice(audio: Path, start_s: float, end_s: float):
+    """The samples of ``[start_s, end_s)`` of the 16 kHz mono PCM16 WAV as float32 in [-1, 1]. Only this part
+    is read: faster-whisper computes its features over all audio it is given, so a whole 88-minute meeting
+    (``clip_timestamps`` still decodes everything) does not fit the 4 GiB media worker."""
+    import wave
+
+    import numpy as np
+
+    with wave.open(str(audio), "rb") as wav:
+        rate = wav.getframerate()
+        first = min(int(start_s * rate), wav.getnframes())
+        wav.setpos(first)
+        frames = wav.readframes(max(0, int(end_s * rate) - first))
+    return np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
+
+
 def whisper_transcriber(model_size: str = "medium") -> Transcriber:
     from faster_whisper import WhisperModel
 
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
 
     def transcribe(audio: Path, start_s: float, end_s: float) -> list[Word]:
-        segments, _ = model.transcribe(
-            str(audio), word_timestamps=True, vad_filter=True, clip_timestamps=[start_s, end_s]
-        )
-        return [Word(w.start, w.end, w.word.strip()) for s in segments for w in (s.words or [])]
+        part = audio_slice(audio, start_s, end_s)
+        segments, _ = model.transcribe(part, word_timestamps=True, vad_filter=True)
+        return [
+            Word(start_s + w.start, start_s + w.end, w.word.strip())
+            for s in segments
+            for w in (s.words or [])
+        ]
 
     return transcribe
 
 
-def transcribe_parts(audio: Path, duration_s: float, transcribe: Transcriber) -> list[Word]:
-    """30-minute parts with 30 s overlap; a word is kept from the part whose core contains its start."""
+class PartStore(Protocol):
+    """Where finished transcription parts are kept, so a long recording continues after a checkpoint."""
+
+    def get(self, key: str) -> bytes | None: ...
+
+    def put(self, key: str, data: bytes) -> str: ...
+
+
+def _part_words(audio: Path, start: float, end: float, transcribe: Transcriber, parts: PartStore | None):
+    key = f"{start:.0f}-{end:.0f}.json"
+    saved = parts.get(key) if parts is not None else None
+    if saved is not None:
+        return [Word(**w) for w in json.loads(saved)]
+    words = transcribe(audio, start, end)
+    if parts is not None:
+        parts.put(key, json.dumps([asdict(w) for w in words]).encode())
+    return words
+
+
+def transcribe_parts(
+    audio: Path, duration_s: float, transcribe: Transcriber, parts: PartStore | None = None
+) -> list[Word]:
+    """10-minute parts with 30 s overlap; a word is kept from the part whose core contains its start. Each
+    finished part is saved in ``parts``, so a task stopped at its time limit continues where it was
+    (file 03 §F time budget: checkpoint and re-queue)."""
     words: list[Word] = []
     start = 0.0
     while start < duration_s:
         end = min(duration_s, start + PART_S + PART_OVERLAP_S)
         core_end = start + PART_S if end < duration_s else duration_s + 1
-        for word in transcribe(audio, start, end):
+        for word in _part_words(audio, start, end, transcribe, parts):
             if start <= word.start_s < core_end and (not words or word.start_s >= words[-1].start_s):
                 if not words or (word.start_s, word.text) != (words[-1].start_s, words[-1].text):
                     words.append(word)
@@ -337,6 +438,8 @@ def process_video(
     transcribe: Transcriber | None = None,
     cloud_allowed: bool = True,
     doc_id: str | None = None,
+    put_cir: Callable[[str, bytes], str] | None = None,
+    parts: PartStore | None = None,
 ) -> ProcessedDocument:
     cir_uri = f"s3://dcl-cir/{blob_sha256}/F/v{PARSER_VERSION}/"
     title = Path(file_name).stem.replace("_", " ")
@@ -363,6 +466,21 @@ def process_video(
                 document=DocumentFields(title=title),
                 flags=[flag],
             )
+        path, proxy = compress(path, info, Path(tmp))
+        proxy_assets: list[ProcessedAsset] = []
+        if proxy["compressed"]:
+            info = probe(path)
+            uri = put_asset(f"videos/{blob_sha256}/proxy.mp4", path.read_bytes())
+            proxy_assets.append(
+                ProcessedAsset(
+                    ref="video:proxy",
+                    kind=AssetKind.VIDEO_PROXY,
+                    minio_uri=uri,
+                    width=info.width,
+                    height=info.height,
+                    bytes=proxy["bytes"],
+                )
+            )
         audio = Path(tmp) / "audio.wav"
         words: list[Word] = []
         if info.has_audio and transcribe is not None:
@@ -387,7 +505,7 @@ def process_video(
                 _speech_share(probe_words, min(SPEECH_PROBE_S, info.duration_s)) >= SPEECH_SHARE_WORKSHOP
             )
             if workshop and not (_hint_test_cell(folder, file_name) and info.duration_s < 300):
-                words = transcribe_parts(audio, info.duration_s, transcribe)
+                words = transcribe_parts(audio, info.duration_s, transcribe, parts)
         if words:
             nodes, assets, flags, catalog = _workshop(
                 path, info, words, folder, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id
@@ -395,9 +513,11 @@ def process_video(
             kind = DocKind.VIDEO_TRANSCRIPT
         else:
             nodes, assets, flags, catalog = _test_cell(
-                path, info, folder, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id
+                path, info, folder, file_name, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id
             )
             kind = DocKind.VIDEO_TIMELINE
+    if put_cir is not None:
+        _write_cir(put_cir, info, words, catalog, nodes)
     document = DocumentFields(
         title=title,
         doc_kind=kind,
@@ -406,7 +526,13 @@ def process_video(
         test_plan_id=folder.test_plan_id,
         test_run_id=folder.test_run_id,
         hardware_item=folder.hardware_item,
-        catalog={**catalog, "duration_s": info.duration_s, "has_audio": info.has_audio, "fps": info.fps},
+        catalog={
+            **catalog,
+            "duration_s": info.duration_s,
+            "has_audio": info.has_audio,
+            "fps": info.fps,
+            "working_copy": proxy,
+        },
     )
     return ProcessedDocument(
         blob_sha256=blob_sha256,
@@ -415,9 +541,26 @@ def process_video(
         cir_uri=cir_uri,
         document=document,
         nodes=nodes,
-        assets=assets,
+        assets=[*proxy_assets, *assets],
         flags=flags,
     )
+
+
+def _write_cir(put_cir, info: Probe, words: list[Word], catalog: dict, nodes: list[ProcessedNode]) -> None:
+    """The Route F CIR files of manual 03 §2: probe, transcript (word timestamps), scenes, events."""
+
+    def dump(value) -> bytes:
+        return json.dumps(value, ensure_ascii=False).encode()
+
+    events = [
+        {"t_ms": n.t_start_ms, "content": n.content, **n.metadata}
+        for n in nodes
+        if n.node_type == NodeType.VIDEO_EVENT
+    ]
+    put_cir("probe.json", dump(asdict(info)))
+    put_cir("transcript.json", dump([asdict(w) for w in words]))
+    put_cir("scenes.json", dump(catalog.get("slide_changes_ms", [])))
+    put_cir("events.json", dump(events))
 
 
 def _frame_asset(path: Path, t_ms: int, blob_sha256: str, put_asset) -> tuple[ProcessedAsset, bytes]:
@@ -429,46 +572,76 @@ def _frame_asset(path: Path, t_ms: int, blob_sha256: str, put_asset) -> tuple[Pr
     ), jpeg
 
 
-def _test_cell(path, info, folder, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id):
+def scan_times(duration_s: float, count: int = SCAN_FRAMES) -> list[int]:
+    """Frames spread over the whole clip, for the model to find an ignition the brightness check missed."""
+    end = max(0, int(duration_s * 1000) - 500)  # ffmpeg returns no frame at the very last instant
+    return sorted({round(end * i / (count - 1)) for i in range(count)}) if end else [0]
+
+
+def _first(events, kinds: tuple[str, ...]) -> int | None:
+    found = [t for t, kind, _, _ in events if any(k in kind.casefold() for k in kinds)]
+    return min(found) if found else None
+
+
+def _test_cell(path, info, folder, file_name, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id):
     ignition = detect_ignition(luminance(path))
-    times = keyframe_times(ignition, info.duration_s)
+    missed = ignition.t_ignition_ms is None
+    # The brightness check misses a small glow at the nozzle (2026-10-24): the model reads frames of the whole
+    # clip instead of two, in the same single call.
+    times = (
+        scan_times(info.duration_s) if missed and cloud_allowed else keyframe_times(ignition, info.duration_s)
+    )
     assets, frames = [], []
     for t_ms in times:
         asset, jpeg = _frame_asset(path, t_ms, blob_sha256, put_asset)
         assets.append(asset)
         frames.append((t_ms, jpeg))
     crumb = " › ".join([*folder.breadcrumb, title])
-    events: list[tuple[int, str, str]] = []
+    events: list[tuple[int, str, str, NodeSource]] = []
     if ignition.t_ignition_ms is not None:
-        events.append((ignition.t_ignition_ms, "ignition", "sudden brightness rise (luminance)"))
+        events.append(
+            (ignition.t_ignition_ms, "ignition", "sudden brightness rise (luminance)", NodeSource.STRUCTURED)
+        )
     if ignition.t_shutdown_ms is not None:
-        events.append((ignition.t_shutdown_ms, "shutdown", "brightness drop (luminance)"))
+        events.append(
+            (ignition.t_shutdown_ms, "shutdown", "brightness drop (luminance)", NodeSource.STRUCTURED)
+        )
     rms = audio_rms(path) if info.has_audio else []
     if rms:
         median = sorted(rms)[len(rms) // 2] or 1.0
         events += [
-            (int(i * 100), "acoustic_event", "loud sound (audio RMS spike)")
+            (int(i * 100), "acoustic_event", "loud sound (audio RMS spike)", NodeSource.STRUCTURED)
             for i, v in enumerate(rms)
             if v > RMS_SPIKE_FACTOR * median
         ][:10]
     anomalies: list[str] = []
+    image_metadata = None
     if cloud_allowed and frames:
         timeline = vision.video_timeline(
             [(t / 1000, Image(j, "image/jpeg")) for t, j in frames],
-            folder_context=" / ".join([*folder.breadcrumb, path.name]),
+            folder_context=" / ".join([*folder.breadcrumb, file_name]),  # not the working copy's temp name
             doc_id=doc_id,
             anchor=f"t:{times[0]}:",
         ).reading
-        events += [(int(e.t_s * 1000), e.type, e.description) for e in timeline.events]
+        events += [(int(e.t_s * 1000), e.type, e.description, NodeSource.VLM) for e in timeline.events]
         anomalies = list(timeline.anomalies)
-    events = sorted(dict(((t, kind), (t, kind, text)) for t, kind, text in events).values())
+        if timeline.image_metadata is not None:
+            image_metadata = timeline.image_metadata.model_dump(mode="json")
+    events = sorted(dict(((e[0], e[1]), e) for e in events).values())
+    t0, t_stop, t0_source = ignition.t_ignition_ms, ignition.t_shutdown_ms, "luminance"
+    if missed:
+        model_vlm = [e for e in events if e[3] == NodeSource.VLM]
+        t0 = _first(model_vlm, ("ignition",))
+        later = [e for e in model_vlm if t0 is not None and e[0] > t0]
+        t_stop = _first(later, ("shutdown",)) if t0 is not None else None
+        t0_source = "model reading of the frames" if t0 is not None else None
     summary = [f"Video timeline of {title} ({info.duration_s:.1f} s)."]
-    if ignition.t_ignition_ms is not None:
+    if t0 is not None:
         summary.append(
-            f"Ignition at {ignition.t_ignition_ms / 1000:.2f} s "
-            f"(video clock, confidence {ignition.confidence})."
+            f"Ignition at {t0 / 1000:.2f} s (video clock, "
+            + (f"confidence {ignition.confidence})." if t0_source == "luminance" else f"{t0_source}).")
         )
-    summary += [f"{t / 1000:.2f} s: {kind} — {text}" for t, kind, text in events]
+    summary += [f"{t / 1000:.2f} s: {kind} — {text}" for t, kind, text, _ in events]
     summary += [f"Anomaly: {a}" for a in anomalies]
     end_ms = int(info.duration_s * 1000)
     nodes = [
@@ -481,10 +654,11 @@ def _test_cell(path, info, folder, title, blob_sha256, vision, put_asset, cloud_
             t_start_ms=0,
             t_end_ms=end_ms,
             source=NodeSource.VLM if cloud_allowed else NodeSource.STRUCTURED,
+            metadata={"image_metadata": image_metadata} if image_metadata else {},
         )
     ]
     frame_refs = {a.t_ms: a.ref for a in assets}
-    for i, (t_ms, kind, text) in enumerate(events):
+    for i, (t_ms, kind, text, source) in enumerate(events):
         nearest = min(frame_refs, key=lambda f: abs(f - t_ms)) if frame_refs else None
         nodes.append(
             ProcessedNode(
@@ -496,15 +670,13 @@ def _test_cell(path, info, folder, title, blob_sha256, vision, put_asset, cloud_
                 content=f"{t_ms / 1000:.2f} s: {kind} — {text}",
                 t_start_ms=t_ms,
                 t_end_ms=t_ms,
-                source=NodeSource.VLM
-                if kind not in ("ignition", "shutdown", "acoustic_event")
-                else NodeSource.STRUCTURED,
+                source=source,
                 asset_ref=frame_refs.get(nearest),
                 metadata={"event_type": kind},
             )
         )
     flags = []
-    if ignition.t_ignition_ms is None or ignition.confidence < 0.5:
+    if t0 is None or (t0_source == "luminance" and ignition.confidence < 0.5):
         flags.append(
             Flag(
                 flag_type=FlagType.CONFLICT,
@@ -516,9 +688,10 @@ def _test_cell(path, info, folder, title, blob_sha256, vision, put_asset, cloud_
                     a=ConflictSide(
                         label="detected",
                         value="no ignition found"
-                        if ignition.t_ignition_ms is None
+                        if t0 is None
                         else f"t0 at {ignition.t_ignition_ms} ms, confidence {ignition.confidence:.2f}",
-                        provenance="luminance jump between sampled frames",
+                        provenance="luminance jump between sampled frames"
+                        + ("; the model saw no firing in the frames" if missed and cloud_allowed else ""),
                     ),
                     b=ConflictSide(
                         label="expected",
@@ -529,9 +702,10 @@ def _test_cell(path, info, folder, title, blob_sha256, vision, put_asset, cloud_
             )
         )
     catalog = {
-        "t0_ignition_video_ms": ignition.t_ignition_ms,
-        "t0_ignition_confidence": ignition.confidence,
-        "t_shutdown_video_ms": ignition.t_shutdown_ms,
+        "t0_ignition_video_ms": t0,
+        "t0_ignition_confidence": ignition.confidence if t0_source == "luminance" else None,
+        "t0_source": t0_source,
+        "t_shutdown_video_ms": t_stop,
     }
     return nodes, assets, flags, catalog
 
@@ -539,7 +713,7 @@ def _test_cell(path, info, folder, title, blob_sha256, vision, put_asset, cloud_
 def _workshop(path, info, words, folder, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id):
     changes = scene_changes(path)
     crumb = " › ".join([*folder.breadcrumb, title])
-    assets, slide_text = [], {}
+    assets, slide_text, frame_metadata = [], {}, {}
     for t_ms in changes:
         asset, jpeg = _frame_asset(path, t_ms, blob_sha256, put_asset)
         assets.append(asset)
@@ -550,6 +724,8 @@ def _workshop(path, info, words, folder, title, blob_sha256, vision, put_asset, 
             slide_text[t_ms] = reading.summary + (
                 f" {reading.diagram_description}" if reading.diagram_description else ""
             )
+            if reading.image_metadata is not None:
+                frame_metadata[str(t_ms)] = reading.image_metadata.model_dump(mode="json")
     nodes: list[ProcessedNode] = []
     sections: dict[int, str] = {}
     for window in windows(words, changes):
@@ -591,4 +767,4 @@ def _workshop(path, info, words, folder, title, blob_sha256, vision, put_asset, 
                 metadata={"deep_link": f"#t={_clock(start_ms)}"},
             )
         )
-    return nodes, assets, [], {"slide_changes_ms": changes}
+    return nodes, assets, [], {"slide_changes_ms": changes, "slide_frame_metadata": frame_metadata}

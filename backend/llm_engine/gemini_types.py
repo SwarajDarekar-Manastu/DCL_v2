@@ -228,7 +228,8 @@ StreamEvent = TextDelta | StreamDone
 
 @dataclass(frozen=True)
 class LlmCallRecord:
-    """One row of llm_calls (docs/architecture/05 §4.6); status is 'ok' or 'error'."""
+    """One row of llm_calls (docs/architecture/05 §4.6); status is 'ok', 'error' or 'cache_hit' (a saved
+    result answered the call: no gateway request, no tokens, no cost)."""
 
     at: datetime
     model: str
@@ -242,7 +243,7 @@ class LlmCallRecord:
     cached_tokens: int
     latency_ms: int
     cost_estimate: float | None
-    status: Literal["ok", "error"]
+    status: Literal["ok", "error", "cache_hit"]
     error: str | None
     request_id: str | None
     usage_estimated: bool = False

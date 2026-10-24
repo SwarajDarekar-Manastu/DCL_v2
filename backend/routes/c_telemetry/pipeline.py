@@ -207,7 +207,8 @@ def process_document(
             raise ValueError(f"no Route C adapter accepts {item.name}")
         adapter_name = adapter.name
         processed = _build(adapter_name, session, minio, store, item, inputs, series_args)
-    processed = processed.model_copy(update={"flags": [with_suggestion(f) for f in processed.flags]})
+    propose = _unit_proposer(item, document) if cloud_allowed else None
+    processed = processed.model_copy(update={"flags": [with_suggestion(f, propose) for f in processed.flags]})
     _apply_fields(document, processed)
     result: GateResult = gate(session, cir, document, processed, stale=_route_c_flag)
     refresh_proposals(session, [document.doc_id])  # a rule's units are shown, never applied
@@ -478,6 +479,18 @@ def sibling_units(session: Session, minio: Minio, item: DriveItem) -> list[Sibli
 def _route_c_flag(flag) -> bool:
     """Route C's own flags point at a channel (unit, bounds, t0); dispatcher and commit flags do not."""
     return bool((flag.anchor or {}).get("channel"))
+
+
+def _unit_proposer(item: DriveItem, document: Document):
+    """One model proposal per unit flag the file's own hints leave open (file 06 §5)."""
+    from backend.dispatcher.runner import _gateway
+    from backend.llm_engine.suggestions import propose_unit
+
+    client, _ = _gateway()
+    folder = (item.path_cached or "").rsplit("/", 1)[0]
+    return lambda evidence: propose_unit(
+        client, evidence, file_name=item.name, folder=folder, doc_id=str(document.doc_id)
+    )
 
 
 def resume_document(

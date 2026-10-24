@@ -15,7 +15,8 @@ this document deleted first), entity mentions, numeric facts, the telemetry cata
   (Lead 2026-10-22: TP7 sheets printed "Test Plan 6"); ``documents.test_plan_id`` keeps the folder value
   until a reviewer chooses.
 
-Review overlays (operator resolutions re-applied on rebuild, file 04 §7) are not applied here yet.
+Decisions (a person's or a rule's) are applied as overlays on every commit (``overlays.py``, file 06 §8);
+active rules answer the commit's own flags and act on the document (origin override, supersession).
 """
 
 import dataclasses
@@ -27,12 +28,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from backend.dispatcher.contract import ConflictEvidence, ConflictSide, Flag, FlagAnchor, ProcessedDocument
 from backend.indexing.index_document import HaltedDocument, IndexPlan
+from backend.indexing.overlays import overlay_document, overlay_plan, supersede
 from backend.llm_engine.enrichment.entities import EntityRef
 from backend.postgres.enums import (
     DocumentStatus,
@@ -49,12 +51,14 @@ from backend.postgres.models import (
     Entity,
     EntityAlias,
     EntityMention,
+    LlmCall,
     NumericFact,
     ReviewFlag,
     TelemetryChannel,
     TelemetryRun,
 )
 from backend.review.flags import upsert_document_flag
+from backend.review.rule_answers import answer_flags, document_rules
 
 Indexer = Callable[[Session, ProcessedDocument, uuid.UUID, bool], IndexPlan]
 
@@ -240,6 +244,13 @@ def commit_document(
     if plan.doc_id != document.doc_id:
         raise ValueError("the index plan is for another document")
     doc_id = document.doc_id
+    rules = document_rules(session, document)
+    if rules.origin is not None:  # an origin_override rule wins over the folder's guess, nodes included
+        override = {"source_origin": rules.origin.source_origin}
+        if rules.origin.trust_tier is not None:
+            override["trust_tier"] = rules.origin.trust_tier
+        processed = processed.model_copy(update={"document": processed.document.model_copy(update=override)})
+    overlay_plan(session, doc_id, plan)
     result = CommitResult(doc_id=doc_id, status=DocumentStatus.ACTIVE)
 
     entity_ids, result.new_entities = _entity_ids(session, plan)
@@ -258,13 +269,17 @@ def commit_document(
         if label != run.run_label:
             renamed[run.run_uuid] = label
             result.renamed_runs[run.run_label] = label
-            upsert_document_flag(session, doc_id, _label_conflict(run.run_label, label), str(processed.route))
+            row = upsert_document_flag(
+                session, doc_id, _label_conflict(run.run_label, label), str(processed.route)
+            )
+            answer_flags(session, document, [row])
 
     content_plan = processed.document.test_plan_id
     if content_plan and document.test_plan_id and content_plan.casefold() != document.test_plan_id.casefold():
-        upsert_document_flag(
+        row = upsert_document_flag(
             session, doc_id, _test_plan_conflict(document.test_plan_id, content_plan), str(processed.route)
         )
+        answer_flags(session, document, [row])  # the commit's own flags meet the rules too
         sources_ids = {"folder": document.test_plan_id, "content": content_plan}
     elif content_plan and not document.test_plan_id:
         document.test_plan_id = content_plan
@@ -421,6 +436,14 @@ def commit_document(
     document.unit_count = fields.unit_count
     document.page_count = fields.page_count
     document.language = fields.language
+    document.source_origin = str(fields.source_origin) if fields.source_origin else document.source_origin
+    document.publisher = fields.publisher or document.publisher
+    document.external_ids = fields.external_ids.model_dump(exclude_none=True) or document.external_ids
+    document.standard_id = fields.standard_id or document.standard_id
+    document.standard_revision = fields.standard_revision or document.standard_revision
+    document.classification_marking = fields.classification_marking or document.classification_marking
+    document.languages_detected = fields.languages_detected or document.languages_detected
+    document.number_locale = fields.number_locale or document.number_locale
     document.revision_marker = fields.revision_marker or document.revision_marker
     document.catalog = fields.catalog
     document.enrichment = aggregated.get("enrichment", {})
@@ -435,6 +458,8 @@ def commit_document(
     document.status = str(status)
     document.staged_payload_uri = None
     document.pipeline_version = pipeline_version
+    document.cir_uri = processed.cir_uri
+    document.parser_version = processed.parser_version
     document.indexed_at = now or datetime.now(UTC)
     sources = dict(document.metadata_sources or {})
     sources.pop(PROCESSED_MARK, None)
@@ -442,7 +467,15 @@ def commit_document(
         sources["test_plan_ids"] = sources_ids
     if plan.warnings:
         sources["index_warnings"] = plan.warnings[:50]
+    else:
+        sources.pop("index_warnings", None)  # a clean re-run leaves no warning of an earlier one
     document.metadata_sources = sources
+    overlay_document(session, document)
+    for other_id in rules.superseded:
+        supersede(session, document, other_id, "rule")
+    document.cloud_processed = bool(
+        session.scalar(select(func.count()).select_from(LlmCall).where(LlmCall.doc_id == document.doc_id))
+    )
     if document.revision_marker:
         from backend.indexing.revisions import apply_revisions
 
@@ -474,9 +507,9 @@ def default_indexer(models_url: str, minio) -> Indexer:
 
     def gemini():
         if not gemini_holder:
-            from backend.llm_engine.gemini_client import GeminiClient
+            from backend.llm_engine.gemini_client import GeminiClient, result_cache_store
 
-            gemini_holder.append(GeminiClient())
+            gemini_holder.append(GeminiClient(result_cache=result_cache_store()))
         return gemini_holder[0]
 
     def asset_bytes(minio_uri: str) -> bytes | None:

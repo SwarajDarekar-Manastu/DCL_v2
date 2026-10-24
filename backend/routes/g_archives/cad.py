@@ -19,6 +19,7 @@ from typing import Any
 DRAWING_SUFFIXES = (".pdf", ".dxf", ".dwg", ".drawio", ".scdoc", ".step", ".stp", ".stl", ".igs", ".iges")
 MESH_SUFFIXES = (".stl",)
 BREP_SUFFIXES = (".step", ".stp", ".igs", ".iges")
+MEASURED_SUFFIXES = (".stl", ".step", ".stp")  # IGES is not measured (03 §11 item 6)
 REFERENCE_SUFFIXES = (".scdoc", ".dwg")
 MAX_SPLIT_FACES = 2_000_000
 
@@ -60,7 +61,7 @@ def measure(data: bytes, file_name: str) -> dict[str, Any]:
     try:
         loaded = trimesh.load(io.BytesIO(data), file_type="step" if file_type == "stp" else file_type)
     except Exception as exc:  # noqa: BLE001 — trimesh and cascadio raise many types for broken files
-        raise CadError(f"{file_name}: {exc}") from exc
+        raise CadError(f"{file_name}: the converter could not read it ({type(exc).__name__})") from exc
     if isinstance(loaded, trimesh.Scene):
         meshes = [g for g in loaded.geometry.values() if isinstance(g, trimesh.Trimesh)]
         units = loaded.units
@@ -69,9 +70,10 @@ def measure(data: bytes, file_name: str) -> dict[str, Any]:
     if not meshes or not any(len(m.faces) for m in meshes):
         raise CadError(f"{file_name}: no geometry")
     scale, shown_units = (1000.0, "mm") if units in ("meters", "m") else (1.0, units or "model units")
-    combined = trimesh.util.concatenate(meshes) if len(meshes) > 1 else meshes[0]
+    combined = trimesh.util.concatenate(meshes) if len(meshes) > 1 else meshes[0].copy()
+    combined.merge_vertices()  # OpenCASCADE tessellates face by face: closed solids arrive unwelded
     lower, upper = combined.bounds
-    watertight = all(m.is_watertight for m in meshes)
+    watertight = combined.is_watertight
     volume = sum(abs(m.volume) for m in meshes)
     result: dict[str, Any] = {
         "format": "STL mesh" if suffix in MESH_SUFFIXES else "B-rep (tessellated by OpenCASCADE)",
@@ -87,11 +89,16 @@ def measure(data: bytes, file_name: str) -> dict[str, Any]:
         "vertices": int(sum(len(m.vertices) for m in meshes)),
         "watertight": watertight,
     }
+    bodies = len(combined.split(only_watertight=False)) if len(combined.faces) <= MAX_SPLIT_FACES else None
     if suffix in BREP_SUFFIXES:
-        result["solids"] = len(meshes)
-        result["solid_names"] = sorted(loaded.geometry)[:50] if isinstance(loaded, trimesh.Scene) else []
-    elif len(combined.faces) <= MAX_SPLIT_FACES:
-        result["bodies"] = len(combined.split(only_watertight=False))
+        result["solids"] = bodies if bodies is not None else len(meshes)
+        result["solid_names"] = (
+            sorted(k for k, g in loaded.geometry.items() if isinstance(g, trimesh.Trimesh))[:50]
+            if isinstance(loaded, trimesh.Scene)
+            else []
+        )
+    elif bodies is not None:
+        result["bodies"] = bodies
     return result
 
 
@@ -128,7 +135,7 @@ def describe(
         lines.append(count)
         if not measurement["units_stated"]:
             lines.append("STL files carry no units: values are in the model's own units")
-    else:
+    elif PurePosixPath(file_name).suffix.casefold() not in MEASURED_SUFFIXES:
         lines.append("No open parser for this format: indexed by name, folder and related files only")
     if same:
         lines.append("Related files (same name): " + ", ".join(PurePosixPath(f).name for f in same))

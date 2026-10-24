@@ -64,6 +64,18 @@ def start_resume(rule_id: uuid.UUID) -> bool:
         return False
 
 
+def start_resume_staged(doc_id: uuid.UUID) -> bool:
+    """Best effort: a missed start leaves the document HALTED with its HARD flags decided."""
+    try:
+        from backend.celery_redis.app import app
+
+        app.send_task("dcl.process.resume_staged", args=[str(doc_id)], queue="cpu_parse")
+        return True
+    except Exception:
+        log.warning("could not start resume_staged for %s", doc_id, exc_info=True)
+        return False
+
+
 def _actor(user: ConsoleUser) -> str:
     return user.email or user.oid
 
@@ -114,6 +126,8 @@ def resolve_case(user: Reviewer, session: Db, case_key: str, body: ResolveReques
         resumed = halted_documents_for_rule(session, outcome.resume_rule_id)
         if resumed:
             start_resume(outcome.resume_rule_id)
+    elif outcome.resume_doc_id is not None and start_resume_staged(outcome.resume_doc_id):
+        resumed = [outcome.resume_doc_id]
     return ResolveResponse(
         case_key=case_key,
         flags=[cases.flag_view(f, admin) for f in outcome.flags],
@@ -244,8 +258,10 @@ def list_rules(
 
 @router.post("/rules", status_code=status.HTTP_201_CREATED)
 def create_rule(user: Reviewer, session: Db, body: RuleDraft) -> RuleCreated:
-    """Save a rule. A unit rule is a proposal: the waiting files it matches show its units and stay open until
-    a person approves each. A channel map is a file's approval and is never made by a rule."""
+    """Save a rule. A telemetry unit rule is a proposal: the waiting files it matches show its units and stay
+    open until a person approves each; a channel map is a file's approval and is never made by a rule. Every
+    other kind acts (option A, 2026-10-24): it answers the matching open flags or changes the matched
+    documents, and those files are rebuilt or resumed at once."""
     if body.rule_type == "channel_map":
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -254,11 +270,28 @@ def create_rule(user: Reviewer, session: Db, body: RuleDraft) -> RuleCreated:
     try:
         rule = cases.create_rule(session, body, _actor(user))
         proposed = cases.propose_rule(session, rule)
+        effect = cases.apply_rule(session, rule)
     except (cases.InvalidAction, ValueError) as exc:
         session.rollback()
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     session.commit()
-    return RuleCreated(**cases.rule_view(session, rule).model_dump(), proposed_files=proposed)
+    _start_effect(session, effect)
+    return RuleCreated(
+        **cases.rule_view(session, rule).model_dump(),
+        proposed_files=proposed,
+        resolved_flags=effect.resolved_flags,
+        rebuilt_doc_ids=[*effect.rebuild, *effect.resume],
+    )
+
+
+def _start_effect(session: Session, effect: "cases.RuleEffect") -> None:
+    """Rebuild the committed files an acting rule changed and resume the HALTED ones it unblocked."""
+    from backend.postgres.models import Document
+
+    for doc_id in effect.rebuild:
+        start_rebuild(doc_id, session.get(Document, doc_id).route)
+    for doc_id in effect.resume:
+        start_resume_staged(doc_id)
 
 
 @router.post("/rules/preview")
@@ -286,8 +319,9 @@ def simulate_rule(user: Reviewer, session: Db, rule_id: uuid.UUID) -> RuleSimula
 @router.post("/rules/{rule_id}/deactivate")
 def deactivate_rule(user: Reviewer, session: Db, rule_id: uuid.UUID) -> RuleView:
     try:
-        rule = cases.deactivate_rule(session, rule_id, _actor(user))
+        rule, effect = cases.switch_off_rule(session, rule_id, _actor(user))
     except cases.CaseNotFound as exc:
         raise _not_found(exc) from exc
     session.commit()
+    _start_effect(session, effect)
     return cases.rule_view(session, rule)

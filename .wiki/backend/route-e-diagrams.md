@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S6 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §9; DECISIONS 2026-10-23 (SVG, Visio, DXF via ezdxf; DWG → Route G `cad_reference`) |
-| Last updated | 2026-10-23 |
+| Last updated | 2026-10-24 |
 
 ## Purpose
 
@@ -15,8 +15,8 @@ Diagrams become a component/connection graph in `documents.catalog` plus focused
 ## Location
 
 Code (`backend/routes/e_diagrams/`):
-- `route.py`: `process_diagram` (entry point), `can_handle`, `diagram_format`, `Stores`, XSD nodes, `read_schematic` pass, flags
-- `graph.py`: `Graph` model, `graph_nodes` (summary + component nodes, tag/range mentions), `graph_flags`, `duplicate_tags`
+- `route.py`: `process_diagram` (entry point), `can_handle`, `diagram_format`, `Stores`, XSD nodes, `read_schematic` pass, `completeness` note, flags
+- `graph.py`: `Graph` model, `graph_nodes` (summary + component nodes, `sensor_tag`/range mentions), `graph_flags`, `completeness`, `duplicate_tags`
 - `drawio.py`: `<mxfile>` pages, compressed diagrams, cells, edges, containers, notes, embedded images; safe lxml parser
 - `formats.py`: `parse_svg`, `parse_vsdx`, `parse_dxf` (+ `dxf_texts`), `parse_xsd`
 - `render.py`: matplotlib render of a draw.io page; ezdxf matplotlib render of a DXF modelspace
@@ -27,13 +27,14 @@ Tests: `backend/tests/unit/routes/e_diagrams/test_route_e.py` (synthetic draw.io
 
 Provides:
 - `process_diagram(data, *, blob_sha256, file_name, folder, stores, vision=None, cloud_allowed=False, doc_id=None)` → `ProcessedDocument` (route E, parser_version 1); extensions `.drawio .dio .xsd .svg .vsdx .dxf` and XML that starts `<mxfile`/`<mxGraphModel`
-- `documents.catalog`: `{diagram_format, pages, nodes, edges, groups, notes, extra, duplicate_tags}`; CIR `graph.json` (catalog + schematic readings)
-- Nodes: `diagram_summary` per page (`page{n}`), `diagram_component` per labeled component (`c{page}:{id}`), `figure` (source vlm) per schematic reading; XSD: one `child` per element/type. `page_no` on every diagram node, `line_start` where the XML has one
+- `documents.catalog`: `{diagram_format, pages, nodes, edges, groups, notes, extra, duplicate_tags, completeness}`; CIR `graph.json` (catalog + schematic readings)
+- `catalog.completeness` (draw.io and Visio graphs; not SVG, DXF or XSD, which expect no connections): `{incomplete, unlabeled_edges: [count, total], orphan_components: [count, total], reasons}`. An incomplete drawing is kept (user, 2026-10-24): when `incomplete` the first summary node ends with the line `Diagram incomplete: <reasons>` (for example `5 of 5 unlabeled edges`), and the SOFT CONFLICT below is raised as before; it never halts
+- Nodes: `diagram_summary` per page (`page{n}`), `diagram_component` per labeled component (`c{page}:{id}`), `figure` (source vlm) per schematic reading, whose `metadata.structured_reading` holds the whole reading (with `image_metadata`), as for A1 figures and D photos; XSD: one `child` per element/type. `page_no` on every diagram node, `line_start` where the XML has one
 - Assets: `diagrams/{sha256}/{page:02d}.png` (`diagram_render`) for draw.io pages, SVG and DXF, linked from the page summary
-- Mentions: `tag` (PT-101, SV-1, T7), `quantity` (ranges such as 0–250 bar), `enumeration` (XSD)
+- Mentions: `sensor_tag` (PT-101, SV-1, T7; `tag` is not an entity type and the commit dropped it, so tag lookup through `entity_mentions` now works; an equipment tag the enrichment model types as `component` in prose stays a separate entity), `quantity` (ranges such as 0–250 bar), `enumeration` (XSD)
 - Flags: PARSE_FAILURE HARD (invalid XML, unreadable package/DXF); CONFLICT SOFT (> 30 % unlabeled connections, > 20 % orphan components; tags read by `read_schematic` that the file lacks)
 
-Consumes: VisionService `read_schematic` (renders and embedded images, cloud only), `figures.render_schematic` (S2); lxml, ezdxf 1.4.4, matplotlib, resvg-py 0.5.0.
+Consumes: VisionService `read_schematic` (renders and embedded images, cloud only; prompt `read_schematic.v2`: tags and labels copied as printed, never a tag built from a part name, a mechanical drawing has no connections and its notes start "Mechanical drawing."), `figures.render_schematic` (S2); lxml, ezdxf 1.4.4, matplotlib, resvg-py 0.5.0.
 
 Waiting on others: S1 registers the adapter (`dcl.process.route_e`) and runner; S1 adds `.svg .vsdx .dxf` kinds.
 
@@ -64,6 +65,8 @@ Waiting on others: S1 registers the adapter (`dcl.process.route_e`) and runner; 
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-24 | Lead | Incomplete diagrams are kept and tagged (user, quality): `graph.completeness` -> `catalog.completeness` and a `Diagram incomplete: …` line in the first summary node, plus the existing SOFT CONFLICT; `read_schematic.v2` (verbatim tags, mechanical drawings). Test `test_mostly_unlabeled_edges_mark_the_graph_incomplete` |
+| 2026-10-24 | Lead | Diagram tags are mention kind `sensor_tag` (were dropped at commit); schematic reading kept as `metadata.structured_reading` on the `figure` node |
 | 2026-10-23 | S6 | Route built: draw.io, XSD, SVG, Visio, DXF; renders and read_schematic cross-check; tests on synthetic and real samples |
 | 2026-10-23 | S6 | Samples smoke test `backend/tests/unit/routes/test_samples_smoke.py` (every accepted file in data/samples, vision off) |
 | 2026-10-23 | S6 | SVG render with resvg-py; read_schematic on it |

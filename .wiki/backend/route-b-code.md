@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S6 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §6, file 04 §4.1 (code symbol), file 06 §4 |
-| Last updated | 2026-10-23 |
+| Last updated | 2026-10-24 |
 
 ## Purpose
 
@@ -32,6 +32,7 @@ Provides:
 - Unit hashes: one `symbol` per qualname
 - Catalog: `{language, generated, symbols}`, or `{dependencies}`, or `{language, cells}`
 - CIR `dcl-cir/{sha256}/B/v1/`: `ast.json`, `module_header.md`
+- No model call: the shared tail skips enrichment for Route B (`index_document`: `doc.route != Route.B`, manual 03 §6), so Markdown, requirements, `.bat`, notebook text cells and `.py` text-window fallbacks get metadata from the parse and ingestion only
 - Flags: SENSITIVE_CONTENT HARD (`backend/sync/gate.scan_secrets`), PARSE_FAILURE SOFT (syntax errors → text windows)
 
 Consumes: tree-sitter 0.26 with the python, c and matlab grammars (parse group).
@@ -62,6 +63,7 @@ Waiting on others: S1 registers the adapter (`dcl.process.route_b`, cpu_parse) a
 | Date | Session | Change |
 |------|---------|--------|
 | 2026-10-21 | Lead | Map created from the architecture manual |
+| 2026-10-24 | Lead | Route B documents are no longer enriched by the shared tail (`enrichment.parent` calls had gone to Gemini for text files); see `backend/enrichment` |
 | 2026-10-23 | S6 | Route built: Python, C, MATLAB via Tree-sitter, notebooks, Markdown, text, requirements; tests on synthetic and real samples |
 | 2026-10-23 | S6 | Samples smoke test `backend/tests/unit/routes/test_samples_smoke.py` (every accepted file in data/samples, vision off) |
 | 2026-10-23 | S6 | Import-light: the `route` module and `can_handle` need only the standard library and Pillow (the dispatcher's io_light image); parse libraries load inside the process functions. Guarded by `backend/tests/unit/routes/test_routes_import_light.py` |

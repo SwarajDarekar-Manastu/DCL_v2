@@ -16,7 +16,14 @@ from sqlalchemy.orm import Session
 
 from backend.dispatcher.location import Location, location_near
 from backend.dispatcher.routing import folder_tree, group_key
-from backend.dispatcher.runner import Outcome, RunContext, read_object, run_document, vision_for
+from backend.dispatcher.runner import (
+    Outcome,
+    RunContext,
+    file_metadata,
+    read_object,
+    run_document,
+    vision_for,
+)
 from backend.indexing.commit import Indexer
 from backend.postgres import pipeline_config
 from backend.postgres.enums import DocumentSourceRole, DriveItemStatus, Route
@@ -87,7 +94,15 @@ def process_a2_document(
         stores = a2.Stores(put_cir=ctx.put_cir, put_asset=ctx.put_asset)
         primary = next(f for f in files if f.role == DocumentSourceRole.PRIMARY)
         if primary.path.casefold().endswith(".json"):
-            return a2.process_json(files, title=ctx.document.title, folder=ctx.folder, stores=stores)
+            from backend.review.rule_answers import json_key_mapping
+
+            return a2.process_json(
+                files,
+                title=ctx.document.title,
+                folder=ctx.folder,
+                stores=stores,
+                key_mapping=json_key_mapping(ctx.session, ctx.document),
+            )
         return a2.process_latex(
             files,
             title=ctx.document.title,
@@ -96,7 +111,7 @@ def process_a2_document(
             folder_files=list(by_path),
             read_file=read_file,
             conflicts=(),
-            vision=vision_for(ctx.session) if ctx.cloud_allowed else None,
+            vision=vision_for(ctx.session, file_metadata(ctx)) if ctx.cloud_allowed else None,
             cloud_allowed=ctx.cloud_allowed,
             doc_id=str(ctx.document.doc_id),
         )
@@ -135,7 +150,7 @@ def process_e_document(
             file_name=ctx.where.name,
             folder=ctx.folder,
             stores=e.Stores(put_cir=ctx.put_cir, put_asset=ctx.put_asset),
-            vision=vision_for(ctx.session) if ctx.cloud_allowed else None,
+            vision=vision_for(ctx.session, file_metadata(ctx)) if ctx.cloud_allowed else None,
             cloud_allowed=ctx.cloud_allowed,
             doc_id=str(ctx.document.doc_id),
         )

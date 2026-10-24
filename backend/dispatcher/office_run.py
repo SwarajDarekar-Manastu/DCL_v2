@@ -10,7 +10,14 @@ from minio import Minio
 from sqlalchemy.orm import Session
 
 from backend.dispatcher.contract import ProcessedDocument
-from backend.dispatcher.runner import Outcome, RunContext, common_options, run_document, vision_for
+from backend.dispatcher.runner import (
+    Outcome,
+    RunContext,
+    common_options,
+    file_metadata,
+    run_document,
+    vision_for,
+)
 from backend.indexing.commit import Indexer
 from backend.postgres import pipeline_config
 from backend.postgres.enums import Route
@@ -22,8 +29,8 @@ def default_build() -> BuildOffice:
     """S2's entry point; Docling is imported only in the parse image."""
     from backend.routes.a1_office.office import process_office
 
-    def build(data: bytes, *, session: Session, **kwargs: Any) -> ProcessedDocument:
-        return process_office(data, vision=vision_for(session), **kwargs)
+    def build(data: bytes, *, session: Session, file=None, **kwargs: Any) -> ProcessedDocument:
+        return process_office(data, vision=vision_for(session, file), **kwargs)
 
     return build
 
@@ -37,6 +44,7 @@ def process_a1_document(
         return build(
             ctx.data,
             session=ctx.session,
+            file=file_metadata(ctx),
             stores=Stores(put_cir=ctx.put_cir, put_asset=ctx.put_asset),
             folder=ctx.folder,
             critical_field_patterns=tuple(

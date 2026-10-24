@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S6 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §11; DECISIONS 2026-10-23 (members as `derived_blobs`, `.dwg` like `.scdoc`, STL/STEP measured with trimesh + cascadio) |
-| Last updated | 2026-10-23 |
+| Last updated | 2026-10-24 |
 
 ## Purpose
 
@@ -19,7 +19,7 @@ Code (`backend/routes/g_archives/`):
 - `route.py`: `process` (runner entry, the card), `process_full` (unpacking, unwired), `process_archive`, `process_cad`, `can_handle`, `Stores`
 - `archive.py`: `Expander` (bomb guard, gate per member, nested archives), `archive_kind`, limits
 - `wbpz.py`: solver `.out` summary, MatML materials, analysis systems from `.wbpj`
-- `cad.py`: `measure` (trimesh, cascadio), `related_files`, `describe`
+- `cad.py`: `measure` (trimesh, cascadio; the mesh is welded with `merge_vertices` before it is measured, because OpenCASCADE tessellates face by face and closed solids arrived unwelded, so every one read "approximate: mesh not watertight"; `solids` = separate bodies after the merge, `solid_names` = mesh geometries only), `related_files`, `describe`
 
 Tests: `backend/tests/unit/routes/g_archives/test_card.py` (the card), `test_route_g.py` (the unwired unpacking route: synthetic bombs, nesting, traversal, encryption, held members, gzip, tar symlinks, wbpz, STL, scdoc/dwg; X2 Injector.zip, web zip with junk, tar.gz, STL, STEP when `data/samples/` is present).
 
@@ -60,6 +60,7 @@ Waiting on others: S1 registers the adapter (`dcl.process.route_g`) and runner (
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-24 | Lead | STEP solids: `merge_vertices` before measuring, `solids` counts bodies, `solid_names` only meshes. Card wording (`card.py`, `cad.MEASURED_SUFFIXES` = STL, STEP, STP): a measured kind that fails reads "Geometry could not be read: …" with the converter's error named by type (no temporary path) and one over 200 MB reads "larger than 200 MB, not measured"; "No open parser for this format" is left to unmeasured kinds. Tests `test_card.py` |
 | 2026-10-23 | Lead | Rebuilt as metadata cards (user ruling): `card.py` `build_card`, one node per file with kind, size, folder, plan/run/hardware, dates, every copy with its date, related files, member names from the directory, mesh/solid measurements; no unpacking, no flags, no derived blobs, never crashes. The unpacking route is `process_full` (unwired). `PARSER_VERSION` 2. Tests `test_card.py`; real G corpus end to end in `test_route_tail.py`; `routes.held_kinds` now empty |
 | 2026-10-23 | Lead | Frozen by the user: zip, gzip, wbpz and IGES wait (`routes.held_kinds`); STL, STEP, scdoc and DWG run. Run on `data/samples/G` (local): 72 of 99 checks pass; defects listed in STATUS 2026-10-23 (corrupt-archive crash, IGES, wbpz convergence, STEP exactness, tar door, memory) are shelved |
 | 2026-10-21 | Lead | Map created from the architecture manual |

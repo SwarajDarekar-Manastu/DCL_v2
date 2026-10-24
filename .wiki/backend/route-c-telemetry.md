@@ -5,8 +5,8 @@
 | Feature id | `backend/route-c-telemetry` |
 | Status | in-progress |
 | Owner session | S1 |
-| Spec | docs/architecture/03_phase2_processing_routes.md §7; 05 §4.4; 06 §4 |
-| Last updated | 2026-10-23 |
+| Spec | docs/architecture/03_phase2_processing_routes.md §7; 05 §4.4; 06 §4, §5 |
+| Last updated | 2026-10-24 |
 
 ## Purpose
 
@@ -25,23 +25,25 @@ Code:
 - `backend/routes/c_telemetry/run.py` (LabJack wrapper over the series path; `process_labjack`: raw Parquet, streaming stats + quantiles, time base (actual rate, gaps, duplicates), channel resolution through `channel_map` rules, `UNIT_AMBIGUITY` HARD per unresolved channel, `schema.json` + `stats.json` in `dcl-cir/{sha}/C/v1/`, run summary node; `run_uuid_for(sha)` = uuid5)
 - `backend/routes/c_telemetry/ljstream_cfg.py` (folder LJStreamM `.cfg`: scan rate, per-channel scaling equations, `linear()`; evidence only, it states no unit)
 - `backend/routes/c_telemetry/normalize.py` (`plan_channel` → SI affine conversion, scaling/expression (arithmetic over `val` only), gauge kept + `*_bar_abs` when the ambient is known, valve `open_threshold` → 0/1; `normalize_run` → `normalized.parquet` with `t_rel_ms`, `t_from_ignition_ms`; `detect_t0` (pressure slope 20 ms, valve edge, temperature slope; confidence); `three_tier_metrics` (peak, 50 ms rolling peak, steady mean + window); saturation; S5's sanity ranges (first match))
-- `backend/routes/c_telemetry/pipeline.py` (`process_document(session, minio, doc_id, indexer)`: primary blob, folder context, folder `.cfg`, rule target, rules, sanity ranges and `telemetry.*` config, gate (stale channel flags AUTO_RESOLVED), index + commit; `resume_document` from `raw.parquet` + `schema.json` header; `halted_documents_for_rule`)
+- `backend/routes/c_telemetry/pipeline.py` (`process_document(session, minio, doc_id, indexer)`: primary blob, folder context, folder `.cfg`, rule target, rules, sanity ranges and `telemetry.*` config, model unit proposal (`_unit_proposer`, roots with `cloud_allowed` only), gate (stale channel flags AUTO_RESOLVED), index + commit; `resume_document` from `raw.parquet` + `schema.json` header; `halted_documents_for_rule`)
 - `backend/indexing/commit.py` (the commit for every route: entities, assets, nodes, mentions, facts, telemetry catalog, documents row; run-label collisions renamed with CONFLICT SOFT; `default_indexer` = S2's `index_document` via the models role)
 - `backend/postgres/models/telemetry.py` + migration `0009_telemetry_catalog` (`telemetry_runs`, `telemetry_channels`)
 - `backend/storage/parquet.py` (`write_batches`: 100k-row groups, ZSTD; `schema_with_metadata`; `telemetry_key`)
 - `backend/review/staged.py` (validation gate, staged payload) and `backend/dispatcher/adapters.py` (registry entry `labjack_dat`)
 - `backend/celery_redis/tasks_process.py` (`dcl.process.route_c`, `dcl.process.resume_route_c` on `telemetry_stream`; `dcl.process.resume_for_rule` on io_light; transient model/gateway errors retry, others leave the document FAILED)
+- `backend/llm_engine/suggestions.py` (`propose_unit(client, evidence, file_name=, folder=, model=, doc_id=) -> Suggestion`: one model call for a column's unit; prompt `backend/llm_engine/prompts/suggest/unit.v1.md`, purpose `suggest.unit`, tier FLASH = `GEMINI_MODEL`, default gemini-3.8-flash, temperature 0; reply schema `UnitProposal`; `MAX_CONFIDENCE = 0.5`)
 - `backend/common/units.py` (pint registry + `config/units.txt`, S5 aliases, gauge/absolute from the spelling, canonical units, gauge → absolute)
 
 Tests and fixtures:
 - `backend/tests/unit/common/test_units.py`
-- `backend/tests/unit/routes/c_telemetry/` (`test_adapters.py` (CSV, TDMS, workbooks, configs on synthetic files in the corpus layouts), `test_pipeline_adapters.py` (all kinds through dispatch and commit), `test_labjack.py`, `test_ljstream_cfg.py`, `test_normalize.py` (synthetic firing); `test_run.py` with MinIO; `test_pipeline.py` with PostgreSQL + MinIO incl. commit and resume; synthetic LJStreamM in `conftest.py`)
+- `backend/tests/unit/routes/c_telemetry/` (`test_suggest.py` (raw unit, sibling unit, unit in the name, the model proposes only when no file states a unit, confidence cap), `test_adapters.py` (CSV, TDMS, workbooks, configs on synthetic files in the corpus layouts), `test_pipeline_adapters.py` (all kinds through dispatch and commit), `test_labjack.py`, `test_ljstream_cfg.py`, `test_normalize.py` (synthetic firing); `test_run.py` with MinIO; `test_pipeline.py` with PostgreSQL + MinIO incl. commit and resume; synthetic LJStreamM in `conftest.py`)
 - `backend/tests/fixtures/route_c/`
 
 ## Interfaces
 
 Provides:
 - `parse_unit(text) -> ParsedUnit{unit, dimension, gauge_or_abs, canonical}` (raises `UnitError`), `to_canonical(value, unit) -> (value, unit)` in bar / N / K / g/s / W or base SI, `ambient_bar_abs(condition, recorded)`, `gauge_to_absolute()`, `has_dimension()`, `fits_quantity(unit, Quantity)` with `QUANTITY_DIMENSIONS` (used by S2's numeric-fact check); the `Quantity` vocabulary is in `backend/postgres/enums.py`
+- unit suggestion of a telemetry UNIT_AMBIGUITY flag: `suggest.py` states a unit only when a file does (raw unit 0.6, sibling unit 0.5, unit in the name 0.4). When those hints are silent and the root is cleared for cloud processing, `with_suggestion(flag, propose)` takes one model proposal instead (`proposed_by = llm`, confidence capped at 0.5, so never near the 0.9 auto-apply line; a null or unparsable unit, or an unknown quantity, is not used and the explicit no-suggestion stays). A person decides either way; `proposals.refresh` keeps the model proposal unless a `channel_proposal` rule reaches the flag (backend/review-backend). Measured choice (24 real channels with known units): gemini-3.1-flash-lite 2 right, 14 invalid replies; gemini-3.8-flash 16 right, 2 wrong, 6 declined (`docs/architecture/research/suggestion_models.md`)
 - `ProcessedDocument` with one `TelemetryRunRecord` (raw Parquet URI, schema URI, rates, gaps, per-channel stats) and the run summary node; `telemetry_runs`/`telemetry_channels` rows written by the commit
 - `dcl-telemetry/{run_uuid}/raw.parquet` (original names, field metadata `raw_name`/`raw_unit`, file metadata `run_uuid`, `run_label`, `source_blob_sha256`, `parser_version`)
 - `dcl-telemetry/{run_uuid}/normalized.parquet`: `t_rel_ms`, `t_from_ignition_ms` (null without t0), canonical SI columns, `*_bar_abs`, valve state 0/1; field metadata `raw_name`, `unit`, `quantity`, `gauge_or_abs`
@@ -61,6 +63,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 - `backend/indexing/commit.py`
 - `backend/postgres/models/telemetry.py`
 - `backend/common/units.py`
+- `backend/llm_engine/suggestions.py`
+- `backend/llm_engine/prompts/suggest/`
 - `backend/tests/unit/common/test_units.py`
 - `backend/tests/unit/routes/c_telemetry/`
 - `backend/tests/fixtures/route_c/`
@@ -68,7 +72,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 ## Rubric (what "done" means for this feature)
 
 - [ ] DuckDB reproduces SME Excel peak/steady numbers within 0.5%
-- [x] Unknown unit or gauge/abs raises UNIT_AMBIGUITY HARD with a suggestion (`suggest.py`; a unit only when a file states it, else an explicit no-suggestion; unit tests; live check after redeploy)
+- [x] Unknown unit or gauge/abs raises UNIT_AMBIGUITY HARD with a suggestion (`suggest.py`; a unit only when a file states it, else a model proposal on cloud roots, else an explicit no-suggestion; unit tests; live check after redeploy)
 - [ ] Live: an SME-confirmed channel_map rule resumes its HALTED runs (`dcl.process.resume_for_rule`)
 - [ ] Pickle files are never loaded
 - [x] Files >1M rows stream through PyArrow within the queue memory limit (live dry run: 628 MB, 3.79 M rows, 3.7 s)
@@ -79,6 +83,7 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-24 | Lead | Model unit proposal when the file's own hints are silent (user, task 5: "the cheapest model that achieves the use case"): `suggestions.py`, prompt `suggest/unit.v1`, gemini-3.8-flash, confidence capped at 0.5, cloud roots only, wired by `pipeline._unit_proposer` into `suggest.with_suggestion`. Telemetry channel units keep "a rule proposes, a person approves" (DECISIONS 2026-10-24). Tests `test_suggest.py` |
 | 2026-10-24 | Lead | After the gate, `process_document` calls `proposals.refresh` for the document, so a file that arrives (or is resumed) after a proposal rule exists halts as before with the rule's units shown on its unit flags (`proposed_by_rule_id`); only a `channel_map` is an answer. Test: `test_a_proposal_shows_its_units_on_a_file_that_arrives_later_and_the_file_still_halts` |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-21 | S1 | backend/common/units.py (registry, aliases, references, canonical units); 29 tests |

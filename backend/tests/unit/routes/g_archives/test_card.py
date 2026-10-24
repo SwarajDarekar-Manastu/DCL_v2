@@ -193,3 +193,34 @@ def test_a_mesh_card_carries_the_measurements_and_the_related_drawings():
     assert "Related files (same name): bracket_v3.pdf" in text
     assert processed.document.catalog["references"] == ["CAD/bracket_v3.pdf"]
     assert processed.document.catalog["measurement"]["triangles"] == 12
+
+
+def test_step_solids_are_measured_exactly_and_counted_one_by_one():
+    pytest.importorskip("cascadio")
+    from backend.routes.g_archives import cad
+    from backend.tests.fixtures.make_g_samples import step_text
+
+    box = cad.measure(step_text([("box", (0, 0, 0), (30, 20, 10))]), "box.step")
+    assert (box["extents"], box["volume"], box["volume_exact"], box["solids"]) == (
+        [30, 20, 10],
+        6000,
+        True,
+        1,
+    )
+    two = cad.measure(
+        step_text([("left", (0, 0, 0), (10, 10, 10)), ("right", (40, 0, 0), (10, 10, 10))]), "two.step"
+    )
+    assert (two["extents"], two["volume"], two["solids"]) == ([50, 10, 10], 2000, 2)
+
+
+def test_a_cad_file_that_cannot_be_measured_says_why_and_never_claims_no_parser():
+    pytest.importorskip("cascadio")
+    from backend.routes.g_archives import cad
+
+    truncated = b"ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('x'),'2;1');\nENDSEC;\nDATA;\n#1=CARTESIAN_POINT("
+    with pytest.raises(cad.CadError) as raised:
+        cad.measure(truncated, "part.step")
+    assert "/tmp" not in str(raised.value) and "could not read it" in str(raised.value)
+    text = cad.describe("part.step", 90, "APU/TP12", None, [], [])
+    assert "No open parser" not in text
+    assert "No open parser" in cad.describe("part.scdoc", 90, "APU/TP12", None, [], [])

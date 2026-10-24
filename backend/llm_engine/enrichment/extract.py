@@ -21,7 +21,7 @@ from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
 from backend.postgres.enums import EntityType, Quantity
 
-PROMPT_VERSION = "parent.v1"
+PROMPT_VERSION = "parent.v2"
 PURPOSE = "enrichment.parent"
 MAX_DROP_RATE = 0.10
 

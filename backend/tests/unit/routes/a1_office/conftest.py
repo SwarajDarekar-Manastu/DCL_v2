@@ -2,6 +2,7 @@ import pytest
 
 from backend.llm_engine.vision import schemas
 from backend.llm_engine.vision.service import VisionOutput
+from backend.tests.unit.routes.vision_readings import with_image_metadata
 
 
 class FakeVision:
@@ -16,7 +17,11 @@ class FakeVision:
         value = self.readings[capability]
         reading = value(kwargs) if callable(value) else value
         return VisionOutput(
-            schema.model_validate(reading), "gemini-3.8-flash", f"{capability}.v1", "h", False
+            schema.model_validate(with_image_metadata(schema, reading)),
+            "gemini-3.8-flash",
+            f"{capability}.v1",
+            "h",
+            False,
         )
 
     def triage_page(self, image, **kw):

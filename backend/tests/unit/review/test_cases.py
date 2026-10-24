@@ -271,6 +271,22 @@ def test_dry_run_converts_the_recorded_stats_without_writing(session, seeded):
     ) == ("y0", "bar", 10.0, 5.0)
     assert (response.affected_documents, response.messages) == (1, [])
     assert session.get(ReviewFlag, flag.flag_id).status == "OPEN"
+    named = request.model_copy(
+        update={
+            "resolution": FlagResolution(
+                flag_id=flag.flag_id,
+                resolution=SetUnitModel(
+                    channel="y0",
+                    unit="psi",
+                    quantity="pressure",
+                    gauge_or_abs="gauge",
+                    canonical_name="p_chamber_1_bar_g",
+                ),
+            )
+        }
+    )
+    (channel,) = cases.dry_run(session, named).channels
+    assert channel.canonical_name == "p_chamber_1_bar_g"  # the name Apply writes, so the same sanity range
 
 
 def test_undo_reopens_the_last_resolution_and_retires_its_file_rule(session, seeded):
@@ -453,6 +469,30 @@ def test_the_closest_proposal_wins_and_switching_it_off_gives_the_hint_back(sess
     )
 
 
+def test_a_model_proposal_is_the_pipelines_own_hint_and_a_refresh_keeps_it(session, seeded):
+    from backend.review.proposals import refresh
+
+    flag = _open_flags(session, seeded["dat"])["y0"]
+    model = {
+        "resolution": {
+            "action": "set_unit",
+            "channel": "y0",
+            "unit": "bar",
+            "quantity": "pressure",
+            "gauge_or_abs": "gauge",
+        },
+        "confidence": 0.5,
+        "rationale": "model proposal",
+        "proposed_by": "llm",
+    }
+    flag.suggested_resolution = model
+    session.commit()
+    refresh(session, [seeded["dat"].doc_id])
+    session.commit()
+    session.refresh(flag)
+    assert (flag.suggested_resolution, flag.proposed_by_rule_id) == (model, None)
+
+
 def test_a_person_approves_each_file_and_the_approval_names_who_and_which_rule(session, seeded):
     from backend.review.rules import RuleScope
 
@@ -529,10 +569,11 @@ def test_preview_says_what_a_rule_would_do_before_it_is_saved(session, seeded):
         session, RulePreviewRequest(rule_type="channel_proposal", scope=scope, body={"channels": {}})
     )
     assert bad.problem is not None
-    assert (
-        cases.preview_rule(session, RulePreviewRequest(rule_type="ignore_pattern", scope=scope)).effect
-        == "stored"
-    )
+    effects = {
+        kind: cases.preview_rule(session, RulePreviewRequest(rule_type=kind, scope=scope)).effect
+        for kind in ("ignore_pattern", "column_unit", "origin_override")
+    }
+    assert effects == {"ignore_pattern": "resolves", "column_unit": "resolves", "origin_override": "applies"}
     assert (
         cases.preview_rule(session, RulePreviewRequest(rule_type="unit_mapping", scope=scope)).effect
         == "proposes"

@@ -144,7 +144,9 @@ All routes that need a vision model call the same component, `VisionService`, so
 | `classify_image` | Flash-Lite, media_resolution low, minimal thinking | photo thumbnail + folder context (Route D step 3, classify-first) | `{image_class: hardware_photo \| plot_or_screenshot \| document_scan \| diagram \| people_or_other, confidence}` |
 | `video_timeline` | 3.8 Flash (video input) | clip ≤ 2 min or keyframes | `{events:[{t_s, type, description}], anomalies[]}` |
 
-**Media resolution per capability** (Gemini 3 per-part `mediaResolution`; tokens per image low 280 / medium 560 / high 1120): `triage_page`, `classify_image` → `low`; `transcribe_handwriting`, `transcribe_page`, `read_table_image`, `digitize_plot`, `read_schematic` → `high`; `inspect_hardware_photo`, `describe_slide` → `medium` (a `relook` at answer time may use `high`); whole PDF pages (rare) → `medium`; `video_timeline` → `low`, `high` only when text in frames must be read. The M5 calibration study compares `medium` and `high` on the handwriting set and may lower the handwriting default.
+**One shared preamble and the file's own metadata (user, 2026-10-24).** Every capability prompt is preceded by one general prompt, `vision/image_context.v2` (what the library is, how a file's origin bears on what an image shows, the rules for every image), and by the metadata of the file the image belongs to, taken from its ingestion record: file name, folder path, site (synced root), the file it was taken out of, test plan, run and hardware from the folder, origin, created and last-modified dates, and up to five other folders holding the same bytes (owner is not recorded at ingestion). The runner builds this per document (`runner.file_metadata`) and hands it to the `VisionService` of that document run, so each file's calls carry its own metadata, never a shared block. Only facts the commit does not rewrite go in (the document title is derived at commit, so it would change the cache key between the first run and a re-run). Each capability keeps its own task, schema, model tier and resolution; the five that describe an image (`digitize_plot`, `read_schematic`, `inspect_hardware_photo`, `describe_slide`, `video_timeline`) always return `image_metadata {subject, setting, hardware[], test_context, from_metadata}` (a required field: v1 left it optional and the model dropped it on hardware photos), which stays with the image's node (in `structured_reading` for figures and photos, in the node metadata for slides and the video timeline, in the catalog for meeting slide frames). No call is added. Because the metadata is part of the input, the cache in rule 2 below dedupes identical images within a file, not across files.
+
+**Media resolution per capability** (Gemini 3 per-part `mediaResolution`; tokens per image low 280 / medium 560 / high 1120): `triage_page`, `classify_image` → `low`; `transcribe_handwriting`, `transcribe_page`, `read_table_image`, `digitize_plot`, `read_schematic` → `high`; `inspect_hardware_photo`, `describe_slide` → `medium` (a `relook` at answer time may use `high`); whole PDF pages (rare) → `medium`; `video_timeline` → `medium` (user, 2026-10-24: a small glow at the nozzle is the ignition the brightness check misses), `high` only when text in frames must be read. The M5 calibration study compares `medium` and `high` on the handwriting set and may lower the handwriting default.
 
 Rules:
 1. Every call is logged to `llm_calls` with `doc_id`, `purpose`, token counts.
@@ -365,6 +367,8 @@ Steps:
 7. `.md` → Docling Markdown backend (headings → sections). `.txt`/`.bat` → single document with line-window children; `requirements.txt` → a `dependencies` mention list.
 8. Call graph (optional, phase 2 of the build): `calls[]` per function from AST; stored in metadata to let the Answer Engine expand "and what does `validate_pressure_columns` call?".
 
+Route B sends nothing to a model (user, 2026-10-24): its metadata comes from the parse above (context headers, symbols, constants, annotations, dependencies) and from ingestion (folder context); module headers and symbols are embedded as they are. Text files on this route (Markdown, requirements, batch files, notebook text cells, a script that fails to parse) do become parent nodes, so the shared tail skips enrichment for every Route B document (`index_document`, route check).
+
 Flags: `SENSITIVE_CONTENT` (HARD), `PARSE_FAILURE` (SOFT — syntax error files are indexed as plain text with the error noted).
 
 Edge cases: Python 2 syntax (fall back to text with line windows), generated UI files (`ui_*.py` from Qt Designer — indexed but tagged `generated=true` and down-weighted), notebooks (`.ipynb` adapter ready: cells → nodes, outputs ignored), very large single-file scripts, shebang/encoding lines, Windows line endings, non-UTF-8 (chardet).
@@ -531,6 +535,8 @@ Inventory: 25 `.mp4`, 1 `.mov` (test-cell camera and workshop recordings).
 
 Sub-route decision by `ffprobe`: duration, audio stream present, speech probability (quick VAD on the first 60 s), folder context.
 
+
+**Working copy (user, 2026-10-24).** Before any step, Route F makes a compressed copy and runs every step below on it; the original blob in `dcl-raw` stays the source of truth. Copy: MP4, H.264 High, long side at most 1280 px, at most 30 fps, CRF 26, preset medium, two threads, AAC mono 64 kbit/s, `+faststart`; HDR clips are tone-mapped to SDR. No copy when the source is already H.264 within 1280 px and under 2 Mbit/s, or when the copy would not be at least 10 % smaller. The copy is the asset `video_proxy` (`dcl-assets/videos/{sha256}/proxy.mp4`), and the viewer plays it when it exists. One profile for every video, because the meeting/test-cell decision comes after the speech check. Settings and sources: `docs/architecture/research/video_compression.md`.
 ### F.1 Workshop / meeting recordings (speech, typically > 5 min)
 
 1. FFmpeg extracts 16 kHz mono audio.
@@ -548,7 +554,7 @@ Sub-route decision by `ffprobe`: duration, audio stream present, speech probabil
 
 Flags: `PARSE_FAILURE` HARD (undecodable), `LOW_CONFIDENCE_EXTRACTION` SOFT (ignition not detected confidently), `CONFLICT` SOFT (video t0 vs telemetry t0 disagree by > 1 s after alignment).
 
-Edge cases: no audio track, variable frame rate, portrait phone video, very long recordings (segmented into 30-minute parts with overlap), screen recordings of Teams meetings (slide OCR dominates), multiple cameras of the same test (same folder → linked by `test_run_id`).
+Edge cases: no audio track, variable frame rate, portrait phone video, very long recordings (transcribed in 10-minute parts with 30 s overlap, each read from its own slice of the audio; every finished part is saved in the CIR (`parts/<whisper model>/`), and at the 60-minute soft time limit the task sends itself again and continues from the saved parts, at most 12 times; user, 2026-10-24: the media worker has 6 GiB because a 30-minute part overflowed 4 GiB in faster-whisper's voice filter), screen recordings of Teams meetings (slide OCR dominates), multiple cameras of the same test (same folder → linked by `test_run_id`).
 
 ---
 

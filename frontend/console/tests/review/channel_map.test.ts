@@ -146,7 +146,7 @@ describe('ChannelMapView', () => {
 			preview: null
 		} as unknown as api.DryRunResponse;
 		vi.mocked(api.dryRun).mockResolvedValue(dryRunResult);
-		vi.mocked(api.previewRule).mockResolvedValue({ matched_documents: 12, waiting_documents: 12, finished_documents: 0, sample: [], effect: 'proposes', open_channels: [], problem: null });
+		vi.mocked(api.previewRule).mockResolvedValue({ matched_documents: 12, waiting_documents: 12, finished_documents: 0, sample: [], effect: 'proposes', resolves_flags: 0, open_channels: [], problem: null });
 		vi.mocked(api.resolveCase).mockResolvedValue({ case_key: 'k', flags: [], rule: null, resumed_doc_ids: ['d'] } as unknown as api.ResolveResponse);
 		render(ChannelMapView, { detail: LABJACK, onChanged: vi.fn(), onDetails: vi.fn() });
 		expect(screen.getByText(/Only this file is decided/)).toBeTruthy();

@@ -24,7 +24,15 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.dispatcher.contract import ColumnMapping
-from backend.postgres.enums import AmbientCondition, GaugeOrAbs, Quantity, RuleOrigin, RuleType, SourceOrigin
+from backend.postgres.enums import (
+    AmbientCondition,
+    FlagType,
+    GaugeOrAbs,
+    Quantity,
+    RuleOrigin,
+    RuleType,
+    SourceOrigin,
+)
 
 EXPORT_VERSION = 1
 
@@ -182,9 +190,17 @@ class UnitMappingBody(_Model):
 
 
 class SchemaMappingBody(_Model):
-    """Column meanings for an array or headerless table (the MapColumns resolution without ``action``)."""
+    """Column meanings for an array or headerless table (the MapColumns resolution without ``action``), or the
+    sections of an unknown JSON shape (MapJsonKeys without ``action``)."""
 
-    columns: list[ColumnMapping] = Field(min_length=1)
+    columns: list[ColumnMapping] | None = Field(default=None, min_length=1)
+    key_to_section: dict[str, str] | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _one_mapping(self) -> Self:
+        if (self.columns is None) == (self.key_to_section is None):
+            raise ValueError("a schema mapping gives either columns or key_to_section")
+        return self
 
 
 class SupersessionBody(_Model):
@@ -193,7 +209,33 @@ class SupersessionBody(_Model):
 
 
 class IgnorePatternBody(_Model):
+    """Accept one kind of finding in a scope: CONFLICT is ignored, LOW_CONFIDENCE_EXTRACTION keeps the model's
+    reading (its suggestion), CLOUD_RESTRICTED is ignored. A rule without ``flag_type`` answers nothing."""
+
     reason: str = Field(min_length=1)
+    flag_type: FlagType | None = None
+    relation: str | None = Field(
+        default=None, description="CONFLICT only: sources_disagree, check_failed or note"
+    )
+    subject_contains: str | None = Field(
+        default=None, description="case-insensitive part of the flag's subject"
+    )
+
+
+class ColumnUnitBody(_Model):
+    """The unit of a number in a table or prose, by its column or label name (glob, case-insensitive);
+    ``unit`` null keeps the numbers as text. Telemetry channels are not answered here (channel_proposal)."""
+
+    column: str = Field(min_length=1)
+    unit: str | None = Field(default=None, min_length=1)
+
+
+class SourceChoiceBody(_Model):
+    """Which side of a two-sided disagreement wins, by the subject and the side's label (e.g. test_plan_id,
+    folder)."""
+
+    subject: str = Field(min_length=1)
+    prefer: str = Field(min_length=1)
 
 
 class OriginOverrideBody(_Model):
@@ -209,6 +251,8 @@ RULE_BODIES: dict[RuleType, type[_Model]] = {
     RuleType.SUPERSESSION: SupersessionBody,
     RuleType.IGNORE_PATTERN: IgnorePatternBody,
     RuleType.ORIGIN_OVERRIDE: OriginOverrideBody,
+    RuleType.COLUMN_UNIT: ColumnUnitBody,
+    RuleType.SOURCE_CHOICE: SourceChoiceBody,
 }
 
 

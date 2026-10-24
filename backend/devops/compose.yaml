@@ -364,7 +364,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4096M
+          memory: 6144M
 
   worker-vision-batch:
     <<: *backend

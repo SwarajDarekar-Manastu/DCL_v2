@@ -19,6 +19,11 @@ were blocked with the gateway defaults. It is off unless `pipeline_config` `visi
 on: `true` for all seven extraction capabilities, or a list of capability names. Other capabilities never send
 it. Refusals are not cached, so switching the flag on lets a refused page through on the next run.
 
+Every call starts with the shared preamble `image_context.v2` (what the library is, how to use a file's
+origin, the rules for every image) and the file's own ingestion metadata (`FileMetadata`): one service per
+document run, made by the runner with `vision_for(session, file=...)`, so each file's calls carry that file's
+metadata and never another's (user, 2026-10-24). The metadata is part of the cache key.
+
 Methods are synchronous (Celery prefork workers on cpu_parse and media). CapabilityUnavailable (image input
 not enabled on the gateway), BudgetExhausted (retry later) and StructuredOutputError propagate to the route.
 """
@@ -49,6 +54,7 @@ from backend.llm_engine.vision.schemas import (
     VideoTimeline,
 )
 
+PREAMBLE_VERSION = "image_context.v2"
 FLASH = Tier.FLASH
 FLASH_LITE = Tier.LITE
 CACHE_PREFIX = "_vision_cache"
@@ -135,7 +141,7 @@ TASKS: dict[VisionCapability, Task] = {
     ),
     VisionCapability.DIGITIZE_PLOT: Task("digitize_plot.v1", PlotReading, FLASH, "high", ThinkingLevel.LOW),
     VisionCapability.READ_SCHEMATIC: Task(
-        "read_schematic.v1", SchematicReading, FLASH, "high", ThinkingLevel.LOW
+        "read_schematic.v2", SchematicReading, FLASH, "high", ThinkingLevel.LOW
     ),
     VisionCapability.INSPECT_HARDWARE_PHOTO: Task(
         "inspect_hardware_photo.v1", HardwarePhotoReading, FLASH, "medium", ThinkingLevel.LOW
@@ -144,12 +150,47 @@ TASKS: dict[VisionCapability, Task] = {
         "describe_slide.v1", SlideReading, FLASH, "medium", ThinkingLevel.LOW
     ),
     VisionCapability.VIDEO_TIMELINE: Task(
-        "video_timeline.v1", VideoTimeline, FLASH, "low", ThinkingLevel.LOW
+        "video_timeline.v2", VideoTimeline, FLASH, "medium", ThinkingLevel.LOW
     ),
     VisionCapability.CLASSIFY_IMAGE: Task(
         "classify_image.v1", ImageClassification, FLASH_LITE, "low", ThinkingLevel.MINIMAL
     ),
 }
+
+
+@dataclass(frozen=True)
+class FileMetadata:
+    """Where one file comes from, from its ingestion record (drive item, folder context, document row)."""
+
+    file_name: str
+    folder_path: str | None = None
+    site: str | None = None  # the synced OneDrive root
+    created_at: str | None = None
+    modified_at: str | None = None
+    parent: str | None = None  # the file this one was taken out of (archive member, attachment)
+    test_plan_id: str | None = None
+    test_run_id: str | None = None
+    hardware_item: str | None = None
+    source_origin: str | None = None
+    other_locations: tuple[str, ...] = ()
+
+    def render(self) -> str:
+        fields = [
+            ("File name", self.file_name),
+            ("Folder", self.folder_path),
+            ("Site", self.site),
+            ("Taken out of", self.parent),
+            ("Test plan", self.test_plan_id),
+            ("Test run", self.test_run_id),
+            ("Hardware", self.hardware_item),
+            ("Origin", self.source_origin),
+            ("Created", self.created_at),
+            ("Last modified", self.modified_at),
+        ]
+        lines = [f"{label}: {value}" for label, value in fields if value]
+        if self.other_locations:
+            lines.append("Also stored in: " + "; ".join(self.other_locations))
+        return "\n".join(lines)
 
 
 class VisionCache(Protocol):
@@ -188,7 +229,14 @@ def input_hash(capability: VisionCapability, task: Task, parts: list[Text | Imag
         else ["image", p.mime_type, hashlib.sha256(p.data).hexdigest()]
         for p in parts
     ]
-    material = [str(capability), task.prompt_version, task.model, task.media_resolution, described]
+    material = [
+        str(capability),
+        task.prompt_version,
+        PREAMBLE_VERSION,
+        task.model,
+        task.media_resolution,
+        described,
+    ]
     return hashlib.sha256(json.dumps(material, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
@@ -203,10 +251,12 @@ class VisionService:
         cache: VisionCache,
         *,
         extraction_safety: frozenset[VisionCapability] = frozenset(),
+        file: FileMetadata | None = None,
     ):
         self._client = client
         self._cache = cache
         self._safety = extraction_safety & EXTRACTION_CAPABILITIES
+        self._file = file
 
     def triage_page(
         self, thumbnail: Image, *, context: str, doc_id: str | None = None, anchor: str | None = None
@@ -329,25 +379,29 @@ class VisionService:
     ) -> VisionOutput:
         task = TASKS[capability]
         prompt = load_prompt(PROMPT_AREA, task.prompt_version)
-        parts: list[Text | Image] = [Text(prompt.render_user(**variables)), *media]
+        preamble = load_prompt(PROMPT_AREA, PREAMBLE_VERSION)
+        about = preamble.render_user(file_metadata=self._file.render() if self._file else "not known")
+        parts: list[Text | Image] = [Text(about), Text(prompt.render_user(**variables)), *media]
         digest = input_hash(capability, task, parts)
         key = cache_key(task.model, task.prompt_version, digest)
 
+        context = CallContext(
+            purpose=f"vision.{capability}",
+            prompt_version=task.prompt_version,
+            doc_id=doc_id,
+            node_anchor=anchor,
+        )
         cached = self._cache.get(key)
         if cached is not None:
             entry = json.loads(cached)
             reading = task.schema.model_validate(entry["reading"])
+            self._client.record_cache_hit(task.model, context)  # the ledger shows what the re-run did not pay
             return VisionOutput(reading, entry["model"], task.prompt_version, digest, cached=True)
 
         result = self._client.generate_sync(
             model=task.model,
-            messages=[Message.system(prompt.system), Message.user(*parts)],
-            context=CallContext(
-                purpose=f"vision.{capability}",
-                prompt_version=task.prompt_version,
-                doc_id=doc_id,
-                node_anchor=anchor,
-            ),
+            messages=[Message.system(f"{preamble.system}\n\n{prompt.system}"), Message.user(*parts)],
+            context=context,
             schema=task.schema,
             thinking=task.thinking,
             media_resolution=task.media_resolution,

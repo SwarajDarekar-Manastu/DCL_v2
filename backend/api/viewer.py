@@ -39,7 +39,7 @@ from backend.api.assets import get_minio
 from backend.api.auth import ConsoleRole, ConsoleUser, require_role
 from backend.dispatcher.contract import Anchor, AnchorError, format_anchor
 from backend.indexing.anchors import ResolutionStatus, resolve_anchor
-from backend.postgres.enums import AssetKind, DocumentSourceRole, DriveItemStatus
+from backend.postgres.enums import AssetKind, DocKind, DocumentSourceRole, DriveItemStatus
 from backend.postgres.models import Asset, Document, DocumentNode, DocumentSource, DriveItem
 from backend.postgres.session import get_session
 from backend.storage.minio import RAW, presign_get, raw_key, uri
@@ -176,6 +176,7 @@ class ViewerPayload(BaseModel):
 PresignFn = Callable[[str], str]
 CODE_NODES = {"code_symbol", "module_header", "config"}
 TIME_NODES = {"transcript_window", "video_event"}
+VIDEO_KINDS = {DocKind.VIDEO_TIMELINE, DocKind.VIDEO_TRANSCRIPT}  # its timeline and section nodes play too
 TABLE_NODE, TABLE_ROW_NODE = "table", "table_row"
 # Route A1 figure classes (backend/routes/a1_office/figures.py): plots and schematics are shown as such.
 PLOT_CLASSES = frozenset({"bar_chart", "box_plot", "line_chart", "pie_chart", "scatter_plot"})
@@ -425,9 +426,14 @@ def _view(
                 height=asset.height,
                 caption=first.breadcrumb or "",
             )
-    if first and first.node_type in TIME_NODES and blob_sha256:
+    if first and (first.node_type in TIME_NODES or doc.doc_kind in VIDEO_KINDS) and blob_sha256:
         start_ms = anchor.t_start_ms if anchor and anchor.t_start_ms is not None else first.t_start_ms or 0
-        return VideoView(video_url=presign(uri(RAW, raw_key(blob_sha256))), t_ms=start_ms)
+        proxy = session.scalar(
+            select(Asset.minio_uri)
+            .where(Asset.blob_sha256 == blob_sha256, Asset.kind == AssetKind.VIDEO_PROXY)
+            .limit(1)
+        )  # the compressed working copy when Route F made one, else the original
+        return VideoView(video_url=presign(proxy or uri(RAW, raw_key(blob_sha256))), t_ms=start_ms)
     return TextView(
         text="\n\n".join(n.content for n in nodes) or "This document has no indexed content yet.",
         breadcrumb=first.breadcrumb or "" if first else "",

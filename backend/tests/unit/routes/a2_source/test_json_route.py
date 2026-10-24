@@ -73,6 +73,22 @@ def test_unknown_shape_is_indexed_generically_with_soft_schema_unknown(memory, f
     assert flag.evidence.missing_keys == ["test_id"]
 
 
+def test_a_key_mapping_turns_an_unknown_shape_into_named_sections_and_keeps_its_flag(memory, folder):
+    data = {"id": "objectives_x", "content": {"text": "Some prose"}, "order": 2}
+    processed = process_json(
+        [primary("Sections/whatever.json", json.dumps(data))],
+        title="Test T01",
+        folder=folder,
+        stores=memory.stores(),
+        schema_config=CONFIG,
+        key_mapping={"content": "Objectives"},
+    )
+    crumbs = [n.breadcrumb for n in processed.nodes]
+    assert crumbs[0] == "Test T01 › Objectives" and "Some prose" in processed.nodes[0].content
+    assert crumbs[-1] == "Test T01 › Other fields" and "id: objectives_x" in processed.nodes[-1].content
+    assert [f.flag_type for f in processed.flags] == [FlagType.SCHEMA_UNKNOWN]  # it carries the decision
+
+
 def test_section_file_set_is_one_document_in_order(memory, folder):
     files = [
         primary("Sections/objectives.json", json.dumps({"text": "Objective prose"})),

@@ -22,6 +22,7 @@ from backend.dispatcher.runner import (
     Outcome,
     RunContext,
     common_options,
+    file_metadata,
     read_object,
     run_document,
     vision_for,
@@ -32,7 +33,7 @@ from backend.postgres.enums import DocumentSourceRole, DocumentStatus, Route
 from backend.postgres.models import Blob, Document, DocumentSource
 
 WHISPER_MODEL = "routes.F.whisper_model"
-WHISPER_DEFAULT = "medium"  # int8 on CPU; large-v3 does not fit the 4 GiB media worker (DECISIONS 2026-10-23)
+WHISPER_DEFAULT = "medium"  # int8 on CPU; large-v3 did not fit the 4 GiB media worker (DECISIONS 2026-10-23)
 
 
 class RepresentativePending(RuntimeError):
@@ -111,7 +112,7 @@ def process_d_document(
         processed, own = d.process_photo(
             ctx.data,
             folder=ctx.folder,
-            vision=vision_for(ctx.session),
+            vision=vision_for(ctx.session, file_metadata(ctx)),
             put_asset=ctx.put_asset,
             representative=reading,
             cluster_id=representative,
@@ -142,18 +143,34 @@ def _transcriber(model_size: str):
     return whisper_transcriber(model_size)
 
 
+class _Parts:
+    """Finished transcription parts of this document's CIR, per speech model, kept across checkpoints."""
+
+    def __init__(self, ctx: RunContext, prefix: str):
+        self._ctx, self._prefix = ctx, ctx.prefix + prefix
+
+    def get(self, key: str) -> bytes | None:
+        return self._ctx.cir.get(self._prefix + key)
+
+    def put(self, key: str, data: bytes) -> str:
+        return self._ctx.cir.put(self._prefix + key, data)
+
+
 def process_f_document(
     session: Session, minio: Minio, doc_id: uuid.UUID, indexer: Indexer | None = None
 ) -> Outcome:
     from backend.routes import f_video as f
 
     def build(ctx: RunContext):
+        size = pipeline_config.get(ctx.session, WHISPER_MODEL, default=WHISPER_DEFAULT)
         return f.process_video(
             ctx.data,
             folder=ctx.folder,
-            vision=vision_for(ctx.session),
+            vision=vision_for(ctx.session, file_metadata(ctx)),
             put_asset=ctx.put_asset,
-            transcribe=_transcriber(pipeline_config.get(ctx.session, WHISPER_MODEL, default=WHISPER_DEFAULT)),
+            transcribe=_transcriber(size),
+            put_cir=ctx.put_cir,
+            parts=_Parts(ctx, f"parts/{size}/"),
             **common_options(ctx),
         )
 

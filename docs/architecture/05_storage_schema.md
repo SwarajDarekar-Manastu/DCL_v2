@@ -212,7 +212,7 @@ Index on `doc_id_b`. Part-of, visual-twin, archive and photo-cluster relationshi
 | `source` ✓ | text | `printed`, `ocr`, `vlm`, `source_code`, `structured`, `human` |
 | `confidence` | real | for `ocr`/`vlm` |
 | `needs_review` | boolean | a SOFT flag anchors here |
-| `doc_kind`, `test_plan_id`, `source_origin`, `trust_tier`, `doc_status` | denormalized from `documents` at commit | lets filtered vector searches avoid the join; `doc_status` is refreshed by the (rare) status changes |
+| `doc_kind`, `test_plan_id`, `source_origin`, `trust_tier`, `doc_status` | denormalized from `documents` at commit | lets filtered vector searches avoid the join; `doc_status` is refreshed by the (rare) status changes: trigger `document_status_to_nodes` (migration 0018) copies every `documents.status` change except PROCESSING, so a re-run keeps the last committed version searchable until its commit |
 | `metadata` | jsonb | node-type-specific: tables `{n_rows, n_cols, units_by_column, caption, part}`, figures `{class, structured_reading}`, handwriting `{regions[]}`, code `{symbol, qualname, calls[], imports[]}`, runs `{run_uuid}`, diagrams `{component_tag, neighbors[]}` |
 | `pipeline_version` | int | informational (visibility no longer depends on it) |
 
@@ -225,7 +225,7 @@ Indexes: HNSW `(embedding halfvec_cosine_ops) WITH (m=16, ef_construction=128)`;
 | `asset_id` uuid PK | — |
 | `minio_uri` text UNIQUE | deterministic per blob/page/crop; upsert key |
 | `blob_sha256` FK, indexed | owner |
-| `kind` ✓ | `page_render`, `figure_crop`, `handwriting_crop`, `table_crop`, `photo_web`, `photo_thumb`, `photo_in_doc`, `video_frame`, `diagram_render`, `sparkline` |
+| `kind` ✓ | `page_render`, `figure_crop`, `handwriting_crop`, `table_crop`, `photo_web`, `photo_thumb`, `photo_in_doc`, `video_frame`, `video_proxy` (compressed working copy of a video, Route F), `diagram_render`, `sparkline` |
 | `page_no`, `bbox`, `t_ms` | anchors |
 | `width`, `height`, `bytes` | — |
 | `phash` | 64-bit hex for images |
@@ -312,7 +312,7 @@ Partial index `(rule_type, scope_folder_id) WHERE active`. "Files affected by th
 
 **`pipeline_config`** — append-only; PK `(key, version)`; `value` jsonb; `updated_by`; `updated_at`; `description`; view `v_config_current` = latest version per key. Rollback = insert the old value as a new version. Secrets and endpoints (Graph app ids, gateway URL and key, database credentials, alert webhook) are **never** stored here; they come from the environment file (file 01 §7.1). Keys include: `gate.*`, `sync.download_scope` (list of root/folder ids/globs allowed to download; empty = everything), `sync.download_concurrency`, `sync.daily_delta_cron`, `processing.scope` (which landed blobs may be processed), `routes.<X>.enabled`, `routes.<X>.parser_version`, `routes.held_kinds` (list of file kinds that wait as `WAITING_FOR_ROUTE` while their route is on), `routes.F.whisper_model` (`tiny`, `base`, `small`, `medium` (default) or `large-v3`), `routes.A1.ocr_engine_by_script`, `thresholds.*`, `chunking.*`, `models.*`, `translation.mode`, `translation.full_for`, `sources.origin_defaults`, `flags.severity_overrides`, `flags.strict_mode`, `cloud.vertex_project`, `cloud.region`, `cloud.daily_token_budget`, `sanity_ranges`, `critical_field_patterns`, `report_json_schemas`, `answer.external_allowed_groups` (seeded with `dcl-external-search` by migration seed data, S1), `answer.proprietary_terms` (seeded by S5 from the hardware and project names in the crawl, confirmed by the user), `answer.external_search_enabled` (kill switch, default true; the group list is the real gate), `vision.extraction_safety` (absent or false = off; true or a list of extraction capability names that send the BLOCK_ONLY_HIGH safety setting).
 
-**`llm_calls`** — `call_id`; `at` (indexed); `model`; `purpose`; `prompt_version`; `doc_id`, `node_anchor`, `trace_id` (no FKs: the ledger outlives documents); `input_tokens`, `output_tokens`, `cached_tokens`; `latency_ms`; `cost_estimate`; `status`; `error`; `request_id`. The daily budget guard aggregates this table.
+**`llm_calls`** — `call_id`; `at` (indexed); `model`; `purpose`; `prompt_version`; `doc_id`, `node_anchor`, `trace_id` (no FKs: the ledger outlives documents); `input_tokens`, `output_tokens`, `cached_tokens`; `latency_ms`; `cost_estimate`; `status` ✓ (`ok`, `error`, `cache_hit`); `error`; `request_id`. The daily budget guard aggregates this table. **Result cache (plan task 7, 2026-10-24):** every pipeline call's valid reply is saved the moment it arrives under `dcl-cir/_result_cache/{model}/{prompt_version}/{sha256 of model, prompt version and request body}.json`; a re-run reads it instead of calling the gateway and writes a `cache_hit` row (no tokens, no cost). Interactive purposes (`engine.`, `console.`, `benchmark.`) are not cached. A saved answer is served even when the daily budget is used up. A hit in the vision service's own cache (`_vision_cache/`) also writes a `cache_hit` row under its `vision.<capability>` purpose.
 
 ### 4.7 Answer engine and benchmarks (4)
 

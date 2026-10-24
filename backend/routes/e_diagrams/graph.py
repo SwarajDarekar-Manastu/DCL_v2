@@ -153,20 +153,36 @@ def _medium(connection: Connection) -> str:
     return f" [{connection.medium}]" if connection.medium else ""
 
 
-def graph_flags(graph: Graph) -> list[Flag]:
-    if not graph.edge_semantics:
-        return []
-    flags = []
+def _checks(graph: Graph) -> list[tuple[str, int, int, float]]:
     edges = [e for e in graph.connections if e.source or e.target]
     unlabeled = [e for e in edges if not e.label]
     connected = {e.source for e in edges} | {e.target for e in edges}
     components = [c for c in graph.components if c.kind != "text"]
     orphans = [c for c in components if c.id not in connected]
-    checks = [
+    return [
         ("unlabeled edges", len(unlabeled), len(edges), UNLABELED_EDGES_MAX),
         ("orphan components", len(orphans), len(components), ORPHANS_MAX),
     ]
-    for subject, count, total, limit in checks:
+
+
+def completeness(graph: Graph) -> dict[str, Any] | None:
+    """The incomplete-graph check as metadata (user, 2026-10-24): a drawing may be incomplete; it is kept,
+    tagged in the catalog and the summary text, and carries a SOFT flag, never a halt."""
+    if not graph.edge_semantics:
+        return None
+    passed = [(s, c, t) for s, c, t, limit in _checks(graph) if t and c / t > limit]
+    return {
+        "incomplete": bool(passed),
+        **{s.replace(" ", "_"): [c, t] for s, c, t, _ in _checks(graph)},
+        "reasons": [f"{c} of {t} {s}" for s, c, t in passed],
+    }
+
+
+def graph_flags(graph: Graph) -> list[Flag]:
+    if not graph.edge_semantics:
+        return []
+    flags = []
+    for subject, count, total, limit in _checks(graph):
         if total and count / total > limit:
             flags.append(
                 Flag(
@@ -221,7 +237,7 @@ def graph_nodes(graph: Graph, title: str, language: str = "en") -> tuple[list[Pr
             )
         )
         for tag in tags_of(content if node_type == NodeType.DIAGRAM_COMPONENT else tag_text):
-            mentions.append(Mention(node_ref=ref, kind="tag", surface=tag, source=MentionSource.REGEX))
+            mentions.append(Mention(node_ref=ref, kind="sensor_tag", surface=tag, source=MentionSource.REGEX))
         for match in RANGE.finditer(content):
             mentions.append(
                 Mention(node_ref=ref, kind="quantity", surface=match.group(0), source=MentionSource.REGEX)

@@ -6,7 +6,7 @@ from backend.dispatcher.contract import Flag, Mention
 from backend.indexing.index_document import HaltedDocument, index_document
 from backend.llm_engine.enrichment.entities import index_from_seed, load_seed
 from backend.llm_engine.gemini_types import GenerateResult, StructuredOutputError, Usage
-from backend.postgres.enums import DocKind, FlagSeverity, FlagType, MentionSource, NodeType
+from backend.postgres.enums import DocKind, FlagSeverity, FlagType, MentionSource, NodeType, Route
 
 DOC_ID = uuid.UUID("6f1c2a3e-0000-4000-8000-0000000000aa")
 RESULTS = (
@@ -226,3 +226,12 @@ def test_a_failed_enrichment_reply_skips_only_that_parent(run):
     plan = run(gemini=Gemini(fail_on="Scope of the test campaign"))
     assert plan.metrics["enrichment_calls"] == 1
     assert any("failed the schema" in w for w in plan.warnings)
+
+
+def test_route_b_sends_nothing_to_a_model_even_for_text_parents(kit, run):
+    gemini = Gemini()
+    doc = kit.document(kit.node("readme", RESULTS, 0)).model_copy(update={"route": Route.B})
+    plan = run(doc, gemini=gemini)
+    assert [n for n in plan.nodes if n.node_type is NodeType.PARENT]
+    assert (gemini.calls, plan.metrics["enrichment_calls"], plan.warnings) == (0, 0, [])
+    assert all(n.embedding for n in plan.nodes if n.embed)

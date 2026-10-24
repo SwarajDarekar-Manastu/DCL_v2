@@ -780,8 +780,11 @@ def process_json(
     folder: FolderContext,
     stores: Stores,
     schema_config: json_sections.SchemaConfig | None = None,
+    key_mapping: dict[str, str] | None = None,
 ) -> ProcessedDocument:
-    """One report JSON file, or a JSON section-file set (primary first, parts in the configured order)."""
+    """One report JSON file, or a JSON section-file set (primary first, parts in the configured order).
+    ``key_mapping`` (a reviewer's ``map_json_keys`` decision or a ``schema_mapping`` rule) turns a JSON of
+    unknown shape into named sections; its SCHEMA_UNKNOWN flag is still raised and keeps that decision."""
     config = schema_config or json_sections.read_schema_config(REPORT_SCHEMAS_YAML)
     primary = next(f for f in files if f.role == DocumentSourceRole.PRIMARY)
     sources = [f for f in files if f.role in (DocumentSourceRole.PRIMARY, DocumentSourceRole.PART)]
@@ -809,6 +812,15 @@ def process_json(
         test_run_id = test_run_id or sniffed.test_run_id
         if sniffed.shape in ("report_section", "section_file"):
             sections = sniffed.sections
+        elif sniffed.shape == "unknown" and key_mapping and isinstance(data, dict):
+            sections = [
+                json_sections.Section(section, json_sections.section_lines(data[key]), key)
+                for key, section in key_mapping.items()
+                if key in data and data[key] not in (None, "", [], {})
+            ]
+            rest = {k: v for k, v in data.items() if k not in key_mapping}
+            if rest:
+                sections.append(json_sections.Section("Other fields", [json_sections.flatten(rest)]))
         else:
             label = {"data_array": "Data array", "config": "Configuration", "unknown": "Fields"}[
                 sniffed.shape

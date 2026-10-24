@@ -159,6 +159,16 @@ def test_low_confidence_and_export_markings_raise_flags(fake_vision, memory_stor
     ]
 
 
+def test_a_marking_inside_another_word_is_not_a_marking(fake_vision, memory_store):
+    reading = {**HARDWARE, "visible_text": ["SANITARY FITTING", "MILITARY GRADE"]}
+    vision = fake_vision(
+        classify_image={"image_class": "hardware_photo", "confidence": 0.9, "shows_people": False},
+        inspect_hardware_photo=reading,
+    )
+    doc, _ = run(photo(), vision, memory_store("s3://dcl-assets/"))
+    assert all(f.flag_type != FlagType.SENSITIVE_CONTENT for f in doc.flags)
+
+
 def test_dark_photo_is_auto_contrasted_for_the_model(fake_vision, memory_store):
     seen = {}
 

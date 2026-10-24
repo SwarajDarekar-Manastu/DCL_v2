@@ -51,6 +51,7 @@ from backend.routes.e_diagrams.graph import (
     SEPARATOR,
     DiagramError,
     Graph,
+    completeness,
     duplicate_tags,
     graph_flags,
     graph_nodes,
@@ -285,7 +286,7 @@ def process_diagram(
                     content=text,
                     page_no=page,
                     source=NodeSource.VLM,
-                    metadata={"image": what},
+                    metadata={"image": what, "structured_reading": reading.model_dump(mode="json")},
                 )
             )
             seen = {t for c in reading.components for t in tags_of(" ".join(filter(None, [c.tag, c.label])))}
@@ -317,6 +318,12 @@ def process_diagram(
         duplicates = duplicate_tags(graph)
         if duplicates:
             catalog["duplicate_tags"] = duplicates
+        state = completeness(graph)
+        if state is not None:
+            catalog["completeness"] = state
+        if state and state["incomplete"] and nodes:
+            note = "Diagram incomplete: " + "; ".join(state["reasons"])
+            nodes[0] = nodes[0].model_copy(update={"content": nodes[0].content + "\n" + note})
     stores.put_cir(
         "graph.json",
         json.dumps({**catalog, "schematic_readings": readings}, ensure_ascii=False).encode("utf-8"),

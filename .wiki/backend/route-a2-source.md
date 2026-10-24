@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S6 |
 | Spec | docs/architecture/03_phase2_processing_routes.md §5 (A2), §1.3 (assembler), file 04 §4, file 06 §4 |
-| Last updated | 2026-10-23 |
+| Last updated | 2026-10-24 |
 
 ## Purpose
 
@@ -26,7 +26,8 @@ Tests: `backend/tests/unit/routes/a2_source/` (synthetic projects inline; `test_
 ## Interfaces
 
 Provides:
-- `process_latex(files, *, title, folder, stores, folder_files, read_file, conflicts, vision, cloud_allowed, doc_id, twin_appendix)` and `process_json(files, *, title, folder, stores, schema_config)` → `ProcessedDocument` (route A2, parser_version 1)
+- `process_latex(files, *, title, folder, stores, folder_files, read_file, conflicts, vision, cloud_allowed, doc_id, twin_appendix)` and `process_json(files, *, title, folder, stores, schema_config, key_mapping=None)` → `ProcessedDocument` (route A2, parser_version 1)
+- `key_mapping` (`{json key: section name}`): turns a JSON of unknown shape into named sections, the keys not named going to one "Other fields" section; SCHEMA_UNKNOWN is still raised and keeps the decision. The runner passes `rule_answers.json_key_mapping(session, document)` (`backend/dispatcher/source_run.py`): the file's own `map_json_keys` decision first, else the most specific active `schema_mapping` rule that names keys
 - `files`: the assembler's plan as `SourceFile(path, blob_sha256, data, role)` with roles primary / part / visual_twin
 - Node anchors: `line_start`/`line_end` are lines of `assembled.md`; `metadata.source` = `file:line`; with a twin, `page_no` = twin page of the section (S2's `process_twin`)
 - CIR `dcl-cir/{sha256}/A2/v1/`: `assembled.md`, `structure.json`, `source_map.json`; `page_map.json` and `appendix/…` from `process_twin`
@@ -69,6 +70,7 @@ Waiting on others:
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-24 | Lead | JSON key mapping (option A, DECISIONS 2026-10-24): `process_json(key_mapping=)` from `rule_answers.json_key_mapping` (a reviewer's `map_json_keys` decision or a `schema_mapping` rule with `key_to_section`). Tests `test_json_route.py` |
 | 2026-10-23 | Lead | The `ValueError … is not in the subpath` on real documents was `primary_location` choosing each part's path from the alphabetically first copy of identical bytes in another test plan; `location_near` (dispatcher) now takes the copy beside the master. Test `backend/tests/unit/dispatcher/test_a2_copies.py`; end to end on a real report folder in `backend/tests/unit/indexing/test_route_tail.py` |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-23 | S6 | Twin through S2's `process_twin` (Lead ruling); own page map removed |

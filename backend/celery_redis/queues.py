@@ -57,7 +57,9 @@ POOLS: dict[Queue, Pool] = {
         Pool(Queue.CPU_PARSE, "prefork", 1, 6144, 6144, 3600, 3900, 2),
         Pool(Queue.TELEMETRY_STREAM, "prefork", 2, 2 * 3072, 3072, 3600, 3900, 2),
         # One video or photo batch at a time: two Whisper + decode children passed 4 GiB (2026-10-23).
-        Pool(Queue.MEDIA, "prefork", 1, 4096, 2048, 3600, 3900, 2),
+        # 6 GiB (user, 2026-10-24): a 10-minute part of a meeting peaks at 3.5 GiB in a one-off container and
+        # the live worker runs about 0.8 GiB above that; long recordings continue across checkpoints.
+        Pool(Queue.MEDIA, "prefork", 1, 6144, 2048, 3600, 3900, 2),
         Pool(Queue.VISION_BATCH, "threads", 2, 1024, None, 900, 1000, 5),
         Pool(Queue.EMBED, "threads", 2, 2048, None, 600, 660, 5),
         # One benchmark answer at a time, Answer Engine in process; prefork so the time limits are enforced.

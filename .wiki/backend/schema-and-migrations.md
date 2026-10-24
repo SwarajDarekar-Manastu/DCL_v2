@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S1 |
 | Spec | docs/architecture/05_storage_schema.md (all) |
-| Last updated | 2026-10-23 |
+| Last updated | 2026-10-24 |
 
 ## Purpose
 
@@ -83,6 +83,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-24 | Lead | Migration 0019 (additive): `rules.rule_type` CHECK gains `column_unit` and `source_choice` (`RuleType.COLUMN_UNIT`, `RuleType.SOURCE_CHOICE`; rules that act outside telemetry units, option A); the downgrade deletes the rows of the two new types first. The stack DB is at 0019 (read-only check of `alembic_version` and the CHECK on 2026-10-24) |
+| 2026-10-24 | Lead | Migrations 0016 to 0018 (all additive; 0016 and 0017 downgrades delete the rows of the new value). 0016: `assets.kind` CHECK gains `video_proxy` (`AssetKind.VIDEO_PROXY`, Route F working copy). 0017: `llm_calls.status` CHECK gains `cache_hit` (`LlmCallStatus.CACHE_HIT`; result-cache and vision-cache hits). 0018: trigger `document_status_to_nodes` (AFTER UPDATE OF status on `documents`) copies every status change to `document_nodes.doc_status` except PROCESSING, and the upgrade corrects stale rows (quarantined, failed, deleted and superseded documents had stayed searchable as ACTIVE). `Document.updated_at` gets ORM `onupdate=now()` (`backend/postgres/models/documents.py`) |
 | 2026-10-24 | Lead | Migration 0015 (applied on the stack DB 2026-10-24, pg_dump first): `rule_type` CHECK gains `channel_proposal`; `review_flags.proposed_by_rule_id` (FK rules, indexed). Additive: an older API keeps working against it. `RuleType.CHANNEL_PROPOSAL` |
 | 2026-10-23 | Lead | 0013 and 0014 applied on the live stack DB (pg_dump first; order: 0013, api redeploy, 0014, because contract models are `extra="forbid"`). 0014 also moves open orphan-file notes onto `documents.metadata_sources.assembler.notes`, deletes those flags and returns a document that was soft-flagged only for one to ACTIVE; downgrade does not restore the deleted flags |
 | 2026-10-23 | Lead | Migration 0014: CONFLICT evidence in `review_flags` gets `relation` (data only, no schema change; idempotent; downgrade restores the old two-sided shape); `backend/tests/schema/test_conflict_relation.py` |

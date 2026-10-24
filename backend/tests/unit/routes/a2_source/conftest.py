@@ -8,6 +8,7 @@ from backend.dispatcher.folder_context import FolderContext
 from backend.llm_engine.vision import schemas
 from backend.llm_engine.vision.service import VisionOutput
 from backend.postgres.enums import DocumentSourceRole
+from backend.tests.unit.routes.vision_readings import IMAGE_METADATA
 
 pytest.importorskip("pylatexenc")  # parse dependency group (arrives with docling)
 
@@ -88,6 +89,7 @@ class FakeVision:
                 ],
                 "annotations": [],
                 "confidence": 0.8,
+                "image_metadata": IMAGE_METADATA,
             }
         )
         return VisionOutput(reading, "gemini-3.8-flash", "digitize_plot.v1", "h", False)

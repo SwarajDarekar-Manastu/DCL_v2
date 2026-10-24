@@ -102,3 +102,53 @@ export function detail(flags: FlagView[] = [unitFlag()], overrides: Partial<Case
 		...overrides
 	};
 }
+
+/** A CONFLICT flag: two sources that disagree (the default), a failed check or a note. */
+export function conflictFlag(overrides: Partial<FlagView> = {}, relation: 'sources_disagree' | 'check_failed' | 'note' = 'sources_disagree'): FlagView {
+	return unitFlag({
+		flag_id: 'flag-conflict',
+		flag_type: 'CONFLICT',
+		severity: 'SOFT',
+		route: 'B',
+		anchor: {},
+		allowed_actions: ['choose_source', 'mark_superseded', 'accept_both', 'ignore'],
+		evidence: {
+			kind: 'conflict',
+			relation,
+			subject: 'test_plan_id',
+			a: { label: 'folder', value: 'TP-30', provenance: 'folder name Test Plan 30' },
+			b: relation === 'sources_disagree' ? { label: 'content', value: 'TP-31', provenance: 'page 1 header' } : null
+		},
+		suggested_resolution: null,
+		...overrides
+	});
+}
+
+/** A SOFT UNIT_AMBIGUITY on a number in a table or prose (not a telemetry channel). */
+export function factUnitFlag(overrides: Partial<FlagView> = {}): FlagView {
+	return unitFlag({
+		flag_id: 'flag-fact',
+		severity: 'SOFT',
+		route: 'A1',
+		anchor: { column: 'Pressure (A)', sheet: 'Results' },
+		allowed_actions: ['set_fact_unit'],
+		evidence: { kind: 'unit_fact', value_raw: '182.6', context: 'Peak chamber pressure, Test 01: Pressure (A)', candidate_units: [] },
+		suggested_resolution: null,
+		...overrides
+	});
+}
+
+/** SCHEMA_UNKNOWN on a JSON file. */
+export function jsonSchemaFlag(overrides: Partial<FlagView> = {}): FlagView {
+	return unitFlag({
+		flag_id: 'flag-json',
+		flag_type: 'SCHEMA_UNKNOWN',
+		severity: 'HARD',
+		route: 'A2',
+		anchor: {},
+		allowed_actions: ['map_json_keys', 'skip'],
+		evidence: { kind: 'json_schema', top_level_keys: ['summary', 'results'], missing_keys: [], flattened_sample: [], closest_schema: null },
+		suggested_resolution: null,
+		...overrides
+	});
+}

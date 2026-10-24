@@ -90,10 +90,10 @@ export const FLAG_GUIDE: Record<GuideKey, FlagGuide> = {
 		unsure: `Leave open: the file stays searchable. ${OPEN_HINT}`
 	},
 	CONFLICT_NOTE: {
-		what: 'The system had to guess how to build one document from several files, for example LaTeX files that no main file includes.',
-		decide: 'Check that the grouping looks sensible.',
+		what: 'The system noted something to confirm about this file, for example two test plans named in its folder path, or LaTeX files grouped without a main file. The note above says which.',
+		decide: 'Check that the note is right for this file.',
 		choices: [
-			{ action: 'accept_both', text: 'Accept as it is if the grouping is fine.' },
+			{ action: 'accept_both', text: 'Accept as it is if the note is right.' },
 			{ action: 'ignore', text: 'Ignore if it does not matter.' }
 		],
 		unsure: 'Leave open: the file is indexed either way and nothing is blocked.'

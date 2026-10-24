@@ -10,7 +10,7 @@ import wizardColumns from '$asset/rules-guide/7-wizard-columns.png';
 import wizardFiles from '$asset/rules-guide/6-wizard-files.png';
 
 export const GUIDE_TITLE = 'How rules work';
-export const GUIDE_INTRO = 'A rule proposes an answer once. A person checks and applies it on each file.';
+export const GUIDE_INTRO = 'A rule gives an answer once. Test-data units are proposed for a person to apply; every other kind acts when you save it.';
 
 export interface GuideImage {
 	src: string;
@@ -35,9 +35,9 @@ export const GUIDE_STEPS: GuideStep[] = [
 		summary:
 			'Many halted files ask the same question: same rig, same columns, no unit. A rule says what that folder\'s columns probably are. Every waiting file in the folder shows your answer, and so does every matching file that arrives later.',
 		points: [
-			'A rule never approves a file. A person opens each file, checks the numbers, and applies the proposal or skips the file.',
+			'A unit rule never approves a file. A person opens each file, checks the numbers, and applies the proposal or skips the file.',
 			'The queue shows how many files wait in a folder ("unblocks 12"). That is how many one rule can fill in.',
-			'Today a rule can propose the unit of each column of a test-data file.'
+			'A test-data unit is only proposed; a person still applies it. The other kinds of rule act when saved: see "Other kinds of rules" at the end.'
 		],
 		get: 'You answer once. Every matching file starts with your answer filled in.',
 		images: [{ src: queue, alt: 'The review queue, each case with the number of files it unblocks', caption: 'The queue, biggest first. Each case says how many files it unblocks.' }]
@@ -92,12 +92,13 @@ export const GUIDE_STEPS: GuideStep[] = [
 	},
 	{
 		id: 'after',
-		title: 'Saved rules and "Stop proposing"',
+		title: 'Saved rules, "Stop proposing" and "Switch off"',
 		summary: 'The rule appears under "Saved rules" with how many files it reached and what happened to them.',
 		points: [
 			'"12 proposed · 3 decided · 9 waiting" tells you how far it has got.',
 			'Simulate on a saved rule shows how many files it reaches now. Nothing changes.',
-			'"Stop proposing" switches a rule off for new proposals. It never touches a file a person has already approved.',
+			'"Stop proposing" switches a unit proposal off for new proposals. It never touches a file a person has already approved.',
+			'"Switch off" on a rule that acts opens the flags it answered again and rebuilds those files.',
 			'A rule is never edited. To change one, save a new one and stop the old one.',
 			'Export YAML saves the active rules, so a rebuilt system starts with the team\'s knowledge.'
 		],
@@ -134,6 +135,20 @@ export const GUIDE_STEPS: GuideStep[] = [
 		]
 	},
 	{
+		id: 'from-decision',
+		title: 'Make a rule from a decision you just made',
+		summary:
+			'After you resolve flags in the queue, a box under them offers to save the same answer as a rule for the folder. It is already filled in from what you decided and from the flag.',
+		points: [
+			'It is offered after: ignoring or accepting a conflict, picking a source, setting the unit of a table or prose number, and mapping the keys of a JSON file.',
+			'Edit the fields, choose the whole folder or a file name pattern, and read "N open flags would be answered" before you save.',
+			'Saving answers the matching open flags in other files and rebuilds those files. The file you just decided is not touched again.',
+			'Test-data units are not offered here. Use "Also propose to" under the table.'
+		],
+		get: 'The same call is made once for the whole folder, and you see how many flags it reaches first.',
+		images: []
+	},
+	{
 		id: 'priority',
 		title: 'When two rules match, the closest one wins',
 		summary: 'When two rules both match a file, the more specific one is shown. Most specific first:',
@@ -149,22 +164,30 @@ export const GUIDE_STEPS: GuideStep[] = [
 	{
 		id: 'advanced',
 		title: 'Other kinds of rules (advanced)',
-		summary: 'At the bottom of this page, "Advanced: write a rule as JSON" can store other kinds of rule.',
+		summary: 'At the bottom of this page, "Advanced: write a rule as JSON" saves the other kinds of rule.',
 		points: [
-			'Only a unit proposal changes anything today: it fills in files. Schema mappings, supersessions, ignore patterns and origin overrides are saved and listed, marked "stored only". No file changes because of them yet.',
-			'A file\'s approved units are not a rule you write; they are made when a person applies a file.',
-			'The form explains each type and fills an example the server accepts.'
+			'A unit proposal fills in files for a person to apply. Every other kind acts when you save it: it answers the open flags it matches the way you would, or changes the files it matches, and those files are rebuilt.',
+			'These kinds answer flags: ignore_pattern (accept one kind of finding), column_unit (the unit of a table or prose number), source_choice (which side of a disagreement wins), schema_mapping (what columns or JSON keys mean).',
+			'These kinds change files: origin_override (internal or external) and supersession (one document replaces another).',
+			'A flag a person reopened is never answered by a rule again, and a test-data unit is never answered by a rule: a person approves it.',
+			'"Preview" says how many open flags a rule would answer before you save it. "Switch off" opens the flags it answered again and rebuilds those files.',
+			'A file\'s approved units are not a rule you write; they are made when a person applies a file.'
 		],
-		get: 'You know which rules act and which only record a decision.',
+		get: 'You know which rules answer for you, which change files, and which only propose.',
 		images: []
 	}
 ];
 
-export type RuleEffect = 'proposes' | 'decision' | 'stored';
+/**
+ * proposes: fills in the units of test-data files for a person to approve;
+ * decision: a person's approval of one file;
+ * resolves: answers the open flags it matches the way a person would, and the files are rebuilt;
+ * applies: changes the documents it matches at their rebuild.
+ */
+export type RuleEffect = 'proposes' | 'decision' | 'resolves' | 'applies';
 
 export interface RuleTypeHelp {
 	what: string;
-	/** proposes: fills in files for a person to approve; decision: a person's approval of one file; stored: nothing reads it yet */
 	effect: RuleEffect;
 	example: Record<string, unknown>;
 }
@@ -191,24 +214,34 @@ export const RULE_TYPE_HELP: Record<RuleType, RuleTypeHelp> = {
 		example: CHANNELS_EXAMPLE
 	},
 	schema_mapping: {
-		effect: 'stored',
-		what: 'Says what each column of a table or array means.',
-		example: { columns: [{ index: 0, canonical_name: 't_rel_ms', unit: 'ms', quantity: 'time', is_time: true }] }
+		effect: 'resolves',
+		what: 'Says which section each JSON key belongs to (key_to_section) or what each table column means (columns). Answers the open flags it matches the way you would and rebuilds those files.',
+		example: { key_to_section: { summary: 'Summary', results: 'Test results' } }
 	},
 	supersession: {
-		effect: 'stored',
-		what: 'Says that one document replaces another (the older one leaves default search).',
+		effect: 'applies',
+		what: 'Says that the files its scope matches replace one older document (the older one leaves default search). Saving rebuilds those files.',
 		example: { superseded_doc_id: '00000000-0000-0000-0000-000000000000', reason: 'Replaced by the newer issue' }
 	},
 	ignore_pattern: {
-		effect: 'stored',
-		what: 'Skips the files its scope matches, for example scratch exports. Give a reason.',
-		example: { reason: 'Scratch export, not part of the test record' }
+		effect: 'resolves',
+		what: 'Accepts one kind of finding in its scope: conflicts are ignored, low-confidence readings keep the model\'s answer. Needs a flag_type and a reason; answers the open flags it matches and rebuilds those files.',
+		example: { reason: 'Known rig offset, accepted in this folder', flag_type: 'CONFLICT', relation: 'check_failed', subject_contains: 'limit' }
 	},
 	origin_override: {
-		effect: 'stored',
-		what: 'Marks the files its scope matches as internal or external, which changes how far they are trusted.',
+		effect: 'applies',
+		what: 'Marks the files its scope matches as internal or external, which changes how far they are trusted. They change at their next rebuild, which saving starts.',
 		example: { source_origin: 'external_kept', trust_tier: 4 }
+	},
+	column_unit: {
+		effect: 'resolves',
+		what: 'Sets the unit of a table or prose number by its column or label name (unit null keeps it as text). Answers the open flags it matches the way you would and rebuilds those files, never for test-data channels.',
+		example: { column: 'Pressure*', unit: 'psi' }
+	},
+	source_choice: {
+		effect: 'resolves',
+		what: 'Says which side of a two-sided disagreement wins, by its subject and the label of the side to prefer (such as folder or content). Answers the open flags it matches the way you would and rebuilds those files.',
+		example: { subject: 'test_plan_id', prefer: 'content' }
 	}
 };
 

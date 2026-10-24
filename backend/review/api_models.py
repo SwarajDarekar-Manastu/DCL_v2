@@ -266,9 +266,14 @@ class OpenChannel(_Model):
 
 
 class RulePreview(RuleSimulation):
-    effect: Literal["proposes", "stored"] = Field(
-        description="proposes: waiting files show its units for a person to approve; "
-        "stored: kept and listed, no route reads this kind yet"
+    effect: Literal["proposes", "resolves", "applies", "stored"] = Field(
+        description="proposes: waiting files show its units for a person to approve (telemetry channels); "
+        "resolves: it answers the matching open flags the way a person would and the files are rebuilt; "
+        "applies: it changes the matched documents themselves (origin, supersession) at their rebuild; "
+        "stored: kept and listed, nothing reads it"
+    )
+    resolves_flags: int = Field(
+        default=0, description="open flags of the matched files this rule would answer"
     )
     open_channels: list[OpenChannel] = Field(description="the columns the matched files wait for a unit on")
     problem: str | None = Field(description="why the body cannot be saved, when it cannot")
@@ -276,6 +281,8 @@ class RulePreview(RuleSimulation):
 
 class RuleCreated(RuleView):
     proposed_files: int = Field(description="files that now show this rule's units as a proposal")
+    resolved_flags: int = Field(default=0, description="open flags this rule answered when it was saved")
+    rebuilt_doc_ids: list[uuid.UUID] = Field(default=[], description="files rebuilt or resumed to apply it")
 
 
 class FolderChoice(_Model):

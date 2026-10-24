@@ -248,7 +248,7 @@ def index_document(
     enriched: list[tuple[IndexNode, EnrichedParent]] = []
     if not cloud_allowed:
         warnings.append("cloud processing not allowed for this root: no enrichment")
-    else:
+    elif doc.route != Route.B:  # manual 03 §6: Route B sends nothing to a model
         context = document_context(
             fields.title, str(fields.doc_kind), fields.source_origin, [fields.test_plan_id or ""]
         )

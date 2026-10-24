@@ -6,6 +6,12 @@ classification, a circuit breaker, bounded concurrency per model, an idempotency
 an inline-size guard, the daily budget and gateway quota, and one llm_calls record per call. Capabilities the
 probe has not confirmed (gemini_capabilities.json) fall back to a plain call or raise CapabilityUnavailable.
 
+Result cache (plan task 7): with `result_cache` (a store with `get`/`put`, `result_cache_store()` in the
+workers) every pipeline result is saved the moment a valid reply arrives, keyed by model, prompt version and
+the whole request body, so a re-run after an outage or a failed save reads it instead of paying again; a hit
+is a `cache_hit` row in `llm_calls`. Interactive purposes (`engine.`, `console.`, `benchmark.`) are never
+cached.
+
 By default every call is written to `llm_calls` through S1's `db_ledger` on the stack database and priced from
 pipeline_config `models.prices` (StackLedger). `ledger=None` turns recording off (unit tests); an explicit
 `prices` mapping replaces the configured prices.
@@ -13,6 +19,7 @@ pipeline_config `models.prices` (StackLedger). `ledger=None` turns recording off
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import logging
 import os
@@ -173,6 +180,22 @@ class _Call:
 
 
 PRICE_REFRESH_S = 300.0
+RESULT_CACHE_PREFIX = "_result_cache"
+UNCACHED_PURPOSES = ("engine.", "console.", "benchmark.")
+
+
+def result_cache_store(settings: Settings | None = None):
+    """The production result cache: S1's BucketStore on dcl-cir (MinIO settings from the env contract)."""
+    from backend.storage.minio import CIR, BucketStore, client_from_settings
+
+    return BucketStore(client_from_settings(settings or get_settings()), CIR)
+
+
+def result_key(call: "_Call") -> str:
+    material = {"model": call.req.model, "prompt_version": call.context.prompt_version, "body": call.body}
+    digest = hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+    version = call.context.prompt_version or "none"
+    return f"{RESULT_CACHE_PREFIX}/{call.req.model}/{version}/{digest}.json"
 
 
 class StackLedger:
@@ -251,6 +274,7 @@ class GeminiClient:
         breaker: CircuitBreaker | None = None,
         transport: httpx.AsyncBaseTransport | httpx.BaseTransport | None = None,
         sleep: Callable[[float], Any] | None = None,
+        result_cache: Any = None,
     ):
         for name in FORBIDDEN_NAMES:
             if name in os.environ:
@@ -273,6 +297,7 @@ class GeminiClient:
         self._limits = _ModelLimits(max_concurrency_per_model)
         self.breaker = breaker or CircuitBreaker()
         self._transport, self._sleep = transport, sleep
+        self._result_cache = result_cache
         self._async_http: httpx.AsyncClient | None = None
         self._sync_http: httpx.Client | None = None
         self.quota_remaining: int | None = None
@@ -327,14 +352,6 @@ class GeminiClient:
         stream: bool,
         **options,
     ) -> _Call:
-        try:
-            if self._budget is not None:
-                self._budget.check()
-            if self.quota_remaining is not None and self.quota_remaining <= 0:
-                raise BudgetExhausted("the gateway reports its daily quota as used up")
-        except BudgetExhausted:
-            METRICS.llm_budget_exhausted_total.add(1, {"model": model})
-            raise
         include_thoughts = options.pop("include_thoughts", None)
         req = GenerateRequest(
             model=model,
@@ -363,7 +380,14 @@ class GeminiClient:
             return self._prices
         return self._ledger.prices() if isinstance(self._ledger, StackLedger) else {}
 
-    def _record(self, call: _Call, usage: Usage, request_id: str | None, error: GeminiError | None) -> int:
+    def _record(
+        self,
+        call: _Call,
+        usage: Usage,
+        request_id: str | None,
+        error: GeminiError | None,
+        status: str | None = None,
+    ) -> int:
         latency_ms = int((time.monotonic() - call.started) * 1000)
         if self._budget is not None:
             self._budget.record(usage.total_tokens)
@@ -381,7 +405,7 @@ class GeminiClient:
             cached_tokens=usage.cached_tokens,
             latency_ms=latency_ms,
             cost_estimate=price.cost(usage) if price else None,
-            status="error" if error else "ok",
+            status=status or ("error" if error else "ok"),
             error=str(error) if error else None,
             request_id=request_id or call.idempotency_key,
             usage_estimated=usage.estimated,
@@ -513,6 +537,7 @@ class GeminiClient:
         except GeminiError as exc:
             self._record(call, usage, request_id, exc)
             raise
+        self._save(call, parsed, usage, request_id)
         latency_ms = self._record(call, usage, request_id, None)
         return GenerateResult(
             text=parsed.text,
@@ -526,6 +551,71 @@ class GeminiClient:
             thoughts=parsed.thoughts,
             quota=parsed.quota,
             grounding=parsed.grounding,
+        )
+
+    def record_cache_hit(self, model: str, context: CallContext) -> None:
+        """The caller's own cache answered (vision): a ``cache_hit`` ledger row, no request, no cost."""
+        call = _Call(GenerateRequest(model=model, messages=()), {}, "", context, time.monotonic(), "")
+        self._record(call, Usage(), None, None, status="cache_hit")
+
+    def _check_budget(self, model: str) -> None:
+        """After the result cache: a saved answer is free, so it is served even with the budget used up."""
+        try:
+            if self._budget is not None:
+                self._budget.check()
+            if self.quota_remaining is not None and self.quota_remaining <= 0:
+                raise BudgetExhausted("the gateway reports its daily quota as used up")
+        except BudgetExhausted:
+            METRICS.llm_budget_exhausted_total.add(1, {"model": model})
+            raise
+
+    def _cacheable(self, call: _Call) -> bool:
+        return (
+            self._result_cache is not None
+            and not call.req.tools
+            and not call.context.purpose.startswith(UNCACHED_PURPOSES)
+        )
+
+    def _save(self, call: _Call, parsed: Parsed, usage: Usage, request_id: str | None) -> None:
+        if not self._cacheable(call):
+            return
+        entry = {
+            "text": parsed.text,
+            "model": parsed.model or call.req.model,
+            "finish_reason": parsed.finish_reason,
+            "request_id": request_id,
+            "usage": {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens},
+            "saved_at": datetime.now(UTC).isoformat(),
+        }
+        try:
+            self._result_cache.put(result_key(call), json.dumps(entry, ensure_ascii=False).encode("utf-8"))
+        except Exception:  # noqa: BLE001 - a failed save must never lose the answer in hand
+            log.exception("result cache save failed for purpose=%s", call.context.purpose)
+
+    def _cached(self, call: _Call) -> GenerateResult | None:
+        if not self._cacheable(call):
+            return None
+        try:
+            raw = self._result_cache.get(result_key(call))
+        except Exception:  # noqa: BLE001 - an unreachable cache means a normal call
+            log.exception("result cache read failed for purpose=%s", call.context.purpose)
+            return None
+        if raw is None:
+            return None
+        entry = json.loads(raw)
+        structured = (
+            parse_structured(entry["text"], call.req.schema, None) if call.req.schema is not None else None
+        )
+        latency_ms = self._record(call, Usage(), entry.get("request_id"), None, status="cache_hit")
+        return GenerateResult(
+            text=entry["text"],
+            parsed=structured,
+            tool_calls=(),
+            usage=Usage(),
+            model=entry["model"],
+            finish_reason=entry.get("finish_reason"),
+            request_id=entry.get("request_id") or call.idempotency_key,
+            latency_ms=latency_ms,
         )
 
     def _finish(self, call: _Call, response: httpx.Response) -> GenerateResult:
@@ -554,6 +644,9 @@ class GeminiClient:
         already-sanitized query: the model writes the Google queries from the whole prompt; they come
         back in result.grounding.queries)."""
         call = self._prepare(model, messages, context, schema, False, **options)
+        if (hit := self._cached(call)) is not None:
+            return hit
+        self._check_budget(model)
         async with self._limits.async_(model):
             response = await self._apost(call)
         return self._finish(call, response)
@@ -568,6 +661,9 @@ class GeminiClient:
         **options: Any,
     ) -> GenerateResult:
         call = self._prepare(model, messages, context, schema, False, **options)
+        if (hit := self._cached(call)) is not None:
+            return hit
+        self._check_budget(model)
         with self._limits.sync(model):
             response = self._post(call)
         return self._finish(call, response)
@@ -581,6 +677,7 @@ class GeminiClient:
             yield TextDelta(result.text)
             yield StreamDone(result)
             return
+        self._check_budget(model)
         call = self._prepare(model, messages, context, None, True, **options)
         state = StreamState.new()
         async with self._limits.async_(model):

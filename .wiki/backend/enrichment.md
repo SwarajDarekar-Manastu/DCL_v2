@@ -6,7 +6,7 @@
 | Status | in-progress |
 | Owner session | S2 |
 | Spec | docs/architecture/04_metadata_enrichment_chunking_embedding.md §1–§3, §8 |
-| Last updated | 2026-10-22 |
+| Last updated | 2026-10-24 |
 
 ## Purpose
 
@@ -18,7 +18,7 @@ Code:
 - `backend/llm_engine/enrichment/extract.py` (`ParentEnrichment`, `enrich_parent`, `ground`, `Drops`)
 - `backend/llm_engine/enrichment/entities.py` (`canonical_key`, `AliasIndex`, `index_from_seed`, `index_from_db`, `normalize`)
 - `backend/llm_engine/enrichment/numeric_facts.py` (`parse_number`, `validate_fact`, `fact_source`, `sanity_bounds`)
-- `backend/llm_engine/prompts/enrichment/parent.v1.md`
+- `backend/llm_engine/prompts/enrichment/parent.v2.md` (the version in use, `PROMPT_VERSION = "parent.v2"` in `extract.py`; `parent.v1.md` stays in the folder)
 
 Tests and fixtures:
 - `backend/tests/unit/llm_engine/enrichment/`
@@ -30,6 +30,9 @@ Provides:
 - `normalize(pairs, node_texts, index, doc_id=, languages=) -> EntityDecisions(new_entities, new_aliases, mentions)` for S1's commit; entity refs are an `entity_id` or `(type, canonical_key)` of a new entity
 - `validate_fact(extract, node_ref=, node_text=, locale=, source=, ranges=) -> FactDecision | DroppedFact` for `numeric_facts`
 - document aggregation (`documents.enrichment`, entity refs, `search_text`) and question proxies are built in `backend/indexing/index_document.py`
+- Route B documents are not enriched: `index_document` skips the `enrich_parent` step when `doc.route == Route.B` (manual 03 §6; Markdown, requirements, `.bat`, notebook text cells and unparsable `.py` text windows went to Gemini before). Metadata comes from the parse and ingestion only
+- result cache: the `GeminiClient` the indexer builds (`default_indexer` in `backend/indexing/commit.py`) has `result_cache_store()`, so a re-run of `enrich_parent` with the same model, prompt version and request body reads `dcl-cir/_result_cache/…` instead of calling the gateway and writes an `llm_calls` row with status `cache_hit` (`backend/llm_engine/gemini_client.py`; `engine.`, `console.` and `benchmark.` purposes are never cached)
+- prompt `parent.v2` (user, quality 2026-10-24; summaries verbatim on gemini-3.8-flash): the summary is in the section's own words with names, identifiers, numbers and units copied verbatim; the `Document:` line is context for understanding the section, never a source (an entity, test id or number only in that line is left out: it made Route F's drop rate 100 %); test and standard ids must appear in the section text; `questions_answered` always has three to five questions, also for a short section or a file description. The prompt version is part of the result-cache key, so every parent is paid once again after this change
 - `seed_rows()` for S1's `seed-entities`; `normalize(..., source=, decisions=)` also resolves route regex mentions
 
 Consumes:
@@ -59,6 +62,8 @@ Keep this list exact. A plan sheet copies it and adds only what the task truly n
 
 | Date | Session | Change |
 |------|---------|--------|
+| 2026-10-24 | Lead | Route B skipped by the shared enrichment step; result cache in `GeminiClient` (DECISIONS 2026-10-24) |
+| 2026-10-24 | Lead | Prompt `parent.v2`: summary verbatim, the Document line is context and not a source, three to five questions always (DECISIONS 2026-10-24, quality). Test `test_extract.py` |
 | 2026-10-23 | S2 | On-the-fly translation (file 04 §10, `enrichment_only`): `translate.py` `translate_passages` (one Gemini call for the uncached passages, prompt `enrichment/translate.v1`, cache `dcl-cir/_translation_cache/…` by content hash, `TranslationRefused` without cloud permission); `POST /v1/translate {doc_id, page_no | anchor, target_language}` in `backend/api/engine.py` for the viewer's Translate toggle; 2 unit + 2 DB tests |
 | 2026-10-21 | Lead | Map created from the architecture manual |
 | 2026-10-22 | S2 | Sanity range by origin and role (S5 rule); `seed_rows()`; alias index keeps display names |

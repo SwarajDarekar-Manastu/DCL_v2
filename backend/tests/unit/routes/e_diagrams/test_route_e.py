@@ -22,6 +22,7 @@ from backend.llm_engine.vision import schemas  # noqa: E402
 from backend.llm_engine.vision.service import VisionOutput  # noqa: E402
 from backend.postgres.enums import DocKind, FlagSeverity, FlagType, NodeType  # noqa: E402
 from backend.routes.e_diagrams.route import Stores, can_handle, process_diagram  # noqa: E402
+from backend.tests.unit.routes.vision_readings import IMAGE_METADATA  # noqa: E402
 
 SAMPLES = Path(__file__).resolve().parents[5] / "data" / "samples"
 WEB = SAMPLES / "web"
@@ -95,6 +96,7 @@ class FakeVision:
                 "components": [{"tag": t, "type": "valve", "label": None} for t in self.tags],
                 "connections": [],
                 "notes": None,
+                "image_metadata": IMAGE_METADATA,
             }
         )
         return VisionOutput(reading, "gemini-3.8-flash", "read_schematic.v1", "h", False)
@@ -165,7 +167,12 @@ def test_component_nodes_carry_their_neighbourhood_and_tags():
     assert valve.content.endswith(". Part of Propellant feed")
     assert valve.page_no == 1 and valve.line_start == 12
     mentions = {(m.kind, m.surface) for m in processed.mentions}
-    assert {("tag", "SV-1"), ("tag", "F-101"), ("tag", "PT-101"), ("quantity", "0–250 bar")} <= mentions
+    assert {
+        ("sensor_tag", "SV-1"),
+        ("sensor_tag", "F-101"),
+        ("sensor_tag", "PT-101"),
+        ("quantity", "0–250 bar"),
+    } <= mentions
     summary = processed.nodes[0]
     assert "Tank T-1 → Filter F-101" in summary.content and "Notes: All lines 1/4 inch" in summary.content
 
@@ -181,7 +188,8 @@ def test_render_and_read_schematic_cross_check(tmp_path):
     assert processed.nodes[0].asset_ref == "render:1"
     conflict = next(f for f in processed.flags if f.flag_type == FlagType.CONFLICT and f.anchor.page == 1)
     assert conflict.severity == FlagSeverity.SOFT and conflict.evidence.b.value == "SV-9"
-    assert any(n.node_type == NodeType.FIGURE and n.source == "vlm" for n in processed.nodes)
+    (reading, *_) = [n for n in processed.nodes if n.node_type == NodeType.FIGURE and n.source == "vlm"]
+    assert reading.metadata["structured_reading"]["image_metadata"]["subject"] == "test image"
 
 
 def test_no_vision_without_cloud_permission():
@@ -208,6 +216,14 @@ def test_mostly_unlabeled_edges_mark_the_graph_incomplete():
     assert subjects == ["diagram graph incomplete: unlabeled edges"]
     assert processed.flags[0].evidence.relation == "check_failed"
     assert processed.flags[0].severity == FlagSeverity.SOFT
+    state = processed.document.catalog["completeness"]  # kept as metadata, never a halt
+    assert (state["incomplete"], state["unlabeled_edges"], state["reasons"]) == (
+        True,
+        [5, 5],
+        ["5 of 5 unlabeled edges"],
+    )
+    assert "Diagram incomplete: 5 of 5 unlabeled edges" in processed.nodes[0].content
+    assert not processed.has_hard_flags
 
 
 def test_xsd_sections_and_enumerations():
@@ -376,7 +392,7 @@ def test_thruster_config_rev_c():
 
 def test_web_samples_line_tags_svg_visio_dxf():
     pid = _run("pid_1.drawio", _sample(WEB / "drawio" / "pid_1.drawio"))
-    assert {"N-OZ-301", "N-WC-303", "N-RO-302"} <= {m.surface for m in pid.mentions if m.kind == "tag"}
+    assert {"N-OZ-301", "N-WC-303", "N-RO-302"} <= {m.surface for m in pid.mentions if m.kind == "sensor_tag"}
 
     svg = _run("V-2.svg", _sample(WEB / "svg" / "V-2_rocket_diagram_English_labels.svg"))
     labels = [n["label"] for n in svg.document.catalog["nodes"]]

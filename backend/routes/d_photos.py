@@ -18,6 +18,7 @@ cannot determine the component; SENSITIVE_CONTENT (HARD) when visible text carri
 """
 
 import io
+import re
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -203,7 +204,10 @@ def read_photo(
                     evidence=LowConfidenceEvidence(crops=[ExtractionCrop(crop_uri="photo", confidence=top)]),
                 )
             )
-        marking = next((m for m in EXPORT_MARKINGS for t in reading.visible_text if m in t.upper()), None)
+        marking = next(
+            (m for m in EXPORT_MARKINGS for t in reading.visible_text if re.search(rf"\b{m}\b", t.upper())),
+            None,
+        )  # whole words, as Route A1: "SANITARY FITTING" carries no ITAR marking
         if marking:
             flags.append(
                 Flag(

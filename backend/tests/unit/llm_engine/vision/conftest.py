@@ -36,6 +36,10 @@ class FakeClient:
         self.image_input = image_input
         self.calls: list[dict] = []
         self.contexts: list[CallContext] = []
+        self.hits: list[tuple[str, CallContext]] = []
+
+    def record_cache_hit(self, model: str, context: CallContext) -> None:
+        self.hits.append((model, context))
 
     def generate_sync(self, *, model: str, messages: list[Message], context: CallContext, schema, **options):
         if not self.image_input and any(isinstance(p, Image) for m in messages for p in m.parts):

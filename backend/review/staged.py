@@ -19,6 +19,7 @@ from backend.postgres import pipeline_config
 from backend.postgres.enums import DocumentStatus, FlagSeverity, FlagStatus
 from backend.postgres.models import Document, ReviewFlag
 from backend.review.flags import upsert_document_flag
+from backend.review.rule_answers import answer_flags
 from backend.storage.minio import BucketStore, parse_uri
 
 
@@ -62,13 +63,21 @@ def gate(
     stale: Callable[[ReviewFlag], bool] | None = None,
     now: datetime | None = None,
 ) -> GateResult:
-    """Record the flags and halt on HARD. The caller commits; a clean document goes to the commit path.
+    """Record the flags and halt on an open HARD one. The caller commits; a clean document goes to the commit
+    path. A HARD flag a person decided (resolved, approved) no longer halts its document (file 06 §7: the
+    resumed gate passes); one the pipeline closed and the route raises again is open again. An open flag an
+    active rule answers is resolved by that rule (``rule_answers``) before the decision is taken.
 
     ``stale`` names the route's own flags: an open one the route did not raise again this time (a rule now
     answers it) becomes ``AUTO_RESOLVED``. Flags of other origins (dispatcher, humans) are left alone."""
     doc = apply_severity_policy(session, doc)
+    rows = []
     for flag in doc.flags:
-        upsert_document_flag(session, document.doc_id, flag, str(doc.route))
+        row = upsert_document_flag(session, document.doc_id, flag, str(doc.route))
+        if row.status == FlagStatus.AUTO_RESOLVED and row.resolved_by == "pipeline":
+            row.status, row.resolved_by, row.resolved_at = FlagStatus.OPEN, None, None
+        rows.append(row)
+    answer_flags(session, document, rows)  # a rule answers a flag the way a person would (rule_answers.py)
     if stale is not None:
         current = {flag.fingerprint for flag in doc.flags}
         for row in session.scalars(
@@ -80,6 +89,12 @@ def gate(
                 row.status = FlagStatus.AUTO_RESOLVED
                 row.resolved_by = "pipeline"
                 row.resolved_at = now or datetime.now(UTC)
+    decided = {
+        f.fingerprint
+        for f, r in zip(doc.flags, rows, strict=True)
+        if f.severity == FlagSeverity.HARD and r.status not in OPEN_STATUSES
+    }
+    doc = doc.model_copy(update={"flags": [f for f in doc.flags if f.fingerprint not in decided]})
     hard = sum(flag.severity == FlagSeverity.HARD for flag in doc.flags)
     soft = len(doc.flags) - hard
     if not hard:
