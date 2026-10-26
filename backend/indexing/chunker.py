@@ -440,20 +440,23 @@ SECTION_MEMBERS = frozenset({NodeType.TABLE, NodeType.FIGURE})
 
 def _attach_to_sections(nodes: list[IndexNode]) -> None:
     """A table or figure the route left without a parent belongs to the section it sits in: the section part
-    (parent) with the same breadcrumb before it in reading order, else the first one after it. The writer then
-    gets the section's text with a table hit, and the section can speak for its tables and figures."""
-    last: dict[str, str] = {}
-    waiting: dict[str, list[IndexNode]] = {}
-    for node in nodes:
+    (parent) with its breadcrumb before it in reading order, else the first one after it. A section that holds
+    only tables and figures ("8.2 Test 01") has no part, so the nearest enclosing section with text takes them
+    ("8 Observations", else the document's top). The writer then gets the section's text with a table hit."""
+    parts: dict[str, list[tuple[int, str]]] = {}
+    for position, node in enumerate(nodes):
         if node.node_type is NodeType.PARENT:
-            last[node.breadcrumb] = node.ref
-            for member in waiting.pop(node.breadcrumb, []):
-                member.parent_ref = node.ref
-        elif node.node_type in SECTION_MEMBERS and node.parent_ref is None:
-            if node.breadcrumb in last:
-                node.parent_ref = last[node.breadcrumb]
-            else:
-                waiting.setdefault(node.breadcrumb, []).append(node)
+            parts.setdefault(node.breadcrumb, []).append((position, node.ref))
+    for position, node in enumerate(nodes):
+        if node.node_type not in SECTION_MEMBERS or node.parent_ref is not None:
+            continue
+        crumbs = [c.strip() for c in node.breadcrumb.split(BREADCRUMB_SEPARATOR.strip())]
+        for depth in range(len(crumbs), 0, -1):
+            found = parts.get(BREADCRUMB_SEPARATOR.join(crumbs[:depth]))
+            if found:
+                before = [ref for at, ref in found if at < position]
+                node.parent_ref = before[-1] if before else found[0][1]
+                break
 
 
 def _table_nodes(

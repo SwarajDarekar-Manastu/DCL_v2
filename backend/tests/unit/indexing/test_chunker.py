@@ -341,3 +341,16 @@ def test_tables_and_figures_belong_to_the_section_they_sit_in(kit):
     by_ref = {n.ref: n for n in nodes}
     assert by_ref["t1"].parent_ref == parent["Test Report 37 › 3 Results"]  # the section before it
     assert by_ref["fig0"].parent_ref == parent[other]  # it opens its section: the section after it
+
+
+def test_a_section_with_only_tables_gives_them_to_its_nearest_enclosing_section(kit):
+    results = "Test Report 37 › 8 Observations"
+    doc = kit.document(
+        kit.node("s8", "Observations of every test.", 0, breadcrumb=results),
+        kit.node(
+            "t1", TABLE_HTML, 1, node_type=NodeType.TABLE, page_no=11, breadcrumb=f"{results} › 8.2 Test 01"
+        ),
+    )
+    nodes = chunk_document(doc, count_tokens=kit.words)
+    section = next(n.ref for n in nodes if n.node_type is NodeType.PARENT)
+    assert next(n for n in nodes if n.ref == "t1").parent_ref == section
