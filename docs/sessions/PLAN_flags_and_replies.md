@@ -95,6 +95,35 @@ Not doing: moving to ADK. It sends the same schema we already send.
 
 ### Step B: units read with a confidence score (one shared reader)
 
+**The pattern behind the unit flags (user, 26 Oct: fix the pattern, not the cases).** Every wrong unit flag
+comes from one of four patterns:
+
+1. The check acts before it knows what the column is. It asks "numeric?" and then "unit?", never "what
+   does this column measure?". So coefficients (C_F), rating scales (1-5), dates and file lists are
+   flagged. The video, photo and JSON problems are the same pattern.
+2. A symbol is trusted without checking it against the meaning. The unit library accepts almost any short
+   token: `C` is coulomb, `S × L` is siemens × litre.
+3. The unit is looked for in one place only, the header brackets.
+4. Each route has its own reader and its own exception lists (`DIMENSIONLESS_HEADERS`, `ID_HEADER`,
+   `UNIT_HINT`, `UNIT_IN_HEADER`), so a gap fixed in one stays open in the others.
+
+The fix follows those patterns, not the cases:
+
+- **Identify first.** One vocabulary in `backend/common/units.py` reads what a column is from its name. It
+  is either a physical quantity (the existing `Quantity` list: pressure, temperature, force…), a unitless
+  quantity (ratio, coefficient, efficiency, percentage, a scale such as "(1-5)"), or not a measurement
+  (date, ID, count, score, file or part reference). It replaces the per-route lists.
+- **Then look everywhere, and accept only what agrees.** Header brackets, header words, the row label, a
+  units row, and the same column name in other tables. A unit counts only when its dimension fits what
+  the column measures. A symbol that fits only through the column's meaning (`C` under "temperature") is
+  read that way.
+- **The flag follows from it.** A physical quantity with no unit at or above the threshold is flagged with
+  the best guess filled in. A unitless quantity or a non-measurement is never flagged. A column whose name
+  says nothing is flagged with "no unit needed" offered first.
+- **Same-name lookup scope.** For tables it searches every table, not only the same campaign: Injector 10's
+  names are stated with units only in the TP07 and TP12 Setup sheets. A unit from another table is used only
+  when every table that states that column name agrees.
+
 One function in `backend/common/units.py` reads a column (or a row label) and returns a unit, a confidence
 and the reason. C tables, the C series adapters, A1 tables and A2 tables all use it, in place of the four
 readers they have today.

@@ -3546,7 +3546,7 @@ export interface components {
         };
         /**
          * SetFactUnit
-         * @description UNIT_AMBIGUITY on a number in prose or a table: a unit, or keep it as text.
+         * @description UNIT_AMBIGUITY on a number in prose or a table: a unit, or "no unit needed" (kept as text).
          */
         SetFactUnit: {
             /**
@@ -3556,7 +3556,7 @@ export interface components {
             action: "set_fact_unit";
             /**
              * Unit
-             * @description null = leave as text
+             * @description null = no unit needed: not a measurement (ID, date, count, rating, ratio)
              */
             unit?: string | null;
         };

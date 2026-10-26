@@ -2,33 +2,36 @@
 children that repeat the header (``Requirement R-12 | Cooling duct shall… | Verification: test``), so one
 row is retrievable on its own.
 
-Units: a header cell's trailing ``(bar)`` / ``[N]``, a ``Unit`` column, or a units row under the header
-state them. A numeric column that states none is a SOFT ``UNIT_AMBIGUITY`` (matrix tables are indexed
-anyway), except columns whose header is on the dimensionless list (FMEA and risk registers would flag on
-every row otherwise).
+Units (plan step B): the shared reader (``backend/common/unit_reader.py``) says what each column measures
+and finds its unit in the header, a ``Unit`` column, a units row under the header, a row label that states
+one (``Thrust [N]`` in a Parameter column), or the same column name in other tables. A numeric column is a
+SOFT ``UNIT_AMBIGUITY`` only when it measures a physical quantity, or the name says nothing, and no unit
+reaches the threshold; the best guess goes into the flag. Ratios, ratings, dates and IDs take no unit.
 """
 
 import hashlib
 import html
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from typing import Any
 
 from openpyxl.utils import get_column_letter
 
-from backend.common.units import UnitError, parse_unit
-from backend.dispatcher.contract import ChannelStats, Flag, FlagAnchor, ProcessedNode, UnitTelemetryEvidence
+from backend.common.unit_reader import ColumnKind, UnitReading, name_of, read_unit
+from backend.dispatcher.contract import (
+    CandidateUnit,
+    ChannelStats,
+    Flag,
+    FlagAnchor,
+    ProcessedNode,
+    UnitTelemetryEvidence,
+)
 from backend.postgres.enums import FlagSeverity, FlagType, NodeSource, NodeType
 
-DIMENSIONLESS_HEADERS = (
-    "s", "o", "d", "rpn", "severity", "occurrence", "detection", "score", "rank", "index", "count", "%",
-    "sr no", "sr no.", "s.no", "sno", "no", "no.", "#", "id", "test no", "test no.", "sample", "edition",
-    "revision", "rev", "qty", "quantity", "number",
-)  # fmt: skip
-HEADER_UNIT = re.compile(r"[\(\[]\s*([^\)\]]+?)\s*[\)\]]")
 UNIT_COLUMN = re.compile(r"^units?$", re.IGNORECASE)
+NAMED = re.compile(r"[^\W\d_]{2}")  # a label names something: two letters in a row, outside brackets
 MAX_ROW_NODES = 2000
 
 
@@ -62,21 +65,15 @@ def is_number(value: Any) -> bool:
     return False
 
 
+def _quantity_unit(label: str) -> str | None:
+    """The unit of a physical quantity the label names (``Thrust [N]``); not a percentage or a bare value."""
+    reading = read_unit(label)
+    return reading.confident_unit if reading.kind == ColumnKind.QUANTITY else None
+
+
 def header_unit(header: str) -> str | None:
-    """The unit a header states in its last brackets, when pint reads it (``Pressure (Bar) [Gauge]``)."""
-    for candidate in reversed(HEADER_UNIT.findall(header)):
-        for spelling in dict.fromkeys((candidate, candidate.lower())):
-            try:
-                parse_unit(spelling)
-            except UnitError:
-                continue
-            return spelling
-    return None
-
-
-def dimensionless(header: str, extra: Sequence[str] = ()) -> bool:
-    name = HEADER_UNIT.sub("", header).strip().casefold()
-    return name in DIMENSIONLESS_HEADERS or name in {e.casefold() for e in extra} or "%" in header
+    """The unit a header states, when the shared reader is sure of it (``Pressure (Bar) [Gauge]``)."""
+    return read_unit(header).confident_unit
 
 
 @dataclass
@@ -116,6 +113,24 @@ class Table:
     def body(self) -> list[list[Any]]:
         return self.rows[1:]
 
+    def readings(self, same_name: Mapping[str, Sequence[str]] | None = None) -> dict[int, UnitReading]:
+        """What each column measures and its unit, by the shared reader."""
+        return {i: read_unit(h, same_name=same_name) for i, h in enumerate(self.header)}
+
+    def row_units(self) -> dict[int, str]:
+        """``{row index in body: unit}`` from the first text column whose labels mostly state a unit
+        (``Parameter: Thrust [N]``): such a table says per row what each number measures."""
+        for j in range(len(self.header)):
+            labels = {
+                i: cell_text(row[j]) for i, row in enumerate(self.body) if j < len(row) and cell_text(row[j])
+            }
+            if not labels or any(is_number(t) for t in labels.values()):
+                continue
+            units = {i: u for i, t in labels.items() if NAMED.search(name_of(t)) and (u := _quantity_unit(t))}
+            if len(units) * 2 >= len(labels):
+                return units
+        return {}
+
     def column_units(self) -> dict[int, str]:
         units = {i: u for i, h in enumerate(self.header) if (u := header_unit(h))}
         if self.body and not self.has_unit_column():
@@ -126,11 +141,10 @@ class Table:
             parsed = {}
             for i, text in enumerate(row):
                 if text and not is_number(text):
-                    try:
-                        parse_unit(text)
-                        parsed[i] = text
-                    except UnitError:
-                        pass
+                    # read with the column's name, so "C" under a temperature is degC and not coulomb
+                    name = self.header[i] if i < len(self.header) else ""
+                    if unit := read_unit(f"{name} [{text}]").confident_unit:
+                        parsed[i] = unit
             if parsed and len(parsed) >= max(1, len([t for t in row if t]) // 2):
                 units.update({i: u for i, u in parsed.items() if i not in units})
                 self.rows = [self.rows[0], *self.body[1:]]  # the units row is not data
@@ -173,6 +187,16 @@ def table_nodes(table: Table, ref: str, ordinal: int, breadcrumb: str) -> list[P
                     "caption": table.caption,
                     "hidden": table.hidden or None,
                     "units": {header[i]: u for i, u in units.items()} or None,
+                    "unit_basis": {
+                        header[i]: f"{r.basis} {r.confidence:.2f}"
+                        for i, r in table.readings().items()
+                        if i in units and r.confident_unit
+                    }
+                    or None,
+                    "row_units": {
+                        cell_text(table.body[i][0]): u for i, u in table.row_units().items() if table.body[i]
+                    }
+                    or None,
                     "error_cells": table.error_cells or None,
                 }.items()
                 if v is not None
@@ -204,20 +228,23 @@ def table_nodes(table: Table, ref: str, ordinal: int, breadcrumb: str) -> list[P
     return nodes
 
 
-def unit_flags(table: Table, extra_dimensionless: Sequence[str] = ()) -> list[Flag]:
-    """SOFT ``UNIT_AMBIGUITY`` for numeric columns that state no unit (C.4 step 8, matrix tables)."""
-    if not table.body or table.has_unit_column():
+def unit_flags(table: Table, same_name: Mapping[str, Sequence[str]] | None = None) -> list[Flag]:
+    """SOFT ``UNIT_AMBIGUITY`` for a numeric column that measures a physical quantity, or whose name says
+    nothing, and has no unit the reader is sure of; none when the rows state their own units."""
+    units = table.column_units()  # first: it drops a units row from the body
+    if not table.body or table.has_unit_column() or table.row_units():
         return []
     header = table.header
-    units = table.column_units()
+    readings = table.readings(same_name)
     flags = []
     for j, name in enumerate(header):
         values = [row[j] for row in table.body if j < len(row) and cell_text(row[j])]
-        if not values or j in units or dimensionless(name, extra_dimensionless):
+        if not values or j in units or readings[j].settled:
             continue
         numbers = [float(v) for v in values if isinstance(v, int | float) and not isinstance(v, bool)]
         if len(numbers) < max(1, int(0.8 * len(values))):
             continue
+        reading = readings[j]
         anchor_key = hashlib.sha256(f"{table.sheet}|{table.cell_range}|{name}".encode()).hexdigest()[:16]
         flags.append(
             Flag(
@@ -226,13 +253,25 @@ def unit_flags(table: Table, extra_dimensionless: Sequence[str] = ()) -> list[Fl
                 anchor=FlagAnchor(sheet=table.sheet, column=name, content_sha256=anchor_key),
                 evidence=UnitTelemetryEvidence(
                     channel=name,
+                    quantity_guess=str(reading.quantity) if reading.quantity else None,
                     header_lines=[" | ".join(header)],
                     stats=ChannelStats(
                         n=len(numbers), min=min(numbers), max=max(numbers), mean=sum(numbers) / len(numbers)
                     )
                     if numbers
                     else ChannelStats(),
-                    note=f"numeric column {name!r} in {table.sheet or 'the table'} states no unit",
+                    candidate_units=[
+                        CandidateUnit(unit=reading.unit, score=reading.confidence, reason=reading.explained)
+                    ]
+                    if reading.unit
+                    else [],
+                    note=f"numeric column {name!r} in {table.sheet or 'the table'} states no unit"
+                    + (
+                        f"; it reads as {reading.quantity}, usually {reading.unit}"
+                        if reading.unit
+                        else "; its name does not say what it measures (it may need no unit)"
+                    )
+                    + (f" ({reading.explained})" if reading.read_as or reading.unread else ""),
                 ),
             )
         )

@@ -1,10 +1,12 @@
 """Suggested resolution for a telemetry ``UNIT_AMBIGUITY`` (file 06 §5: deterministic hints first).
 
-A unit is proposed only when a file states it: the channel's own raw unit string, a sibling file's unit for
-the same channel name, or a unit written in the channel name (``Thrust (N)``). Nothing is derived from a
-scaling slope or a sensor list (decision 2026-10-22). Otherwise the suggestion says so explicitly and
-carries the folder ``.cfg`` scaling as context, so the reviewer sees why no unit is proposed.
-Confidence stays below the 0.9 auto-apply threshold: an operator always confirms.
+A unit is proposed when a file states it: the channel's own raw unit string, a sibling file's unit for
+the same channel name, or a unit written in the channel name (``Thrust (N)``). Else the shared reader's
+guess from what the column's name measures (``candidate_units``, plan step B: "Chamber PT 1" → bar) is
+proposed for a person to confirm. Nothing is derived from a scaling slope or a sensor list (decision
+2026-10-22). Otherwise the suggestion says so explicitly and carries the folder ``.cfg`` scaling as context,
+so the reviewer sees why no unit is proposed. Confidence stays below the 0.9 auto-apply threshold: an
+operator always confirms.
 """
 
 from collections.abc import Callable
@@ -52,6 +54,16 @@ def suggest_unit(evidence: UnitTelemetryEvidence) -> Suggestion:
     named = header_unit(channel)
     if named:
         found = _set_unit(channel, named, NAME, f"the channel name {channel!r} states {named!r}")
+        if found:
+            return found
+    for guess in sorted(evidence.candidate_units, key=lambda c: c.score, reverse=True):
+        found = _set_unit(
+            channel,
+            guess.unit,
+            min(guess.score, NAME),
+            f"the name {channel!r} reads as {evidence.quantity_guess or 'a quantity'}, "
+            f"usually in {guess.unit} ({guess.reason})",
+        )
         if found:
             return found
     context = []

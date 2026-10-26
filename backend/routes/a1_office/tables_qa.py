@@ -14,7 +14,7 @@ import html as html_lib
 import re
 from dataclasses import dataclass, field
 
-from backend.common.units import UnitError, parse_unit
+from backend.common.unit_reader import read_unit
 from backend.dispatcher.contract import Flag, FlagAnchor, LowConfidenceEvidence, ProcessedNode
 from backend.llm_engine.gemini_types import Image
 from backend.postgres.enums import FlagSeverity, FlagType, NodeSource, NodeType
@@ -24,7 +24,6 @@ ROW = re.compile(r"<tr\b.*?</tr>", re.DOTALL | re.IGNORECASE)
 CELL = re.compile(r"<t([dh])\b([^>]*)>(.*?)</t[dh]>", re.DOTALL | re.IGNORECASE)
 SPAN = re.compile(r"(rowspan|colspan)\s*=\s*[\"']?(\d+)", re.IGNORECASE)
 TAG = re.compile(r"<[^>]+>")
-UNIT_IN_HEADER = re.compile(r"[\(\[]\s*([^\)\]]{1,15})\s*[\)\]]\s*$|(?:\bin\s+)([A-Za-z°/%²³]+)\s*$")
 NUMBER = re.compile(r"^[-+−]?\d[\d.,\s']*$")
 LOW_TABLE_OCR = 0.75
 NUMERIC_HEADERLESS = 0.8
@@ -79,16 +78,7 @@ def units_by_column(rows: list[list[Cell]]) -> list[str | None]:
     header = next((row for row in rows if row and all(cell.header for cell in row)), rows[0] if rows else [])
     units: list[str | None] = []
     for cell in header:
-        match = UNIT_IN_HEADER.search(cell.text)
-        unit = None
-        if match:
-            candidate = (match.group(1) or match.group(2) or "").strip()
-            try:
-                parse_unit(candidate)
-                unit = candidate
-            except UnitError:
-                unit = None
-        units.extend([unit] * cell.colspan)
+        units.extend([read_unit(cell.text).confident_unit] * cell.colspan)  # plan step B: shared reader
     return units
 
 

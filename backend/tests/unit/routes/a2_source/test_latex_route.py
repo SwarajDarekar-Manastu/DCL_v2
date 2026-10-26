@@ -227,20 +227,30 @@ def test_every_node_has_a_line_locator_and_a_source_map_entry(memory, folder):
     assert markdown[intro.line_start - 1].startswith("The chamber pressure $P_c$")
 
 
-def test_unit_less_numeric_table_in_results_is_a_soft_unit_flag(memory, folder):
+def test_a_thrust_coefficient_takes_no_unit_and_only_a_number_nothing_names_is_flagged(memory, folder):
+    # C_F is a ratio: the old check flagged it in every TP12 and TP6 report (26 Oct). The "Spanning note"
+    # row's 3 under "Mean" is named by nothing, so a person says whether it needs a unit.
     files, siblings = _project()
     processed = _run(memory, folder, files, siblings)
-    flags = [f for f in processed.flags if f.flag_type == FlagType.UNIT_AMBIGUITY]
-
-    assert len(flags) == 1 and flags[0].severity == FlagSeverity.SOFT
-    assert flags[0].evidence.value_raw == "1.05"
-    assert "C_F" in flags[0].evidence.context
+    (flag,) = [f for f in processed.flags if f.flag_type == FlagType.UNIT_AMBIGUITY]
+    assert (flag.severity, flag.evidence.value_raw) == (FlagSeverity.SOFT, "3")
+    assert "C_F" not in flag.evidence.context and "Spanning note" in flag.evidence.context
 
 
-def test_unitless_values_ignores_id_columns_and_unit_headers():
-    grid = [["Test No.", "Pressure [bar]", "Ratio"], ["1", "5.6", "0.9"], ["2", "5.8", "1.1"]]
-    assert unitless_values(grid, 1) == [("0.9", "Ratio"), ("1.1", "Ratio")]
+def test_unitless_values_flags_only_quantities_without_a_unit():
+    grid = [
+        ["Test No.", "Pressure [bar]", "Ratio", "Thrust"],
+        ["1", "5.6", "0.9", "12.1"],
+        ["2", "5.8", "1.1", "12.4"],
+    ]
+    assert unitless_values(grid, 1) == [("12.1", "Thrust"), ("12.4", "Thrust")]
     assert unitless_values([["T90 [s]", "0.21"], ["Mass [g]", "433.8"]], 0) == []
+    assert unitless_values([["Test 01", "5.6", "5.9"], ["Test 02", "5.7", "6.1"]], 0) == [
+        ("5.6", "Test 01"),
+        ("5.9", "Test 01"),
+        ("5.7", "Test 02"),
+        ("6.1", "Test 02"),
+    ]  # a label that names a test says nothing about its numbers' unit
 
 
 def test_two_masters_and_orphans_raise_soft_conflicts(memory, folder):

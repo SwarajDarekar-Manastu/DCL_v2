@@ -19,7 +19,7 @@ describe('FlagConsole', () => {
 	it('offers only the allowed actions', () => {
 		show(unitFlag());
 		const options = screen.getAllByRole('option').map((o) => o.textContent);
-		expect(options).toEqual(['leave open', 'Set channel unit', 'Set unit of the number']);
+		expect(options).toEqual(['leave open', 'Set channel unit', 'Set the unit, or no unit needed']);
 	});
 
 	it('shows telemetry evidence: header line with the channel, stats, sanity and candidates', () => {

@@ -104,7 +104,22 @@
 		>
 	</fieldset>
 {:else if draft.action === 'set_fact_unit'}
-	<label class={FIELD}><span class="field-label">Unit</span> <input class="field font-mono" bind:value={draft.unit} placeholder="leave empty to keep as text" /></label>
+	<fieldset class="grid gap-2">
+		<legend class="field-label">Does this need a unit?</legend>
+		<div class="flex flex-wrap gap-2">
+			<label class={CHIP}
+				><input type="radio" class="sr-only" name="needs-unit" checked={draft.unit !== null} onchange={() => draft.action === 'set_fact_unit' && (draft.unit = draft.unit ?? '')} />Set a unit</label
+			>
+			<label class={CHIP}
+				><input type="radio" class="sr-only" name="needs-unit" checked={draft.unit === null} onchange={() => draft.action === 'set_fact_unit' && (draft.unit = null)} />No unit needed</label
+			>
+		</div>
+		{#if draft.unit === null}
+			<p class="text-muted-foreground m-0 text-xs">The numbers stay as they are. Use it for IDs, dates, counts, ratings and ratios, or a file that only lists other files.</p>
+		{:else}
+			<label class={FIELD}><span class="field-label">Unit</span> <input class="field font-mono" bind:value={draft.unit} placeholder="bar, N, degC, g/s" /></label>
+		{/if}
+	</fieldset>
 {:else if draft.action === 'map_columns'}
 	<div class="overflow-x-auto rounded-md border">
 		<table class="w-full text-[13px]" aria-label="Column mapping">

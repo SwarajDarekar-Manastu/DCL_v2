@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from backend.common.unit_reader import ColumnKind, read_unit
 from backend.dispatcher.contract import (
     ConflictEvidence,
     ConflictSide,
@@ -70,15 +71,7 @@ RASTER_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 RESULTS_SECTION = re.compile(
     r"result|observation|performance|output|measurement|summary|finding|data|ergebnis", re.IGNORECASE
 )
-UNIT_HINT = re.compile(
-    r"\[[^\]]+\]|\([^)]*[A-Za-z%°µ][^)]*\)|(?<![\w])(bar[ga]?|psi[ga]?|k?pa|mpa|°c|degc|k|w|kw|v|mv|a|ma|n|kn|"
-    r"ns|g/s|kg/s|grams?|kg|mg|s|sec|seconds?|ms|min|minutes?|h|hz|mm|cm|m|%|l|ml|percent)(?![\w])",
-    re.IGNORECASE,
-)
 NUMERIC = re.compile(r"^[-+]?\d+(?:[.,]\d+)?(?:[eE][-+]?\d+)?$")
-ID_HEADER = re.compile(
-    r"\b(no\.?|nr\.?|number|#|sr|s\.?\s?no|id|test|run|edition|rev(ision)?|step|item|index)\b", re.I
-)
 BABEL = re.compile(r"\\usepackage\s*\[([^\]]*)\]\s*\{(?:babel|polyglossia)\}|\\setmainlanguage\s*\{(\w+)\}")
 LANGUAGES = {
     "english": "en",
@@ -217,6 +210,12 @@ def language_of(preamble: str) -> str:
 # ---------------------------------------------------------------- tables: unit check
 
 
+def _states_unit(label: str) -> bool:
+    """A row label gives its numbers a unit, or says they take none (``C_F``); "Test 01" says neither."""
+    reading = read_unit(label)
+    return reading.confident_unit is not None or reading.kind == ColumnKind.UNITLESS
+
+
 def unitless_values(grid: list[list[str]], header_rows: int) -> list[tuple[str, str]]:
     """(value, its row label or column header) for numeric cells no header or row label gives a unit."""
     if not grid:
@@ -227,19 +226,19 @@ def unitless_values(grid: list[list[str]], header_rows: int) -> list[tuple[str, 
     column_header = [
         " ".join(row[j] for row in header if j < len(row)) if header else "" for j in range(width)
     ]
+    settled = [read_unit(h).settled for h in column_header]  # plan step B: the shared reader
     numeric_columns = [
         j
         for j in range(width)
-        if sum(1 for r in body if j < len(r) and NUMERIC.match(r[j].strip())) >= 2
-        and not ID_HEADER.search(column_header[j])
+        if sum(1 for r in body if j < len(r) and NUMERIC.match(r[j].strip())) >= 2 and not settled[j]
     ]
     found = []
     for row in body:
         label = row[0] if row and not NUMERIC.match(row[0].strip()) else ""
+        if label and _states_unit(label):
+            continue
         for j in numeric_columns:
             if j == 0 or j >= len(row) or not NUMERIC.match(row[j].strip()):
-                continue
-            if UNIT_HINT.search(column_header[j]) or UNIT_HINT.search(label):
                 continue
             found.append((row[j].strip(), label or column_header[j]))
     return found

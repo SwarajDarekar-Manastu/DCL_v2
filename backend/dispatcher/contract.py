@@ -208,10 +208,12 @@ class SetUnit(_Model):
 
 
 class SetFactUnit(_Model):
-    """UNIT_AMBIGUITY on a number in prose or a table: a unit, or keep it as text."""
+    """UNIT_AMBIGUITY on a number in prose or a table: a unit, or "no unit needed" (kept as text)."""
 
     action: Literal["set_fact_unit"] = "set_fact_unit"
-    unit: str | None = Field(default=None, description="null = leave as text")
+    unit: str | None = Field(
+        default=None, description="null = no unit needed: not a measurement (ID, date, count, rating, ratio)"
+    )
 
 
 class ColumnMapping(_Model):

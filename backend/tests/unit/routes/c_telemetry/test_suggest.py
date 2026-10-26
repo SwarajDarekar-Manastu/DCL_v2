@@ -1,6 +1,7 @@
 """UNIT_AMBIGUITY suggestions: a unit only when a file states it, else an explicit 'no suggestion'."""
 
 from backend.dispatcher.contract import (
+    CandidateUnit,
     Flag,
     FlagAnchor,
     LowConfidenceEvidence,
@@ -136,3 +137,18 @@ def test_a_model_proposal_is_capped_below_auto_apply_and_marked_as_the_models():
         propose_unit(client, _evidence(channel="y3"), file_name="t1.dat", folder="x", model="m").resolution
         is None
     )
+
+
+def test_the_readers_guess_is_proposed_below_the_names_confidence():
+    evidence = UnitTelemetryEvidence(
+        channel="Chamber PT 1",
+        quantity_guess="pressure",
+        candidate_units=[CandidateUnit(unit="bar", score=0.5, reason="usual")],
+    )
+    suggestion = suggest_unit(evidence)
+    assert (suggestion.resolution.unit, suggestion.resolution.quantity, suggestion.confidence) == (
+        "bar",
+        "pressure",
+        0.4,
+    )
+    assert "reads as pressure, usually in bar" in suggestion.rationale

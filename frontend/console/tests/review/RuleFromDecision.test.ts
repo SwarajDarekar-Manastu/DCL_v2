@@ -162,9 +162,10 @@ describe('Make a rule from this decision', () => {
 		expect(await screen.findByText('4 open flags would be answered, among 14 matching files.')).toBeTruthy();
 	});
 
-	it('offers to keep a column as text when the decision was to keep the number as text', async () => {
+	it('offers to keep a column as text when the decision was "no unit needed"', async () => {
 		open(factUnitFlag());
 		await choose('set_fact_unit');
+		await fireEvent.click(screen.getByLabelText('No unit needed'));
 		await apply();
 		await screen.findByText('Keep numbers under “Pressure (A)” as text.');
 		await waitFor(() => expect(vi.mocked(api.previewRule).mock.calls.at(-1)![0].body).toEqual({ column: 'Pressure (A)', unit: null }));

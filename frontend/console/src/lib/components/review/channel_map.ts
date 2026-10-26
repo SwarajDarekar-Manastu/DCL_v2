@@ -97,6 +97,12 @@ export const UNIT_GROUPS: { quantity: string; label: string; choices: UnitChoice
 			{ id: 'mv', label: 'mV (raw voltage)', unit: 'mV', quantity: 'voltage', gauge_or_abs: 'n/a' },
 			{ id: 'ma', label: 'mA (current loop)', unit: 'mA', quantity: 'current', gauge_or_abs: 'n/a' }
 		]
+	},
+	{
+		// plan step B (user, 2026-10-26): a counter, a status or a label column is not a measurement; it stays raw
+		quantity: 'other',
+		label: 'Not a measurement',
+		choices: [{ id: 'none', label: 'No unit needed (keep the numbers as they are)', unit: 'dimensionless', quantity: 'other', gauge_or_abs: 'n/a' }]
 	}
 ];
 

@@ -14,9 +14,10 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from minio import Minio
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from backend.common.unit_reader import name_of
 from backend.dispatcher.adapters import adapter_for
 from backend.dispatcher.contract import (
     ConflictEvidence,
@@ -326,7 +327,7 @@ def _build(
             item.name,
             inputs.context,
             [as_tab],
-            unit_flags(as_tab),
+            unit_flags(as_tab, table_units_elsewhere(session)),
             DocKind.ENGINEERING_TABLE,
             cir_put,
             PARSER_VERSION,
@@ -335,7 +336,7 @@ def _build(
             else None,
         )
     if adapter == "workbook":
-        return _workbook_document(store.read(), item, inputs, series, cir_put)
+        return _workbook_document(store.read(), item, inputs, series, cir_put, table_units_elsewhere(session))
     raise ValueError(f"unknown Route C adapter {adapter}")
 
 
@@ -351,7 +352,12 @@ def _doc_kind_for_workbook(name: str, sheets: list[str]) -> DocKind:
 
 
 def _workbook_document(
-    data: bytes, item: DriveItem, inputs: RunInputs, series: _SeriesArgs, cir_put
+    data: bytes,
+    item: DriveItem,
+    inputs: RunInputs,
+    series: _SeriesArgs,
+    cir_put,
+    same_name: dict[str, list[str]] | None = None,
 ) -> ProcessedDocument:
     from backend.common.office import convert
 
@@ -360,7 +366,7 @@ def _workbook_document(
     book = read_workbook(data, recalc=lambda raw: convert(raw, "xlsx", "xlsx", recalc=True))
     flags: list[Flag] = []
     for table in book.tables:
-        flags += unit_flags(table)
+        flags += unit_flags(table, same_name)
     for sheet, cells in book.error_sheets.items():
         flags.append(_formula_conflict(sheet, cells, book.recalc_note))
     doc = table_document(
@@ -439,6 +445,32 @@ def _formula_conflict(sheet: str, cells: list[str], note: str | None) -> Flag:
 
 
 SIBLING_MAX_BYTES = 5 * 1024 * 1024
+
+
+TABLE_UNITS_SQL = """
+select u.key, coalesce(u.value, '')
+from document_nodes n
+join documents d on d.doc_id = n.doc_id,
+lateral (
+    select * from jsonb_each_text(
+        case when jsonb_typeof(n.metadata -> 'units') = 'object' then n.metadata -> 'units' else '{}' end)
+    union all
+    select * from jsonb_each_text(
+        case when jsonb_typeof(n.metadata -> 'column_units') = 'object' then n.metadata -> 'column_units'
+        else '{}' end)
+) u
+where n.node_type = 'table' and d.status in ('ACTIVE', 'ACTIVE_WITH_SOFT_FLAGS')
+"""
+
+
+def table_units_elsewhere(session: Session) -> dict[str, list[str]]:
+    """``{column name: units}`` for the shared reader's same-name check (plan step B): the units indexed
+    tables state, and the ones people decided (``column_units``, written by a ``set_fact_unit`` decision; ""
+    for "no unit needed"). A column named like those takes the unit when they all agree."""
+    found: dict[str, list[str]] = {}
+    for header, unit in session.execute(text(TABLE_UNITS_SQL)).all():
+        found.setdefault(name_of(header), []).append(unit)
+    return found
 
 
 def sibling_units(session: Session, minio: Minio, item: DriveItem) -> list[SiblingUnit]:

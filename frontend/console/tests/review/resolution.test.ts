@@ -17,7 +17,11 @@ describe('resolution drafts', () => {
 		const draft = startDraft('set_unit', flag);
 		expect(draft).toEqual(flag.suggested_resolution!.resolution);
 		expect(draft).not.toBe(flag.suggested_resolution!.resolution);
-		expect(startDraft('set_fact_unit', flag)).toEqual({ action: 'set_fact_unit', unit: null });
+		// a person chooses: a unit, or "no unit needed" (null); an empty unit is not a decision
+		expect(startDraft('set_fact_unit', flag)).toEqual({ action: 'set_fact_unit', unit: '' });
+		expect(missing({ action: 'set_fact_unit', unit: '' })).toBe('a unit, or choose "No unit needed"');
+		expect(missing({ action: 'set_fact_unit', unit: null })).toBeNull();
+		expect(missing({ action: 'set_fact_unit', unit: 'bar' })).toBeNull();
 	});
 
 	it('starts a blank unit draft on the flagged channel', () => {

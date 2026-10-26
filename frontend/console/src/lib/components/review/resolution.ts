@@ -5,7 +5,7 @@ import type { CaseLocation, FlagView, Resolution, ResolutionAction, RuleScope } 
 
 export const ACTION_LABEL: Record<ResolutionAction, string> = {
 	set_unit: 'Set channel unit',
-	set_fact_unit: 'Set unit of the number',
+	set_fact_unit: 'Set the unit, or no unit needed',
 	map_columns: 'Map columns',
 	map_json_keys: 'Map JSON keys',
 	set_value: 'Type the value',
@@ -92,7 +92,7 @@ export function startDraft(action: ResolutionAction, flag: Pick<FlagView, 'ancho
 				expression: null
 			};
 		case 'set_fact_unit':
-			return { action, unit: null };
+			return { action, unit: '' }; // a person chooses: a unit, or "no unit needed" (null)
 		case 'map_columns':
 			return { action, columns: [{ index: 0, canonical_name: '', unit: null, quantity: null, is_time: true }] };
 		case 'map_json_keys':
@@ -125,6 +125,8 @@ export function missing(r: Resolution): string | null {
 			if (!r.quantity) return 'quantity';
 			if (r.gauge_or_abs === 'gauge' && !r.ambient_condition) return 'the ambient reference for a gauge unit';
 			return null;
+		case 'set_fact_unit':
+			return r.unit !== null && !r.unit?.trim() ? 'a unit, or choose "No unit needed"' : null;
 		case 'map_columns':
 			if (!r.columns.length) return 'at least one column';
 			if (r.columns.some((c) => !c.canonical_name.trim())) return 'a canonical name for every column';
