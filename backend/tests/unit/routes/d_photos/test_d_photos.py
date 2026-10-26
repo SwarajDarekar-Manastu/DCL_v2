@@ -7,7 +7,7 @@ pytest.importorskip("imagehash")
 from PIL import Image as PILImage  # noqa: E402
 from PIL import ImageDraw  # noqa: E402
 
-from backend.dispatcher.folder_context import build_folder_context  # noqa: E402
+from backend.dispatcher.folder_context import Sibling, build_folder_context  # noqa: E402
 from backend.postgres.enums import AssetKind, DocKind, FlagSeverity, FlagType, NodeType  # noqa: E402
 from backend.routes.d_photos import cluster_photos, normalize, process_photo  # noqa: E402
 
@@ -157,6 +157,55 @@ def test_low_confidence_and_export_markings_raise_flags(fake_vision, memory_stor
         (FlagType.LOW_CONFIDENCE_EXTRACTION, FlagSeverity.SOFT),
         (FlagType.SENSITIVE_CONTENT, FlagSeverity.HARD),
     ]
+
+
+def test_a_product_picture_raises_no_damage_flag(fake_vision, memory_store):
+    # plan step D2: damage findings matter on an inspection photo only
+    reading = {
+        **HARDWARE,
+        "photo_kind": "product_image",
+        "failure_modes": [{"mode": "discoloration", "location": "?", "severity": "minor", "confidence": 0.3}],
+    }
+    vision = fake_vision(
+        classify_image={"image_class": "hardware_photo", "confidence": 0.9, "shows_people": False},
+        inspect_hardware_photo=reading,
+    )
+    doc, _ = run(photo(), vision, memory_store("s3://dcl-assets/"))
+    assert doc.flags == []
+    assert doc.nodes[0].content.startswith("Photo (product image): Burned injector mesh")
+
+
+def test_the_model_is_told_when_the_photo_was_taken_and_which_photos_are_next_to_it(
+    fake_vision, memory_store
+):
+    folder = build_folder_context(
+        "APU",
+        ["APU", "Test Plan 19", "Post-Explosion"],
+        "burned_injector_mesh.jpg",
+        siblings=[
+            Sibling(name="burned_injector_mesh.jpg", extension=".jpg", size_bytes=1),
+            Sibling(name="mesh_close_up.HEIC", extension=".HEIC", size_bytes=1),
+            Sibling(name="notes.docx", extension=".docx", size_bytes=1),
+        ],
+    )
+    vision = fake_vision(
+        classify_image={"image_class": "hardware_photo", "confidence": 0.9, "shows_people": False},
+        inspect_hardware_photo={**HARDWARE, "readings": ["12.34 g"]},
+    )
+    doc, _ = process_photo(
+        photo(),
+        blob_sha256=SHA,
+        file_name="burned_injector_mesh.jpg",
+        folder=folder,
+        vision=vision,
+        put_asset=memory_store("s3://dcl-assets/"),
+    )
+    told = dict(vision.calls)["inspect_hardware_photo"]["folder_context"]
+    assert told == (
+        "APU / Test Plan 19 / Post-Explosion / burned_injector_mesh.jpg · taken 2024-05-02 10:15"
+        " · photos next to it: mesh_close_up.HEIC"
+    )
+    assert "Readings: 12.34 g" in doc.nodes[0].content
 
 
 def test_a_marking_inside_another_word_is_not_a_marking(fake_vision, memory_store):

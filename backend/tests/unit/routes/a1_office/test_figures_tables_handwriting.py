@@ -7,9 +7,9 @@ from reportlab.lib.pagesizes import A4  # noqa: E402
 from reportlab.pdfgen import canvas  # noqa: E402
 
 from backend.dispatcher.contract import PageBox, ProcessedNode  # noqa: E402
-from backend.llm_engine.vision.schemas import PageType, Script  # noqa: E402
+from backend.llm_engine.vision.schemas import PageType, SchematicReading, Script  # noqa: E402
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType  # noqa: E402
-from backend.routes.a1_office.figures import read_figures  # noqa: E402
+from backend.routes.a1_office.figures import read_figures, render_schematic  # noqa: E402
 from backend.routes.a1_office.handwriting import nearest_label, region_box, transcribe_regions  # noqa: E402
 from backend.routes.a1_office.tables_qa import (  # noqa: E402
     agreement,
@@ -20,6 +20,7 @@ from backend.routes.a1_office.tables_qa import (  # noqa: E402
     units_by_column,
 )
 from backend.routes.a1_office.triage import PageDecision  # noqa: E402
+from backend.tests.unit.routes.vision_readings import with_image_metadata  # noqa: E402
 
 SHA = "c" * 64
 
@@ -44,7 +45,7 @@ def node(ref, node_type, content="", box=(0.1, 0.1, 0.5, 0.2), page=1, **kw):
         ref=ref,
         node_type=node_type,
         ordinal=kw.pop("ordinal", 0),
-        breadcrumb="Run sheet",
+        breadcrumb=kw.pop("breadcrumb", "Run sheet"),
         content=content,
         page_no=page,
         bboxes=[PageBox(page_no=page, x0=box[0], y0=box[1], x1=box[2], y1=box[3])],
@@ -222,6 +223,70 @@ def test_figures_route_by_class_and_become_readings_with_assets(fake_vision, mem
     assert f"figures/{SHA}/fig1.png" in assets.objects
     (flag,) = result.flags  # photo top failure-mode confidence 0.4 < 0.5
     assert flag.flag_type is FlagType.LOW_CONFIDENCE_EXTRACTION
+
+
+def test_the_model_is_told_where_a_figure_sits_and_a_product_picture_raises_no_flag(
+    fake_vision, memory_store
+):
+    # plan step D2: a brochure's product shot came back with "discoloration 0.85" (26 Oct)
+    vision = fake_vision(digitize_plot=PLOT, inspect_hardware_photo={**PHOTO, "photo_kind": "product_image"})
+    crumb = "Moog brochure › WHAT WE DO IN PROPULSION"
+    nodes = [
+        node("t1", NodeType.CHILD, "As Figure 4 shows, the pressure settles.", breadcrumb=crumb),
+        node(
+            "fig1",
+            NodeType.FIGURE,
+            "Figure 4: Pc trace",
+            metadata={"class": "line_chart", "caption": "Figure 4: Pc trace"},
+            breadcrumb=crumb,
+            page=1,
+        ),
+        node(
+            "fig2", NodeType.FIGURE, "", metadata={"class": "photograph", "caption": None}, breadcrumb=crumb
+        ),
+    ]
+    result = read_figures(
+        nodes,
+        pdf_bytes=PDF,
+        blob_sha256=SHA,
+        vision=vision,
+        context="APS - Library / moog.pdf",
+        doc_id="d1",
+        cloud_allowed=True,
+        put_asset=memory_store("s3://dcl-assets/"),
+    )
+    assert result.flags == []
+    calls = dict(vision.calls)
+    assert calls["digitize_plot"]["context"] == (
+        "APS - Library / moog.pdf · page 1 · section: WHAT WE DO IN PROPULSION"
+        " · the text says: As Figure 4 shows, the pressure settles."
+    )
+    assert calls["inspect_hardware_photo"]["folder_context"] == (
+        "APS - Library / moog.pdf · page 1 · section: WHAT WE DO IN PROPULSION · no caption"
+    )
+    photo = next(n for n in result.nodes if n.ref == "fig2")
+    assert photo.content.startswith("Photo (product image): Eroded injector face")
+
+
+def test_a_flowchart_is_read_as_its_steps_and_arrows():
+    reading = SchematicReading.model_validate(
+        with_image_metadata(
+            SchematicReading,
+            {
+                "drawing_kind": "flowchart",
+                "steps": ["Structural design", "Is leak hazardous?", "Proof test"],
+                "connections": [
+                    {"from": "Structural design", "to": "Is leak hazardous?"},
+                    {"from": "Is leak hazardous?", "to": "Proof test", "label": "yes"},
+                ],
+            },
+        )
+    )
+    assert render_schematic(reading).splitlines() == [
+        "Flowchart steps: Structural design; Is leak hazardous?; Proof test",
+        "Structural design → Is leak hazardous?",
+        "Is leak hazardous? → Proof test yes",
+    ]
 
 
 def test_figures_without_cloud_keep_their_caption_and_make_no_call(fake_vision, memory_store):

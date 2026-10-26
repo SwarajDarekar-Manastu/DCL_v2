@@ -160,6 +160,7 @@ class Axis(Reading):
     label: str | None
     unit: str | None
     range: list[float] = Field(default_factory=list, max_length=2)
+    log_scale: bool = False
 
 
 class PlotPoint(Reading):
@@ -171,6 +172,7 @@ class PlotSeries(Reading):
     name: str | None
     key_points: list[PlotPoint] = Field(default_factory=list)
     trend: str | None = None
+    panel: str | None = Field(default=None, description="the panel of a figure with several plots")
 
 
 class PlotReading(Reading):
@@ -200,11 +202,20 @@ class SchematicConnection(Reading):
     label: str | None = None
 
 
+class DrawingKind(StrEnum):
+    SCHEMATIC = "schematic"
+    MECHANICAL = "mechanical"
+    FLOWCHART = "flowchart"
+
+
 class SchematicReading(Reading):
-    """`read_schematic` (3.8 Flash, figure crop): components and connections."""
+    """`read_schematic` (3.8 Flash, figure crop): components and connections. v3 (2026-10-26, plan step D2):
+    the drawing's kind first; a flowchart is its steps and the arrows between them (labelled yes or no)."""
 
     image_metadata: ImageMetadata
+    drawing_kind: DrawingKind = DrawingKind.SCHEMATIC
     components: list[SchematicComponent] = Field(default_factory=list)
+    steps: list[str] = Field(default_factory=list)
     connections: list[SchematicConnection] = Field(default_factory=list)
     notes: str | None = None
 
@@ -239,12 +250,27 @@ class ImageClassification(Reading):
     shows_people: bool
 
 
+class PhotoKind(StrEnum):
+    INSPECTION = "inspection"
+    ASSEMBLY = "assembly"
+    SETUP = "setup"
+    AS_RECEIVED = "as_received"
+    INSTRUMENT_READING = "instrument_reading"
+    MATERIAL_SAMPLE = "material_sample"
+    PRODUCT_IMAGE = "product_image"
+    OTHER = "other"
+
+
 class HardwarePhotoReading(Reading):
-    """`inspect_hardware_photo` (3.8 Flash, medium resolution, photo and folder context), no people."""
+    """`inspect_hardware_photo` (3.8 Flash, medium resolution, photo and its context), no people. v2
+    (2026-10-26, plan step D2): what the photo is for first; damage only when it is visible, never on a
+    product image; values on gauges and screens in ``readings``."""
 
     image_metadata: ImageMetadata
+    photo_kind: PhotoKind = PhotoKind.INSPECTION
     components_visible: list[str] = Field(default_factory=list)
     failure_modes: list[FailureMode] = Field(default_factory=list)
+    readings: list[str] = Field(default_factory=list)
     visible_text: list[str] = Field(default_factory=list)
     test_stage_hint: TestStage
     description: str

@@ -10,7 +10,7 @@
 
 ## Purpose
 
-HEIC conversion, EXIF without GPS, pHash clusters, classify-first routing, hardware inspection prompt with folder context, text and image embeddings.
+HEIC conversion, EXIF without GPS, pHash clusters, classify-first routing, a general photo prompt (`inspect_hardware_photo.v2`: what the photo is for first, damage only when visible) with the folder, camera date and nearby photos as context, LOW_CONFIDENCE_EXTRACTION only on inspection photos, text and image embeddings. The node text is `figures.render_photo`, shared with photos inside documents.
 
 ## Location
 

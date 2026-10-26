@@ -21,7 +21,9 @@ from backend.llm_engine.vision.service import (
 
 VERSIONS = {
     VisionCapability.TRANSCRIBE_PAGE: 2,  # v2 (2026-10-22): page furniture as its own field
-    VisionCapability.READ_SCHEMATIC: 2,  # v2 (2026-10-24): verbatim, mechanical drawings have no connections
+    VisionCapability.READ_SCHEMATIC: 3,  # v3 (2026-10-26): schematic, mechanical drawing or flowchart first
+    VisionCapability.DIGITIZE_PLOT: 2,  # v2 (2026-10-26): panels and log axes
+    VisionCapability.INSPECT_HARDWARE_PHOTO: 2,  # v2 (2026-10-26): what the photo is for first
     VisionCapability.VIDEO_TIMELINE: 3,  # v3 (2026-10-26): kind of recording first; ignition if firing
 }
 
@@ -336,7 +338,7 @@ def test_every_call_starts_with_the_shared_preamble_and_the_files_own_metadata(m
     system, user = client.calls[0]["messages"]
     preamble, task = system.parts[0].text.split("\n\n", 1)[0], system.parts[0].text
     assert "document library of a rocket propulsion team" in preamble
-    assert "You inspect one photo of rocket propulsion hardware" in task
+    assert "First decide what the photo is for" in task
     assert user.parts[0].text.splitlines() == [
         "About this file:",
         "File name: IMG_0042.HEIC",

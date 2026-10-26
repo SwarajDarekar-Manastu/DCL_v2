@@ -41,7 +41,7 @@ from backend.dispatcher.contract import (
 )
 from backend.dispatcher.folder_context import FolderContext
 from backend.llm_engine.gemini_types import Image
-from backend.llm_engine.vision.schemas import ImageClass
+from backend.llm_engine.vision.schemas import DrawingKind, ImageClass, PhotoKind
 from backend.postgres.enums import AssetKind, DocKind, FlagSeverity, FlagType, NodeSource, NodeType, Route
 
 PARSER_VERSION = 1
@@ -51,6 +51,8 @@ CLUSTER_MAX_DISTANCE = 6
 CLUSTER_MAX_SECONDS = 60
 DARK_MEAN_LUMINANCE = 40
 LOW_CONFIDENCE = 0.5
+PHOTO_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".heic", ".heif", ".tif", ".tiff", ".bmp", ".webp"})
+NEARBY_PHOTOS = 10
 GPS_TAG = 0x8825
 EXIF_TAGS = {
     0x010F: "make",
@@ -163,19 +165,20 @@ def _for_model(image: PILImage.Image) -> bytes:
     return _jpeg(image, WEB_LONG_SIDE)[0]
 
 
-def render_photo(reading) -> str:
-    lines = [reading.description]
-    if reading.components_visible:
-        lines.append("Components visible: " + ", ".join(reading.components_visible))
-    for mode in reading.failure_modes:
-        lines.append(
-            f"Failure mode: {mode.mode} at {mode.location or '?'} ({mode.severity or '?'}, "
-            f"confidence {mode.confidence:.2f})"
-        )
-    if reading.visible_text:
-        lines.append("Visible text: " + ", ".join(reading.visible_text))
-    lines.append(f"Test stage: {reading.test_stage_hint}")
-    return "\n".join(lines)
+def photo_context(folder, file_name: str, taken_at: datetime | None) -> str:
+    """What the model is told about a photo besides the shared file metadata (plan step D2): its folder and
+    name, when the camera took it, and the photos next to it, which often show the same part or step."""
+    nearby = [
+        s.name
+        for s in folder.siblings
+        if s.name != file_name and (s.extension or "").casefold() in PHOTO_EXTENSIONS
+    ][:NEARBY_PHOTOS]
+    parts = [" / ".join([*folder.breadcrumb, file_name])]
+    if taken_at is not None:
+        parts.append(f"taken {taken_at:%Y-%m-%d %H:%M}")
+    if nearby:
+        parts.append("photos next to it: " + ", ".join(nearby))
+    return " · ".join(parts)
 
 
 def plot_summary(reading) -> str:
@@ -190,16 +193,21 @@ def plot_summary(reading) -> str:
 
 
 def schematic_summary(reading) -> str:
-    """A schematic's summary from the VLM's reading: how many components, the first tags, and its notes."""
-    names = [c.tag or c.label for c in reading.components if c.tag or c.label]
-    text = f"Schematic with {len(reading.components)} components: " + ", ".join(names[:15])
+    """A drawing's summary from the VLM's reading: a flowchart's first steps, else how many components and
+    the first tags; then its notes."""
+    if reading.drawing_kind == DrawingKind.FLOWCHART:
+        text = f"Flowchart with {len(reading.steps)} steps: " + "; ".join(reading.steps[:8])
+    else:
+        names = [c.tag or c.label for c in reading.components if c.tag or c.label]
+        kind = "Mechanical drawing" if reading.drawing_kind == DrawingKind.MECHANICAL else "Schematic"
+        text = f"{kind} with {len(reading.components)} components: " + ", ".join(names[:15])
     return text + (f". {reading.notes}" if reading.notes else ".")
 
 
 def read_photo(
     vision, model_image: bytes, *, context: str, doc_id: str | None
 ) -> tuple[PhotoReading, list[Flag]]:
-    from backend.routes.a1_office.figures import render_plot, render_schematic
+    from backend.routes.a1_office.figures import render_photo, render_plot, render_schematic
 
     image = Image(model_image, "image/jpeg")
     anchor = "page:1:"
@@ -212,9 +220,12 @@ def read_photo(
             image, folder_context=context, doc_id=doc_id, anchor=anchor
         ).reading
         top = max((m.confidence for m in reading.failure_modes), default=None)
-        if (
-            top is not None and top < LOW_CONFIDENCE
-        ) or "cannot determine component" in reading.description.lower():
+        # Damage findings matter on an inspection photo only (plan step D2): a product image or a setup photo
+        # has nothing for a person to confirm about failure modes.
+        if reading.photo_kind == PhotoKind.INSPECTION and (
+            (top is not None and top < LOW_CONFIDENCE)
+            or "cannot determine component" in reading.description.lower()
+        ):
             flags.append(
                 Flag(
                     flag_type=FlagType.LOW_CONFIDENCE_EXTRACTION,
@@ -333,7 +344,7 @@ def process_photo(
             exif=normalized.exif,
         ),
     ]
-    context = " / ".join([*folder.breadcrumb, file_name])
+    context = photo_context(folder, file_name, normalized.taken_at)
     flags: list[Flag] = []
     reading = representative
     if reading is None and cloud_allowed:

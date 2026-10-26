@@ -27,6 +27,7 @@ from backend.dispatcher.contract import (
     ProcessedNode,
 )
 from backend.llm_engine.gemini_types import Image, StructuredOutputError
+from backend.llm_engine.vision.schemas import DrawingKind, PhotoKind
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType
 from backend.routes.a1_office.assets import image_fields
 from backend.routes.a1_office.crops import (
@@ -72,6 +73,21 @@ class FigureResult:
     crops: list[SheetItem] = field(default_factory=list)
 
 
+def figure_about(context: str, node: ProcessedNode, texts: list[ProcessedNode]) -> str:
+    """Where a figure sits in its document, for the model (plan step D2): the file, the page, the section
+    heading Docling put it under, and the body sentences that cite it ("Figure 4 shows ...")."""
+    parts = [context]
+    if node.page_no:
+        parts.append(f"page {node.page_no}")
+    section = node.breadcrumb.split(" › ", 1)[1] if " › " in (node.breadcrumb or "") else None
+    if section:
+        parts.append(f"section: {section}")
+    cited = _referencing_sentences(node.metadata.get("caption"), texts)
+    if cited:
+        parts.append("the text says: " + " ".join(cited))
+    return " · ".join(parts)
+
+
 def _referencing_sentences(caption: str | None, texts: list[ProcessedNode]) -> list[str]:
     number = FIGURE_NUMBER.search(caption or "")
     if not number:
@@ -85,25 +101,35 @@ def _referencing_sentences(caption: str | None, texts: list[ProcessedNode]) -> l
     return found[:3]
 
 
+def _axis(name: str, axis) -> str:
+    return f"{name}: {axis.label or '?'} [{axis.unit or '-'}] {axis.range or ''}".rstrip() + (
+        " (log scale)" if axis.log_scale else ""
+    )
+
+
 def render_plot(reading) -> str:
-    x = reading.x_axis
-    lines = [
-        f"Plot ({reading.plot_type}). x axis: {x.label or '?'} [{x.unit or '-'}] {x.range or ''}".rstrip()
-    ]
-    for axis in reading.y_axes:
-        lines.append(f"y axis: {axis.label or '?'} [{axis.unit or '-'}] {axis.range or ''}".rstrip())
+    lines = [f"Plot ({reading.plot_type}). " + _axis("x axis", reading.x_axis)]
+    lines += [_axis("y axis", axis) for axis in reading.y_axes]
     for series in reading.series:
         points = "; ".join(f"({p.x}, {p.y})" for p in series.key_points)
-        lines.append(f"Series {series.name or ''}: {points}" + (f" — {series.trend}" if series.trend else ""))
+        panel = f" [panel {series.panel}]" if series.panel else ""
+        lines.append(
+            f"Series {series.name or ''}{panel}: {points}" + (f" — {series.trend}" if series.trend else "")
+        )
     lines += [f"Annotation: {a}" for a in reading.annotations]
     return "\n".join(lines)
 
 
 def render_schematic(reading) -> str:
-    lines = [
-        "Schematic components: "
-        + "; ".join(f"{c.tag or c.label or '?'} ({c.type})" for c in reading.components)
-    ]
+    if reading.drawing_kind == DrawingKind.FLOWCHART:
+        lines = ["Flowchart steps: " + "; ".join(reading.steps)]
+    else:
+        kind = (
+            "Mechanical drawing parts"
+            if reading.drawing_kind == DrawingKind.MECHANICAL
+            else "Schematic components"
+        )
+        lines = [f"{kind}: " + "; ".join(f"{c.tag or c.label or '?'} ({c.type})" for c in reading.components)]
     lines += [
         f"{c.source} → {c.target}"
         + (f" [{c.medium}]" if c.medium else "")
@@ -116,7 +142,10 @@ def render_schematic(reading) -> str:
 
 
 def render_photo(reading) -> str:
-    lines = [reading.description]
+    """A photo's node text, for Route D photos and photos inside documents alike."""
+    lines = [f"Photo ({str(reading.photo_kind).replace('_', ' ')}): {reading.description}"]
+    if reading.readings:
+        lines.append("Readings: " + ", ".join(reading.readings))
     if reading.components_visible:
         lines.append("Components visible: " + ", ".join(reading.components_visible))
     for mode in reading.failure_modes:
@@ -199,14 +228,15 @@ def read_figures(
         if cloud_allowed and crop is not None:
             image = Image(crop, "image/png")
             anchor = f"page:{node.page_no}:" if node.page_no else None
-            figure_context = f"{context} · {caption or 'no caption'}"
+            about = figure_about(context, node, texts)  # page, section, the sentences citing it (step D2)
+            figure_context = f"{about} · {caption or 'no caption'}"
             if figure_class in PLOT_CLASSES:
                 capability = "digitize_plot"
                 output = _readable(
                     vision.digitize_plot,
                     image,
                     caption=caption,
-                    context=context,
+                    context=about,
                     doc_id=doc_id,
                     anchor=anchor,
                 )
@@ -218,7 +248,7 @@ def read_figures(
                     vision.read_schematic,
                     image,
                     caption=caption,
-                    context=context,
+                    context=about,
                     doc_id=doc_id,
                     anchor=anchor,
                 )
@@ -235,9 +265,14 @@ def read_figures(
                 )
                 reading, rendered = (output.reading, render_photo(output.reading)) if output else (None, None)
                 top = max((m.confidence for m in reading.failure_modes), default=None) if reading else None
-                if reading is not None and (
-                    (top is not None and top < LOW_PHOTO_CONFIDENCE)
-                    or "cannot determine component" in reading.description.lower()
+                if (
+                    reading is not None
+                    and reading.photo_kind
+                    == PhotoKind.INSPECTION  # a product picture has no damage to confirm
+                    and (
+                        (top is not None and top < LOW_PHOTO_CONFIDENCE)
+                        or "cannot determine component" in reading.description.lower()
+                    )
                 ):
                     result.flags.append(
                         Flag(
@@ -254,7 +289,7 @@ def read_figures(
                     vision.read_table_image,
                     image,
                     caption=caption,
-                    context=context,
+                    context=about,
                     doc_id=doc_id,
                     anchor=anchor,
                 )

@@ -142,13 +142,13 @@ TASKS: dict[VisionCapability, Task] = {
         "read_table_image.v1", TableReading, FLASH, "high", ThinkingLevel.LOW, 16_384
     ),
     VisionCapability.DIGITIZE_PLOT: Task(
-        "digitize_plot.v1", PlotReading, FLASH, "high", ThinkingLevel.LOW, 24_576
+        "digitize_plot.v2", PlotReading, FLASH, "high", ThinkingLevel.LOW, 24_576
     ),
     VisionCapability.READ_SCHEMATIC: Task(
-        "read_schematic.v2", SchematicReading, FLASH, "high", ThinkingLevel.LOW, 12_288
+        "read_schematic.v3", SchematicReading, FLASH, "high", ThinkingLevel.LOW, 12_288
     ),
     VisionCapability.INSPECT_HARDWARE_PHOTO: Task(
-        "inspect_hardware_photo.v1", HardwarePhotoReading, FLASH, "medium", ThinkingLevel.LOW, 12_288
+        "inspect_hardware_photo.v2", HardwarePhotoReading, FLASH, "medium", ThinkingLevel.LOW, 12_288
     ),
     VisionCapability.DESCRIBE_SLIDE: Task(
         "describe_slide.v1", SlideReading, FLASH, "medium", ThinkingLevel.LOW, 8_192
