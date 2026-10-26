@@ -30,6 +30,7 @@ not enabled on the gateway), BudgetExhausted (retry later) and StructuredOutputE
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -153,7 +154,7 @@ TASKS: dict[VisionCapability, Task] = {
         "describe_slide.v1", SlideReading, FLASH, "medium", ThinkingLevel.LOW, 8_192
     ),
     VisionCapability.VIDEO_TIMELINE: Task(
-        "video_timeline.v2", VideoTimeline, FLASH, "medium", ThinkingLevel.LOW, 8_192
+        "video_timeline.v3", VideoTimeline, FLASH, "medium", ThinkingLevel.LOW, 8_192
     ),
     VisionCapability.CLASSIFY_IMAGE: Task(
         "classify_image.v1", ImageClassification, FLASH_LITE, "low", ThinkingLevel.MINIMAL, 1_024
@@ -362,14 +363,25 @@ class VisionService:
         keyframes: list[tuple[float, Image]],
         *,
         folder_context: str,
+        duration_s: float | None = None,
+        has_audio: bool | None = None,
+        nearby_files: Sequence[str] = (),
+        frame_plan: str = "",
         doc_id: str | None = None,
         anchor: str | None = None,
     ) -> VisionOutput[VideoTimeline]:
-        """Keyframes with their time in seconds from the clip start; the gateway takes images, not video."""
+        """Keyframes with their time in seconds from the clip start; the gateway takes images, not video. The
+        clip's own facts go with them (plan step D), so the model can tell what kind of recording it is."""
         parts: list[Text | Image] = []
         for t_s, frame in keyframes:
             parts += [Text(f"t = {t_s:.2f} s"), frame]
-        variables = {"folder_context": folder_context}
+        variables = {
+            "folder_context": folder_context,
+            "duration_s": f"{duration_s:.1f}" if duration_s is not None else "not known",
+            "has_audio": {True: "yes", False: "no", None: "not known"}[has_audio],
+            "nearby_files": ", ".join(nearby_files) or "none",
+            "frame_plan": frame_plan or "not stated",
+        }
         return self._run(VisionCapability.VIDEO_TIMELINE, parts, variables, doc_id, anchor)
 
     def _run(

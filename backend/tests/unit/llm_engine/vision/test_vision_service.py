@@ -22,7 +22,7 @@ from backend.llm_engine.vision.service import (
 VERSIONS = {
     VisionCapability.TRANSCRIBE_PAGE: 2,  # v2 (2026-10-22): page furniture as its own field
     VisionCapability.READ_SCHEMATIC: 2,  # v2 (2026-10-24): verbatim, mechanical drawings have no connections
-    VisionCapability.VIDEO_TIMELINE: 2,  # v2 (2026-10-24): frames across the clip, what ignition looks like
+    VisionCapability.VIDEO_TIMELINE: 3,  # v3 (2026-10-26): kind of recording first; ignition if firing
 }
 
 PNG = Image(b"\x89PNG fake crop bytes", "image/png")
@@ -91,6 +91,8 @@ READINGS = {
         "key_numbers": [],
     },
     VisionCapability.VIDEO_TIMELINE: {
+        "recording_kind": "firing",
+        "summary": "A hot firing.",
         "events": [{"t_s": 0.4, "type": "ignition", "description": "flash"}],
         "image_metadata": IMAGE_METADATA,
     },

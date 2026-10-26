@@ -5,10 +5,13 @@ sub-route; a folder hint (`Test Plan`, `Run`, `hot fire`) favours the test-cell 
 
 F.2 test-cell (short, usually no speech): luminance sampled at 2 fps; ignition = first sustained jump of the
 mean luminance, shutdown = the last sustained drop; keyframes at ignition −0.5 s, ignition, +0.5 s, the
-steady midpoint and shutdown, plus anomaly spikes; `video_timeline` reads them (the gateway takes images,
-not video); audio RMS spikes become acoustic events without interpretation. One timeline node (kept whole
-as the parent) and one `video_event` per event with its keyframe asset; `documents.catalog` holds
-`t0_ignition_video_ms` and its confidence for the clock alignment of file 03 §C.6.
+steady midpoint and shutdown, plus anomaly spikes; `video_timeline` reads them with frames across the whole
+clip (the gateway takes images, not video); audio RMS spikes become acoustic events without interpretation.
+The model first says what kind of recording it is (``video_timeline.v3``, plan step D, 2026-10-26): only a
+firing has an ignition, so the t0 check and its CONFLICT apply to firings, and a brightness jump in an
+inspection clip is dropped. One timeline node (kept whole as the parent) and one `video_event` per event with
+its keyframe asset; `documents.catalog` holds `recording_kind`, the model's summary, `t0_ignition_video_ms`
+and its confidence for the clock alignment of file 03 §C.6.
 
 F.1 workshop (speech): 16 kHz mono audio, transcribed with word timestamps (faster-whisper medium int8 on
 CPU by default, injectable); recordings above 30 minutes go in 30-minute parts with 30 s overlap, words of the
@@ -526,6 +529,7 @@ def process_video(
         test_plan_id=folder.test_plan_id,
         test_run_id=folder.test_run_id,
         hardware_item=folder.hardware_item,
+        summary=catalog.get("summary"),
         catalog={
             **catalog,
             "duration_s": info.duration_s,
@@ -586,10 +590,19 @@ def _first(events, kinds: tuple[str, ...]) -> int | None:
 def _test_cell(path, info, folder, file_name, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id):
     ignition = detect_ignition(luminance(path))
     missed = ignition.t_ignition_ms is None
-    # The brightness check misses a small glow at the nozzle (2026-10-24): the model reads frames of the whole
-    # clip instead of two, in the same single call.
+    # The model reads frames of the whole clip in one call: the brightness check misses a small glow at the
+    # nozzle (2026-10-24), and the model must see the whole clip to say what kind of recording it is (plan
+    # step D, 2026-10-26). A brightness jump adds the frames around it.
+    keyframes = [] if missed else keyframe_times(ignition, info.duration_s)
     times = (
-        scan_times(info.duration_s) if missed and cloud_allowed else keyframe_times(ignition, info.duration_s)
+        sorted({*keyframes, *scan_times(info.duration_s)})
+        if cloud_allowed
+        else keyframe_times(ignition, info.duration_s)
+    )
+    frame_plan = "frames across the whole clip" + (
+        f", plus frames around a sudden brightness rise at {ignition.t_ignition_ms / 1000:.2f} s"
+        if not missed
+        else " (no sudden brightness change)"
     )
     assets, frames = [], []
     for t_ms in times:
@@ -616,26 +629,43 @@ def _test_cell(path, info, folder, file_name, title, blob_sha256, vision, put_as
         ][:10]
     anomalies: list[str] = []
     image_metadata = None
+    recording_kind, model_summary = None, None
     if cloud_allowed and frames:
         timeline = vision.video_timeline(
             [(t / 1000, Image(j, "image/jpeg")) for t, j in frames],
             folder_context=" / ".join([*folder.breadcrumb, file_name]),  # not the working copy's temp name
+            duration_s=info.duration_s,
+            has_audio=info.has_audio,
+            nearby_files=[s.name for s in folder.siblings if s.name != file_name][:15],
+            frame_plan=frame_plan,
             doc_id=doc_id,
             anchor=f"t:{times[0]}:",
         ).reading
+        recording_kind, model_summary = str(timeline.recording_kind), timeline.summary
         events += [(int(e.t_s * 1000), e.type, e.description, NodeSource.VLM) for e in timeline.events]
         anomalies = list(timeline.anomalies)
         if timeline.image_metadata is not None:
             image_metadata = timeline.image_metadata.model_dump(mode="json")
+    # Only a firing has an ignition. Without a model reading (cloud not allowed) the clip is taken as one, as
+    # before; a brightness jump in an inspection or assembly clip is a lamp or the camera, not an ignition.
+    firing = recording_kind in (None, "firing")
+    if not firing:
+        events = [
+            e for e in events if not (e[3] == NodeSource.STRUCTURED and e[1] in ("ignition", "shutdown"))
+        ]
     events = sorted(dict(((e[0], e[1]), e) for e in events).values())
-    t0, t_stop, t0_source = ignition.t_ignition_ms, ignition.t_shutdown_ms, "luminance"
-    if missed:
+    t0, t_stop, t0_source = (
+        (ignition.t_ignition_ms, ignition.t_shutdown_ms, "luminance") if firing else (None, None, None)
+    )
+    if firing and missed:
         model_vlm = [e for e in events if e[3] == NodeSource.VLM]
         t0 = _first(model_vlm, ("ignition",))
         later = [e for e in model_vlm if t0 is not None and e[0] > t0]
         t_stop = _first(later, ("shutdown",)) if t0 is not None else None
         t0_source = "model reading of the frames" if t0 is not None else None
     summary = [f"Video timeline of {title} ({info.duration_s:.1f} s)."]
+    if recording_kind is not None:
+        summary.append(f"Recording: {recording_kind.replace('_', ' ')}. {model_summary}".strip())
     if t0 is not None:
         summary.append(
             f"Ignition at {t0 / 1000:.2f} s (video clock, "
@@ -676,7 +706,7 @@ def _test_cell(path, info, folder, file_name, title, blob_sha256, vision, put_as
             )
         )
     flags = []
-    if t0 is None or (t0_source == "luminance" and ignition.confidence < 0.5):
+    if firing and (t0 is None or (t0_source == "luminance" and ignition.confidence < 0.5)):
         flags.append(
             Flag(
                 flag_type=FlagType.CONFLICT,
@@ -702,6 +732,8 @@ def _test_cell(path, info, folder, file_name, title, blob_sha256, vision, put_as
             )
         )
     catalog = {
+        "recording_kind": recording_kind,
+        "summary": model_summary,
         "t0_ignition_video_ms": t0,
         "t0_ignition_confidence": ignition.confidence if t0_source == "luminance" else None,
         "t0_source": t0_source,

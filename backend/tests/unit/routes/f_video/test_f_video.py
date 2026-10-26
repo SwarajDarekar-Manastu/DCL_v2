@@ -53,10 +53,18 @@ def test_keyframes_at_the_specified_offsets():
 
 
 TIMELINE = {
+    "recording_kind": "firing",
+    "summary": "A hot firing of the thruster in the test cell.",
     "events": [
         {"t_s": 3.0, "type": "ignition", "description": "bright flash"},
         {"t_s": 5.5, "type": "steady_plume", "description": "steady white glow"},
     ],
+    "anomalies": [],
+}
+INSPECTION = {
+    "recording_kind": "inspection",
+    "summary": "A metal tool probes the catalyst pellets inside the bed flange.",
+    "events": [{"t_s": 3.0, "type": "tool_contact", "description": "a tool presses on the pellets"}],
     "anomalies": [],
 }
 
@@ -90,11 +98,17 @@ def test_test_cell_clip_end_to_end(tmp_path, fake_vision, memory_store):
     )
     assert {e.metadata["event_type"] for e in events} >= {"ignition", "shutdown", "steady_plume"}
     assert {a.kind for a in doc.assets} == {AssetKind.VIDEO_FRAME}
-    assert sorted(a.t_ms for a in doc.assets) == [2500, 3000, 3500, 5500, 8000]
+    # frames across the whole clip, plus the ones around the brightness jump (plan step D)
+    times = sorted(a.t_ms for a in doc.assets)
+    assert {2500, 3000, 3500, 5500, 8000} <= set(times) and len(times) == 21
     (call,) = vision.calls
-    assert [round(t, 1) for t, _ in call[1]["keyframes"]] == [2.5, 3.0, 3.5, 5.5, 8.0]
+    assert [round(t * 1000) for t, _ in call[1]["keyframes"]] == times
     assert call[1]["folder_context"] == "APU / Test Plan 19 / Videos / hotfire_T01.mp4"
+    assert (call[1]["duration_s"], call[1]["has_audio"]) == (pytest.approx(10.0, abs=0.2), False)
+    assert call[1]["frame_plan"].startswith("frames across the whole clip, plus frames around a sudden")
     assert doc.flags == []
+    assert doc.document.summary == "A hot firing of the thruster in the test cell."
+    assert "Recording: firing." in timeline.content
 
 
 @needs_ffmpeg
@@ -113,6 +127,47 @@ def test_a_clip_without_ignition_is_flagged_soft(tmp_path, fake_vision, memory_s
     evidence = doc.flags[0].evidence
     assert (evidence.relation, evidence.a.value) == ("check_failed", "no ignition found")
     assert doc.document.catalog["t0_ignition_video_ms"] is None
+
+
+@needs_ffmpeg
+def test_an_inspection_clip_has_no_ignition_even_with_a_brightness_jump(tmp_path, fake_vision, memory_store):
+    # the TP07 and TP09 de-integration clips were flagged "no ignition found" (26 Oct)
+    data = clip(tmp_path, [("black", 3), ("white", 5), ("black", 2)])
+    doc = process_video(
+        data,
+        blob_sha256=SHA,
+        file_name="WhatsApp Video.mp4",
+        folder=TEST_CELL,
+        vision=fake_vision(video_timeline=INSPECTION),
+        put_asset=memory_store("s3://dcl-assets/"),
+    )
+    catalog = doc.document.catalog
+    assert (catalog["recording_kind"], catalog["t0_ignition_video_ms"], catalog["t_shutdown_video_ms"]) == (
+        "inspection",
+        None,
+        None,
+    )
+    assert doc.flags == []
+    timeline, *events = doc.nodes
+    assert [e.metadata["event_type"] for e in events] == ["tool_contact"]
+    assert "Recording: inspection. A metal tool probes" in timeline.content
+
+
+@needs_ffmpeg
+def test_a_firing_without_an_ignition_is_still_flagged(tmp_path, fake_vision, memory_store):
+    data = clip(tmp_path, [("gray", 4)])
+    firing = {**TIMELINE, "events": [{"t_s": 1.0, "type": "smoke", "description": "smoke at the nozzle"}]}
+    doc = process_video(
+        data,
+        blob_sha256=SHA,
+        file_name="hotfire_T03.mp4",
+        folder=TEST_CELL,
+        vision=fake_vision(video_timeline=firing),
+        put_asset=memory_store("s3://dcl-assets/"),
+    )
+    assert [(f.flag_type, f.evidence.a.value) for f in doc.flags] == [
+        (FlagType.CONFLICT, "no ignition found")
+    ]
 
 
 @needs_ffmpeg
@@ -293,6 +348,8 @@ def test_when_brightness_misses_the_ignition_the_model_finds_it_in_frames_of_the
     seen = {"ignition": 3.5, "shutdown": 6.5}
     vision = fake_vision(
         video_timeline=lambda kw: {
+            "recording_kind": "firing",
+            "summary": "A small glow at the nozzle.",
             "events": [
                 {"t_s": t, "type": kind, "description": "glow at the nozzle"} for kind, t in seen.items()
             ],

@@ -265,9 +265,23 @@ class VideoEvent(Reading):
     description: str
 
 
+class RecordingKind(StrEnum):
+    FIRING = "firing"
+    COLD_FLOW = "cold_flow"
+    LEAK_CHECK = "leak_check"
+    INSPECTION = "inspection"
+    ASSEMBLY = "assembly"
+    SETUP = "setup"
+    SCREEN = "screen"
+    OTHER = "other"
+
+
 class VideoTimeline(Reading):
-    """`video_timeline` (3.8 Flash, timestamped keyframes of a test-cell clip)."""
+    """`video_timeline` (3.8 Flash, timestamped frames of a short clip). v3 (2026-10-26, plan step D): the
+    model first says what kind of recording it is; ignition and shutdown belong to a firing only."""
 
     image_metadata: ImageMetadata
+    recording_kind: RecordingKind
+    summary: str
     events: list[VideoEvent] = Field(default_factory=list)
     anomalies: list[str] = Field(default_factory=list)
