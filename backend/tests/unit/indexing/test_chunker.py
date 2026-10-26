@@ -300,3 +300,44 @@ def test_no_embed_text_exceeds_8000_tokens_with_the_real_tokenizer(kit, real_tok
         NodeType.CODE_SYMBOL,
     }
     assert max(c for n, c in zip(embedded, counts, strict=True) if n.node_type is NodeType.CHILD) <= 520
+
+
+TABLE_HTML = (
+    "<table><tr><th>Test</th><th>Pc [bar]</th><th>Thrust [N]</th></tr>"
+    "<tr><td>T01</td><td>12.4</td><td>1.1</td></tr><tr><td>T02</td><td>12.9</td><td>1.2</td></tr></table>"
+)
+
+
+def test_a_table_gets_a_summary_of_its_caption_columns_and_rows(kit):
+    from backend.indexing.tables import table_summary
+
+    assert table_summary(TABLE_HTML, "Table 6 Thruster Performance") == (
+        "Table 6 Thruster Performance: 2 rows; columns Test, Pc [bar], Thrust [N]"
+    )
+    in_html = TABLE_HTML.replace("<table>", "<table><caption>Table 3 Abort limits</caption>")
+    assert table_summary(in_html).startswith("Table 3 Abort limits: 2 rows")
+    doc = kit.document(
+        kit.node("s1", "Results of the hot fires.", 0),
+        kit.node("t1", TABLE_HTML, 1, node_type=NodeType.TABLE, page_no=11, metadata={"caption": "Table 6"}),
+    )
+    nodes = build_embed_texts(
+        chunk_document(doc, count_tokens=kit.words), doc.document, count_tokens=kit.words
+    )
+    table = next(n for n in nodes if n.node_type is NodeType.TABLE)
+    assert table.metadata["summary"] == "Table 6: 2 rows; columns Test, Pc [bar], Thrust [N]"
+    assert "---\nTable 6: 2 rows; columns Test, Pc [bar], Thrust [N]\nTest | Pc [bar]" in table.embed_text
+
+
+def test_tables_and_figures_belong_to_the_section_they_sit_in(kit):
+    other = "Test Report 37 › 4 Calibration"
+    doc = kit.document(
+        kit.node("fig0", "Plot of the setup", 0, node_type=NodeType.FIGURE, page_no=2, breadcrumb=other),
+        kit.node("s1", "Results of the hot fires.", 1),
+        kit.node("t1", TABLE_HTML, 2, node_type=NodeType.TABLE, page_no=11),
+        kit.node("s2", "The transducers were calibrated.", 3, breadcrumb=other),
+    )
+    nodes = chunk_document(doc, count_tokens=kit.words)
+    parent = {n.breadcrumb: n.ref for n in nodes if n.node_type is NodeType.PARENT}
+    by_ref = {n.ref: n for n in nodes}
+    assert by_ref["t1"].parent_ref == parent["Test Report 37 › 3 Results"]  # the section before it
+    assert by_ref["fig0"].parent_ref == parent[other]  # it opens its section: the section after it

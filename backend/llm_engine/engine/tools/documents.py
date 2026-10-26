@@ -72,7 +72,9 @@ def get_document(session: Session, args: GetDocumentArgs) -> ToolResult:
     clauses = [
         "n.doc_id = :doc_id",
         "n.ordinal >= :start",
-        "(n.node_type = 'parent' OR "
+        # sections, their tables and figures (attached to the section since 2026-10-26), and pieces of
+        # their own; never a section's passages, proxies or table rows, which the parents already hold
+        "(n.node_type IN ('parent', 'table', 'figure') OR "
         "(n.parent_node_id IS NULL AND n.node_type NOT IN ('child', 'question_proxy')))",
     ]
     params = {"doc_id": doc["doc_id"], "start": args.start_ordinal}

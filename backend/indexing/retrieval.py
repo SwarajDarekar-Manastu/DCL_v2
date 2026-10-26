@@ -18,8 +18,8 @@
    models role is down the RRF order is kept and the result says so (file 07 §12).
 6. Near-duplicate collapse via `document_relations` NEAR_DUPLICATE: the newer document stays, the other is
    listed in `also_in`.
-7. Hits carry the parent text, a stable anchor of the best child, document fields and `web_url`. Node ids
-   exist only inside the request.
+7. Hits carry the parent text, a stable anchor of the best child, document fields and `web_url`; a table or
+   figure hit also carries the text of the section it sits in. Node ids exist only inside the request.
 
 All SQL is templates with bound values; field and table names are constants, never user input.
 """
@@ -63,6 +63,10 @@ LANGUAGE_FIELDS = {
     "zh": "content_zh",
 }
 COLLAPSING_TYPES = frozenset({NodeType.CHILD, NodeType.QUESTION_PROXY})
+# a hit on one of these keeps its own text and anchor and brings its section's text along (chunker attaches
+# tables and figures to the section they sit in)
+SECTION_MEMBERS = frozenset({NodeType.TABLE, NodeType.FIGURE})
+SECTION_CHARS = 4000
 
 
 class Scope(StrEnum):
@@ -303,6 +307,9 @@ class Hit(BaseModel):
     rrf_score: float
     rerank_score: float | None
     also_in: list[uuid.UUID] = []
+    section_text: str | None = Field(
+        default=None, description="the text of the section a table or figure sits in (its parent)"
+    )
 
 
 class SearchResult(BaseModel):
@@ -419,6 +426,14 @@ def search(
     documents = _documents(session, doc_ids)
     ordered = _drop_near_duplicates(ordered, _near_duplicates(session, doc_ids), documents)
 
+    sections = _load_nodes(
+        session,
+        [
+            c.best.parent_node_id
+            for c in ordered[: k * 2]
+            if c.best.node_type in SECTION_MEMBERS and c.best.parent_node_id
+        ],
+    )
     hits = []
     unanchored: set[uuid.UUID] = set()
     for c in ordered:
@@ -454,6 +469,11 @@ def search(
                 rrf_score=c.score,
                 rerank_score=c.rerank_score,
                 also_in=c.also_in,
+                section_text=(
+                    sections[c.best.parent_node_id].content[:SECTION_CHARS]
+                    if c.best.node_type in SECTION_MEMBERS and c.best.parent_node_id in sections
+                    else None
+                ),
             )
         )
     if unanchored:

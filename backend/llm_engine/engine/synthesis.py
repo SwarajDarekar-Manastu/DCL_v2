@@ -52,7 +52,15 @@ def evidence_items(results: list[ToolResult]) -> list[Evidence]:
                         f"E{len(items) + 1}",
                         result.call_id,
                         result.tool,
-                        (_location(hit) + hit["parent_text"])[:EVIDENCE_CHARS],
+                        (
+                            _location(hit)
+                            + hit["parent_text"]
+                            + (
+                                f"\nSection around it: {hit['section_text']}"
+                                if hit.get("section_text")
+                                else ""
+                            )
+                        )[:EVIDENCE_CHARS],
                         source,
                     )
                 )

@@ -1,7 +1,9 @@
 """HTML tables for the chunker (file 03 §A1.4 step 6, file 04 §4.1): rows, rowspan groups, row blocks.
 
 A table up to the token cap stays whole; a longer one becomes row blocks with the header repeated, and a
-block never cuts a row or a rowspan group. `table_to_text` is the plain form used for embedding.
+block never cuts a row or a rowspan group. `table_to_text` is the plain form used for embedding;
+`table_summary` is the table's one-line summary written in code (caption, columns, rows), embedded before
+its rows (file 04 §4.1: "summary + header + first rows").
 """
 
 import html
@@ -17,6 +19,7 @@ TABLE_OPEN = re.compile(r"<table\b[^>]*>", re.IGNORECASE)
 ROWSPAN = re.compile(r"rowspan\s*=\s*[\"']?(\d+)", re.IGNORECASE)
 TAG = re.compile(r"<[^>]+>")
 CELL_END = re.compile(r"</t[dh]>", re.IGNORECASE)
+CAPTION = re.compile(r"<caption\b[^>]*>(.*?)</caption>", re.DOTALL | re.IGNORECASE)
 
 
 def table_rows(table_html: str) -> tuple[list[str], list[str]]:
@@ -80,3 +83,22 @@ def _balanced_blocks(groups: list[str], sizes: list[int], budget: int) -> list[l
         blocks[-1].append(group)
         size += tokens
     return blocks
+
+
+def _cells(row_html: str) -> list[str]:
+    return [c for c in (html.unescape(TAG.sub("", c)).strip() for c in CELL_END.split(row_html)) if c]
+
+
+def table_summary(table_html: str, caption: str | None = None, part: str | None = None) -> str:
+    """'Table 6 Thruster Performance Metrics: 12 rows; columns Test, Pc [bar], Thrust [N]' — the columns as
+    printed (units included), from the last header row (the one naming each column)."""
+    header, body = table_rows(table_html)
+    columns = _cells(header[-1]) if header else []
+    if not caption and (found := CAPTION.search(table_html)):
+        caption = html.unescape(TAG.sub("", found.group(1)))
+    head = " ".join((caption or "Table").split())
+    text = f"{head}: {len(body)} rows" + (f" (part {part})" if part else "")
+    if columns:
+        listed = ", ".join(columns[:24]) + (", …" if len(columns) > 24 else "")
+        text += f"; columns {listed}"
+    return text

@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.dispatcher.contract import DocumentFields, PageBox, ProcessedDocument, ProcessedNode
 from backend.indexing.anchors import content_hash
 from backend.indexing.identifiers import content_codes
-from backend.indexing.tables import split_table, table_to_text
+from backend.indexing.tables import split_table, table_summary, table_to_text
 from backend.llm_engine.local_models import MAX_EMBED_TEXT_TOKENS, format_document
 from backend.postgres.enums import NodeSource, NodeType, SourceOrigin
 
@@ -421,9 +421,39 @@ def chunk_document(
     for node in out:
         if node.parent_ref in first_derived:
             node.parent_ref = first_derived[node.parent_ref]
+    _attach_to_sections(out)
+    for node in out:
+        if node.node_type is NodeType.TABLE and not node.metadata.get("summary"):
+            node.metadata = {
+                **node.metadata,
+                "summary": table_summary(
+                    node.content, node.metadata.get("caption"), node.metadata.get("part")
+                ),
+            }
     for ordinal, node in enumerate(out):
         node.ordinal = ordinal
     return out
+
+
+SECTION_MEMBERS = frozenset({NodeType.TABLE, NodeType.FIGURE})
+
+
+def _attach_to_sections(nodes: list[IndexNode]) -> None:
+    """A table or figure the route left without a parent belongs to the section it sits in: the section part
+    (parent) with the same breadcrumb before it in reading order, else the first one after it. The writer then
+    gets the section's text with a table hit, and the section can speak for its tables and figures."""
+    last: dict[str, str] = {}
+    waiting: dict[str, list[IndexNode]] = {}
+    for node in nodes:
+        if node.node_type is NodeType.PARENT:
+            last[node.breadcrumb] = node.ref
+            for member in waiting.pop(node.breadcrumb, []):
+                member.parent_ref = node.ref
+        elif node.node_type in SECTION_MEMBERS and node.parent_ref is None:
+            if node.breadcrumb in last:
+                node.parent_ref = last[node.breadcrumb]
+            else:
+                waiting.setdefault(node.breadcrumb, []).append(node)
 
 
 def _table_nodes(
