@@ -286,6 +286,18 @@ def test_open_webui_tasks_never_reach_the_engine(pipe_module):
     tags, _, _ = run(pipe, task="tags_generation")
     assert len(recorder.requests) == calls_after_answer
     assert json.loads(title[0]) == {"title": "Steady-state pressure of TP07 T04?"}
+    template = {  # what Open WebUI really sends for a title: its instruction, the chat inside it
+        "messages": [
+            {
+                "role": "user",
+                "content": "### Task:\nGenerate a concise title summarizing the chat history.\n"
+                "<chat_history>\nUSER: Which catalyst did TP12 use?\nASSISTANT: ...\n</chat_history>",
+            }
+        ]
+    }
+    pipe._questions.clear()  # a worker restart forgot the question: the template's chat history gives it
+    title, _, _ = run(pipe, body=template, task="title_generation")
+    assert json.loads(title[0]) == {"title": "Which catalyst did TP12 use?"}
     assert json.loads(follow[0]) == {"follow_ups": ["Compare with T05?"]}
     assert json.loads(tags[0]) == {"tags": []}
 

@@ -155,6 +155,21 @@ def tool_block(step: dict) -> str:
     )
 
 
+def _history_question(messages: list[dict]) -> str:
+    """The first user line of the ``<chat_history>`` block Open WebUI puts in its task templates."""
+    text = next(
+        (m.get("content") for m in messages if m.get("role") == "user" and isinstance(m.get("content"), str)),
+        "",
+    )
+    history = (
+        text.split("<chat_history>", 1)[1].split("</chat_history>", 1)[0] if "<chat_history>" in text else ""
+    )
+    for line in history.splitlines():
+        if line.strip().upper().startswith("USER:"):
+            return line.strip()[5:].strip()
+    return ""
+
+
 class Pipe:
     class Valves(BaseModel):
         ENGINE_URL: str = Field(default="", description="DCL backend base URL, e.g. http://dcl-api:8200")
@@ -175,6 +190,7 @@ class Pipe:
         self.valves = self.Valves()
         self.http_client: httpx.AsyncClient | None = None  # tests inject a mock transport here
         self._followups: dict[str, list[str]] = {}
+        self._questions: dict[str, str] = {}  # each chat's first question, for its title
 
     def pipes(self) -> list[dict]:
         return [{"id": "main", "name": "Manastu Propulsion Engine"}]
@@ -247,10 +263,9 @@ class Pipe:
     def _task_reply(self, task: str, messages: list[dict], chat_id: str) -> str:
         """Open WebUI's own background tasks never reach the engine."""
         if task == "title_generation":
-            last = next(
-                (m["content"] for m in reversed(engine_messages(messages)) if m["role"] == "user"), ""
-            )
-            return json.dumps({"title": " ".join(last.split()[:8]) or "Propulsion question"})
+            # The task's own message is Open WebUI's instruction template, never the user's question.
+            question = self._questions.get(chat_id) or _history_question(messages)
+            return json.dumps({"title": " ".join(question.split()[:8]) or "Propulsion question"})
         if task == "tags_generation":
             return json.dumps({"tags": []})
         if task == "follow_up_generation":
@@ -273,6 +288,11 @@ class Pipe:
         if __task__:
             yield self._task_reply(str(__task__), body.get("messages", []), chat_id)
             return
+        first = next(
+            (m["content"] for m in engine_messages(body.get("messages", [])) if m["role"] == "user"), ""
+        )
+        if chat_id and first and isinstance(first, str):
+            self._questions.setdefault(chat_id, first)
 
         async def emit(kind: str, data: dict) -> None:
             if __event_emitter__:

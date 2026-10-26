@@ -179,6 +179,9 @@ class Settings(BaseSettings):
     minio_access_key: str | None = _env("DCL_MINIO_ACCESS_KEY", default=None)
     minio_secret_key: SecretStr | None = _env("DCL_MINIO_SECRET_KEY", default=None)
     minio_secure: bool = _env("DCL_MINIO_SECURE", default=False)
+    # The address a user's browser reaches MinIO at (file 05 §1: browsers fetch presigned links). Links the
+    # browser opens are signed for it; None signs them for DCL_MINIO_ENDPOINT, which only containers resolve.
+    minio_public_endpoint: AnyHttpUrl | None = _env("DCL_MINIO_PUBLIC_ENDPOINT", default=None)
     minio_root_user: str | None = _env("DCL_MINIO_ROOT_USER", default=None)
     minio_root_password: SecretStr | None = _env("DCL_MINIO_ROOT_PASSWORD", default=None)
     models_url: AnyHttpUrl | None = _env("DCL_MODELS_URL", default=None)

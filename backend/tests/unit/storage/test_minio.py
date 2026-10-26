@@ -116,3 +116,27 @@ def test_presigned_put_uploads_and_expires_in_15_minutes(client):
     assert parse_qs(urlsplit(url).query)["X-Amz-Expires"] == ["900"]
     assert httpx.put(url, content=b"attachment").status_code == 200
     assert BucketStore(client, "dcl-exports").get("uploads/user-1/attachment-1") == b"attachment"
+
+
+def test_links_a_browser_opens_are_signed_for_the_public_address_without_a_network_call():
+    from types import SimpleNamespace
+
+    from pydantic import SecretStr
+
+    from backend.storage.minio import browser_client_from_settings, client_from_settings
+
+    settings = SimpleNamespace(
+        minio_endpoint="http://minio:9000",
+        minio_public_endpoint="http://localhost:9100",
+        minio_access_key="key",
+        minio_secret_key=SecretStr("secret"),
+        minio_secure=False,
+    )
+    settings.require = lambda *groups: settings
+    link = presign_get(browser_client_from_settings(settings), "s3://dcl-assets/photos/a/web.jpg")
+    assert link.startswith(
+        "http://localhost:9100/dcl-assets/photos/a/web.jpg?"
+    )  # signed offline: no server here
+    assert client_from_settings(settings)._base_url.host == "minio:9000"  # reads and writes stay inside
+    settings.minio_public_endpoint = None
+    assert browser_client_from_settings(settings)._base_url.host == "minio:9000"

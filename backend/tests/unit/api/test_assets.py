@@ -28,6 +28,7 @@ def client(auth_config, key_resolver, minio):
     app.dependency_overrides[auth.get_auth_config] = lambda: auth_config
     app.dependency_overrides[auth.get_key_resolver] = lambda: key_resolver
     app.dependency_overrides[assets.get_minio] = lambda: minio
+    app.dependency_overrides[assets.get_browser_minio] = lambda: minio
     return TestClient(app)
 
 

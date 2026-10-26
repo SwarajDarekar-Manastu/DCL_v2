@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import auth, viewer
-from backend.api.assets import get_minio
+from backend.api.assets import get_browser_minio
 from backend.api.viewer import ViewerPayload, viewer_path
 from backend.dispatcher.contract import AnchorError, format_anchor, parse_anchor
 from backend.postgres.session import get_session
@@ -122,7 +122,7 @@ def client(auth_config, key_resolver):
     app.dependency_overrides[auth.get_auth_config] = lambda: auth_config
     app.dependency_overrides[auth.get_key_resolver] = lambda: key_resolver
     app.dependency_overrides[get_session] = lambda: NoDocuments()
-    app.dependency_overrides[get_minio] = lambda: None
+    app.dependency_overrides[get_browser_minio] = lambda: None
     return TestClient(app)
 
 

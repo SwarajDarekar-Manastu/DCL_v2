@@ -27,6 +27,7 @@ from backend.storage.minio import (
     EXPORTS,
     PRESIGN_TTL,
     StorageError,
+    browser_client_from_settings,
     client_from_settings,
     parse_uri,
     presign_get,
@@ -46,6 +47,11 @@ def get_minio() -> Minio:
     return client_from_settings(get_settings())
 
 
+def get_browser_minio() -> Minio:
+    """Signs the links a user's browser opens (``DCL_MINIO_PUBLIC_ENDPOINT``)."""
+    return browser_client_from_settings(get_settings())
+
+
 router = APIRouter(tags=["assets"])
 Viewer = Annotated[ConsoleUser, Depends(require_role(ConsoleRole.VIEWER))]
 
@@ -54,7 +60,7 @@ Viewer = Annotated[ConsoleUser, Depends(require_role(ConsoleRole.VIEWER))]
 def asset_url(
     uri: Annotated[str, Query(max_length=1024, description="s3://dcl-assets/<key>")],
     user: Viewer,
-    client: Annotated[Minio, Depends(get_minio)],
+    client: Annotated[Minio, Depends(get_browser_minio)],
 ) -> AssetUrl:
     try:
         bucket, _ = parse_uri(uri)

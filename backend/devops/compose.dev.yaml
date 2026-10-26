@@ -78,6 +78,13 @@ services:
   worker-media:
     environment: *dev-env
 
+  # The dev Console signs in with local passwords (DECISIONS 2026-10-22; Entra ID is future scope). The base
+  # file defaults to msal, which builds a Console that cannot sign in here (S4 note, 2026-10-24).
+  console:
+    build:
+      args:
+        VITE_AUTH_MODE: ${VITE_AUTH_MODE:-local}
+
   worker-vision-batch:
     environment: *dev-env
 

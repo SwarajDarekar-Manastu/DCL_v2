@@ -42,6 +42,28 @@ def client_from_settings(settings: Settings) -> Minio:
     )
 
 
+# Fixed so a browser-facing client signs offline: minio-py would otherwise ask the endpoint for its region,
+# and the public address may not be reachable from inside a container.
+REGION = "us-east-1"
+
+
+def browser_client_from_settings(settings: Settings) -> Minio:
+    """A client whose presigned links name ``DCL_MINIO_PUBLIC_ENDPOINT``, the address a user's browser
+    reaches; the signature covers the host, so a link signed for ``minio:9000`` cannot be rewritten
+    afterwards. Only for presigning links a browser opens: reads and writes use ``client_from_settings``."""
+    if settings.minio_public_endpoint is None:
+        return client_from_settings(settings)
+    settings.require(Group.MINIO)
+    endpoint = urlsplit(str(settings.minio_public_endpoint))
+    return Minio(
+        endpoint.netloc,
+        access_key=settings.minio_access_key,
+        secret_key=settings.minio_secret_key.get_secret_value(),
+        secure=endpoint.scheme == "https",
+        region=REGION,
+    )
+
+
 def check_key(key: str) -> str:
     if not key or key.startswith("/") or any(part in ("", ".", "..") for part in key.split("/")):
         raise StorageError(f"invalid object key {key!r}")

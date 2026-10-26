@@ -415,10 +415,18 @@ def _external_policy(session) -> Any:
 
 def _asset_access(settings) -> tuple[Any, Any, Any]:
     """(presign, fetch, put_asset) over MinIO for T2 plots and T3; all None without MinIO configured."""
-    from backend.storage.minio import ASSETS, BucketStore, client_from_settings, parse_uri, presign_get
+    from backend.storage.minio import (
+        ASSETS,
+        BucketStore,
+        browser_client_from_settings,
+        client_from_settings,
+        parse_uri,
+        presign_get,
+    )
 
     try:
         client = client_from_settings(settings)
+        browser = browser_client_from_settings(settings)  # the answer's images open in the user's browser
     except ConfigError as exc:
         log.warning("T2 plots and T3 image links are off: %s", exc)
         return None, None, None
@@ -434,7 +442,7 @@ def _asset_access(settings) -> tuple[Any, Any, Any]:
 
     assets = BucketStore(client, ASSETS)
     return (
-        (lambda uri: presign_get(client, uri)),
+        (lambda uri: presign_get(browser, uri)),
         fetch,
         (lambda key, data: assets.put(key, data, content_type="image/png")),
     )

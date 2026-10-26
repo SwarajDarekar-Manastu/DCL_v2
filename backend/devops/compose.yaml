@@ -12,6 +12,8 @@ x-stack-env: &stack-env
   DCL_DATABASE_URL: postgresql+psycopg://${DCL_DB_USER}:${DCL_DB_PASSWORD}@postgres:5432/dcl_v2
   DCL_REDIS_URL: redis://${DCL_REDIS_PASSWORD:+:}${DCL_REDIS_PASSWORD:-}${DCL_REDIS_PASSWORD:+@}redis:6379/0
   DCL_MINIO_ENDPOINT: http://minio:9000
+  # what a user's browser opens presigned links at (MinIO's S3 port, published below as 9100)
+  DCL_MINIO_PUBLIC_ENDPOINT: ${DCL_MINIO_PUBLIC_ENDPOINT:-http://localhost:9100}
   DCL_MODELS_URL: http://models:8500
   DCL_OFFICE_URL: http://libreoffice:2003
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318

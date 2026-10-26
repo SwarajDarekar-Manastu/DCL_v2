@@ -1,0 +1,574 @@
+# Silver benchmark suite: TEMPLATE (index-derived answers; DECISIONS.md 2026-10-22, option b). Owner: S5 style.
+# Silver = expected answers copied from what the pipeline had indexed on the build date, not human-verified.
+# Questions, tools and behaviours only: expected numbers, citations, entities and retrieval anchors are in the
+# git-ignored data/benchmark/silver.local.yaml (fragments) and data/benchmark/silver.yaml (importable suite).
+# Built by the build_suites module (verification folder); case schema: file 08 section 5.3.
+version: 1
+suite: silver
+cases:
+- case_id: silver-a1-tp23-coolant-outlet-abort
+  category: FACT_LOOKUP
+  question: Under the TP-23-CS cooling sleeve hot-fire test plan (Table 3, abort criteria thresholds), at what coolant outlet temperature must a firing be aborted?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route A1, report fact): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-tp23-expected-thrust-11bar
+  category: FACT_LOOKUP
+  question: What thrust does Table 4 (expected performance metrics, MS289C reference) of the TP-23-CS test plan predict at a tank pressure of 11.00 bar gauge?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route A1, report table cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-tp26-bed-time-380w
+  category: FACT_LOOKUP
+  question: In the Clamp Heater 1 catalyst bed heater characterisation test report of Test Campaign 2 (Test Plan 26, document APU-TC2-TR-HTRCHAR-v2.0), how many minutes did the catalyst bed need to reach 300 degC with the 380 W heater?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route A1, report fact): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-duct450-tp4-peak
+  category: FACT_LOOKUP
+  question: In the 450 W ceramic clamp heater duct-cooled preheat test (Duct Cooling, Config 0 POC, heater 280HT-14-10102025), what peak temperature did the catalyst-bed core probe TP4 reach?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route A1, report fact): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-tp24-termination-tc
+  category: FACT_LOOKUP
+  question: In the Heater Bed Temperature Characterisation (HTRCHAR) test plan of Test Campaign 2 (Test Plan 24), at what thermocouple reading is the heater cut as a termination criterion for any individual test?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route A1, report fact): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-ecss35-10c-galvanic-method
+  category: STANDARDS
+  question: Which ASTM test method does ECSS-E-ST-35-10C require for testing galvanic corrosion of two dissimilar metals in electrical contact in an electrolyte under low-flow conditions, and which clauses of it apply?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A1, standard clause): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-ecss35-10c-spontaneous-ignition
+  category: STANDARDS
+  question: According to ECSS-E-ST-35-10C, which test standards may be used to determine the spontaneous ignition temperature of non-metallic materials in pressurised gaseous oxygen?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A1, standard clause): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-moog-monarc5-expansion
+  category: FACT_LOOKUP
+  question: What nozzle expansion ratio does the Moog monopropellant thrusters datasheet give for the MONARC-5 engine?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A1, vendor datasheet cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-ariane-400n-longest-burn
+  category: FACT_LOOKUP
+  question: What longest steady state burn does the ArianeGroup chemical monopropellant thruster family datasheet list for the 400N mono-propellant thruster?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A1, vendor datasheet cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-deint-outer-diameter
+  category: VISUAL
+  question: What outer diameter of the chamber is written by hand on the de-integration sheet of Test Campaign 2, Test Plan 7?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route A1, handwriting reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-deint-heater-type
+  category: VISUAL
+  question: What heater type and power are recorded on the de-integration sheet of Test Campaign 2, Test Plan 7?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A1, handwriting reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a1-deint-handwritten-date
+  category: VISUAL
+  question: What date is written by hand on the de-integration sheet of Test Campaign 2, Test Plan 7?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route A1, handwriting reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-tp12-thrust-13p5bar
+  category: FACT_LOOKUP
+  question: According to the Test Campaign 1, Test Plan 12 report, what thrust does the thruster performance metrics table give for a tank pressure of 13.5 barg?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A2, report table cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-tp12-throughput-test02
+  category: FACT_LOOKUP
+  question: In the Test Campaign 1, Test Plan 12 report, what propellant throughput is listed for Test 02?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route A2, report table cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-tp12-cw40-max-firing-test01
+  category: FACT_LOOKUP
+  question: In the Test 01 temperature table of the Test Campaign 1, Test Plan 12 report, what maximum firing temperature is recorded at the chamber-wall location 40 mm from the flange?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A2, report table cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-tp12-tc-stop-limit
+  category: FACT_LOOKUP
+  question: Under the emergency procedures of the Test Campaign 1, Test Plan 12 report, at what surface thermocouple temperature does the test have to be stopped?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route A2, report fact): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-tp12-checklist-kv
+  category: FACT_LOOKUP
+  question: In the pre-firing checklist of the Test Campaign 1, Test Plan 12 report, who is responsible for the valve Kv characterization?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route A2, report table cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-tp6-injector-part
+  category: FACT_LOOKUP
+  question: Which injector, by part number and common name, is used in the Test Campaign 2, Test Plan 6 report?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route A2, report fact): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-tp6-bed-offset
+  category: FACT_LOOKUP
+  question: In the Test Campaign 2, Test Plan 6 report, by how many millimetres is the catalyst bed offset from the injector face, and what fills that gap?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A2, report fact): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-tp6-catalyst-depth-test05
+  category: FAILURE_ANALYSIS
+  question: In the Test Campaign 2, Test Plan 6 report, what catalyst depth had been reached by Test 05 against the 2 mm containment criterion?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A2, report fact): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-json-overview-eol-target
+  category: FACT_LOOKUP
+  question: In the Overview section of the first test campaign's APU test plan, how many seconds of cumulative firing duration at EOL conditions are targeted, and what is the minimum per test?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A2, JSON section): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-json-objectives-inclined-injector
+  category: FACT_LOOKUP
+  question: In the Objectives section of the first test campaign's APU test plan, which catalyst is the APU evaluated with using the inclined injector?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A2, JSON section): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-latex-spray-nozzle-dead-volume
+  category: FACT_LOOKUP
+  question: In the spray nozzle test discussion (Spraytech Systems COTS nozzles), what maximum dead volume limit have Manastu Space's advisors recommended?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A2, LaTeX section): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-a2-tp7-expected-thrust-22bar
+  category: FACT_LOOKUP
+  question: In the Test Plan 7 (Test Campaign 2) expected thruster performance table, what thrust is expected at a tank pressure of 22 barg?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route A2, LaTeX table cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-b-header-custom
+  category: CODE
+  question: What does the header_custom function of the team's test-plan creator script return for a header v?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route B, code symbol): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-b-bold-header
+  category: CODE
+  question: How does the bold_header function of the test-plan creator script format each header cell?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route B, code symbol): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-b-latex-cleanup
+  category: CODE
+  question: What does the latex_cleanup function of the test-plan creator script do to the text it receives?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route B, code symbol): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-b-write-line
+  category: CODE
+  question: What does the write_line helper of the test-plan creator script write to the file it is given?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route B, code symbol): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-b-revision-sheet-name
+  category: CODE
+  question: From which Excel sheet name does the test-plan creator script read the revision history?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route B, code constant): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-b-debug-max-runs
+  category: CODE
+  question: How many pdflatex passes at most does the test-plan creator script allow when its debug flag is set to 1?
+  expected_tools: [search_documents]
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route B, code constant): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-b-portrait-params
+  category: CODE
+  question: Which parameters does the convert_portrait_to_landscape function of the test-plan creator script take, and what does the second one do?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route B, code symbol): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-b-inj10-excel-close-nosave
+  category: CODE
+  question: In the copy of the test-plan creator script stored with the Injector 10 cold flow test, does close_excel_workbook save the workbook when it closes it?
+  expected_tools: [search_documents]
+  difficulty: 4
+  local: true
+  notes: 'Silver case (route B, code symbol): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-b-requirements-xlwings
+  category: CODE
+  question: Which version of xlwings does the requirements file of the test-plan creator pin?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route B, tooling document): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-tp07log-peak-t4
+  category: TELEMETRY_MATH
+  question: What was the peak temperature at thermocouple T4 (chamber wall, 40 mm from the flange) in the Test Plan 7 thermocouple log recorded on 4 December 2025 at 13:25 (Analog file)?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route C, telemetry stat): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-tp07log-peak-t3
+  category: TELEMETRY_MATH
+  question: What was the peak temperature at thermocouple T3 (chamber wall, 10 mm from the flange) in the Test Plan 7 thermocouple log recorded on 4 December 2025 at 13:25 (Analog file)?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route C, telemetry stat): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-tp07log-mean-t8
+  category: TELEMETRY_MATH
+  question: What was the mean temperature at thermocouple T8 (thrust valve outlet) over the whole recording in the Test Plan 7 thermocouple log recorded on 4 December 2025 at 13:25 (Analog file)?
+  expected_tools: [query_telemetry]
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route C, telemetry stat): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-tp07log-duration
+  category: TELEMETRY_MATH
+  question: How long is the recording in the Test Plan 7 thermocouple log recorded on 4 December 2025 at 13:25 (Analog file)?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route C, telemetry stat): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-tp07log-sampling-rate
+  category: TELEMETRY_MATH
+  question: At what sampling rate was the Test Plan 7 thermocouple log recorded on 4 December 2025 at 13:25 (Analog file) sampled?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route C, telemetry stat): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-inj10-labjack-ain0-scaling
+  category: FACT_LOOKUP
+  question: What scaling does the LabJack stream configuration of the Injector 10 cold flow test (Test 02, 8 bar tube collection) apply to the first analog channel AIN0?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route C, config): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-inj10-labjack-default-scan-rate
+  category: FACT_LOOKUP
+  question: What scan rate do the LabJack default configuration settings in the Injector 10 cold flow test pressure folder use?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route C, config): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-tp07-labjack-scan-rate
+  category: FACT_LOOKUP
+  question: What stream scan rate is set in the LabJack stream configuration of the Test Plan 7 (Test Campaign 2) pressure recordings?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route C, config): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-tp07-input-throat-diameter
+  category: FACT_LOOKUP
+  question: What throat diameter is listed in the Test Plan 7 test input parameters sheet of Test Campaign 2?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route C, spreadsheet cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-tp12-test02-max-massflow
+  category: FACT_LOOKUP
+  question: In the Test Plan 12 Test 02 data analysis workbook, what is the maximum mass flow rate on the valve on/off sheet?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route C, spreadsheet cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-tp12-test04-nozzle-pressure-max
+  category: FACT_LOOKUP
+  question: In the Test Plan 12 Test 04 data analysis workbook, what is the maximum nozzle convergent pressure on the valve on/off sheet?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route C, spreadsheet cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-c-tp23-risk-film-boiling-rpn
+  category: FAILURE_ANALYSIS
+  question: In the Cooling Duct FMEA of the Test Plan 23 risk assessment, what RPN is assigned to film boiling onset in a low-flow channel?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route C, spreadsheet cell): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-d-broken-thruster-failure-mode
+  category: VISUAL
+  question: What failure does the photo of the broken thruster from the Test Plan 9 de-integration show?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route D, photo reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-d-catalyst-batch2-label
+  category: VISUAL
+  question: What label is written on the Petri dish in the Test Plan 9 photo of the 3 mm catalyst pellets (Batch 2)?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route D, photo reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-d-catalyst-monolith-damage
+  category: VISUAL
+  question: What damage does the Test Plan 12 de-integration photo of the catalyst monolith show?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route D, photo reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-d-inj-mesh-condition
+  category: VISUAL
+  question: What condition is the injector mesh screen in on the Test Plan 12 de-integration photo of the injector mesh?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route D, photo reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-d-inj-vf-label
+  category: VISUAL
+  question: Which injector number is written on the label in the Test Plan 12 photo of the injector faceplate (Inj VF)?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route D, photo reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-d-inj-cc-tp09-label
+  category: VISUAL
+  question: Which injector number and which value are written on the label in the Test Plan 9 photo of the injector flange (Inj CC)?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route D, photo reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-d-inj14-test10-injector-pressure
+  category: VISUAL
+  question: In the Injector 14 Test 10 flow-test plot, what injector pressure is reached while the valve is open?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route D, plot reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-d-inj10-pressure-drop-100gs
+  category: VISUAL
+  question: In the Injector 10 plot of injector pressure drop against mass flow rate, what pressure drop do the test data show at a mass flow of about 100 g/s?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route D, plot reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-d-inj10-setup-schematic-components
+  category: VISUAL
+  question: Which burst disk, solenoid valve and pressure transducer tags appear on the Injector 10 cold flow test setup schematic?
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route D, diagram image reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-d-nav-burned-mesh-photos
+  category: NAVIGATIONAL
+  question: Show me the photos of the injector mesh after firing.
+  expected_tools: [search_documents, inspect_visuals]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route D, photo navigation): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-e-revc-total-length
+  category: VISUAL
+  question: What total length is dimensioned on page 1 of the thruster configuration Rev C drawing?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route E, diagram reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-e-revc-p1-components
+  category: VISUAL
+  question: Which components are shown on page 1 of the thruster configuration Rev C drawing?
+  expected_tools: [inspect_code_and_diagrams]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route E, diagram components): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-e-revc-p2-overall-length
+  category: VISUAL
+  question: On the 06.04.2026 page of the thruster configuration Rev C drawing, what overall length is dimensioned?
+  expected_tools: [search_documents]
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route E, diagram reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-e-revc-p2-catalyst
+  category: VISUAL
+  question: Which catalyst is named on the 06.04.2026 page of the thruster configuration Rev C drawing?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route E, diagram reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-e-revc-mesh-material
+  category: VISUAL
+  question: What material is the mesh made of in the thruster configuration Rev C drawing?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route E, diagram reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-e-tp23-sensors
+  category: VISUAL
+  question: Which sensors are shown on the thruster configuration drawing of Test Plan 23?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route E, diagram reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-e-tp23-retainer-material
+  category: VISUAL
+  question: What is the retainer plate of the thruster configuration drawing of Test Plan 23 made of?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route E, diagram reading): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-f-tp01-v1-ignition-time
+  category: FACT_LOOKUP
+  question: At what time on the video clock does ignition appear in the Test Plan 1 front-camera hot-firing video recorded on 30 May 2025 at 14:01:51?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route F, video timeline): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-f-tp01-v1-duration
+  category: FACT_LOOKUP
+  question: How long is the Test Plan 1 front-camera hot-firing video recorded on 30 May 2025 at 14:01:51?
+  expected_tools: [search_documents]
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route F, video timeline): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-f-tp01-v1-first-acoustic
+  category: FACT_LOOKUP
+  question: When is the first loud acoustic event in the Test Plan 1 front-camera hot-firing video recorded on 30 May 2025 at 14:01:51?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route F, video timeline): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-f-tp01-v2-ignition-time
+  category: FACT_LOOKUP
+  question: At what time on the video clock does ignition appear in the Test Plan 1 front-camera hot-firing video recorded on 30 May 2025 at 14:40:24?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route F, video timeline): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-f-tp09-video-spoon
+  category: FACT_LOOKUP
+  question: What happens at about 3.4 s in the Test Plan 9 de-integration video recorded on 9 December 2025 (iPhone video, 6.7 s long)?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route F, video timeline): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-f-tp07-video-pellets
+  category: FACT_LOOKUP
+  question: What does the Test Plan 7 de-integration video recorded on 4 December 2025 (WhatsApp video, 9.8 s long) show being done?
+  expected_tools: [search_documents]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route F, video timeline): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-oos-chitchat
+  category: OUT_OF_SCOPE
+  question: How are you today?
+  difficulty: 1
+  local: true
+  notes: 'Silver case (route behaviour, out of scope): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-oos-flight
+  category: OUT_OF_SCOPE
+  question: Which airline flies direct from Bengaluru to Munich?
+  expected_behavior: [must_state_insufficient_evidence]
+  difficulty: 1
+  notes: 'Silver case (route behaviour, out of scope): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-insufficient-tp38
+  category: TELEMETRY_MATH
+  question: What was the peak chamber pressure in Test Plan 38 of Test Campaign 2?
+  expected_tools: [query_telemetry]
+  expected_behavior: [must_state_insufficient_evidence]
+  difficulty: 1
+  notes: 'Silver case (route behaviour, insufficient evidence): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-insufficient-tp22-pressure
+  category: TELEMETRY_MATH
+  question: What chamber pressure was measured in the Test Plan 22 hot-fire test?
+  expected_tools: [query_telemetry]
+  expected_behavior: [must_state_insufficient_evidence]
+  difficulty: 2
+  notes: 'Silver case (route behaviour, insufficient evidence): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-insufficient-moog-price
+  category: FACT_LOOKUP
+  question: What does a Moog MONARC-5 thruster cost?
+  expected_tools: [search_documents]
+  expected_behavior: [must_state_insufficient_evidence]
+  difficulty: 2
+  notes: 'Silver case (route behaviour, insufficient evidence): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-halted-inj14-t06
+  category: HALTED_DATA_BEHAVIOR
+  question: What was the mean mass flow rate in the first 6 bar run (Test 06) of the Injector 14 flow test without mesh?
+  expected_behavior: [must_mention_halted_case]
+  difficulty: 3
+  notes: 'Silver case (route behaviour, halted data): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-halted-inj14-t08
+  category: HALTED_DATA_BEHAVIOR
+  question: What chamber pressure was recorded in the third 6 bar run (Test 08) of the Injector 14 flow test without mesh?
+  expected_behavior: [must_mention_halted_case]
+  difficulty: 3
+  notes: 'Silver case (route behaviour, halted data): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-halted-tp07-tdms
+  category: HALTED_DATA_BEHAVIOR
+  question: What temperatures does the Test Plan 7 LabVIEW (TDMS) temperature recording show?
+  expected_behavior: [must_mention_halted_case]
+  difficulty: 3
+  notes: 'Silver case (route behaviour, halted data): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-halted-inj10-verification
+  category: HALTED_DATA_BEHAVIOR
+  question: What chamber pressure does the Injector 10 cold flow verification data recording show?
+  expected_behavior: [must_mention_halted_case]
+  difficulty: 3
+  notes: 'Silver case (route behaviour, halted data): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-library-ecaps-temp-range
+  category: LIBRARY_VS_INTERNAL
+  question: What operating temperature range capability does the ECAPS 5 N HPGP thruster datasheet list for HPGP propellant?
+  expected_tools: [search_documents]
+  expected_behavior: [must_label_external]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route behaviour, library label): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-library-ariane-isp
+  category: LIBRARY_VS_INTERNAL
+  question: What nominal specific impulse does the ArianeGroup bi-propellant thruster datasheet give for the 400N apogee motor?
+  expected_tools: [search_documents]
+  expected_behavior: [must_label_external]
+  difficulty: 2
+  local: true
+  notes: 'Silver case (route behaviour, library label): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-conflict-tp6-vs-tp7-report
+  category: CONFLICT_BEHAVIOR
+  question: Which test plan does the report with the 4 December 2025 firing in the Test Plan 7 folder of Test Campaign 2 belong to?
+  expected_tools: [search_documents]
+  expected_behavior: [must_present_both_conflicting_values]
+  difficulty: 4
+  local: true
+  notes: 'Silver case (route behaviour, conflict): expected values and evidence are in the git-ignored silver files, not here.'
+- case_id: silver-beh-clarify-test04-peak-pressure
+  category: TELEMETRY_MATH
+  question: What was the peak pressure in Test 04?
+  expected_tools: [search_documents]
+  expected_behavior: [must_clarify]
+  clarification_answer: Test 04 of Test Plan 12 in Test Campaign 1, the nozzle convergent pressure on the valve on/off sheet of the Test 04 data analysis workbook.
+  difficulty: 3
+  local: true
+  notes: 'Silver case (route behaviour, clarification): expected values and evidence are in the git-ignored silver files, not here.'

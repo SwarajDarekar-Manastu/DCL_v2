@@ -35,7 +35,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.api.assets import get_minio
+from backend.api.assets import get_browser_minio
 from backend.api.auth import ConsoleRole, ConsoleUser, require_role
 from backend.dispatcher.contract import Anchor, AnchorError, format_anchor
 from backend.indexing.anchors import ResolutionStatus, resolve_anchor
@@ -503,7 +503,7 @@ def get_viewer(
     doc_id: UUID,
     user: Viewer,
     session: Annotated[Session, Depends(get_session)],
-    minio: Annotated[Minio, Depends(get_minio)],
+    minio: Annotated[Minio, Depends(get_browser_minio)],
     anchor: Annotated[str, Query(max_length=600)] = "",
     translate: bool = False,
 ) -> ViewerPayload:
