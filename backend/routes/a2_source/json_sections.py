@@ -208,5 +208,13 @@ def sniff(data: Any, file_name: str, config: SchemaConfig) -> Sniffed:
     )
 
 
+EMPTY_VALUES = frozenset({"", "null", "{}", "[]"})
+
+
+def has_content(flattened: list[str]) -> bool:
+    """True when some flattened line carries a value, not only empty containers or nulls."""
+    return any(line.rpartition(": ")[2].strip() not in EMPTY_VALUES for line in flattened)
+
+
 def quantities(text: str) -> list[tuple[str, int, int]]:
     return [(m.group(0), m.start(), m.end()) for m in QUANTITY.finditer(text)]

@@ -19,7 +19,8 @@ figures, unresolved references, missing includes, unknown macros), ``source_map.
 Flags (file 06 §4): ``CONFLICT`` SOFT from the assembler (two masters, no master); ``PARSE_FAILURE`` HARD
 only when the full walk and every per-section walk fail; ``UNIT_AMBIGUITY`` SOFT for a numeric table in a
 results section with values that no column header or row label gives a unit; ``SENSITIVE_CONTENT`` HARD
-for a secret in the source; ``SCHEMA_UNKNOWN`` SOFT for a JSON file of unknown shape.
+for a secret in the source; ``SCHEMA_UNKNOWN`` SOFT for a JSON file of unknown shape with no readable
+field (a file whose fields were read is indexed under them; its test comes from the folder labels).
 """
 
 import hashlib
@@ -784,7 +785,7 @@ def process_json(
 ) -> ProcessedDocument:
     """One report JSON file, or a JSON section-file set (primary first, parts in the configured order).
     ``key_mapping`` (a reviewer's ``map_json_keys`` decision or a ``schema_mapping`` rule) turns a JSON of
-    unknown shape into named sections; its SCHEMA_UNKNOWN flag is still raised and keeps that decision."""
+    unknown shape into named sections; the decision stays on its resolved flag (``json_key_mapping``)."""
     config = schema_config or json_sections.read_schema_config(REPORT_SCHEMAS_YAML)
     primary = next(f for f in files if f.role == DocumentSourceRole.PRIMARY)
     sources = [f for f in files if f.role in (DocumentSourceRole.PRIMARY, DocumentSourceRole.PART)]
@@ -828,7 +829,7 @@ def process_json(
             sections = [
                 json_sections.Section(f"{label} ({name})", [sniffed.flattened] if sniffed.flattened else [])
             ]
-        if sniffed.shape == "unknown":
+        if sniffed.shape == "unknown" and not json_sections.has_content(sniffed.flattened):
             flags.append(
                 Flag(
                     flag_type=FlagType.SCHEMA_UNKNOWN,

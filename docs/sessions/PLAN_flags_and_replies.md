@@ -395,6 +395,9 @@ Wiki: `.wiki/platform/compose-stack.md`, `.wiki/backend/benchmark-runner.md`
 2. `backend/dispatcher/reindex.py`: run `--route <X> --dry-run` first and report the file count and the
    expected paid calls. Then run it for real, one route at a time: C (units), A2 (JSON and units), F (video),
    D (photos).
+   **Pilot first (user, 26 Oct):** never send a whole route to Gemini at once. Re-run 3 to 5 files, read their
+   results against what this plan expects (flags closed, units right, video kind right, photo kind right),
+   and only then send the rest in batches, checking each batch before the next.
 3. The A1 figure re-read needs a file filter that `reindex.py` does not have yet: add `--doc <id>` (repeatable)
    to its `main`. Then pass only the documents with photographs or flowcharts, or the smaller set from
    decision 4.

@@ -131,6 +131,8 @@ def test_tp7_section_json_files(memory, folder):
     assert processed.nodes and processed.flags == []
     assert "700 seconds cumulative firing time" in processed.nodes[0].content
 
+    # one section per file with no test_id: its fields are read and its test comes from the folder
     single = next(p for p in plans if p.primary.path == "Sections/test_plan.json")
-    unknown = process_json(_files(E3, single), title=single.title, folder=folder, stores=memory.stores())
-    assert [f.flag_type for f in unknown.flags] == ["SCHEMA_UNKNOWN"]
+    read = process_json(_files(E3, single), title=single.title, folder=folder, stores=memory.stores())
+    assert read.flags == []
+    assert "content.text: This section outlines the test plan and procedures." in read.nodes[0].content

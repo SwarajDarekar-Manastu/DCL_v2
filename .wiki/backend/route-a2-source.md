@@ -27,14 +27,14 @@ Tests: `backend/tests/unit/routes/a2_source/` (synthetic projects inline; `test_
 
 Provides:
 - `process_latex(files, *, title, folder, stores, folder_files, read_file, conflicts, vision, cloud_allowed, doc_id, twin_appendix)` and `process_json(files, *, title, folder, stores, schema_config, key_mapping=None)` → `ProcessedDocument` (route A2, parser_version 1)
-- `key_mapping` (`{json key: section name}`): turns a JSON of unknown shape into named sections, the keys not named going to one "Other fields" section; SCHEMA_UNKNOWN is still raised and keeps the decision. The runner passes `rule_answers.json_key_mapping(session, document)` (`backend/dispatcher/source_run.py`): the file's own `map_json_keys` decision first, else the most specific active `schema_mapping` rule that names keys
+- `key_mapping` (`{json key: section name}`): turns a JSON of unknown shape into named sections, the keys not named going to one "Other fields" section; the decision stays on its resolved SCHEMA_UNKNOWN flag, where `json_key_mapping` finds it on every re-run. The runner passes `rule_answers.json_key_mapping(session, document)` (`backend/dispatcher/source_run.py`): the file's own `map_json_keys` decision first, else the most specific active `schema_mapping` rule that names keys
 - `files`: the assembler's plan as `SourceFile(path, blob_sha256, data, role)` with roles primary / part / visual_twin
 - Node anchors: `line_start`/`line_end` are lines of `assembled.md`; `metadata.source` = `file:line`; with a twin, `page_no` = twin page of the section (S2's `process_twin`)
 - CIR `dcl-cir/{sha256}/A2/v1/`: `assembled.md`, `structure.json`, `source_map.json`; `page_map.json` and `appendix/…` from `process_twin`
 - Twin: page renders (`pages/{twin sha}/{nnnn}.png`), PDF-only pages through `twin_appendix` (a bound A1 `process_pdf`) under "Appendix (PDF-only)"
 - Assets: `figures/{sha256}/{nnnn}{ext}` (kind `figure_crop`) for `\includegraphics` images found in the folder
 - Mentions: `reference` (bibliography), `quantity` (siunitx, JSON strings with units)
-- Flags: CONFLICT SOFT (assembler), PARSE_FAILURE HARD (full and per-section walk fail; invalid JSON), UNIT_AMBIGUITY SOFT (unit-less numeric table in a results section), SENSITIVE_CONTENT HARD (secret, `backend/sync/gate.scan_secrets`), SCHEMA_UNKNOWN SOFT (JSON)
+- Flags: CONFLICT SOFT (assembler), PARSE_FAILURE HARD (full and per-section walk fail; invalid JSON), UNIT_AMBIGUITY SOFT (unit-less numeric table in a results section), SENSITIVE_CONTENT HARD (secret, `backend/sync/gate.scan_secrets`), SCHEMA_UNKNOWN SOFT (JSON of unknown shape with no field that carries a value, `json_sections.has_content`)
 
 Consumes:
 - `backend/dispatcher/assembler.py` plans (S1), `config/report_json_schemas.yaml` (S5)
@@ -53,7 +53,7 @@ Waiting on others:
 ## Rubric (what "done" means for this feature)
 
 - [x] Multi-file LaTeX project assembles into one document (E4 TP12: 11 sections and appendices A, B)
-- [x] Unknown JSON shape indexes generically with SCHEMA_UNKNOWN SOFT
+- [x] Unknown JSON shape indexes generically; SCHEMA_UNKNOWN SOFT only when no field carries a value (2026-10-26)
 - [x] \ref and \cite resolve to readable text in chunks
 - [x] Every node has a line locator; `source_map.json` maps it to `file:line`
 - [x] Twin page map assigns a page to the TP12 sections (monotone); nodes carry `page_no`
@@ -63,7 +63,7 @@ Waiting on others:
 ## Notes
 
 - The manual names Pandoc; file 01 lists "Pandoc / pylatexenc". pylatexenc keeps character positions, which the source map needs, and needs no binary. A failure of the walker on the whole body falls back to one walk per `\section`; only when every section fails is PARSE_FAILURE raised.
-- The real section JSON files (`{id, title, order, content: {text, …}}`, written by `Test_plan_creator.py`) match no schema in `report_json_schemas.yaml`, so they index generically with SCHEMA_UNKNOWN; S5 can add a schema for that shape.
+- The real section JSON files (`{id, title, order, content: {text, …}}`, written by `Test_plan_creator.py`) match no schema in `report_json_schemas.yaml`, so they index generically. Since 2026-10-26 they raise no flag: their fields are read, and their test comes from the folder labels (plan step C, `docs/sessions/PLAN_flags_and_replies.md`).
 - doc_kind comes from A1's L1 rules (`Test_plan.tex` → `test_plan` even when the title says Report).
 
 ## Change log
