@@ -8,12 +8,12 @@ from backend.llm_engine.engine.catalog import (
     CatalogResult,
     Labels,
     Option,
-    _same_name,
     chosen_option,
     decide,
     group,
     question_labels,
     reframing_ok,
+    same_name_options,
 )
 
 
@@ -68,13 +68,13 @@ def test_same_name_files_in_different_folders_conflict_unless_the_question_tells
         _file("2", "Inj CC", plan="TP12", folder="APU › Test Plan 12 › Figures › De-Integration"),
         _file("3", "Inj CC", plan="TP09", folder="APU › Test Plan 9 › Figures › De-Integration"),
     ]
-    title, options = _same_name(files, "show the inj cc photo", Labels())
-    assert (title, [o.doc_ids for o in options]) == ("Inj CC", [["1"], ["2"], ["3"]])
-    _, narrowed = _same_name(
+    title, options = same_name_options(files, "show the inj cc photo", Labels())
+    assert (title, [o.doc_ids for o in options]) == ("Inj CC", [["3"], ["2"], ["1"]])  # by plan, then folder
+    _, narrowed = same_name_options(
         files, "show the TP09 inj cc photo", question_labels("show the TP09 inj cc photo")
     )
     assert narrowed == []  # one file left: nothing to ask
-    _, by_folder = _same_name(files, "the integration inj cc photo", Labels())
+    _, by_folder = same_name_options(files, "the integration inj cc photo", Labels())
     assert [o.doc_ids for o in by_folder] == []
 
 
@@ -90,8 +90,8 @@ def test_an_ambiguous_reading_asks_with_the_real_subjects_and_no_database():
     )
     decision = decide(None, catalog, resolution="ambiguous", subject_ids=[], intents=["telemetry_metric"])
     assert decision.kind == "ask"
-    assert "1. TP12 · Test 04: 1 engineering_table" in decision.text
-    assert "2. INJ14 · Test 04: 1 telemetry_run" in decision.text
+    assert "1. TP12 · Test 04: 1 engineering table" in decision.text
+    assert "2. INJ14 · Test 04: 1 telemetry run" in decision.text
 
 
 def test_a_question_that_needs_no_particular_file_goes_on_unfiltered():
@@ -118,3 +118,18 @@ def test_a_reframed_question_may_only_name_known_identifiers():
     allowed = "peak pressure in test 4\nS1 TP12 · Test 04: 4 files"
     assert reframing_ok("Peak pressure in TP12 Test 04", allowed)
     assert not reframing_ok("Peak pressure in TP31 Test 04", allowed)
+
+
+def test_a_numbered_name_is_the_same_name_and_a_bare_word_needs_a_kind_of_file():
+    files = [
+        _file("7", "03 VF Gasket", plan="TP07", folder="APU › Test Plan 7 › De-Integration › Initial"),
+        _file("9", "VF Gasket", plan="TP09", folder="APU › Test Plan 9 › De-Integration"),
+        _file("12", "VF Gasket", plan="TP12", folder="APU › Test Plan 12 › Integration"),
+        _file("t7", "Thruster", plan="TP07", folder="APU › Test Plan 7 › De-Integration"),
+        _file("t9", "Thruster", plan="TP09", folder="APU › Test Plan 9 › De-Integration"),
+    ]
+    title, options = same_name_options(files, "show the VF gasket photo", Labels())
+    assert [o.owner for o in options] == ["TP07", "TP09", "TP12"]
+    assert same_name_options(files, "what happened to the thruster", Labels()) == ("", [])
+    _, photos = same_name_options(files, "show the thruster photo", Labels())
+    assert [o.doc_ids for o in photos] == [["t7"], ["t9"]]

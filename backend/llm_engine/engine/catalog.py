@@ -44,7 +44,7 @@ LEG_LIMIT = 40
 TOP_FILES = 15
 TOP_SUBJECTS = 6
 CLOSE = 0.9  # second subject within 10 % of the first
-MAX_OPTIONS = 6
+MAX_OPTIONS = 10
 MAX_SUBJECT_FILES = 400
 MEASURED = frozenset({"telemetry_metric", "run_comparison"})
 MONTHS = {m: i for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), start=1)}
@@ -127,7 +127,7 @@ class CatalogFile:
     def line(self) -> str:
         bits = [self.doc_kind, self.doc_date, self.status if self.status != "ACTIVE" else None]
         if self.case_keys:
-            bits.append("review case " + ", ".join(self.case_keys))
+            bits.append("review case " + ", ".join(_case(c) for c in self.case_keys))
         where = f" in {self.folder}" if self.folder else ""
         return f"{self.title} ({', '.join(b for b in bits if b)}){where}"
 
@@ -149,11 +149,10 @@ class Subject:
         return self.folder or "unlabelled files"
 
     def describe(self) -> str:
-        kinds = Counter(f.doc_kind for f in self.files)
         held = [f for f in self.files if f.status == "HALTED"]
-        text = f"{self.label}: " + ", ".join(f"{n} {k}" for k, n in kinds.most_common())
+        text = f"{self.label}: " + _kinds(self.files)
         if held:
-            cases = sorted({c for f in held for c in f.case_keys})
+            cases = sorted({_case(c) for f in held for c in f.case_keys})
             text += f"; {len(held)} held for review" + (f" (case {', '.join(cases)})" if cases else "")
         return text
 
@@ -407,17 +406,34 @@ def _run_conflict(session: Session, labels: Labels) -> list[Option]:
     return [Option("", "", r.owner, r.test_run_id, None, list(r.docs)) for r in rows]
 
 
-def _same_name(files: list[CatalogFile], question: str, labels: Labels) -> tuple[str, list[Option]]:
-    """Files whose name the question uses, in different folders, that the question doesn't tell apart."""
+FILE_WORDS = frozenset(
+    "photo photos picture pictures image images report reports video videos clip plot plots graph chart "
+    "sheet sheets workbook file files drawing drawings diagram diagrams schematic document documents".split()
+)
+
+
+def _name(title: str) -> str:
+    """A file's name as people say it: normalized, without a leading number ("03 VF Gasket" → "vf gasket")."""
+    return re.sub(r"^(?:\d+ )+", "", _norm(title))
+
+
+def _named(name: str, asked: str) -> bool:
+    """The question uses this file name; a one-word name only with a word for the kind of file ("photo")."""
+    return len(name) >= 3 and f" {name} " in asked and (" " in name or bool(set(asked.split()) & FILE_WORDS))
+
+
+def same_name_options(files: list[CatalogFile], question: str, labels: Labels) -> tuple[str, list[Option]]:
+    """Of the files whose name the question uses, those in different folders that the question's labels and
+    folder words don't tell apart: one option per file. The most specific (longest) name is tried first."""
     asked = f" {_norm(question)} "
-    named = [f for f in files if (n := _norm(f.title)) and len(n) >= 3 and f" {n} " in asked]
-    by_title: dict[str, list[CatalogFile]] = {}
-    for f in named:
-        by_title.setdefault(_norm(f.title), []).append(f)
-    for _, same in sorted(by_title.items(), key=lambda kv: -len(kv[1])):
+    by_name: dict[str, list[CatalogFile]] = {}
+    for f in files:
+        if _named(name := _name(f.title), asked):
+            by_name.setdefault(name, []).append(f)
+    for name in sorted(by_name, key=len, reverse=True):
         same = [
             f
-            for f in same
+            for f in by_name[name]
             if (not labels.plans or f.test_plan_id in labels.plans)
             and (not labels.hardware or f.hardware_item in labels.hardware)
             and (not labels.runs or f.test_run_id in labels.runs)
@@ -427,8 +443,34 @@ def _same_name(files: list[CatalogFile], question: str, labels: Labels) -> tuple
         ]
         same = told or same
         if len({f.folder for f in same}) >= 2:
+            same.sort(key=lambda f: (f.owner or "", f.folder))
             return same[0].title, [Option("", "", f.owner, f.test_run_id, f.folder, [f.doc_id]) for f in same]
     return "", []
+
+
+def _same_name(session: Session, question: str, labels: Labels) -> tuple[str, list[Option]]:
+    """`same_name_options` over every file in the index whose name the question uses (not only the top)."""
+    asked = f" {_norm(question)} "
+    rows = _execute(
+        session,
+        "SELECT doc_id::text AS doc_id, title FROM documents WHERE status = ANY(:statuses)",
+        {"statuses": list(STATUSES)},
+        bindparam("statuses", type_=ARRAY(Text)),
+    )
+    ids = [r.doc_id for r in rows if _named(_name(r.title or ""), asked)]
+    return same_name_options(files_by_id(session, ids), question, labels)
+
+
+def _kinds(members: list[CatalogFile]) -> str:
+    """'2 hardware photos, 1 engineering table'; a file the route could not type is a 'file'."""
+    counts = Counter("file" if m.doc_kind == "unknown" else m.doc_kind.replace("_", " ") for m in members)
+    return ", ".join(f"{n} {k}{'s' if n > 1 else ''}" for k, n in counts.most_common(3))
+
+
+def _case(key: str) -> str:
+    """A review case key (`<doc id>:<n>`) as a short reference."""
+    head, _, tail = key.partition(":")
+    return head[:8] + (f":{tail}" if tail else "")
 
 
 def _label_option(option: Option, files: dict[str, CatalogFile]) -> str:
@@ -437,16 +479,12 @@ def _label_option(option: Option, files: dict[str, CatalogFile]) -> str:
     if option.folder:
         head = " › ".join(x for x in (head, option.folder.split(" › ")[-1]) if x)
     if members:
-        kinds = Counter(m.doc_kind for m in members)
-        what = ", ".join(f"{n} {k}" for k, n in kinds.most_common(3))
+        what = _kinds(members)
         dates = sorted({m.doc_date for m in members if m.doc_date})
-        held = [c for m in members if m.status == "HALTED" for c in m.case_keys]
+        held = sorted({_case(c) for m in members if m.status == "HALTED" for c in m.case_keys})
         what += f", {dates[0]}" if dates else ""
-        what += (
-            (" — held for unit review" + (f" (case {', '.join(sorted(set(held)))})" if held else ""))
-            if any(m.status == "HALTED" for m in members)
-            else ""
-        )
+        if any(m.status == "HALTED" for m in members):
+            what += " — held for unit review" + (f" (case {', '.join(held)})" if held else "")
         return f"{head}: {what}"
     return head
 
@@ -493,7 +531,7 @@ def search_catalog(
             f"Run {', '.join(labels.runs)} exists under {owners} and the question names neither."
         )
     else:
-        title, options = _same_name(files, question, labels)
+        title, options = _same_name(session, question, labels)
         if options:
             conflicts.append(f"{len(options)} files named '{title}' sit in different folders.")
     if len(subjects) >= 2 and subjects[1].score >= CLOSE * subjects[0].score:
