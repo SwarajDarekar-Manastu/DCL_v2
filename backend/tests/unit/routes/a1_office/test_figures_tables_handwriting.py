@@ -242,6 +242,34 @@ def test_figures_without_cloud_keep_their_caption_and_make_no_call(fake_vision, 
     assert vision.calls == [] and result.nodes[0].content == "Caption: Figure 2"
 
 
+def test_an_unusable_reading_keeps_the_figure_with_its_caption_and_flags_it(fake_vision, memory_store):
+    from backend.llm_engine.gemini_types import StructuredOutputError
+
+    def unusable(kwargs):
+        raise StructuredOutputError("response does not match the schema: ValidationError", raw_text="{}")
+
+    vision = fake_vision(digitize_plot=unusable, inspect_hardware_photo=PHOTO)
+    nodes = [
+        node("fig1", NodeType.FIGURE, "Figure 7", metadata={"class": "line_chart", "caption": "Figure 7"}),
+        node("fig2", NodeType.FIGURE, "", metadata={"class": "photograph", "caption": None}),
+    ]
+    result = read_figures(
+        nodes,
+        pdf_bytes=PDF,
+        blob_sha256=SHA,
+        vision=vision,
+        context="APU",
+        doc_id="d1",
+        cloud_allowed=True,
+        put_asset=memory_store("s3://dcl-assets/"),
+    )
+    by_ref = {n.ref: n for n in result.nodes}
+    assert by_ref["fig1"].content == "Caption: Figure 7"  # the document goes on
+    assert "Eroded injector face" in by_ref["fig2"].content  # and so do the other figures
+    unusable_flags = [f for f in result.flags if f.evidence.crops[0].confidence is None]
+    assert len(unusable_flags) == 1 and unusable_flags[0].flag_type is FlagType.LOW_CONFIDENCE_EXTRACTION
+
+
 # ---------------------------------------------------------------- handwriting
 
 LABELS = [

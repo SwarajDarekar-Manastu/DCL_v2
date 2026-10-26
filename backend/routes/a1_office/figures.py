@@ -12,9 +12,11 @@ The crop is Docling's region clipped against the page's other layout items and p
 `picture_class` and decides the reading).
 """
 
+import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from backend.dispatcher.contract import (
     ExtractionCrop,
@@ -24,7 +26,7 @@ from backend.dispatcher.contract import (
     ProcessedAsset,
     ProcessedNode,
 )
-from backend.llm_engine.gemini_types import Image
+from backend.llm_engine.gemini_types import Image, StructuredOutputError
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType
 from backend.routes.a1_office.assets import image_fields
 from backend.routes.a1_office.crops import (
@@ -34,6 +36,8 @@ from backend.routes.a1_office.crops import (
     is_full_page,
     pad_into_whitespace,
 )
+
+log = logging.getLogger(__name__)
 
 PLOT_CLASSES = frozenset({"bar_chart", "box_plot", "line_chart", "pie_chart", "scatter_plot"})
 SCHEMATIC_CLASSES = frozenset({"engineering_drawing", "flow_chart"})
@@ -126,6 +130,17 @@ def render_photo(reading) -> str:
     return "\n".join(lines)
 
 
+def _readable(read: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """A vision reading, or None when the model's reply does not fit the reading's schema: that figure keeps
+    its caption and citing sentences and is flagged, the document goes on (one unusable chart failed a whole
+    400-page datasheet, 2026-10-26). Transient gateway errors still raise and retry the task."""
+    try:
+        return read(*args, **kwargs)
+    except StructuredOutputError as exc:
+        log.warning("figure reading unusable, kept with its caption: %s", exc)
+        return None
+
+
 def read_figures(
     nodes: list[ProcessedNode],
     *,
@@ -187,25 +202,42 @@ def read_figures(
             figure_context = f"{context} · {caption or 'no caption'}"
             if figure_class in PLOT_CLASSES:
                 capability = "digitize_plot"
-                output = vision.digitize_plot(
-                    image, caption=caption, context=context, doc_id=doc_id, anchor=anchor
+                output = _readable(
+                    vision.digitize_plot,
+                    image,
+                    caption=caption,
+                    context=context,
+                    doc_id=doc_id,
+                    anchor=anchor,
                 )
-                reading, rendered = output.reading, render_plot(output.reading)
+                if output is not None:
+                    reading, rendered = output.reading, render_plot(output.reading)
             elif figure_class in SCHEMATIC_CLASSES:
                 capability = "read_schematic"
-                output = vision.read_schematic(
-                    image, caption=caption, context=context, doc_id=doc_id, anchor=anchor
+                output = _readable(
+                    vision.read_schematic,
+                    image,
+                    caption=caption,
+                    context=context,
+                    doc_id=doc_id,
+                    anchor=anchor,
                 )
-                reading, rendered = output.reading, render_schematic(output.reading)
+                if output is not None:
+                    reading, rendered = output.reading, render_schematic(output.reading)
             elif figure_class in PHOTO_CLASSES:
                 capability = "inspect_hardware_photo"
-                output = vision.inspect_hardware_photo(
-                    image, folder_context=figure_context, doc_id=doc_id, anchor=anchor
+                output = _readable(
+                    vision.inspect_hardware_photo,
+                    image,
+                    folder_context=figure_context,
+                    doc_id=doc_id,
+                    anchor=anchor,
                 )
-                reading, rendered = output.reading, render_photo(output.reading)
-                top = max((m.confidence for m in reading.failure_modes), default=None)
-                if (top is not None and top < LOW_PHOTO_CONFIDENCE) or "cannot determine component" in (
-                    reading.description.lower()
+                reading, rendered = (output.reading, render_photo(output.reading)) if output else (None, None)
+                top = max((m.confidence for m in reading.failure_modes), default=None) if reading else None
+                if reading is not None and (
+                    (top is not None and top < LOW_PHOTO_CONFIDENCE)
+                    or "cannot determine component" in reading.description.lower()
                 ):
                     result.flags.append(
                         Flag(
@@ -217,11 +249,17 @@ def read_figures(
                             ),
                         )
                     )
-            elif figure_class in TABLE_CLASSES:
-                capability = "read_table_image"
-                output = vision.read_table_image(
-                    image, caption=caption, context=context, doc_id=doc_id, anchor=anchor
+            elif figure_class in TABLE_CLASSES and (
+                output := _readable(
+                    vision.read_table_image,
+                    image,
+                    caption=caption,
+                    context=context,
+                    doc_id=doc_id,
+                    anchor=anchor,
                 )
+            ):
+                capability = "read_table_image"
                 table = output.reading
                 out.append(
                     node.model_copy(
@@ -242,6 +280,20 @@ def read_figures(
                     )
                 )
                 continue
+        if (
+            cloud_allowed
+            and crop is not None
+            and reading is None
+            and figure_class in PLOT_CLASSES | SCHEMATIC_CLASSES | PHOTO_CLASSES | TABLE_CLASSES
+        ):  # the model's reading was unusable: the crop is kept for a person to read
+            result.flags.append(
+                Flag(
+                    flag_type=FlagType.LOW_CONFIDENCE_EXTRACTION,
+                    severity=FlagSeverity.SOFT,
+                    anchor=FlagAnchor(page=node.page_no, bbox=box.model_dump(exclude={"page_no"})),
+                    evidence=LowConfidenceEvidence(crops=[ExtractionCrop(crop_uri=uri, confidence=None)]),
+                )
+            )
         parts = [
             p
             for p in (
