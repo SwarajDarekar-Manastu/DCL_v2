@@ -217,7 +217,7 @@ def test_confirmation_is_forwarded_with_the_trace_id(pipe_module, reply, accepte
     # no tokens were streamed, so the final markdown is shown, plus the caveat not already in it
     assert (
         "".join(yielded)
-        == "12.4 bar(a) ⚠ unverified extraction\n\n> ⚠ PT-101 value comes from an unverified extraction"
+        == "12.4 bar(a) ⚠ unverified extraction\n\n> Note: PT-101 value comes from an unverified extraction"
     )
 
 
@@ -532,5 +532,19 @@ def test_a_mark_already_in_the_label_is_not_repeated():
         ]
         assert names == [
             "[1] s3-attachment-check.txt (your attachment)",
-            "[2] Test Report 37, p. 8 (internal report, ⚠ unverified extraction)",
+            "[2] Test Report 37, p. 8 (internal report, reading not yet checked by a person)",
         ]
+
+
+def test_markers_number_the_files_open_webui_lists(pipe_module):
+    citations = [
+        {"citation_id": "1", "doc_id": "video-a", "title": "WIN 14 01 51"},
+        {"citation_id": "2", "doc_id": "video-a", "title": "WIN 14 01 51"},
+        {"citation_id": "3", "doc_id": "video-b", "title": "WIN 14 40 24"},
+        {"citation_id": "4", "doc_id": "video-b", "title": "WIN 14 40 24"},
+    ]
+    text = "Ignition at 27.69 s [1, 2]. Ignition at 26.44 s [3, 4]. Plume at 30 s [4]."
+    assert pipe_module.renumber_markers(text, citations) == (
+        "Ignition at 27.69 s [1]. Ignition at 26.44 s [2]. Plume at 30 s [2]."
+    )
+    assert len(pipe_module.group_sources(citations, "")) == 2  # the list the markers number

@@ -100,17 +100,43 @@ def viewer_url(citation: dict, console_url: str) -> str | None:
     return citation.get("url_onedrive") or citation.get("url_asset")
 
 
+MARKERS = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+
+
+def _source_key(citation: dict, console_url: str) -> str:
+    return citation.get("doc_id") or viewer_url(citation, console_url) or citation.get("title", "")
+
+
+def renumber_markers(text: str, citations: list[dict], console_url: str = "") -> str:
+    """The engine numbers markers per cited passage ([1]…[6]); Open WebUI lists one source per file
+    (`group_sources`), and a marker numbers that list, so [4] of a two-file answer showed "undefined".
+    Each marker becomes the number of its file, in the order the files are listed."""
+    files: dict[str, int] = {}
+    number_of: dict[str, int] = {}
+    for c in citations:
+        key = _source_key(c, console_url)
+        files.setdefault(key, len(files) + 1)
+        number_of[str(c.get("citation_id"))] = files[key]
+
+    def replace(match: re.Match) -> str:
+        mapped = [number_of.get(n.strip()) for n in match.group(1).split(",")]
+        kept = list(dict.fromkeys(m for m in mapped if m is not None))
+        return f"[{', '.join(map(str, kept))}]" if kept else match.group(0)
+
+    return MARKERS.sub(replace, text)
+
+
 def group_sources(citations: list[dict], console_url: str) -> list[dict]:
     """One Open WebUI `source` per document, every cited passage of it in `document[]` (file 08 §2.1)."""
     grouped: dict[str, dict] = {}
     for c in citations:
         url = viewer_url(c, console_url)
-        key = c.get("doc_id") or url or c.get("title", "")
+        key = _source_key(c, console_url)
         marks = [PROVENANCE_LABEL.get(c.get("provenance", ""), c.get("provenance", ""))]
         if c.get("translated"):
             marks.append(f"translated from {c.get('language') or 'another language'}")
         if c.get("needs_review"):
-            marks.append("⚠ unverified extraction")
+            marks.append("reading not yet checked by a person")
         source = grouped.setdefault(
             key,
             {"source": {"id": key, "name": c.get("title", ""), "url": url}, "document": [], "metadata": []},
@@ -348,9 +374,8 @@ class Pipe:
                         await emit("status", {"description": data.get("description", ""), "done": False})
                     if request["options"]["show_debug_trace"] and data.get("done") and data.get("tool"):
                         yield tool_block(data)
-                elif kind == "token":
+                elif kind == "token":  # held until the citations: markers are renumbered per file
                     streamed.append(data.get("text", ""))
-                    yield data.get("text", "")
                 elif kind == "citation":
                     citations.append(data)
                 elif kind == "embed":
@@ -386,13 +411,12 @@ class Pipe:
                             },
                         )
                 elif kind == "done":
-                    text = "".join(streamed)
-                    if not text.strip():
-                        yield data.get("answer_markdown", "")
-                        text = data.get("answer_markdown", "")
+                    text = "".join(streamed) or data.get("answer_markdown", "")
+                    streamed.clear()  # shown now; nothing left to release
+                    yield renumber_markers(text, citations, config.console_url)
                     caveats = [c for c in data.get("caveats", []) if c and c not in text]
                     if caveats:
-                        yield "\n\n" + "\n".join(f"> ⚠ {c}" for c in caveats)
+                        yield "\n\n" + "\n".join(f"> Note: {c}" for c in caveats)
                     await flush_sources()
                     followups = [f for f in data.get("followups", []) if isinstance(f, str)]
                     if chat_id:
@@ -408,11 +432,17 @@ class Pipe:
                             },
                         )
                 elif kind == "error":
+                    if streamed:  # what the engine wrote before failing is still shown
+                        yield renumber_markers("".join(streamed), citations, config.console_url)
                     await flush_sources()
                     yield {"error": {"detail": data.get("message") or "the engine reported an error"}}
                     return
+            if streamed:  # the stream ended without "done"
+                yield renumber_markers("".join(streamed), citations, config.console_url)
             await flush_sources()
         except EngineError as exc:
+            if streamed:
+                yield renumber_markers("".join(streamed), citations, config.console_url)
             await flush_sources()
             detail = "The answer engine is not available yet." if exc.status == 501 else exc.detail
             yield {"error": {"detail": detail}}

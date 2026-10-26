@@ -761,7 +761,7 @@ def _photo_cell(visual: dict, viewer_url) -> str:
 def _event_label(visual: dict) -> str:
     """'00:26 ignition' from a video event's reading ('26.44 s: ignition — …')."""
     seconds = (visual.get("t_start_ms") or 0) / 1000
-    what = (visual.get("reading") or "").split("—", 1)[0].split(":", 1)[-1].strip()[:40]
+    what = (visual.get("reading") or "").split("—", 1)[0].split(":", 1)[-1].strip().replace("_", " ")[:40]
     return f"{int(seconds // 60):02d}:{int(seconds % 60):02d} {what}".strip()
 
 
