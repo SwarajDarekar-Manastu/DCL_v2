@@ -760,3 +760,41 @@ def test_the_answer_to_an_ask_back_resumes_the_question_inside_the_chosen_test(s
     assert calls[0].query == "Peak pressure in TP12 Test 04"
     record = traces[0]["query_analysis"]["catalog"]
     assert record["chosen"]["owner"] == "TP12" and record["question"] == "peak pressure in test 4"
+
+
+def test_videos_play_whole_from_their_event_and_photos_open_their_onedrive_page():
+    def visual(doc, title, **kw):
+        base = {
+            "doc_id": doc,
+            "title": title,
+            "anchor": "page:1:" + "a" * 64,
+            "node_type": "photo",
+            "reading": "",
+            "breadcrumb": f"APU › {title}",
+            "url_web": "https://api/media/w?s=1",
+            "url_thumb": "https://api/media/t?s=1",
+            "url_video": None,
+            "t_start_ms": None,
+            "web_url": None,
+        }
+        return {**base, **kw}  # fmt: skip
+
+    video = "00000000-0000-4000-8000-0000000000f1"
+    visuals = [
+        visual(video, "WIN 14 40 24", node_type="video_event", url_video="https://api/media/v.mp4?s=1",
+               t_start_ms=26440, reading="26.44 s: ignition — bright glow", anchor="t:26440:" + "b" * 64),
+        visual(video, "WIN 14 40 24", node_type="video_event", url_video="https://api/media/v.mp4?s=1",
+               t_start_ms=56660, reading="56.66 s: steady plume — plume", anchor="t:56660:" + "c" * 64),
+        visual(str(REPORT), "VF Gasket", web_url="https://manastu.sharepoint.com/VF_Gasket.heic"),
+    ]  # fmt: skip
+    result = ToolResult(tool="inspect_visuals", result={"visuals": visuals}, display="")
+    player, strip = wf.photo_strips([result], lambda doc_id, anchor: f"/docs/{doc_id}/viewer")
+    assert player["kind"] == "html" and player["html"].count("<video") == 1
+    assert 'src="https://api/media/v.mp4?s=1#t=26.44"' in player["html"]
+    assert (
+        'data-t="26.44"' in player["html"]
+        and 'data-t="56.66"' in player["html"]
+        and "00:26 ignition" in player["html"]
+    )
+    assert 'href="https://manastu.sharepoint.com/VF_Gasket.heic"' in strip["html"]
+    assert "color:#8f8f8f" in strip["html"] and "X-Amz" not in strip["html"] + player["html"]

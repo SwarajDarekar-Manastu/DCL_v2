@@ -2,7 +2,8 @@
 
 Hybrid search (the T1 core) restricted to the node types of the requested kinds, optionally fused by RRF with
 an image-embedding kNN on `document_nodes.image_embedding` from a reference asset. Every result carries its
-reading, the containing document, presigned web and thumb URLs (15 min) and its anchor, never a node id.
+reading, the containing document, lasting web and thumb links (and the whole video for a video event)
+and its anchor, never a node id.
 
 `relook` sends the top ≤ 4 images with a question to Gemini (`relook.v1`); the answer is an answer-time
 observation, returned to synthesis and the trace and never written to the index.
@@ -77,6 +78,11 @@ class Visual(BaseModel):
     asset_uri: str | None = None
     url_web: str | None = None
     url_thumb: str | None = None
+    url_video: str | None = Field(default=None, description="the whole video (its proxy), for a video event")
+    t_start_ms: int | None = Field(default=None, description="where a video event starts")
+    web_url: str | None = Field(
+        default=None, description="the file's OneDrive page (who may see it: OneDrive)"
+    )
     similarity: float | None = None
     source: Source
 
@@ -211,7 +217,8 @@ def _inspect_visuals(
         a for a in ((by_key[k].get("hit") or by_key[k]["row"]).asset_id for k in ordered) if a is not None
     ]
     assets = _assets(session, asset_ids)
-    visuals = [_visual(by_key[key], assets, presign) for key in ordered]
+    videos = _video_proxies(session, [(by_key[k].get("hit") or by_key[k]["row"]).doc_id for k in ordered])
+    visuals = [_visual(by_key[key], assets, presign, videos) for key in ordered]
     if not visuals:
         return ToolResult(
             tool=NAME,
@@ -235,7 +242,26 @@ def _inspect_visuals(
     )
 
 
-def _visual(entry: dict, assets: dict, presign) -> Visual:
+def _video_proxies(session: Session, doc_ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """doc_id → the playable proxy of its video (Route F), for the documents that have one."""
+    if not doc_ids:
+        return {}
+    statement = text(
+        "SELECT ds.doc_id, a.minio_uri FROM assets a JOIN document_sources ds "
+        "ON ds.blob_sha256 = a.blob_sha256 WHERE ds.doc_id = ANY(:ids) AND a.kind = :kind"
+    ).bindparams(bindparam("ids", type_=ARRAY(UUID(as_uuid=True))))
+    rows = session.execute(statement, {"ids": list(set(doc_ids)), "kind": str(AssetKind.VIDEO_PROXY)})
+    return {r.doc_id: r.minio_uri for r in rows}
+
+
+def _start_ms(anchor: str) -> int | None:
+    """The time of a `t:<ms>:<hash>` anchor."""
+    kind, _, rest = anchor.partition(":")
+    value = rest.split(":", 1)[0]
+    return int(value) if kind == "t" and value.isdigit() else None
+
+
+def _visual(entry: dict, assets: dict, presign, videos: dict | None = None) -> Visual:
     if hit := entry.get("hit"):
         doc_id, title, anchor, node_type, reading = (
             hit.doc_id,
@@ -282,6 +308,9 @@ def _visual(entry: dict, assets: dict, presign) -> Visual:
         asset_uri=web_uri,
         url_web=presign(web_uri) if presign and web_uri else None,
         url_thumb=presign(thumb_uri or web_uri) if presign and (thumb_uri or web_uri) else None,
+        url_video=presign(video) if presign and (video := (videos or {}).get(doc_id)) else None,
+        t_start_ms=_start_ms(anchor),
+        web_url=web_url,
         similarity=entry.get("similarity"),
         source=source,
     )

@@ -5,8 +5,9 @@ The model cites evidence ids, never anchors, so a citation can only point at a s
 maps the ids back to `Source`s. Verification has two parts: every numeric claim must match a value and unit
 string of the evidence it cites (deterministic, `verifier.check_numeric_claims`), and every claim is judged
 entailed / contradicted / not_supported by a separate call that sees only that claim's evidence. A
-contradicted or unsupported claim triggers one re-synthesis with the verdicts; what still fails is removed
-from the answer and named in the caveats.
+contradicted or unsupported claim triggers one re-synthesis with the verdicts; what still fails is left out of
+the answer quietly and kept in the trace (`removed_claims`), never shown as a warning in the text (user,
+2026-10-26).
 """
 
 import json
@@ -25,7 +26,7 @@ from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
 
 log = logging.getLogger(__name__)
-SYNTHESIS_PROMPT = "synthesis.v1"
+SYNTHESIS_PROMPT = "synthesis.v2"
 VERIFY_PROMPT = "verify.v1"
 REPAIR_PROMPT = "repair.v1"
 REPAIR_MAX_OUTPUT_TOKENS = 2048  # a repair is a few sentences; one stack repair ran 208 s / 4,198 tokens
@@ -79,14 +80,16 @@ def evidence_items(results: list[ToolResult]) -> list[Evidence]:
 
 def _location(hit: dict) -> str:
     """Where a passage is from, as part of its text: the writer and the verifier both read it, so a claim may
-    name the document, page, sheet or table caption (the caption lives in the breadcrumb)."""
+    name the document, page, sheet ("T90_T10", which names the window) or table (its caption and columns)."""
     parts = [
         hit.get("title") or "",
         f"page {hit['page_no']}" if hit.get("page_no") else "",
+        f"sheet {hit['sheet_name']}" if hit.get("sheet_name") else "",
         hit.get("breadcrumb") or "",
     ]
     located = " · ".join(p for p in parts if p)
-    return f"Source: {located}\n" if located else ""
+    table = f"Table: {hit['table_summary']}\n" if hit.get("table_summary") else ""
+    return (f"Source: {located}\n" if located else "") + table
 
 
 def render_evidence(items: list[Evidence]) -> str:
@@ -139,6 +142,7 @@ class Answer:
     verdicts: list[Verdict] = field(default_factory=list)
     numeric_mismatches: list[dict] = field(default_factory=list)
     passes: int = 1
+    removed: list[str] = field(default_factory=list)  # claims left out after repair; kept in the trace
 
     def summary(self) -> dict:
         counts = {
@@ -349,11 +353,12 @@ async def answer(
         rejected = _rejected(output, verdicts, mismatches)
         passes = 2
     markdown, caveats = output.answer_markdown, list(output.caveats)
+    removed: list[str] = []
     kept = []
     for i, claim in enumerate(output.claims):
         if i in rejected:
             markdown = markdown.replace(claim.text, "").strip()
-            caveats.append(f"Removed because it could not be verified against the sources: {claim.text}")
+            removed.append(claim.text)  # the trace keeps it with the verdict; the answer just leaves it out
         else:
             kept.append(claim)
     markdown, citations = number_citations(markdown, kept, items)
@@ -364,6 +369,7 @@ async def answer(
         caveats=caveats,
         followups=output.followups,
         verdicts=verdicts,
+        removed=removed,
         numeric_mismatches=mismatches,
         passes=passes,
     )

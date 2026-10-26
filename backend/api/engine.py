@@ -415,18 +415,16 @@ def _external_policy(session) -> Any:
 
 def _asset_access(settings) -> tuple[Any, Any, Any]:
     """(presign, fetch, put_asset) over MinIO for T2 plots and T3; all None without MinIO configured."""
+    from backend.storage.media_links import media_url
     from backend.storage.minio import (
         ASSETS,
         BucketStore,
-        browser_client_from_settings,
         client_from_settings,
         parse_uri,
-        presign_get,
     )
 
     try:
         client = client_from_settings(settings)
-        browser = browser_client_from_settings(settings)  # the answer's images open in the user's browser
     except ConfigError as exc:
         log.warning("T2 plots and T3 image links are off: %s", exc)
         return None, None, None
@@ -441,8 +439,10 @@ def _asset_access(settings) -> tuple[Any, Any, Any]:
             response.release_conn()
 
     assets = BucketStore(client, ASSETS)
+    # embedded images, videos and plots stay with the chat message: they get lasting links that redirect to a
+    # fresh presigned link each time they are opened (storage/media_links.py)
     return (
-        (lambda uri: presign_get(browser, uri)),
+        (lambda uri: media_url(settings, uri)),
         fetch,
         (lambda key, data: assets.put(key, data, content_type="image/png")),
     )

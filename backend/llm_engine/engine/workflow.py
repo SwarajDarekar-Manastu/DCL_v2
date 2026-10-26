@@ -635,7 +635,7 @@ class AnswerWorkflow(Workflow):
         citations: list[Source] | None = None,
         request: dict | None = None,
     ) -> StopEvent:
-        for embed in [*plot_embeds(results), *photo_strips(results)]:
+        for embed in [*plot_embeds(results), *photo_strips(results, self.deps.viewer_url)]:
             _emit(ctx, trace_id, embed)
         _tokens(ctx, trace_id, markdown)
         for n, source in enumerate(citations or [], start=1):
@@ -713,6 +713,7 @@ class AnswerWorkflow(Workflow):
                 "summary": verifier,
                 "verdicts": [v.model_dump() for v in draft.verdicts],
                 "numeric_mismatches": draft.numeric_mismatches,
+                "removed_claims": draft.removed,
             }
             if draft
             else None,
@@ -734,16 +735,64 @@ TRACE_DISPLAY = 4000  # characters of each tool's display kept in the trace (ben
 IMG_STYLE = "width:160px;height:120px;object-fit:cover"
 
 
-def _photo_cell(visual: dict) -> str:
-    full = html.escape(visual.get("url_web") or visual["url_thumb"])
-    thumb = html.escape(visual.get("url_thumb") or visual["url_web"])
-    alt = html.escape(visual["breadcrumb"][:120])
+# readable on Open WebUI's dark and light themes alike: the embed cannot see which one is on
+CAPTION_STYLE = "font:12px system-ui,sans-serif;color:#8f8f8f;margin-top:2px"
+VIDEO_WIDTH = 560
+
+
+def _open_link(visual: dict, viewer_url) -> str:
+    """Where clicking a photo or video goes: the file's OneDrive page, which decides who may see it and lets
+    others ask for access; else the Console viewer."""
+    return visual.get("web_url") or viewer_url(uuid.UUID(str(visual["doc_id"])), visual.get("anchor")) or ""
+
+
+def _photo_cell(visual: dict, viewer_url) -> str:
+    link = html.escape(_open_link(visual, viewer_url), quote=True)
+    thumb = html.escape(visual.get("url_thumb") or visual["url_web"], quote=True)
+    alt = html.escape(visual["breadcrumb"][:120], quote=True)
     caption = html.escape((visual["title"] or "")[:60])
     return (
-        f'<figure style="margin:0;width:160px"><a href="{full}" target="_blank">'
+        f'<figure style="margin:0;width:160px"><a href="{link}" target="_blank" rel="noopener">'
         f'<img src="{thumb}" alt="{alt}" style="{IMG_STYLE}"></a>'
-        f'<figcaption style="font:12px sans-serif">{caption}</figcaption></figure>'
+        f'<figcaption style="{CAPTION_STYLE}">{caption}</figcaption></figure>'
     )
+
+
+def _event_label(visual: dict) -> str:
+    """'00:26 ignition' from a video event's reading ('26.44 s: ignition — …')."""
+    seconds = (visual.get("t_start_ms") or 0) / 1000
+    what = (visual.get("reading") or "").split("—", 1)[0].split(":", 1)[-1].strip()[:40]
+    return f"{int(seconds // 60):02d}:{int(seconds % 60):02d} {what}".strip()
+
+
+def _video_block(n: int, events: list[dict], viewer_url) -> str:
+    """The whole video, streamed by the browser (range requests), opening at the first event; one button per
+    event jumps the player there."""
+    first = events[0]
+    start = (first.get("t_start_ms") or 0) / 1000
+    src = html.escape(f"{first['url_video']}#t={start:.2f}", quote=True)
+    poster = html.escape(first.get("url_thumb") or first.get("url_web") or "", quote=True)
+    link = html.escape(_open_link(first, viewer_url), quote=True)
+    title = html.escape((first["title"] or "video")[:80])
+    buttons = "".join(
+        f'<button data-v="v{n}" data-t="{(e.get("t_start_ms") or 0) / 1000:.2f}" style="font:12px system-ui;'
+        f"margin:2px;padding:2px 6px;border-radius:4px;border:1px solid #8f8f8f;background:transparent;"
+        f'color:#8f8f8f;cursor:pointer">{html.escape(_event_label(e))}</button>'
+        for e in sorted(events, key=lambda e: e.get("t_start_ms") or 0)
+    )
+    return (
+        f'<div style="margin-bottom:10px"><video id="v{n}" controls preload="metadata" playsinline '
+        f'src="{src}" poster="{poster}" '
+        f'style="width:100%;max-width:{VIDEO_WIDTH}px;border-radius:6px"></video>'
+        f'<div style="{CAPTION_STYLE}"><a href="{link}" target="_blank" rel="noopener" style="color:#8f8f8f">'
+        f"{title}</a></div><div>{buttons}</div></div>"
+    )
+
+
+SEEK_SCRIPT = (
+    "<script>document.querySelectorAll('button[data-t]').forEach(function(b){b.onclick=function(){"
+    "var v=document.getElementById(b.dataset.v);v.currentTime=parseFloat(b.dataset.t);v.play();};});</script>"
+)
 
 
 def plot_embeds(results: list[ToolResult]) -> list[dict]:
@@ -763,16 +812,40 @@ def plot_embeds(results: list[ToolResult]) -> list[dict]:
     ]
 
 
-def photo_strips(results: list[ToolResult]) -> list[dict]:
-    """One `photo_strip` embed per T3 result that has image links (self-contained HTML, escaped)."""
+def photo_strips(results: list[ToolResult], viewer_url=lambda doc_id, anchor: None) -> list[dict]:
+    """Per T3 result: one `video` embed holding the whole video of every video it found (opening at the event,
+    with a button per event), and one `photo_strip` embed of its photos and figures (self-contained, escaped).
+    Media links are lasting (storage/media_links.py); a click opens the file's OneDrive page."""
     embeds = []
     for result in results:
         if result.tool != visual_tools.NAME or not isinstance(result.result, dict):
             continue
-        shown = [v for v in result.result.get("visuals", []) if v.get("url_thumb") or v.get("url_web")][:6]
+        visuals = result.result.get("visuals", [])
+        by_video: dict[str, list[dict]] = {}
+        for v in visuals:
+            if v.get("url_video"):
+                by_video.setdefault(str(v["doc_id"]), []).append(v)
+        if by_video:
+            blocks = "".join(
+                _video_block(n, events, viewer_url) for n, events in enumerate(by_video.values())
+            )
+            embeds.append(
+                {
+                    "type": "embed",
+                    "embed_id": f"videos-{result.call_id}",
+                    "kind": "html",  # a player per video (the wire contract has no video kind)
+                    "html": blocks + SEEK_SCRIPT,
+                    "alt": f"{len(by_video)} videos: "
+                    + "; ".join(e[0]["title"] or "" for e in by_video.values()),
+                    "height": 380 * len(by_video),
+                }
+            )
+        shown = [v for v in visuals if not v.get("url_video") and (v.get("url_thumb") or v.get("url_web"))][
+            :6
+        ]
         if not shown:
             continue
-        cells = "".join(_photo_cell(v) for v in shown)
+        cells = "".join(_photo_cell(v, viewer_url) for v in shown)
         embeds.append(
             {
                 "type": "embed",

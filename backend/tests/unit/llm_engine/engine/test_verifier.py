@@ -41,3 +41,30 @@ def test_value_unit_pairs_read_function_words_as_no_unit():
         ("600", "°C"),
         ("5", "%"),
     ]
+
+
+ROW = (
+    "T90_T10 | Parameter: Pressure Before Thruster valve [barg] | Mean: 10.93 | Max: 30.49 | Min: 6.72",
+    "Bed temperature (°C): 612.5",
+)
+
+
+def test_a_table_value_counts_with_the_unit_its_header_names():
+    claims = [
+        "The peak before the thruster valve was 30.49 barg.",
+        "The peak was 30.49 bar(g).",  # the same gauge unit written another way
+        "The bed reached 612.5 degC.",
+    ]
+    assert check_numeric_claims(claims, ROW) == []
+
+
+def test_a_header_unit_of_another_reference_or_size_does_not_count():
+    reasons = {
+        m.value: m.reason
+        for m in check_numeric_claims(["Peak 30.49 bara.", "Mean 10.93 bar.", "Bed 612.5 K."], ROW)
+    }
+    assert reasons == {
+        "30.49": "value appears with another unit",
+        "10.93": "value appears with another unit",
+        "612.5": "value appears with another unit",
+    }

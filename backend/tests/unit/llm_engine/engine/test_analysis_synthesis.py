@@ -183,7 +183,8 @@ def test_a_rounded_number_is_repaired_alone_and_removed_if_it_persists():
     assert "Claim 0: Steady-state mean 12 bar(a)." in repair_prompt and "[E1] TP07_T04" in repair_prompt
     assert str(client.calls[2][2]["thinking"]) == "medium"
     assert out.claims == [] and "12 bar(a)" not in out.markdown
-    assert any("could not be verified" in c for c in out.caveats)
+    # left out quietly: the trace keeps it, the answer carries no warning about it
+    assert out.removed == ["Steady-state mean 12 bar(a)."] and not any("verified" in c for c in out.caveats)
 
 
 def test_contradicted_claim_is_fixed_on_the_second_pass():

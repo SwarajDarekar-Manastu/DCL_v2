@@ -224,7 +224,7 @@ def rrf(rankings: Iterable[list[uuid.UUID]], k: int = RRF_K) -> dict[uuid.UUID, 
 NODE_COLUMNS = (
     "node_id, doc_id, parent_node_id, node_type, ordinal, content, content_sha256, breadcrumb, language, "
     "page_no, page_end, line_start, line_end, t_start_ms, t_end_ms, sheet_name, cell_range, bbox, "
-    "needs_review, doc_kind, test_plan_id, source_origin, trust_tier, asset_id, embed_text"
+    "needs_review, doc_kind, test_plan_id, source_origin, trust_tier, asset_id, embed_text, metadata"
 )
 
 
@@ -310,6 +310,8 @@ class Hit(BaseModel):
     section_text: str | None = Field(
         default=None, description="the text of the section a table or figure sits in (its parent)"
     )
+    sheet_name: str | None = None
+    table_summary: str | None = Field(default=None, description="caption, rows and columns of a table hit")
 
 
 class SearchResult(BaseModel):
@@ -469,6 +471,8 @@ def search(
                 rrf_score=c.score,
                 rerank_score=c.rerank_score,
                 also_in=c.also_in,
+                sheet_name=c.best.sheet_name,
+                table_summary=(c.best.metadata or {}).get("summary"),
                 section_text=(
                     sections[c.best.parent_node_id].content[:SECTION_CHARS]
                     if c.best.node_type in SECTION_MEMBERS and c.best.parent_node_id in sections
