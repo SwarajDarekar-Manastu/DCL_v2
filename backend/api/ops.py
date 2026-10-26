@@ -13,11 +13,11 @@ reprs and cannot be replayed.
 
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -221,6 +221,120 @@ def _part(notes: dict[str, str], name: str, read: Callable[[], Any], session: Se
         notes[name] = str(exc) if isinstance(exc, LookupError) else f"unavailable ({type(exc).__name__})"
         log.warning("ops summary: %s unavailable: %s", name, exc)
         return None
+
+
+class UsageRow(BaseModel):
+    """One day, model and task of `llm_calls`. A failed call whose reply came back carries tokens and is
+    billed like any other; a cache hit carries none."""
+
+    day: date
+    model: str
+    purpose: str
+    calls: int
+    billed_calls: int = Field(description="calls that used tokens, failed ones included")
+    cache_hits: int = Field(description="answered from the result cache: no cost")
+    errors: int
+    input_tokens: int
+    output_tokens: int
+    cached_tokens: int
+    cost_usd: float | None = Field(description="the cost each call recorded at the price then in force")
+    unpriced_calls: int = Field(description="billed calls recorded while the model had no price")
+
+
+COUNTS = ("calls", "billed_calls", "cache_hits", "errors", "input_tokens", "output_tokens", "unpriced_calls")
+
+
+class ModelTotal(BaseModel):
+    model: str
+    calls: int
+    billed_calls: int
+    cache_hits: int
+    errors: int
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float | None
+    unpriced_calls: int
+
+
+class LlmUsage(BaseModel):
+    days: int
+    rows: list[UsageRow]
+    by_model: list[ModelTotal]
+    total_cost_usd: float | None
+
+
+def llm_usage(session: Session, days: int) -> LlmUsage:
+    """Gemini use per day, model and task over the last `days` days (UTC). Each call's cost is the one the
+    gateway client recorded from `models.prices` when it ran, so a price change never rewrites history."""
+    from backend.postgres import models
+
+    model = models.LlmCall
+    since = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days - 1)
+    day = func.date_trunc("day", model.at).label("day")
+    billed = (model.input_tokens + model.output_tokens) > 0
+    rows = session.execute(
+        select(
+            day,
+            model.model,
+            model.purpose,
+            func.count(),
+            func.count().filter(billed),
+            func.count().filter(model.status == "cache_hit"),
+            func.count().filter(model.status.notin_(("ok", "cache_hit"))),
+            func.coalesce(func.sum(model.input_tokens), 0),
+            func.coalesce(func.sum(model.output_tokens), 0),
+            func.coalesce(func.sum(model.cached_tokens), 0),
+            func.sum(model.cost_estimate),
+            func.count().filter(billed & model.cost_estimate.is_(None)),
+        )
+        .where(model.at >= since)
+        .group_by(day, model.model, model.purpose)
+        .order_by(day.desc(), model.model, model.purpose)
+    ).all()
+    out = [
+        UsageRow(
+            day=d.date(),
+            model=name,
+            purpose=purpose,
+            calls=calls,
+            billed_calls=n_billed,
+            cache_hits=hits,
+            errors=errors,
+            input_tokens=t_in,
+            output_tokens=t_out,
+            cached_tokens=cached,
+            cost_usd=round(float(cost), 6) if cost is not None else None,
+            unpriced_calls=unpriced,
+        )
+        for d, name, purpose, calls, n_billed, hits, errors, t_in, t_out, cached, cost, unpriced in rows
+    ]
+    by_model = []
+    for name in sorted({r.model for r in out}):
+        mine = [r for r in out if r.model == name]
+        costs = [r.cost_usd for r in mine if r.cost_usd is not None]
+        by_model.append(
+            ModelTotal(
+                model=name,
+                **{key: sum(getattr(r, key) for r in mine) for key in COUNTS},
+                cost_usd=round(sum(costs), 6) if costs else None,
+            )
+        )
+    costs = [t.cost_usd for t in by_model if t.cost_usd is not None]
+    return LlmUsage(
+        days=days,
+        rows=out,
+        by_model=by_model,
+        total_cost_usd=round(sum(costs), 4) if costs else None,
+    )
+
+
+@router.get("/llm-usage", response_model=LlmUsage)
+def get_llm_usage(
+    _: Annotated[ConsoleUser, Depends(require_role(ConsoleRole.VIEWER))],
+    session: Annotated[Session, Depends(get_session)],
+    days: Annotated[int, Query(ge=1, le=90)] = 7,
+) -> LlmUsage:
+    return llm_usage(session, days)
 
 
 @router.get("/summary", response_model=OpsSummary)

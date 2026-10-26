@@ -438,6 +438,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Media */
+        get: operations["media_media__key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ops/failed-tasks": {
         parameters: {
             query?: never;
@@ -447,6 +464,23 @@ export interface paths {
         };
         /** Failed Tasks */
         get: operations["failed_tasks_ops_failed_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ops/llm-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Llm Usage */
+        get: operations["get_llm_usage_ops_llm_usage_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2403,8 +2437,20 @@ export interface components {
             rerank_score: number | null;
             /** Rrf Score */
             rrf_score: number;
+            /**
+             * Section Text
+             * @description the text of the section a table or figure sits in (its parent)
+             */
+            section_text?: string | null;
+            /** Sheet Name */
+            sheet_name?: string | null;
             /** Source Origin */
             source_origin: string | null;
+            /**
+             * Table Summary
+             * @description caption, rows and columns of a table hit
+             */
+            table_summary?: string | null;
             /** Test Plan Id */
             test_plan_id: string | null;
             /** Test Run Id */
@@ -2533,6 +2579,17 @@ export interface components {
             /** Output Tokens */
             output_tokens: number;
         };
+        /** LlmUsage */
+        LlmUsage: {
+            /** By Model */
+            by_model: components["schemas"]["ModelTotal"][];
+            /** Days */
+            days: number;
+            /** Rows */
+            rows: components["schemas"]["UsageRow"][];
+            /** Total Cost Usd */
+            total_cost_usd: number | null;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -2645,6 +2702,27 @@ export interface components {
              * @description the entity that stays
              */
             target_entity_id: string;
+        };
+        /** ModelTotal */
+        ModelTotal: {
+            /** Billed Calls */
+            billed_calls: number;
+            /** Cache Hits */
+            cache_hits: number;
+            /** Calls */
+            calls: number;
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Errors */
+            errors: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Model */
+            model: string;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Unpriced Calls */
+            unpriced_calls: number;
         };
         /** OneDriveLocation */
         OneDriveLocation: {
@@ -2913,6 +2991,8 @@ export interface components {
              *       "include_superseded": false,
              *       "languages": [],
              *       "node_types": [],
+             *       "prefer_doc_kinds": [],
+             *       "prefer_node_types": [],
              *       "source_origins": [],
              *       "test_plan_ids": []
              *     }
@@ -3413,6 +3493,10 @@ export interface components {
             languages?: string[];
             /** Node Types */
             node_types?: string[];
+            /** Prefer Doc Kinds */
+            prefer_doc_kinds?: string[];
+            /** Prefer Node Types */
+            prefer_node_types?: string[];
             /** Source Origins */
             source_origins?: string[];
             /** Test Plan Ids */
@@ -3948,6 +4032,52 @@ export interface components {
             object_uri: string;
             /** Upload Url */
             upload_url: string;
+        };
+        /**
+         * UsageRow
+         * @description One day, model and task of `llm_calls`. A failed call whose reply came back carries tokens and is
+         *     billed like any other; a cache hit carries none.
+         */
+        UsageRow: {
+            /**
+             * Billed Calls
+             * @description calls that used tokens, failed ones included
+             */
+            billed_calls: number;
+            /**
+             * Cache Hits
+             * @description answered from the result cache: no cost
+             */
+            cache_hits: number;
+            /** Cached Tokens */
+            cached_tokens: number;
+            /** Calls */
+            calls: number;
+            /**
+             * Cost Usd
+             * @description the cost each call recorded at the price then in force
+             */
+            cost_usd: number | null;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Errors */
+            errors: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Model */
+            model: string;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Purpose */
+            purpose: string;
+            /**
+             * Unpriced Calls
+             * @description billed calls recorded while the model had no price
+             */
+            unpriced_calls: number;
         };
         /**
          * UseReplacement
@@ -5034,6 +5164,39 @@ export interface operations {
             };
         };
     };
+    media_media__key__get: {
+        parameters: {
+            query: {
+                s: string;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     failed_tasks_ops_failed_tasks_get: {
         parameters: {
             query?: {
@@ -5052,6 +5215,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FailedTasks"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_llm_usage_ops_llm_usage_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmUsage"];
                 };
             };
             /** @description Validation Error */
