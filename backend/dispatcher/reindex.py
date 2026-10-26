@@ -4,6 +4,7 @@ and question proxies all come from the route and the indexer, and a finished fil
 
     python -m backend.dispatcher.reindex --route C --limit 5            # relabel all, re-run 5 of route C
     python -m backend.dispatcher.reindex --relabel-only                 # labels and halted cards only
+    python -m backend.dispatcher.reindex --route D --stuck --limit 5    # also files stuck in PROCESSING
     python -m backend.dispatcher.reindex --route A1 --dry-run
 
 1. Every file's folder context is rebuilt from its stored root, folders, file name and siblings with today's
@@ -81,7 +82,9 @@ def halted_card(document: Document, embed) -> None:
     write_halted_card(document, fields, embed=embed)
 
 
-def run(session: Session, route: Route | None, limit: int | None, dry_run: bool, embed) -> dict:
+def run(
+    session: Session, route: Route | None, limit: int | None, dry_run: bool, embed, stuck: bool = False
+) -> dict:
     documents = session.scalars(select(Document).where(Document.status != DocumentStatus.DELETED)).all()
     filled: dict[str, int] = {}
     halted = 0
@@ -96,7 +99,10 @@ def run(session: Session, route: Route | None, limit: int | None, dry_run: bool,
         from backend.dispatcher.adapters import task_for_route
 
         found = task_for_route(route)
-        candidates = redispatch_candidates(session, route, REPROCESSABLE)[: limit or None]
+        statuses = (*REPROCESSABLE, DocumentStatus.PROCESSING) if stuck else REPROCESSABLE
+        # a file with its new card was re-run already: repeated calls with --limit walk through the rest
+        pending = [d for d in redispatch_candidates(session, route, statuses) if d.card_embedding is None]
+        candidates = pending[: limit or None]
         if found is not None and not dry_run:
             task, queue = found
             for document in candidates:
@@ -111,7 +117,7 @@ def run(session: Session, route: Route | None, limit: int | None, dry_run: bool,
     else:
         session.commit()
     return {"labels_filled": filled, "halted_cards": halted, "queued": len(releases), "planned": planned,
-            "releases": releases}  # fmt: skip
+            "left": (len(pending) - planned) if route is not None else 0, "releases": releases}  # fmt: skip
 
 
 def main(argv: list[str]) -> int:
@@ -120,6 +126,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--relabel-only", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--stuck", action="store_true", help="also queue files stuck in PROCESSING")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
     from backend.celery_redis.tasks_process import enqueue_release
@@ -128,7 +135,7 @@ def main(argv: list[str]) -> int:
 
     route = None if args.relabel_only or not args.route else Route(args.route)
     with default_session_factory()() as session:
-        out = run(session, route, args.limit, args.dry_run, models_embedder())
+        out = run(session, route, args.limit, args.dry_run, models_embedder(), stuck=args.stuck)
     for release in out.pop("releases"):
         enqueue_release(release)
     print(out)
