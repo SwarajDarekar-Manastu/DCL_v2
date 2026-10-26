@@ -139,14 +139,15 @@ def test_unchanged_embed_texts_reuse_their_vectors(run):
     first_embedder = Embedder()
     first = run(embedder=first_embedder)
     embedded = [n for n in first.nodes if n.embed]
-    assert first.metrics["vectors_computed"] == len(embedded) == len(first_embedder.texts)
+    # every embedded piece, plus the file's card (indexing/card.py)
+    assert first.metrics["vectors_computed"] == len(embedded) == len(first_embedder.texts) - 1
     reuse = {n.embed_text_hash: n.embedding for n in embedded}
     again_embedder = Embedder()
     again = run(embedder=again_embedder, reuse=reuse)
     assert (again.metrics["vectors_reused"], again.metrics["vectors_computed"], again_embedder.calls) == (
         len(embedded),
         0,
-        0,
+        1,  # only the card
     )
     assert all(n.embedding for n in again.nodes if n.embed)
 
@@ -186,15 +187,16 @@ def test_route_mentions_map_to_chunk_nodes_and_non_entity_kinds_are_skipped(kit,
     assert plan.metrics["route_mentions_skipped"] == 1
 
 
-def test_question_proxies_only_for_configured_kinds(kit, run):
+def test_question_proxies_for_every_enriched_kind(kit, run):
     plan = run()
     proxies = [n for n in plan.nodes if n.node_type is NodeType.QUESTION_PROXY]
     parent_refs = {n.ref for n in plan.nodes if n.node_type is NodeType.PARENT}
     assert proxies and {p.parent_ref for p in proxies} <= parent_refs
     assert all(p.embed and p.embedding for p in proxies)
     doc = kit.document(kit.node("res", RESULTS, 0, page_no=8))
-    other = doc.model_copy(update={"document": doc.document.model_copy(update={"doc_kind": DocKind.UNKNOWN})})
-    assert not [n for n in run(other).nodes if n.node_type is NodeType.QUESTION_PROXY]
+    for kind in (DocKind.UNKNOWN, DocKind.RISK_ASSESSMENT):
+        other = doc.model_copy(update={"document": doc.document.model_copy(update={"doc_kind": kind})})
+        assert [n for n in run(other).nodes if n.node_type is NodeType.QUESTION_PROXY]
 
 
 def test_document_aggregation_and_search_text(run):
@@ -202,8 +204,13 @@ def test_document_aggregation_and_search_text(run):
     enrichment = plan.document["enrichment"]
     assert enrichment["test_ids"] == ["TP37"]
     assert "C-103" in enrichment["materials"] and "HTP" in enrichment["propellants"]
-    assert plan.document["search_text"].startswith("Test Report 37\nTP37 hot fire 3 reached 12.4 bar.")
-    assert "C-103" in plan.document["search_text"]
+    assert plan.document["search_text"].startswith(
+        "Test Report 37\nKind: test_report · internal\nTest: plan TP37\n"
+        "Summary: TP37 hot fire 3 reached 12.4 bar."
+    )
+    assert "Entities: INJ-14, HTP, C-103, PT-101" in plan.document["search_text"]
+    assert "Contains: 1 Scope; 3 Results" in plan.document["search_text"]
+    assert "TP37" in plan.document["card_codes"].split() and len(plan.document["card_embedding"]) > 0
     assert set(plan.document["entity_refs"]) >= {("material", "c-103"), ("propellant", "htp")}
 
 

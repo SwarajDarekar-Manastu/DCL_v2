@@ -16,12 +16,7 @@ from backend.indexing.identifiers import content_codes
 from backend.indexing.retrieval import SearchFilters
 from backend.llm_engine.engine.tools import Provenance
 from backend.llm_engine.engine.tools.code_diagrams import CodeDiagramArgs, inspect_code_and_diagrams
-from backend.llm_engine.engine.tools.documents import (
-    CatalogArgs,
-    GetDocumentArgs,
-    catalog_lookup,
-    get_document,
-)
+from backend.llm_engine.engine.tools.documents import GetDocumentArgs, get_document
 from backend.llm_engine.engine.tools.search import SearchDocumentsArgs, search_documents
 from backend.llm_engine.local_models import rank_scores
 from backend.postgres.enums import DocumentStatus, NodeSource, NodeType
@@ -294,17 +289,17 @@ def test_get_document_reads_parents_in_order_with_labels(engine, ids):
     assert section.result["parents_returned"] == 1 and "PT-104" in section.display
 
 
-def test_catalog_lists_halted_items_with_case_keys_and_standards_with_revisions(engine, ids):
+def test_the_catalog_finds_files_by_name_label_and_piece_and_keeps_halted_ones(engine, ids):
+    from backend.llm_engine.engine import catalog
+
     with Session(engine) as s:
-        halted = catalog_lookup(s, CatalogArgs(kind="halted"))
-        standards = catalog_lookup(s, CatalogArgs(kind="standards"))
-        plan = catalog_lookup(s, CatalogArgs(test_plan_id="TP37"))
-    assert halted.result[0]["case_keys"] == [f"{ids['TP07 run sheet']}:1"] and "review case" in halted.display
-    assert {r["title"] for r in standards.result} == {
-        "ECSS-E-ST-35C",
-        "ECSS-E-ST-35B",
-    } and "SUPERSEDED" in standards.display
-    assert [r["title"] for r in plan.result] == ["Test Report 37"]
+        held = catalog.search_catalog(s, "TP07 run sheet", vec("other"))
+        report = catalog.search_catalog(s, "chamber pressure in TP37", vec("pressure"))
+        everything = catalog.subject_files(s, "TP37", None, None)
+    sheet = next(f for subject in held.subjects for f in subject.files if f.title == "TP07 run sheet")
+    assert sheet.status == "HALTED" and sheet.case_keys == [f"{ids['TP07 run sheet']}:1"]
+    assert report.subjects[0].label == "TP37" and report.subjects[0].files[0].title == "Test Report 37"
+    assert [f.title for f in everything] == ["Test Report 37"]
 
 
 def test_code_symbol_lookup_with_callers(engine, ids):

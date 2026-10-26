@@ -3,7 +3,7 @@ name: Navigational
 description: Which documents, runs or tests exist for something, with links.
 intents: [navigational]
 dcl-playbook: navigational
-tools: [catalog_lookup, search_documents]
+tools: [search_documents]
 ---
 
 # Navigational
@@ -16,12 +16,12 @@ Which documents, runs or tests exist for something, with links.
 
 ## What the engine does
 
-1. List matching documents and runs from the catalog (document kind, test plan, entities), including halted ones with their review case.
+1. Find the matching files and runs in the metadata of every file (title, path, summary, labels, entities), including halted ones with their review case; ask back when the question fits several tests.
 2. Search where the topic is discussed.
 3. Answer with a list of links to the viewer.
 
 ## Tools
 
-`catalog_lookup`, `search_documents`
+`search_documents`
 
 Every number in the answer comes from a tool result and is checked before it is shown; each cited source carries its provenance label.

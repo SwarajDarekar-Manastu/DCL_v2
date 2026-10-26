@@ -29,7 +29,7 @@ from workflows import Context, Workflow, step
 from workflows.events import Event, StartEvent, StopEvent
 
 from backend.config import ThinkingLevel
-from backend.llm_engine.engine import playbooks, synthesis
+from backend.llm_engine.engine import catalog, playbooks, synthesis
 from backend.llm_engine.engine.analysis import Analysis, Intent, QueryAnalysis, analyze
 from backend.llm_engine.engine.playbooks import PlannedCall
 from backend.llm_engine.engine.tools import Source, ToolResult
@@ -38,10 +38,7 @@ from backend.llm_engine.engine.tools import external as external_tools
 from backend.llm_engine.engine.tools import telemetry as telemetry_tools
 from backend.llm_engine.engine.tools import visuals as visual_tools
 from backend.llm_engine.engine.tools.code_diagrams import inspect_code_and_diagrams
-from backend.llm_engine.engine.tools.documents import (
-    catalog_lookup,
-    get_document,
-)
+from backend.llm_engine.engine.tools.documents import GetDocumentArgs, get_document
 from backend.llm_engine.engine.tools.external import ExternalPolicy
 from backend.llm_engine.engine.tools.physics import PhysicsArgs, physics_calculator
 from backend.llm_engine.engine.tools.search import SearchDocumentsArgs, search_documents
@@ -176,7 +173,16 @@ class AnswerWorkflow(Workflow):
         with self.deps.session_factory() as session:
             index = self.deps.alias_index(session)
             policy = self.deps.external_policy(session)
+            previous = catalog.previous_record(session, ev.get("chat_id"), ev.get("user_id"))
         policy = dataclasses.replace(policy, mode=ev.get("external_mode") or policy.mode)
+        # an answer to the last ask-back ("TP12", "the second one") resumes the question that was asked then
+        picked = catalog.chosen_option(previous, ev.question)
+        asked = previous["ask"]["question"] if picked else ev.question
+        _step(ctx, ev.trace_id, "catalog", "query_analysis", "Finding what the question refers to", False)
+        vector = await asyncio.to_thread(self.deps.embed_query, asked)
+        with self.deps.session_factory() as session:
+            found = catalog.search_catalog(session, asked, vector, previous)
+        _step(ctx, ev.trace_id, "catalog", "query_analysis", "Finding what the question refers to", True)
         groups = ev.get("groups", [])
         request = {
             "question": ev.question,
@@ -192,18 +198,39 @@ class AnswerWorkflow(Workflow):
         await ctx.store.set("request", request)
         analysis = await analyze(
             self.deps.gemini,
-            ev.question,
+            asked,
             history=ev.get("history", ""),
             state=ev.get("state", {}),
             index=index,
             user_groups=groups,
             external_allowed_groups=list(policy.allowed_groups) if policy.allows(groups) else [],
             trace_id=ev.trace_id,
+            catalog=found.prompt_text(),
         )
         _step(ctx, ev.trace_id, "analysis", "query_analysis", "Understanding the question", True)
         analysis = playbooks.apply_hint(analysis, ev.get("playbook_hint"))
-        if analysis.chitchat:
+        if analysis.chitchat and not picked:
             return await self._chitchat(ctx, ev, analysis, started, request)
+        decision = self._decide(analysis, found, previous, picked, ev)
+        analysis.catalog = {**decision.record(found, asked), "caveats": decision.caveats}
+        if decision.kind == "ask":
+            return self._finish(
+                ctx, ev.trace_id, "clarification", decision.text, analysis, [], None, started, request=request
+            )
+        if decision.kind == "halted":
+            return self._finish(
+                ctx,
+                ev.trace_id,
+                "insufficient_evidence",
+                decision.text,
+                analysis,
+                [],
+                None,
+                started,
+                request=request,
+            )
+        if decision.subject is not None:  # the catalog settled it: the model's own clarification is moot
+            analysis.raw.clarification.needed = False
         if analysis.raw.clarification.needed and analysis.raw.clarification.question:
             text = analysis.raw.clarification.question
             if analysis.raw.clarification.options:
@@ -212,6 +239,32 @@ class AnswerWorkflow(Workflow):
                 ctx, ev.trace_id, "clarification", text, analysis, [], None, started, request=request
             )
         return QueryAnalyzed(analysis=dump_analysis(analysis), started=started)
+
+    def _decide(self, analysis: Analysis, found, previous: dict | None, picked: dict | None, ev):
+        """The catalog decision after the model reframed the question (engine/catalog.py)."""
+        raw = analysis.raw
+        allowed = "\n".join(
+            [found.question, ev.get("history", ""), str(ev.get("state", {})), found.prompt_text()]
+            + [str((previous or {}).get("chosen") or ""), str(picked or "")]
+            + [o.label for o in found.options]
+        )
+        if raw.reframed_question and not catalog.reframing_ok(raw.reframed_question, allowed):
+            analysis.warnings.append(f"reframed question dropped (unknown id): {raw.reframed_question}")
+            raw.reframed_question = None
+            if len(found.subjects) >= 2 and not picked:
+                raw.resolution = "ambiguous"
+        forced = picked
+        if forced is None and "S0" in raw.subject_ids and previous and previous.get("chosen"):
+            forced = previous["chosen"]
+        with self.deps.session_factory() as session:
+            return catalog.decide(
+                session,
+                found,
+                resolution=raw.resolution,
+                subject_ids=raw.subject_ids,
+                intents=[str(i) for i in raw.intents],
+                forced=forced,
+            )
 
     async def _chitchat(self, ctx, ev, analysis: Analysis, started: float, request: dict) -> StopEvent:
         """Small talk gets a friendly reply (mode `chitchat`); a question outside the team's material gets a
@@ -241,15 +294,31 @@ class AnswerWorkflow(Workflow):
     async def run_tools(self, ctx: Context, ev: QueryAnalyzed) -> ToolsDone:
         request = await ctx.store.get("request")
         analysis = load_analysis(ev.analysis)
-        plan = playbooks.build_plan(request["question"], analysis)
+        question = analysis.question or request["question"]
+        request = {**request, "asked": question}
+        await ctx.store.set("request", request)
+        plan = playbooks.build_plan(question, analysis)
         calls = list(plan.calls)
         if plan.needs_physics_args:
             physics = await self._extract(request, "physics_args", PhysicsArgs)
             if physics is not None:
                 calls.append(PlannedCall("physics_calculator", physics, "the calculation asked for"))
         if plan.needs_telemetry_args:
-            asked = await self._extract(request, "telemetry_args", telemetry_tools.TelemetryRequest)
-            args = asked and telemetry_tools.args_for(asked, analysis.test_plan_ids, analysis.test_run_ids)
+            with self.deps.session_factory() as session:
+                channels = telemetry_tools.channel_list(session, analysis.catalog.get("run_labels", []))
+            asked = await self._extract(
+                request,
+                "telemetry_args",
+                telemetry_tools.TelemetryRequest,
+                version="telemetry_args.v2",
+                channels=channels or "not known (use the roles)",
+            )
+            args = asked and telemetry_tools.args_for(
+                asked,
+                analysis.test_plan_ids,
+                analysis.test_run_ids,
+                run_labels=analysis.catalog.get("run_labels", []),
+            )
             if args is not None:
                 calls.insert(0, PlannedCall(telemetry_tools.NAME, args, "the measured run data"))
         trace_id = request["trace_id"]
@@ -258,11 +327,26 @@ class AnswerWorkflow(Workflow):
         for item in attached:
             if item.is_image and visual and self.deps.embed_image is not None:
                 vector = await asyncio.to_thread(self.deps.embed_image, item.data)
-                args = playbooks.similar_photos(analysis, request["question"], vector)
+                args = playbooks.similar_photos(analysis, question, vector)
                 calls.append(PlannedCall(visual_tools.NAME, args, f"photos similar to {item.name}"))
         results = await asyncio.gather(*(self._call(ctx, trace_id, i, c) for i, c in enumerate(calls)))
+        uncovered = [
+            f"not covered by the files: {c.reason.removeprefix('sub-question: ')}"
+            for c, r in zip(calls, results, strict=True)
+            if c.reason.startswith("sub-question:") and not r.provenance
+        ]
         results = [*await self._read_attachments(ctx, request, attached), *results]
-        if plan.read_top_document:
+        settled = analysis.catalog.get("doc_ids") if analysis.catalog.get("chosen") else []
+        if settled:
+            with self.deps.session_factory() as session:
+                cards = catalog.catalog_evidence(session, settled)
+            results += [cards] if cards else []
+        if plan.read_top_document and settled:
+            read = PlannedCall(
+                "get_document", GetDocumentArgs(doc_id=settled[0]), "read the file asked about"
+            )
+            results.append(await self._call(ctx, trace_id, len(calls), read))
+        elif plan.read_top_document:
             top = next((r for r in results if r.tool == "search_documents" and r.provenance), None)
             if top is not None and top.provenance[0].doc_id:
                 results.append(
@@ -278,7 +362,9 @@ class AnswerWorkflow(Workflow):
         return ToolsDone(
             analysis=ev.analysis,
             results=[r.model_dump(mode="json") for r in results],
-            caveats=list(dict.fromkeys([*plan.caveats, *halted])),
+            caveats=list(
+                dict.fromkeys([*plan.caveats, *analysis.catalog.get("caveats", []), *uncovered, *halted])
+            ),
             started=ev.started,
         )
 
@@ -344,16 +430,20 @@ class AnswerWorkflow(Workflow):
             _step(ctx, request["trace_id"], step_id, "tool", description, True, tool=attachment_tools.NAME)
         return results
 
-    async def _extract(self, request: dict, name: str, schema: type[BaseModel]) -> Any:
-        """Tool arguments from the question (`<name>.v1`); None when Gemini fails."""
-        version = f"{name}.v1"
+    async def _extract(
+        self, request: dict, name: str, schema: type[BaseModel], version: str | None = None, **variables: str
+    ) -> Any:
+        """Tool arguments from the question (`<name>.v1` unless pinned); None when Gemini fails."""
+        version = version or f"{name}.v1"
         prompt = load_prompt("engine", version)
         try:
             result = await self.deps.gemini.generate(
                 model=model_id(),
                 messages=[
                     Message.system(prompt.system),
-                    Message.user(prompt.render_user(question=request["question"])),
+                    Message.user(
+                        prompt.render_user(question=request.get("asked") or request["question"], **variables)
+                    ),
                 ],
                 context=CallContext(
                     purpose=f"engine.{name}",
@@ -407,8 +497,6 @@ class AnswerWorkflow(Workflow):
                 )
             if call.tool == "get_document":
                 return get_document(session, call.args)
-            if call.tool == "catalog_lookup":
-                return catalog_lookup(session, call.args)
             if call.tool == telemetry_tools.NAME:
                 return telemetry_tools.query_telemetry(
                     session,
@@ -465,9 +553,12 @@ class AnswerWorkflow(Workflow):
             )
         _step(ctx, request["trace_id"], "synthesis", "synthesis", "Writing the answer", False)
         try:
+            asked = request.get("asked") or request["question"]
             draft = await synthesis.answer(
                 self.deps.gemini,
-                request["question"],
+                asked
+                if asked == request["question"]
+                else f"{asked}\n(The user asked: {request['question']})",
                 ev.analysis,
                 results,
                 language=analysis.raw.language,
@@ -486,10 +577,12 @@ class AnswerWorkflow(Workflow):
         )
         halted = [c for c in ev.caveats if HALTED.search(c)]
         markdown = draft.markdown + ("\n\n" + "\n".join(f"> Note: {c}" for c in halted) if halted else "")
+        # sufficiency (file 07 §4): an answer none of whose claims the evidence entails did not find it
+        supported = any(v.verdict == "entailed" for v in draft.verdicts)
         return self._finish(
             ctx,
             request["trace_id"],
-            "answered",
+            "answered" if supported else "insufficient_evidence",
             markdown,
             analysis,
             results,

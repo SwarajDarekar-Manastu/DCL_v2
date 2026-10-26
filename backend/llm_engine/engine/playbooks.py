@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from backend.indexing.retrieval import Scope, SearchFilters
 from backend.llm_engine.engine.analysis import Analysis, Intent, SourceScope
 from backend.llm_engine.engine.tools.code_diagrams import CodeDiagramArgs
-from backend.llm_engine.engine.tools.documents import CatalogArgs, GetDocumentArgs
+from backend.llm_engine.engine.tools.documents import GetDocumentArgs
 from backend.llm_engine.engine.tools.search import SearchDocumentsArgs
 from backend.llm_engine.engine.tools.visuals import InspectVisualsArgs
 from backend.postgres.enums import EntityType, SourceOrigin
@@ -56,14 +56,22 @@ def _origins(analysis: Analysis) -> list[str]:
     return []
 
 
+def _settled(analysis: Analysis) -> list[str]:
+    """The files the catalog step settled the question on (engine/catalog.py); empty when it settled none."""
+    return list(analysis.catalog.get("doc_ids") or []) if analysis.catalog.get("chosen") else []
+
+
 def _filters(analysis: Analysis, **overrides) -> SearchFilters:
     raw = analysis.raw.filters
     values = {
-        "doc_kinds": raw.doc_kinds,
+        # search inside the files the question was resolved to (widened when that finds nothing)
+        "doc_ids": _settled(analysis),
         "test_plan_ids": analysis.test_plan_ids,
         "source_origins": _origins(analysis),
         "include_superseded": raw.include_superseded,
-        "node_types": raw.node_types,
+        # the model's kinds are guesses: they rank matching passages higher and hide nothing
+        "prefer_doc_kinds": raw.doc_kinds,
+        "prefer_node_types": raw.node_types,
     }
     values.update(overrides)
     return SearchFilters(**values)
@@ -82,12 +90,23 @@ def _search(
     )
 
 
+VISUAL_KINDS = {
+    "photo": "hardware_photo",
+    "figure": "plot_figure",
+    "diagram_summary": "diagram",
+    "video_event": "video_frame",
+}
+
+
 def _visuals(analysis: Analysis, question: str, *, kinds=(), relook: str | None = None) -> InspectVisualsArgs:
+    """The visual kinds the question asks for ("photos": hardware photos only); all when it names none."""
+    asked = [VISUAL_KINDS[t] for t in analysis.raw.filters.node_types if t in VISUAL_KINDS]
     return InspectVisualsArgs(
         query=question,
-        kinds=list(kinds),
+        kinds=list(kinds) or list(dict.fromkeys(asked)),
         test_plan_ids=analysis.test_plan_ids,
         components=_tags(analysis)[:3],
+        doc_ids=_settled(analysis),
         relook_question=relook,
         user_language=analysis.raw.language,
     )
@@ -125,11 +144,6 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
     if intents & {Intent.TELEMETRY_METRIC, Intent.RUN_COMPARISON}:
         plan.needs_telemetry_args = True
         plan.add(
-            "catalog_lookup",
-            CatalogArgs(test_plan_id=(analysis.test_plan_ids or [None])[0]),
-            "which runs and reports exist for the plan",
-        )
-        plan.add(
             "search_documents",
             _search(analysis, question, scope=Scope.TABLES_ONLY),
             "report tables to cross-check the measured values",
@@ -140,11 +154,15 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
             PROCEDURE_KINDS if Intent.PROCEDURE_LOOKUP in intents else []
         )
         plan.add(
-            "search_documents", _search(analysis, question, doc_kinds=kinds), "the passages that state it"
+            "search_documents",
+            _search(analysis, question, prefer_doc_kinds=kinds),
+            "the passages that state it",
         )
     if Intent.FAILURE_INVESTIGATION in intents:
         plan.needs_telemetry_args |= bool(analysis.test_plan_ids or analysis.test_run_ids)
-        plan.add("search_documents", _search(analysis, question, doc_kinds=FAILURE_KINDS), "failure reports")
+        plan.add(
+            "search_documents", _search(analysis, question, prefer_doc_kinds=FAILURE_KINDS), "failure reports"
+        )
         plan.add(
             "inspect_visuals", _visuals(analysis, question, kinds=["hardware_photo"]), "photos of the damage"
         )
@@ -157,7 +175,7 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
     if Intent.STANDARDS_COMPLIANCE in intents:
         plan.add(
             "search_documents",
-            _search(analysis, question, doc_kinds=["standard"], test_plan_ids=[]),
+            _search(analysis, question, doc_kinds=["standard"], test_plan_ids=[], doc_ids=[]),
             "the requirement clause",
         )
         plan.add(
@@ -199,7 +217,7 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
         )
         plan.add(
             "search_documents",
-            _search(analysis, question, source_origins=[SourceOrigin.EXTERNAL_KEPT]),
+            _search(analysis, question, source_origins=[SourceOrigin.EXTERNAL_KEPT], doc_ids=[]),
             "kept library: datasheets and papers",
         )
         plan.needs_physics_args = True
@@ -210,16 +228,7 @@ def build_plan(question: str, analysis: Analysis) -> Plan:
             "search_documents", _search(analysis, question, scope=Scope.PARENT, k=3), "find the document"
         )
         plan.read_top_document = True
-    if Intent.NAVIGATIONAL in intents:
-        plan.add(
-            "catalog_lookup",
-            CatalogArgs(
-                doc_kinds=analysis.raw.filters.doc_kinds,
-                test_plan_id=(analysis.test_plan_ids or [None])[0],
-                entity_ids=analysis.entity_ids,
-            ),
-            "what exists",
-        )
+    if Intent.NAVIGATIONAL in intents:  # what exists comes from the catalog step's files
         plan.add("search_documents", _search(analysis, question), "where it is discussed")
     if Intent.VISUAL_LOOKUP in intents or analysis.raw.needs_visuals:
         relook = question if Intent.VISUAL_LOOKUP in intents else None

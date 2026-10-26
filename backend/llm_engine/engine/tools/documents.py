@@ -1,15 +1,12 @@
-"""U1 `get_document` and U2 `catalog_lookup` (file 07 §4).
+"""U1 `get_document` (file 07 §4): a document's parents in reading order — the whole report, a page range or
+one section — within a character budget; a longer document is read progressively (`next_ordinal` continues
+where this call stopped).
 
-U1 returns a document's parents in reading order — the whole report, a page range or one section — within a
-character budget; a longer document is read progressively (`next_ordinal` continues where this call stopped).
-U2 lists what exists: documents by kind, test plan, entity and date; halted documents with their review case
-keys (so the answer can say "this run is halted, case …"); standards with their revisions and status. The run
-catalog for telemetry joins U2 when Route C's tables exist.
+What exists, halted files with their review cases and which file a question means are the catalog step's
+(`engine/catalog.py`, run before the analysis); it replaced the U2 `catalog_lookup` tool (user 2026-10-26).
 """
 
 import uuid
-from datetime import date
-from typing import Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import bindparam, text
@@ -24,13 +21,7 @@ GET_NAME = "get_document"
 GET_DESCRIPTION = (
     "Read one document in order (all, a page range, or a section), for summaries and full reads."
 )
-CATALOG_NAME = "catalog_lookup"
-CATALOG_DESCRIPTION = (
-    "List what exists: documents by kind, test plan, entity or date; halted documents with review case keys; "
-    "standards with revisions. Use before reading or comparing."
-)
 BUDGET_CHARS = 40_000
-CATALOG_LIMIT = 50
 VISIBLE = ("ACTIVE", "ACTIVE_WITH_SOFT_FLAGS")
 
 
@@ -41,17 +32,6 @@ class GetDocumentArgs(BaseModel):
     page_to: int | None = Field(default=None, ge=1)
     section: str | None = Field(default=None, description="text of the section heading, e.g. '3.2 Chamber'")
     start_ordinal: int = Field(default=0, ge=0, description="continue a progressive read")
-
-
-class CatalogArgs(BaseModel):
-    kind: Literal["documents", "halted", "standards"] = "documents"
-    doc_kinds: list[str] = []
-    test_plan_id: str | None = None
-    entity_ids: list[uuid.UUID] = []
-    date_from: date | None = None
-    date_to: date | None = None
-    include_superseded: bool = False
-    limit: int = Field(default=CATALOG_LIMIT, ge=1, le=200)
 
 
 NODE_COLUMNS = (
@@ -159,84 +139,3 @@ def get_document(session: Session, args: GetDocumentArgs) -> ToolResult:
         warnings=warnings,
         display=header + "\n\n" + "\n\n".join(blocks) + tail,
     )
-
-
-def catalog_lookup(session: Session, args: CatalogArgs) -> ToolResult:
-    clauses, params, binds = [], {"limit": args.limit}, []
-    if args.kind == "halted":
-        clauses.append("d.status = 'HALTED'")
-    elif args.kind == "standards":
-        clauses.append("d.doc_kind = 'standard'")
-        clauses.append("d.status = ANY(:statuses)")
-        params["statuses"] = [
-            *VISIBLE,
-            "SUPERSEDED",
-        ]  # every revision, so the answer can name the current one
-        binds.append(bindparam("statuses", type_=ARRAY(Text)))
-    else:
-        clauses.append("d.status = ANY(:statuses)")
-        params["statuses"] = [*VISIBLE, "SUPERSEDED"] if args.include_superseded else list(VISIBLE)
-        binds.append(bindparam("statuses", type_=ARRAY(Text)))
-    if args.doc_kinds:
-        clauses.append("d.doc_kind = ANY(:kinds)")
-        params["kinds"] = args.doc_kinds
-        binds.append(bindparam("kinds", type_=ARRAY(Text)))
-    if args.test_plan_id:
-        clauses.append("d.test_plan_id = :plan")
-        params["plan"] = args.test_plan_id
-    if args.entity_ids:
-        clauses.append("d.entity_ids && :entities")
-        params["entities"] = args.entity_ids
-        binds.append(bindparam("entities", type_=ARRAY(UUID(as_uuid=True))))
-    if args.date_from:
-        clauses.append("d.doc_date >= :date_from")
-        params["date_from"] = args.date_from
-    if args.date_to:
-        clauses.append("d.doc_date <= :date_to")
-        params["date_to"] = args.date_to
-    cases = (
-        ", (SELECT array_agg(DISTINCT f.case_key) FROM review_flags f WHERE f.doc_id = d.doc_id "
-        "AND f.status = 'OPEN' AND f.severity = 'HARD') AS case_keys"
-    )
-    statement = text(
-        "SELECT d.doc_id, d.title, d.doc_kind, d.status, d.doc_date, d.test_plan_id, d.test_run_id, "  # noqa: S608
-        f"d.source_origin, d.standard_id, d.standard_revision{cases} FROM documents d "
-        f"WHERE {' AND '.join(clauses)} "
-        "ORDER BY d.doc_date DESC NULLS LAST, d.title LIMIT :limit"
-    ).bindparams(*binds)
-    rows = list(session.execute(statement, params))
-    lines, items = [], []
-    for row in rows:
-        bits = [row.doc_kind, str(row.doc_date) if row.doc_date else None, row.test_plan_id, row.test_run_id]
-        if row.standard_id:
-            bits.append(
-                f"{row.standard_id} rev {row.standard_revision}" if row.standard_revision else row.standard_id
-            )
-        if row.status != "ACTIVE":
-            bits.append(row.status)
-        if row.case_keys:
-            bits.append("review case " + ", ".join(row.case_keys))
-        lines.append(f"- {row.title} ({', '.join(b for b in bits if b)})")
-        items.append(
-            {
-                "doc_id": str(row.doc_id),
-                "title": row.title,
-                "doc_kind": row.doc_kind,
-                "status": row.status,
-                "doc_date": str(row.doc_date) if row.doc_date else None,
-                "test_plan_id": row.test_plan_id,
-                "case_keys": row.case_keys or [],
-            }
-        )
-    sources = [
-        Source(
-            doc_id=row.doc_id,
-            title=row.title,
-            label=row.title,
-            provenance=provenance_of(row.source_origin, row.doc_kind),
-        )
-        for row in rows
-    ]
-    heading = {"documents": "Documents", "halted": "Halted documents", "standards": "Standards"}[args.kind]
-    display = f"{heading} ({len(rows)}):\n" + ("\n".join(lines) if lines else "none")
-    return ToolResult(tool=CATALOG_NAME, result=items, provenance=sources, display=display)

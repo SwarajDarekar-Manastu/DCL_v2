@@ -239,6 +239,16 @@ def unit_flags(table: Table, extra_dimensionless: Sequence[str] = ()) -> list[Fl
     return flags
 
 
+def workbook_summary(tables: Sequence[Table]) -> str | None:
+    """A workbook's summary: its tables by sheet and caption, with their header cells."""
+    parts = []
+    for table in tables[:12]:
+        where = " / ".join(x for x in (table.sheet, table.caption) if x) or "table"
+        header = ", ".join(c for c in (cell_text(v) for v in (table.rows[0] if table.rows else [])) if c)
+        parts.append(f"{where} ({len(table.rows)} rows" + (f": {header[:160]})" if header else ")"))
+    return f"Workbook with {len(tables)} tables: " + "; ".join(parts) if parts else None
+
+
 def table_document(
     blob_sha256: str,
     name: str,
@@ -293,6 +303,7 @@ def table_document(
             hardware_item=context.hardware_item,
             unit_count=len({t.sheet for t in tables if t.sheet}) or len(tables),
             catalog=catalog,
+            summary=workbook_summary(tables),
         ),
         nodes=nodes,
         flags=list(flags),

@@ -14,7 +14,10 @@ The Answer Engine is a FastAPI service running a LlamaIndex Workflow. Open WebUI
 
 ```mermaid
 flowchart TD
-    Q[User message + chat history] --> QA[1 Query analysis<br/>Gemini 3.8 Flash · structured output]
+    Q[User message + chat history] --> CT[0 Catalog step<br/>files and pieces matched by metadata · no model]
+    CT --> QA[1 Query analysis + reframing<br/>Gemini 3.8 Flash · structured output]
+    QA -->|fits several tests| CL0[Ask back with the real options]
+    QA -->|only halted data| HD[Say it is held, name the case]
     QA --> PL[2 Planner<br/>playbook selection · sub-questions · filters]
     PL --> EX[3 Tool execution<br/>parallel where independent]
     EX --> T1[search_documents]
@@ -23,8 +26,7 @@ flowchart TD
     EX --> T4[inspect_code_and_diagrams]
     EX --> T5[physics_calculator]
     EX --> U1[get_document]
-    EX --> U2[catalog_lookup]
-    T1 & T2 & T3 & T4 & T5 & U1 & U2 --> SC[4 Sufficiency check<br/>coverage of sub-questions]
+    T1 & T2 & T3 & T4 & T5 & U1 --> SC[4 Sufficiency check<br/>coverage of sub-questions]
     SC -->|gap, internal| WD[Widen: relax filters,<br/>aliases, section-level search]
     WD --> EX
     SC -->|gap, external allowed| T6[external_search<br/>via IP sanitizer]
@@ -38,9 +40,13 @@ flowchart TD
 
 Implemented as Workflow steps with typed events (`QueryAnalyzed`, `PlanReady`, `ToolResults`, `Sufficiency`, `Draft`, `Verified`). Each step emits `status` events that Open WebUI shows above the message ("Searching 3 test reports…", "Running DuckDB on TP07_T01…", "Verifying 6 claims…"). The workflow runs under the **DBOS runtime** (decision H8): every step transition is persisted in PostgreSQL, so an engine restart mid-answer resumes the run by id instead of starting over, and a clarification pause (§10) or a "use unverified value anyway?" confirmation survives a process restart. Gemini is reached only through the Manastu gateway client (file 01 §7).
 
-## 3. Step 1 — Query analysis (structured output)
+## 3. Step 0 — the catalog step, and Step 1 — query analysis with reframing
 
-Input: the user message, the last 6 turns summarized, and the conversation state (`last_run_ids`, `last_doc_ids`, `active_filters`). Output schema:
+**Step 0, the catalog step** (`backend/llm_engine/engine/catalog.py`, user 2026-10-26; replaces the U2 `catalog_lookup` tool). Before any model reads the question it finds what the question refers to in the metadata of every file, halted ones included. Files are ranked five ways and fused by RRF: the file cards (file 04 §3.4) by keyword (`search_text`, `title`, `card_codes`) and by meaning (`card_embedding`); the pieces by meaning and by keyword with their headers (T1's legs, best piece per file); and the plan, run, hardware and date written in the question (the ingestion patterns). The top 15 files are grouped into **subjects**: one test (its owner, the test plan or else the hardware, and its run) or, for files without labels, their folder. Code computes the conflict signals: a run named without plan or hardware that exists under two or more owners; files of the name the question uses in different folders that the question does not tell apart; two subjects close at the top; labels that match nothing. The conversation's last catalog record (from its trace, same `chat_id`) carries an open ask-back and the subject chosen: an answer like "TP12" or "the second one" resumes the original question, and a follow-up that names nothing new may stay on the conversation's subject (offered to the model as `S0`). About 0.1–0.3 s; no model call.
+
+**Step 1, query analysis**, reads the question with the catalog's subjects and conflicts and, besides the fields below, returns `reframed_question` (the question with the test, file and part named, from catalog facts only), `resolution` (`clear`, `ambiguous`, `not_found`) and `subject_ids`. Code checks that the subjects exist and that every identifier of the reframed question appears in the question, the conversation or the catalog (else the reframing is dropped). Then code decides: **ask back** when a conflict signal stands or the model reads the question as ambiguous with two or more subjects, with the options built from the catalog ("Which Test 04? 1. TP12 · Test 04: workbook and 3 plots 2. INJ14 · Test 04: pressure run, held for unit review (case …)"); **halted** when the question asks for a measured value and the subject's only measured data is held (the reply names the files and the case); otherwise **go on**: every tool works from the reframed question, searches are filtered to all files of the chosen subject (`doc_ids`, widened when that finds nothing), telemetry gets the subject's run labels, and the writer gets the chosen files' cards. The trace keeps the raw and reframed question, the subjects and the decision.
+
+Input: the user message, the last 6 turns summarized, the conversation state, and the catalog. Output schema:
 
 | Field | Values / meaning |
 |-------|------------------|
@@ -55,7 +61,8 @@ Input: the user message, the last 6 turns summarized, and the conversation state
 | `language` | the user's language (BCP-47); the answer is written in it regardless of the sources' languages |
 | `source_scope` | `internal_only`, `internal_and_library` (default: in-house material plus the kept brochures, datasheets and papers), `include_web` (only when `external_allowed` and the policy in §6 triggers) |
 | `sub_questions[]` | decomposition for multi-part questions, each tagged with the tool it likely needs |
-| `clarification_needed` | with the exact ambiguity, only when two different tool calls would result (e.g., "TP07 has three runs; which one?") |
+| `clarification_needed` | with the exact ambiguity, only when two different tool calls would result and neither the conversation nor the catalog settles it |
+| `reframed_question`, `resolution`, `subject_ids` | the catalog step's reading (above) |
 
 Thinking level `low`; this step must stay under ~1.5 s.
 
@@ -121,9 +128,9 @@ Six core tools plus two utilities. All tool interfaces are strict JSON schemas (
 
 `doc_id` or exact title → ordered parents (or a page range / a section / a table by id). Used for summaries and "read the whole report". For long documents the model receives sections progressively; Gemini context caching is used when the same document is read repeatedly in a session.
 
-### U2 `catalog_lookup`
+### U2 `catalog_lookup` (removed 2026-10-26)
 
-Structured listing: runs by plan/status/date, documents by kind/entity/date, photos by test, halted items with case ids, standards and their revisions. Answers "what do we have on X?" and feeds the planner with run ids before T2.
+Replaced by the catalog step (§3), which runs before the analysis instead of beside the other tools, searches the whole metadata layer (cards and pieces, not only labels), reports halted files with their review cases, and decides the ask-back in code.
 
 ## 5. Playbooks (Skills) — how each question type is executed
 
@@ -131,17 +138,17 @@ Server-side plan templates; the same content is published as Open WebUI **Skills
 
 | Question type | Steps | Tools |
 |---------------|-------|-------|
-| **Telemetry metric** ("peak and steady-state pressure in TP07") | resolve run(s) → metrics → cross-check with the report's stated value if a report exists → answer with window and unit | U2 → T2 → T1(tables_only, test_plan) |
-| **Run comparison** ("compare TP07 T01 vs T02 bed temperature") | resolve runs → same metrics for both → align on `t_from_ignition` → table + optional overlay plot | U2 → T2(compare, plot) |
+| **Telemetry metric** ("peak and steady-state pressure in TP07") | resolve run(s) → metrics → cross-check with the report's stated value if a report exists → answer with window and unit | catalog → T2 → T1(tables_only, subject files) |
+| **Run comparison** ("compare TP07 T01 vs T02 bed temperature") | resolve runs → same metrics for both → align on `t_from_ignition` → table + optional overlay plot | catalog → T2(compare, plot) |
 | **Fact / procedure lookup** ("what is the pre-firing checklist for Injector 14?") | search with `doc_kind` filter → parent read → answer with page cites | T1 |
-| **Failure investigation** ("what went wrong in the INJ-14 flow test and what damage did we see?") | runs with `FAILED_RUN` → pressure anomaly metrics → failure report text → photos with failure modes → timeline if video exists → synthesize cause/effect only as stated in sources | U2 → T2 → T1 → T3 → T4(diagram neighbors of the failed component) |
+| **Failure investigation** ("what went wrong in the INJ-14 flow test and what damage did we see?") | runs with `FAILED_RUN` → pressure anomaly metrics → failure report text → photos with failure modes → timeline if video exists → synthesize cause/effect only as stated in sources | catalog → T2 → T1 → T3 → T4(diagram neighbors of the failed component) |
 | **Standards compliance** ("do our cooling-duct FMEA and C-103 data satisfy the ECSS thermal margin requirement for TP37?") | find the clause (standard, current revision) → find our FMEA/material rows (table_row nodes) → compare numbers via `pint` → verdict per requirement with both cites | T1(standard) → T1(tables/rows filtered by TP37, entities) → T5(unit_convert) |
 | **Code walkthrough** ("how does our script compute expansion ratio and validate pressure columns?") | symbol/semantic lookup → callers/callees → explain with line cites | T4 |
 | **Diagram traversal** ("what is upstream of the injector in Rev C?") | diagram path query → render embed → narrative | T4 |
-| **Design synthesis / trade study** ("15 N green thruster, Isp > 230 s, < 20 W preheat, 1U") | decompose constraints → internal baselines (reports, catalyst tables, runs) → **kept library** (datasheets, papers; `source_origin = external_kept`) for components and published results → physics check of each candidate → gap detection → live web (sanitized) only for remaining gaps → trade matrix with a provenance label per cell (measured / internal report / vendor claim / literature / web) | T1(internal) → U2/T2 → T1(library) → T5 → T6 |
+| **Design synthesis / trade study** ("15 N green thruster, Isp > 230 s, < 20 W preheat, 1U") | decompose constraints → internal baselines (reports, catalyst tables, runs) → **kept library** (datasheets, papers; `source_origin = external_kept`) for components and published results → physics check of each candidate → gap detection → live web (sanitized) only for remaining gaps → trade matrix with a provenance label per cell (measured / internal report / vendor claim / literature / web) | T1(internal) → catalog/T2 → T1(library) → T5 → T6 |
 | **Library lookup** ("what preheat power does the Moog valve datasheet give?", "what did the 2023 ADN paper measure?") | search restricted to `external_kept` → datasheet rows or paper sections → answer with the vendor/literature label, in the user's language, quoting the original | T1(library) |
 | **Document summary** ("summarize the TP37 report") | `get_document` → section summaries (from enrichment) → key numbers verified against tables/runs | U1 → T2 |
-| **Navigational** ("what tests used the ADN catalyst?", "where is the heater calibration?") | catalog + entity filters → list with links | U2 → T1 |
+| **Navigational** ("what tests used the ADN catalyst?", "where is the heater calibration?") | the catalog step's files → list with links | catalog → T1 |
 | **Visual lookup** ("show me the burned injector mesh photos") | photo search → embeds | T3 |
 | **Physics calc** ("mass flow for 5 N at Isp 225 s") | calculator | T5 |
 | **Out of scope / chit-chat** | answer briefly without tools; no citations | — |
@@ -186,6 +193,7 @@ Rules enforced by prompt and checked by the verifier:
 - A claim built on a `needs_review` node carries "⚠ unverified extraction".
 - When sources conflict, present both with dates; do not choose silently.
 - If `claims` is empty for a question that needed evidence, the answer is the "insufficient evidence" template: what was searched (filters, runs, standards), what exists but is halted (case ids), and what the user could add.
+- **Sufficiency decides the mode** (user 2026-10-26): an answer none of whose claims the verifier finds entailed is returned with mode `insufficient_evidence`, not `answered`; a sub-question whose searches found nothing adds the caveat "not covered by the files: …".
 
 Citations are rendered in Open WebUI as `source` events: `source.name` = document title (page/slide/run), `metadata.url` = Console deep link that shows the page render with the bbox highlighted and offers "Open in OneDrive" (`web_url`) and "Open file" (presigned original). Photos and plots are rendered inline via `embeds`.
 
@@ -200,7 +208,7 @@ Citations are rendered in Open WebUI as `source` events: `source.name` = documen
 
 ### 9.1 "What was the peak pressure in Test Run 04 and what was the mean after steady state?"
 
-- **Analysis:** `telemetry_metric`; `test_run_ids = ['T04']`; no plan id → `catalog_lookup` finds `TP07_T04` and `TP12_T04`; ambiguity changes the tool call → **clarify once**: "Two runs match T04: TP07 (2024-03-12, nominal) and TP12 (2024-06-02, cold flow). Which one?" User: TP07.
+- **Analysis:** `telemetry_metric`; `test_run_ids = ['T04']`; no plan id → the catalog step finds run T04 under TP07 and TP12; ambiguity changes the tool call → **clarify once**: "Two runs match T04: TP07 (2024-03-12, nominal) and TP12 (2024-06-02, cold flow). Which one?" User: TP07.
 - **Tools:** `query_telemetry(run_ids=['TP07_T04'], channels=['chamber_pressure'], metrics=['peak_raw','peak_50ms','steady_mean'])` → `{peak_raw: 52.4 bar_abs @ t+0.012 s, peak_50ms: 38.1 bar_abs, steady_mean: 12.4 bar_abs over t+1.0…t+9.8 s, ambient: VACUUM_CHAMBER, t0_method: dP/dt, sampling 1 kHz}`; `search_documents(query='T04 chamber pressure', filters={test_plan_id:'TP07'}, scope='tables_only')` → the report table says 12.5 bar.
 - **Answer:** "TP07 run T04 (2024-03-12): instantaneous peak 52.4 bar(a) at ignition (+12 ms) — a water-hammer spike; 50 ms-filtered peak 38.1 bar(a); steady-state mean 12.4 bar(a) over +1.0 to +9.8 s. The test report table lists 12.5 bar for steady state (rounding). Sensor PT-101, 1 kHz, vacuum chamber. [cites: run TP07_T04 parquet; TP07 report p. 8 table 3]" plus the shaded plot embed.
 - **Verifier:** three numeric claims match tool strings; the report comparison is `entailed`.
@@ -213,7 +221,7 @@ Citations are rendered in Open WebUI as `source` events: `source.name` = documen
 
 ### 9.3 "What went wrong during the Injector 14 flow test and what hardware damage did we see?"
 
-- **Tools:** `catalog_lookup(hardware_item='INJ-14', run_status='FAILED_RUN')` → `INJ14_FAIL_01`; `query_telemetry(... metrics=['max','time_to_peak','window_stats'])` → pressure drop at +3.2 s; `search_documents(query='Injector 14 post-test observations', filters={hardware_items:['INJ-14'], doc_kinds:['test_report','failure_report']})` → observations JSON section + report conclusions; `inspect_visuals(kinds=['hardware_photo'], filters={hardware_items:['INJ-14']})` → 4 photos (`burned_injector_mesh`, `broken_monolith_throat`) with failure modes; `inspect_code_and_diagrams(mode='diagram_neighbors', from_tag='INJ-14')` → upstream SV-1, F-101.
+- **Tools:** the catalog step resolves the Injector 14 flow test to its files and runs (`INJ14_FAIL_01`); `query_telemetry(... metrics=['max','time_to_peak','window_stats'])` → pressure drop at +3.2 s; `search_documents(query='Injector 14 post-test observations', filters={hardware_items:['INJ-14'], doc_kinds:['test_report','failure_report']})` → observations JSON section + report conclusions; `inspect_visuals(kinds=['hardware_photo'], filters={hardware_items:['INJ-14']})` → 4 photos (`burned_injector_mesh`, `broken_monolith_throat`) with failure modes; `inspect_code_and_diagrams(mode='diagram_neighbors', from_tag='INJ-14')` → upstream SV-1, F-101.
 - **Answer:** timeline (pressure collapse at +3.2 s per telemetry), stated causes **as written in the report** (not invented), photo evidence inline with the model's failure-mode reading, and the P&ID neighborhood; caveats if the report is DRAFT.
 
 ### 9.4 "Do our cooling duct risk assessment and C-103 material data satisfy the ECSS thermal margin requirements for Test Plan 37?"
@@ -223,7 +231,7 @@ Citations are rendered in Open WebUI as `source` events: `source.name` = documen
 
 ### 9.5 "Find 5 candidate architectures for a 2–5 N green thruster, < 20 W preheat, fitting 1U."
 
-- **Tools:** decomposition → `catalog_lookup` + `search_documents(source_origin='internal')` for in-house HTP/ADN/HAN baselines and catalyst beds → `query_telemetry` for measured Isp/preheat where runs exist → `search_documents(source_origin='external_kept')` over the library: a German catalyst-heater datasheet and two ADN papers answer part of the preheat question → `physics_calculator(cea_performance / scale_thruster)` per candidate → sufficiency still finds the monolith-preheat gap → `external_search(purpose='literature', query_intent='low-power preheat monolithic catalyst ADN-class 5 N thruster')` (sanitized; no test ids) → trade matrix.
+- **Tools:** decomposition → the catalog step + `search_documents(source_origin='internal')` for in-house HTP/ADN/HAN baselines and catalyst beds → `query_telemetry` for measured Isp/preheat where runs exist → `search_documents(source_origin='external_kept')` over the library: a German catalyst-heater datasheet and two ADN papers answer part of the preheat question → `physics_calculator(cea_performance / scale_thruster)` per candidate → sufficiency still finds the monolith-preheat gap → `external_search(purpose='literature', query_intent='low-power preheat monolithic catalyst ADN-class 5 N thruster')` (sanitized; no test ids) → trade matrix.
 - **Answer:** matrix with a provenance tag per cell (`measured: TP19 run`, `internal report: catalyst_specs.xlsx`, `vendor claim: Heater datasheet (DE, translated)`, `literature: ADN paper 2023`, `calc: CEA frozen`, `web: AIAA 2024…`) and an explicit list of what is unknown.
 
 ### 9.6 "Summarize the TP37 hot-fire report."
@@ -250,8 +258,8 @@ Citations are rendered in Open WebUI as `source` events: `source.name` = documen
 
 ## 10. Conversation handling
 
-- State carried per chat: last run ids, last doc ids, last filters, last answer's citations. Follow-ups like "and the temperature?" reuse `run_ids`.
-- Clarifying questions are asked only when two different tool calls would result **and** the catalog cannot disambiguate (most recent run is **not** assumed silently; it is offered as the default in the clarification).
+- State carried per chat on the server: the catalog record of the chat's last answer (`answer_traces.query_analysis.catalog`, same `chat_id`): the subject chosen, its files and runs, and an open ask-back with its options. Follow-ups like "and the temperature?" stay on the chosen subject; "and test 5?" keeps its test plan or hardware. (Neither the pipe nor the API sends a separate state; the history text alone was the only memory before 2026-10-26.)
+- Clarifying questions are asked only when two different tool calls would result **and** the catalog cannot disambiguate: the options are the catalog's real subjects or files, never invented, and the most recent run is not assumed silently. The user's reply ("TP12", "2", "the de-integration one") is matched to an option and the original question is answered for it.
 - "Use it anyway" unlocks `needs_review` numbers for the rest of that chat (recorded in the trace).
 
 ## 11. Latency, budget, concurrency

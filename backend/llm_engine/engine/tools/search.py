@@ -2,8 +2,9 @@
 
 The lexical leg is expanded with every alias surface of the entities query analysis resolved (all languages
 the alias table knows: `HTP` → `hydrogen peroxide`, `H2O2`, `Wasserstoffperoxid`). Zero hits widen in the
-manual's order — drop `doc_kinds`, then `test_plan_ids`, then switch to parent scope — and the result says
-which filters were dropped. Each hit is quoted in `display` with its label, provenance and review marker.
+manual's order — drop the files the question was resolved to, then `doc_kinds`, then `test_plan_ids`, then
+switch to parent scope — and the result says which filters were dropped. Each hit is quoted in `display`
+with its label, provenance and review marker.
 """
 
 import uuid
@@ -52,6 +53,9 @@ def alias_surfaces(session: Session, entity_ids: list[uuid.UUID]) -> list[str]:
 def widening_steps(args: SearchDocumentsArgs) -> list[tuple[str, SearchFilters, Scope]]:
     steps = [("as asked", args.filters, args.scope)]
     filters = args.filters
+    if filters.doc_ids:  # the files the question was resolved to (engine/catalog.py) held nothing
+        filters = filters.model_copy(update={"doc_ids": []})
+        steps.append(("dropped the files the question was resolved to", filters, args.scope))
     if filters.doc_kinds:
         filters = filters.model_copy(update={"doc_kinds": []})
         steps.append(("dropped doc_kinds", filters, args.scope))

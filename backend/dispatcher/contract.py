@@ -671,6 +671,9 @@ class DocumentFields(_Model):
     page_count: int | None = Field(default=None, ge=0)
     unit_count: int | None = Field(default=None, ge=0)
     catalog: dict[str, Any] | None = None
+    # the file's own one-paragraph summary as the route read it (a photo's VLM description, a plot's axes and
+    # series notes, a run's first line); used when enrichment wrote none (file 04 §3.4 `doc_summary`)
+    summary: str | None = None
 
 
 class ProcessedNode(_Model):

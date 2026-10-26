@@ -88,6 +88,7 @@ class PhotoReading:
     content: str
     metadata: dict
     confidence: float | None
+    summary: str | None = None  # the file's summary in its metadata (DocumentFields.summary)
 
 
 def _register_heif() -> None:
@@ -177,6 +178,24 @@ def render_photo(reading) -> str:
     return "\n".join(lines)
 
 
+def plot_summary(reading) -> str:
+    """A plot's summary from the VLM's reading: what is plotted against what, then its note on each series."""
+    axes = ", ".join(f"{a.label or '?'}" + (f" ({a.unit})" if a.unit else "") for a in reading.y_axes)
+    x = reading.x_axis
+    head = f"{str(reading.plot_type).capitalize()} plot of {axes or '?'} against {x.label or '?'}"
+    head += f" ({x.unit})" if x.unit else ""
+    head += f" over {x.range[0]:g} to {x.range[1]:g}" if x.range and len(x.range) == 2 else ""
+    notes = [f"{s.name or 'series'}: {s.trend}" for s in reading.series if s.trend]
+    return ". ".join([head, *notes]) + "."
+
+
+def schematic_summary(reading) -> str:
+    """A schematic's summary from the VLM's reading: how many components, the first tags, and its notes."""
+    names = [c.tag or c.label for c in reading.components if c.tag or c.label]
+    text = f"Schematic with {len(reading.components)} components: " + ", ".join(names[:15])
+    return text + (f". {reading.notes}" if reading.notes else ".")
+
+
 def read_photo(
     vision, model_image: bytes, *, context: str, doc_id: str | None
 ) -> tuple[PhotoReading, list[Flag]]:
@@ -224,6 +243,7 @@ def read_photo(
             render_photo(reading),
             {**base, "structured_reading": reading.model_dump(mode="json")},
             top,
+            reading.description,
         ), flags
     if image_class == ImageClass.PLOT_OR_SCREENSHOT:
         reading = vision.digitize_plot(
@@ -234,6 +254,7 @@ def read_photo(
             render_plot(reading),
             {**base, "structured_reading": reading.model_dump(mode="json")},
             reading.confidence,
+            plot_summary(reading),
         ), flags
     if image_class == ImageClass.DIAGRAM:
         reading = vision.read_schematic(
@@ -244,6 +265,7 @@ def read_photo(
             render_schematic(reading),
             {**base, "structured_reading": reading.model_dump(mode="json", by_alias=True)},
             None,
+            schematic_summary(reading),
         ), flags
     if image_class == ImageClass.DOCUMENT_SCAN:
         reading = vision.transcribe_page(image, context=context, doc_id=doc_id, anchor=anchor).reading
@@ -351,6 +373,7 @@ def process_photo(
         date_source="exif" if normalized.taken_at else None,
         page_count=1,
         unit_count=1,
+        summary=reading.summary if reading else None,
     )
     doc = ProcessedDocument(
         blob_sha256=blob_sha256,

@@ -7,9 +7,14 @@
    and exact distances are computed over the filtered rows; otherwise HNSW with `ef_search = 200` and
    `iterative_scan = relaxed_order`.
 3. Lexical leg: BM25 (pg_search) over `content` with the user's language field and English, `breadcrumb`,
-   `content_codes` and `content_en`. Field names are S1's pinned DDL (`bm25_document_nodes`).
+   `content_codes` (the piece's and its header's identifiers), `content_en` and `embed_text` (the header with
+   the piece). Field names are the pinned DDL (`bm25_document_nodes`, migrations 0004 and 0020).
 4. RRF (k = 60); children and question proxies collapse to their parent keeping the best child; top 30.
-5. Rerank the parents' best children with bge-reranker; the rank-1 minus rank-5 margin is recorded. When the
+   Preferred document and passage kinds (guesses of the query analysis) add two more legs over the matching
+   rows: they rank higher, nothing is excluded.
+5. Rerank the parents' best children with bge-reranker over the stored header (`embed_text`: title, kind,
+   date, test labels, piece type, path, About line, entities) and the passage; the rank-1 minus rank-5
+   margin is recorded. When the
    models role is down the RRF order is kept and the result says so (file 07 §12).
 6. Near-duplicate collapse via `document_relations` NEAR_DUPLICATE: the newer document stays, the other is
    listed in `also_in`.
@@ -87,6 +92,10 @@ class SearchFilters(BaseModel):
     languages: list[str] = Field(default_factory=list)
     include_superseded: bool = False
     include_needs_review: bool = True
+    # Guesses (the query-analysis model's document and passage kinds) rank matching passages higher and
+    # exclude nothing: a wrong guess must never hide the answer.
+    prefer_doc_kinds: list[str] = Field(default_factory=list)
+    prefer_node_types: list[str] = Field(default_factory=list)
 
 
 @dataclass
@@ -181,7 +190,11 @@ def lexical_leg(
         for lang in dict.fromkeys(languages)
         if lang in LANGUAGE_FIELDS
     ]
-    matches = [f"{f} ||| :q" for f in fields] + ["breadcrumb ||| :q", "content_en ||| :q"]
+    matches = [f"{f} ||| :q" for f in fields] + [
+        "breadcrumb ||| :q",
+        "content_en ||| :q",
+        "embed_text ||| :q",
+    ]
     extra: dict[str, Any] = {"q": query_text, "limit": limit}
     if codes:
         matches.append("content_codes ||| :codes")
@@ -207,7 +220,7 @@ def rrf(rankings: Iterable[list[uuid.UUID]], k: int = RRF_K) -> dict[uuid.UUID, 
 NODE_COLUMNS = (
     "node_id, doc_id, parent_node_id, node_type, ordinal, content, content_sha256, breadcrumb, language, "
     "page_no, page_end, line_start, line_end, t_start_ms, t_end_ms, sheet_name, cell_range, bbox, "
-    "needs_review, doc_kind, test_plan_id, source_origin, trust_tier, asset_id"
+    "needs_review, doc_kind, test_plan_id, source_origin, trust_tier, asset_id, embed_text"
 )
 
 
@@ -219,6 +232,12 @@ def _load_nodes(session: Session, node_ids: Iterable[uuid.UUID]) -> dict[uuid.UU
         bindparam("ids", type_=ARRAY(UUID(as_uuid=True)))
     )
     return {row.node_id: row for row in session.execute(statement, {"ids": ids})}
+
+
+def _rerank_text(row) -> str:
+    """What the reranker reads: the passage's stored header (title, kind, date, test labels, piece type, path,
+    the file's About line, entities), then the passage. Bare text alone loses which file a passage is from."""
+    return (row.embed_text or row.content)[:RERANK_PASSAGE_CHARS]
 
 
 def _anchor(row, fallback) -> str:
@@ -357,9 +376,25 @@ def search(
     codes = extract_identifiers(lexical_text)
     warnings: list[str] = []
 
-    dense, path = dense_leg(session, embed_query(query), where)
+    query_vector = embed_query(query)
+    dense, path = dense_leg(session, query_vector, where)
     lexical = lexical_leg(session, lexical_text, codes, [user_language, "en"], where)
-    scores = rrf([dense, lexical])
+    rankings = [dense, lexical]
+    if filters.prefer_doc_kinds or filters.prefer_node_types:
+        preferred = build_where(
+            filters.model_copy(
+                update={
+                    "doc_kinds": [*filters.doc_kinds, *filters.prefer_doc_kinds],
+                    "node_types": [*filters.node_types, *filters.prefer_node_types],
+                }
+            ),
+            scope,
+        )
+        rankings += [
+            dense_leg(session, query_vector, preferred)[0],
+            lexical_leg(session, lexical_text, codes, [user_language, "en"], preferred),
+        ]
+    scores = rrf(rankings)
     rows = _load_nodes(session, scores)
     candidates = collapse(scores, rows)
     parents = _load_nodes(session, [c.key for c in candidates if c.key not in rows])
@@ -372,7 +407,7 @@ def search(
     ordered = candidates
     if rerank is not None and candidates:
         try:
-            result = rerank(query, [c.best.content[:RERANK_PASSAGE_CHARS] for c in candidates])
+            result = rerank(query, [_rerank_text(c.best) for c in candidates])
             for i, score in enumerate(result.scores):
                 candidates[i].rerank_score = score
             ordered = [candidates[i] for i in result.order]

@@ -421,6 +421,20 @@ def _notebook(text: str, file_name: str) -> _Out:
     )
 
 
+def code_summary(nodes: list[ProcessedNode]) -> str | None:
+    """A code file's summary in code, never by a model (manual 03 §6): its module line and what it defines."""
+    header = next(
+        (n.content.split("\n", 1)[0].lstrip("# ") for n in nodes if n.node_type == NodeType.MODULE_HEADER),
+        None,
+    )
+    names = [n.metadata.get("qualname") for n in nodes if n.node_type == NodeType.CODE_SYMBOL]
+    names = [x for x in dict.fromkeys(names) if x]
+    if header is None and not names:
+        return None
+    defines = f"defines {', '.join(names[:20])}" if names else ""
+    return ". ".join(x for x in (header, defines) if x) + "."
+
+
 def process_code(
     data: bytes, *, blob_sha256: str, file_name: str, folder: FolderContext, stores: Stores
 ) -> ProcessedDocument:
@@ -461,6 +475,7 @@ def process_code(
         language="en",
         unit_count=len(out.hashes) or None,
         catalog=out.catalog or None,
+        summary=code_summary(out.nodes),
     )
     return ProcessedDocument(
         blob_sha256=blob_sha256,

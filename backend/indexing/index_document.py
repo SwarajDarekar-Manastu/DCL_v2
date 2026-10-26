@@ -10,11 +10,12 @@ This module writes nothing. Its steps:
    a parent whose reply fails the schema is skipped with a warning, BudgetExhausted propagates (retry later);
 4. entity normalization over the alias index and numeric facts with the sanity rule; extracted items land on
    the child that contains them, else on the parent; route mentions map onto the chunk nodes they came from;
-5. question-proxy nodes (file 04 §5.4) for the configured doc kinds;
+5. question-proxy nodes (file 04 §5.4) for every enriched section, whatever the document kind;
 6. contextual headers with English canonical names and `embed_text` (`chunker.build_embed_texts`);
 7. vectors reused by `embed_text_hash` from the document's current rows, the rest embedded through the
    models role; image nodes embedded from their asset bytes;
-8. document aggregation (file 04 §3.4): `documents.enrichment`, entity refs, `search_text`.
+8. document aggregation (file 04 §3.4): `documents.enrichment`, entity refs, and the file's card
+   (`indexing/card.py`: `search_text`, `card_codes`, `card_embedding`).
 """
 
 import uuid
@@ -30,6 +31,7 @@ from sqlalchemy.types import Text
 
 from backend.dispatcher.contract import ProcessedDocument
 from backend.indexing.anchors import content_hash
+from backend.indexing.card import card_codes, card_text, contents_of
 from backend.indexing.chunker import (
     ChunkingConfig,
     IndexNode,
@@ -55,14 +57,11 @@ from backend.llm_engine.enrichment.numeric_facts import (
 )
 from backend.llm_engine.gemini_types import StructuredOutputError
 from backend.llm_engine.local_models import EMBEDDING_MODEL_TAG
-from backend.postgres.enums import DocKind, EntityType, MentionSource, NodeType, Route, SourceOrigin
+from backend.postgres.enums import EntityType, MentionSource, NodeType, Route, SourceOrigin
 
 EMBED_BATCH = 256
 IMAGE_BATCH = 32
 IMAGE_NODE_TYPES = frozenset({NodeType.PHOTO, NodeType.FIGURE})
-QUESTION_PROXY_KINDS = frozenset(
-    {DocKind.TEST_REPORT, DocKind.STANDARD, DocKind.PROCEDURE, DocKind.ACADEMIC_PAPER, DocKind.DATASHEET}
-)
 ENTITY_TYPE_VALUES = frozenset(str(t) for t in EntityType)
 TOP_ENTITIES = 20
 SUMMARY_PARENTS = 2
@@ -72,6 +71,16 @@ AGGREGATED_TYPES = {
     EntityType.PROPELLANT: "propellants",
     EntityType.FAILURE_MODE: "failure_modes",
 }
+
+
+def first_sentence(text: str | None, limit: int = 300) -> str | None:
+    """The summary's first sentence for the header's About line (a long first sentence is cut at a word)."""
+    text = " ".join((text or "").split())
+    if not text:
+        return None
+    end = text.find(". ")
+    sentence = text if end < 0 else text[: end + 1]
+    return sentence if len(sentence) <= limit else sentence[:limit].rsplit(" ", 1)[0] + " …"
 
 
 class HaltedDocument(ValueError):
@@ -195,7 +204,7 @@ def _aggregate(
         return list(dict.fromkeys(str(x) for _, e in enriched for x in getattr(e.enrichment, attr)))
 
     entities_top = [index.name(ref) for ref, _ in counts.most_common(TOP_ENTITIES)]
-    doc_summary = " ".join(summaries)
+    doc_summary = " ".join(summaries) or (doc.document.summary or "")
     enrichment = {
         "doc_kind_llm": kinds.most_common(1)[0][0] if kinds else None,
         "publication_type": publication,
@@ -208,10 +217,7 @@ def _aggregate(
         "languages_seen": sorted({n.language for n, _ in enriched if n.language}),
     }
     canonical_names = list(dict.fromkeys(index.name(ref) for ref in counts))
-    search_text = "\n".join(
-        part for part in (doc.document.title, doc_summary, " · ".join(canonical_names)) if part
-    )
-    return {"enrichment": enrichment, "entity_refs": list(counts), "search_text": search_text}
+    return {"enrichment": enrichment, "entity_refs": list(counts), "entity_names": canonical_names}
 
 
 def index_document(
@@ -228,6 +234,7 @@ def index_document(
     cloud_allowed: bool = True,
     config: ChunkingConfig | None = None,
     count_tokens: TokenCounter | None = None,
+    folder_path: str | None = None,
 ) -> IndexPlan:
     """Build the IndexPlan. The callables are the models role (`ModelsClient.embed_documents`/`embed_images`),
     the asset store (`BucketStore(ASSETS).get` by key) and `existing_vectors` bound to a session."""
@@ -312,10 +319,9 @@ def index_document(
             else:
                 facts.append(outcome)
 
-    if fields.doc_kind in QUESTION_PROXY_KINDS or doc.route == Route.G:
-        for parent, result in enriched:
-            if result.enrichment.questions_answered:
-                nodes.append(_question_proxy(parent, result.enrichment.questions_answered, len(nodes)))
+    for parent, result in enriched:  # every kind (user 2026-10-26): the questions come in the same reply
+        if result.enrichment.questions_answered:
+            nodes.append(_question_proxy(parent, result.enrichment.questions_answered, len(nodes)))
     for ordinal, node in enumerate(nodes):
         node.ordinal = ordinal
 
@@ -329,7 +335,21 @@ def index_document(
         merged = entities_by_ref.setdefault(parent.ref, [])
         for child in children.get(parent.ref, []):
             merged.extend(n for n in entities_by_ref.get(child.ref, []) if n not in merged)
-    build_embed_texts(nodes, fields, entities_by_ref, config, count_tokens)
+    aggregated = _aggregate(doc, enriched, decisions, alias_index)
+    about = first_sentence(aggregated["enrichment"]["doc_summary"])
+    build_embed_texts(nodes, fields, entities_by_ref, config, count_tokens, about=about)
+    card = card_text(
+        fields,
+        folder_path=folder_path,
+        summary=aggregated["enrichment"]["doc_summary"] or None,
+        entities=aggregated.pop("entity_names"),
+        contents=contents_of(nodes, fields.title),
+    )
+    aggregated |= {
+        "search_text": card,
+        "card_codes": card_codes(card),
+        "card_embedding": embed_documents([card], [fields.title])[0],
+    }
 
     to_embed = [n for n in nodes if n.embed and n.embed_text_hash]
     reused = reuse_vectors([n.embed_text_hash for n in to_embed])
@@ -362,7 +382,7 @@ def index_document(
         nodes=nodes,
         entities=decisions,
         facts=facts,
-        document=_aggregate(doc, enriched, decisions, alias_index),
+        document=aggregated,
         warnings=warnings,
         metrics={
             "parents": len(parents),

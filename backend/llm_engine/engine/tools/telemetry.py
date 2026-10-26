@@ -28,7 +28,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import ARRAY, Text, bindparam, text
@@ -46,6 +46,8 @@ PEAK_WINDOW_MS = 50.0
 MAX_RUNS = 12
 COLUMN = re.compile(r"[a-z0-9_]+")
 SemanticChannel = Literal["chamber_pressure", "thrust", "bed_temperature", "mass_flow", "heater_power"]
+# a role above, or a channel the run card lists by its stored or recorded name ("t8_thrust_valve_outlet_k")
+ChannelAsked = Annotated[str, Field(min_length=1)]
 Metric = Literal[
     "peak_raw",
     "peak_50ms",
@@ -79,7 +81,7 @@ class QueryTelemetryArgs(BaseModel):
     run_ids: list[str] = Field(default=[], description="run labels, e.g. TP07_T04")
     test_plan_id: str | None = None
     test_run_ids: list[str] = Field(default=[], description="run selector within the test plan, e.g. T04")
-    channels: list[SemanticChannel] = Field(min_length=1)
+    channels: list[ChannelAsked] = Field(min_length=1)
     metrics: list[Metric] = ["peak_raw", "peak_50ms", "steady_mean"]
     window_kind: WindowKind = "run"
     window: TelemetryWindow | None = None
@@ -97,7 +99,7 @@ class QueryTelemetryArgs(BaseModel):
 class TelemetryRequest(BaseModel):
     """What the question asks (`telemetry_args.v1`); the run ids come from the query analysis."""
 
-    channels: list[SemanticChannel] = []
+    channels: list[ChannelAsked] = []
     metrics: list[Metric] = []
     window_kind: WindowKind = "run"
     window: TelemetryWindow | None = None
@@ -106,15 +108,39 @@ class TelemetryRequest(BaseModel):
     plot: bool = False
 
 
+def channel_list(session: Session, run_labels: list[str]) -> str:
+    """The channels of the settled runs, one line each, for the argument extraction (`telemetry_args.v2`)."""
+    if not run_labels:
+        return ""
+    rows = session.execute(
+        text(
+            "SELECT DISTINCT c.canonical_name, c.raw_name, c.quantity, c.unit_si FROM telemetry_channels c "
+            "JOIN telemetry_runs r ON r.run_uuid = c.run_uuid WHERE r.run_label = ANY(:labels) "
+            "ORDER BY c.canonical_name"
+        ).bindparams(bindparam("labels", type_=ARRAY(Text))),
+        {"labels": list(run_labels)},
+    )
+    return "\n".join(f"- {r.canonical_name} (recorded {r.raw_name}; {r.quantity}, {r.unit_si})" for r in rows)
+
+
 def args_for(
-    request: TelemetryRequest, test_plan_ids: list[str], test_run_ids: list[str]
+    request: TelemetryRequest,
+    test_plan_ids: list[str],
+    test_run_ids: list[str],
+    run_labels: list[str] = (),
 ) -> QueryTelemetryArgs | None:
-    """None when the question names no measured quantity or no test plan (runs are only unique per plan)."""
-    if not request.channels or not test_plan_ids:
+    """The runs the catalog step settled (their labels, so runs of hardware without a plan work), else the
+    plan's runs; None when the question names no measured quantity or neither runs nor a plan are known."""
+    if not request.channels:
         return None
     values = request.model_dump(exclude_none=True)
     if not values.get("metrics"):
         values.pop("metrics", None)
+    if run_labels:
+        wanted = [r for r in run_labels if not test_run_ids or r.rsplit("_", 1)[-1] in test_run_ids]
+        return QueryTelemetryArgs(run_ids=wanted or list(run_labels), **values)
+    if not test_plan_ids:
+        return None
     return QueryTelemetryArgs(test_plan_id=test_plan_ids[0], test_run_ids=test_run_ids, **values)
 
 
@@ -222,11 +248,12 @@ def _runs(session: Session, args: QueryTelemetryArgs) -> list[Run]:
 def _halted(session: Session, args: QueryTelemetryArgs, found: set[str]) -> list[str]:
     """Requested runs whose telemetry document is HALTED, with their open HARD review cases."""
     statement = text(
-        "SELECT d.title, d.test_plan_id, d.test_run_id, "
+        "SELECT d.title, d.test_plan_id, d.test_run_id, d.hardware_item, "
         "(SELECT array_agg(DISTINCT f.case_key) FROM review_flags f WHERE f.doc_id = d.doc_id "
         " AND f.status = 'OPEN' AND f.severity = 'HARD') AS case_keys "
         "FROM documents d WHERE d.route = 'C' AND d.status = 'HALTED' AND ("
-        " (d.test_plan_id || '_' || d.test_run_id) = ANY(:labels) OR (CAST(:plan AS text) IS NOT NULL "
+        " (coalesce(d.test_plan_id, d.hardware_item) || '_' || d.test_run_id) = ANY(:labels) "
+        " OR (CAST(:plan AS text) IS NOT NULL "
         " AND d.test_plan_id = :plan AND (cardinality(:runs) = 0 OR d.test_run_id = ANY(:runs)))) "
         "ORDER BY d.title"
     ).bindparams(bindparam("labels", type_=ARRAY(Text)), bindparam("runs", type_=ARRAY(Text)))
@@ -235,7 +262,8 @@ def _halted(session: Session, args: QueryTelemetryArgs, found: set[str]) -> list
     )
     out = []
     for row in rows:
-        label = f"{row.test_plan_id}_{row.test_run_id}" if row.test_plan_id and row.test_run_id else row.title
+        owner = row.test_plan_id or row.hardware_item
+        label = f"{owner}_{row.test_run_id}" if owner and row.test_run_id else row.title
         if label in found:
             continue
         cases = ", ".join(row.case_keys or []) or "no open case key"
@@ -244,6 +272,14 @@ def _halted(session: Session, args: QueryTelemetryArgs, found: set[str]) -> list
 
 
 def channels_for(run: Run, asked: str) -> list[Any]:
+    if asked not in ROLES:  # a channel by its stored or recorded name, as the run card lists it
+        name = asked.casefold().strip()
+        return [
+            c
+            for c in run.channels
+            if name in (c.canonical_name.casefold(), (c.raw_name or "").casefold())
+            or fnmatchcase(c.canonical_name.casefold(), f"*{name}*")
+        ]
     quantity, globs = ROLES[asked]
     return [
         c

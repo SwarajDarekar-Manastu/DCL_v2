@@ -54,6 +54,7 @@ class InspectVisualsArgs(BaseModel):
     query: str = ""
     kinds: list[VisualKind] = []
     test_plan_ids: list[str] = []
+    doc_ids: list[uuid.UUID] = Field(default=[], description="the files the question was resolved to")
     failure_modes: list[str] = []
     components: list[str] = []
     k: int = Field(default=6, ge=1, le=20)
@@ -143,7 +144,31 @@ def inspect_visuals(
     rerank: Callable | None,
     presign: Callable[[str], str] | None = None,
 ) -> ToolResult:
-    filters = SearchFilters(node_types=node_types(args.kinds), test_plan_ids=args.test_plan_ids)
+    """T3 inside the files the question was resolved to; when they hold no visual, over every file."""
+    found = _inspect_visuals(session, args, embed_query=embed_query, rerank=rerank, presign=presign)
+    if args.doc_ids and not found.provenance:
+        found = _inspect_visuals(
+            session,
+            args.model_copy(update={"doc_ids": []}),
+            embed_query=embed_query,
+            rerank=rerank,
+            presign=presign,
+        )
+        found.warnings.append("no visual in the files the question was resolved to; searched every file")
+    return found
+
+
+def _inspect_visuals(
+    session: Session,
+    args: InspectVisualsArgs,
+    *,
+    embed_query: Callable[[str], list[float]],
+    rerank: Callable | None,
+    presign: Callable[[str], str] | None = None,
+) -> ToolResult:
+    filters = SearchFilters(
+        node_types=node_types(args.kinds), test_plan_ids=args.test_plan_ids, doc_ids=args.doc_ids
+    )
     query = " ".join([args.query, *args.failure_modes, *args.components]).strip()
     warnings: list[str] = []
     by_key: dict[tuple, dict] = {}

@@ -318,6 +318,8 @@ def _new_document(
         test_plan_id=context.test_plan_id,
         test_run_id=context.test_run_id,
         hardware_item=context.hardware_item,
+        doc_date=context.doc_date,
+        date_source="path" if context.doc_date else None,
         folder_context=context.model_dump(mode="json"),
         metadata_sources=new.metadata,
     )

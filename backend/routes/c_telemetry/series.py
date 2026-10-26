@@ -21,11 +21,12 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 import numpy as np
+import pint
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
-from backend.common.units import QUANTITY_DIMENSIONS, UnitError, has_dimension, parse_unit
+from backend.common.units import QUANTITY_DIMENSIONS, UnitError, has_dimension, parse_unit, registry
 from backend.dispatcher.contract import (
     ChannelStats,
     ConflictEvidence,
@@ -512,6 +513,7 @@ def process_series(
             doc_date=header.started_at.date() if header.started_at else None,
             date_source=source.date_source if header.started_at else None,
             unit_count=len(header.channels),
+            summary=summary,
         ),
         nodes=[
             ProcessedNode(
@@ -675,6 +677,23 @@ def _normalized_record(result: ColumnResult) -> TelemetryChannelRecord:
     )
 
 
+def _as_recorded(result, unit: str) -> str:
+    """How the file itself names and measures the channel, so an engineer finds it by the logger's name and
+    reads the extreme in the unit the sensor reported (`T4_Upper_Standoff` in °C, stored in kelvin)."""
+    raw_unit = result.plan.raw_unit or result.plan.rule_unit
+    text = f"; recorded as {result.plan.raw_name!r}" + (f" in {raw_unit}" if raw_unit else "")
+    extreme = result.metrics.peak_50ms if result.metrics.peak_50ms is not None else result.stats.get("max")
+    if raw_unit and extreme is not None and raw_unit != unit:
+        try:
+            value = (
+                registry().Quantity(extreme, parse_unit(unit).unit).to(parse_unit(raw_unit).unit).magnitude
+            )
+            text += f", max {value:.4g} {raw_unit}"
+        except (UnitError, pint.PintError, ValueError, TypeError):
+            pass
+    return text
+
+
 def _summary(
     label: str,
     name: str,
@@ -707,7 +726,9 @@ def _summary(
                 bits.append(f"max {result.stats['max']:.4g}")
             if result.metrics.steady_mean is not None:
                 bits.append(f"steady {result.metrics.steady_mean:.4g}")
-            described.append(f"{result.column} {result.plan.quantity} ({', '.join(bits)})")
+            described.append(
+                f"{result.column} {result.plan.quantity} ({', '.join(bits)}{_as_recorded(result, unit)})"
+            )
         voltages = sum(1 for r in outcome.run.columns if r.plan.quantity == "voltage")
         text += f"; channels: {'; '.join(described) or 'none mapped'}; {voltages} raw voltage channels"
         t0 = outcome.run.t0

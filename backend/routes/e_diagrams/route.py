@@ -341,6 +341,7 @@ def process_diagram(
         language="en",
         page_count=len(graph.pages) if graph is not None else None,
         catalog=catalog,
+        summary=next((n.content[:800] for n in nodes if n.node_type == NodeType.DIAGRAM_SUMMARY), None),
     )
     return ProcessedDocument(
         blob_sha256=blob_sha256,

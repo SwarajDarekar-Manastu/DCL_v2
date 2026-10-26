@@ -72,6 +72,18 @@ def no_hits() -> ToolResult:
     return ToolResult(tool="search_documents", result={"hits": []}, display="0 passages for 'TP99 pressure'")
 
 
+@pytest.fixture(autouse=True)
+def empty_catalog(monkeypatch):
+    """No database here: the catalog step finds nothing unless a test installs subjects."""
+    from backend.llm_engine.engine.catalog import CatalogResult, Labels
+
+    def search(session, question, vector, previous=None):
+        return CatalogResult(question, Labels(), [], [], [], previous)
+
+    monkeypatch.setattr(wf.catalog, "search_catalog", search)
+    monkeypatch.setattr(wf.catalog, "previous_record", lambda session, chat, user: None)
+
+
 @pytest.fixture
 def searches(monkeypatch):
     calls = []
@@ -465,7 +477,6 @@ def test_telemetry_question_runs_t2_with_extracted_arguments(searches, monkeypat
         return ToolResult(tool="query_telemetry", result={"runs": []}, provenance=[source], display=MEASURED)
 
     monkeypatch.setattr(wf.telemetry_tools, "query_telemetry", fake_telemetry)
-    monkeypatch.setattr(wf, "catalog_lookup", lambda session, args: no_hits())
     client = Client(
         query_analysis=[
             {"intents": ["telemetry_metric"], "test_plan_ids": ["TP7"], "test_run_ids": ["Run 4"]}
@@ -492,7 +503,6 @@ def test_telemetry_question_runs_t2_with_extracted_arguments(searches, monkeypat
 
 def test_telemetry_question_without_a_quantity_skips_t2(searches, monkeypatch):
     searches(report_hit)
-    monkeypatch.setattr(wf, "catalog_lookup", lambda session, args: no_hits())
     monkeypatch.setattr(wf.telemetry_tools, "query_telemetry", pytest.fail)
     client = Client(
         query_analysis=[{"intents": ["telemetry_metric"], "test_plan_ids": ["TP7"]}],
@@ -587,7 +597,6 @@ def test_a_halted_run_is_named_in_the_answer(searches, monkeypatch):
         return ToolResult(tool="query_telemetry", result={"runs": []}, warnings=[warning], display="none")
 
     monkeypatch.setattr(wf.telemetry_tools, "query_telemetry", halted)
-    monkeypatch.setattr(wf, "catalog_lookup", lambda session, args: no_hits())
     client = Client(
         query_analysis=[FACT | {"intents": ["telemetry_metric"]}],
         telemetry_args=[{"channels": ["chamber_pressure"], "metrics": ["mean"]}],
@@ -677,3 +686,77 @@ def test_attachments_become_user_provided_evidence_and_a_photo_searches_similar_
     assert any(a.similar_to_vector == [0.5] * 768 for a in seen)  # the attached photo searched the index
     assert "attachment" in client.purposes  # the photo was read by Gemini, the CSV was not
     assert client.purposes.count("attachment") == 1
+
+
+def _two_test_04s(monkeypatch):
+    from backend.llm_engine.engine.catalog import CatalogResult, Option, question_labels
+
+    def search(session, question, vector, previous=None):
+        options = [
+            Option("1", "TP12 · Test 04: 1 engineering_table", "TP12", "T04", None, ["a"]),
+            Option(
+                "2", "INJ14 · Test 04: 1 telemetry_run — held for unit review", "INJ14", "T04", None, ["c"]
+            ),
+        ]
+        conflicts = ["Run T04 exists under INJ14, TP12 and the question names neither."]
+        return CatalogResult(question, question_labels(question), [], conflicts, options, previous)
+
+    monkeypatch.setattr(wf.catalog, "search_catalog", search)
+
+
+def test_a_question_that_fits_two_tests_is_asked_back_before_any_tool_runs(searches, monkeypatch):
+    calls = searches(report_hit)
+    _two_test_04s(monkeypatch)
+    client = Client(query_analysis=[{"intents": ["telemetry_metric"], "test_run_ids": ["test 4"]}])
+    events, done, traces = run(client, "peak pressure in test 4", chat_id="chat-1")
+    assert calls == [] and client.purposes == ["query_analysis"]
+    assert done["mode"] == "clarification"
+    assert "1. TP12 · Test 04" in done["answer_markdown"] and "2. INJ14 · Test 04" in done["answer_markdown"]
+    record = traces[0]["query_analysis"]["catalog"]
+    assert record["decision"] == "ask" and [o["owner"] for o in record["ask"]["options"]] == ["TP12", "INJ14"]
+
+
+def test_the_answer_to_an_ask_back_resumes_the_question_inside_the_chosen_test(searches, monkeypatch):
+    from backend.llm_engine.engine.catalog import CatalogFile
+
+    calls = searches(report_hit)
+    _two_test_04s(monkeypatch)
+    previous = {
+        "question": "peak pressure in test 4",
+        "chosen": None,
+        "ask": {
+            "question": "peak pressure in test 4",
+            "options": [
+                {
+                    "id": "1",
+                    "label": "TP12 · Test 04",
+                    "owner": "TP12",
+                    "run": "T04",
+                    "folder": None,
+                    "doc_ids": ["a"],
+                },
+                {
+                    "id": "2",
+                    "label": "INJ14 · Test 04",
+                    "owner": "INJ14",
+                    "run": "T04",
+                    "folder": None,
+                    "doc_ids": ["c"],
+                },
+            ],
+        },
+    }
+    monkeypatch.setattr(wf.catalog, "previous_record", lambda session, chat, user: previous)
+    workbook = CatalogFile(
+        str(REPORT), "Test 04 Data Analysis", "engineering_table", "ACTIVE", "C", None, "TP12", "T04", None,
+        "APU › Test Plan 12", "", "Test 04 Data Analysis", "internal",
+    )  # fmt: skip
+    monkeypatch.setattr(wf.catalog, "subject_files", lambda session, owner, run, folder: [workbook])
+    monkeypatch.setattr(wf.catalog, "catalog_evidence", lambda session, doc_ids: None)
+    reframed = {**FACT, "reframed_question": "Peak pressure in TP12 Test 04", "resolution": "clear"}
+    client = Client(query_analysis=[reframed], synthesis=[SYNTH], verify=[{"verdicts": []}])
+    events, done, traces = run(client, "TP12", chat_id="chat-1")
+    assert [str(d) for d in calls[0].filters.doc_ids] == [str(REPORT)]
+    assert calls[0].query == "Peak pressure in TP12 Test 04"
+    record = traces[0]["query_analysis"]["catalog"]
+    assert record["chosen"]["owner"] == "TP12" and record["question"] == "peak pressure in test 4"

@@ -74,6 +74,11 @@ def make_search(directory: Path):
 
 async def main(mode: str, directory: Path, url: str) -> None:
     wf.search_documents = make_search(directory)
+    # no file database here: the catalog step finds nothing and there is no earlier turn
+    wf.catalog.search_catalog = lambda session, question, vector, previous=None: wf.catalog.CatalogResult(
+        question, wf.catalog.Labels(), [], [], [], previous
+    )
+    wf.catalog.previous_record = lambda session, chat, user: None
     deps = wf.EngineDeps(
         gemini=Client(directory),
         session_factory=contextlib.nullcontext,

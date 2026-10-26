@@ -431,6 +431,8 @@ def commit_document(
     document.title = fields.title or document.title
     document.doc_kind = str(fields.doc_kind)
     document.trust_tier = fields.trust_tier or document.trust_tier
+    document.test_run_id = fields.test_run_id or document.test_run_id
+    document.hardware_item = fields.hardware_item or document.hardware_item
     document.doc_date = fields.doc_date or document.doc_date
     document.date_source = fields.date_source or document.date_source
     document.unit_count = fields.unit_count
@@ -455,6 +457,8 @@ def commit_document(
         )
     )
     document.search_text = aggregated.get("search_text")
+    document.card_codes = aggregated.get("card_codes")
+    document.card_embedding = aggregated.get("card_embedding")
     document.status = str(status)
     document.staged_payload_uri = None
     document.pipeline_version = pipeline_version
@@ -496,6 +500,7 @@ def default_indexer(models_url: str, minio) -> Indexer:
     """S2's ``index_document`` with the models role (vectors and token counts), the alias index and this
     session's vector reuse. The Gemini client is created only for a root with ``sync_roots.cloud_allowed``.
     An unreachable models role raises ``ModelServerUnavailable``; the Route C pipeline then parks the run."""
+    from backend.indexing.card import folder_path
     from backend.indexing.index_document import existing_vectors, index_document
     from backend.llm_engine.enrichment.entities import index_from_db
     from backend.llm_engine.local_models import ModelsClient
@@ -530,6 +535,7 @@ def default_indexer(models_url: str, minio) -> Indexer:
             sanity_ranges=ranges.get("ranges", []),
             cloud_allowed=cloud_allowed,
             count_tokens=models.count_tokens,  # POST /tokenize/count; workers never import transformers
+            folder_path=folder_path(session.get(Document, doc_id).folder_context),
         )
 
     return index

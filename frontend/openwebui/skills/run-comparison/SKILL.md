@@ -3,7 +3,7 @@ name: Run comparison
 description: The same metrics for two or more runs side by side, aligned on time from ignition.
 intents: [run_comparison]
 dcl-playbook: run_comparison
-tools: [catalog_lookup, query_telemetry, search_documents]
+tools: [query_telemetry, search_documents]
 ---
 
 # Run comparison
@@ -23,7 +23,7 @@ The same metrics for two or more runs side by side, aligned on time from ignitio
 
 ## Tools
 
-`catalog_lookup`, `query_telemetry`, `search_documents`
+`query_telemetry`, `search_documents`
 
 ## Limits
 

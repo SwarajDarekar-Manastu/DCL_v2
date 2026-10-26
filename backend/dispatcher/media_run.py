@@ -106,6 +106,7 @@ def process_d_document(
                     content=value["content"],
                     metadata=value["metadata"],
                     confidence=value["confidence"],
+                    summary=value.get("summary"),
                 )
             elif _in_flight(ctx.session, representative):
                 raise RepresentativePending(f"photo {representative} has not been read yet")
@@ -127,6 +128,7 @@ def process_d_document(
                         "content": own.content,
                         "metadata": own.metadata,
                         "confidence": own.confidence,
+                        "summary": own.summary,
                     },
                     default=str,
                 ).encode(),

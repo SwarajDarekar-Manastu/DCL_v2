@@ -104,7 +104,7 @@ The Console **Entities** page (not a queue) lets an engineer merge two entities 
 
 ### 3.4 Document-level aggregation
 
-After all parents are enriched: `documents.enrichment` = `{doc_kind_llm, publication_type, doc_summary (English), entities_top (by frequency), subsystems[], materials[], propellants[], test_ids[], standards[], status_markers[], failure_modes[], languages_seen[]}` plus the denormalized `entity_ids uuid[]` (GIN-indexed; ids, not names, so merges do not stale it) and `search_text` (English: title + summary + canonical entity names) which is BM25-indexed so alias forms and non-English surfaces are reachable lexically through their English canonicals.
+After all parents are enriched: `documents.enrichment` = `{doc_kind_llm, publication_type, doc_summary (English), entities_top (by frequency), subsystems[], materials[], propellants[], test_ids[], standards[], status_markers[], failure_modes[], languages_seen[]}` plus the denormalized `entity_ids uuid[]` (GIN-indexed; ids, not names, so merges do not stale it) and the file's **card** (`backend/indexing/card.py`, user 2026-10-26): `search_text` holds its text (title; kind, origin, revision, date; test plan, run, hardware; folder path; summary; English canonical entity names; what the file contains: section, table, figure and event titles), `card_codes` its normalized identifiers, `card_embedding` its vector. The card is BM25- and HNSW-indexed and searched by the answer engine's catalog step (file 07 §3) before any model reads a question. A halted file gets its card too (from its staged result), so the engine can say it exists and why it is held. `doc_summary` is the enrichment summary, or, where no section is enriched (routes B, C, D, E), the route's own summary (`DocumentFields.summary`: a photo's VLM description, a plot's axes and series notes, a schematic's components, a run summary, a workbook's tables, a module's definitions).
 
 `doc_kind` final = L1 rule if confident, else L2 label; when they disagree, L1 wins and the disagreement is logged (no flag).
 
@@ -116,7 +116,7 @@ Goal: embed small, read big, never cut a unit of meaning.
 
 | Level | Size | Boundary rule | Embedded? | Given to the LLM? |
 |-------|------|---------------|-----------|-------------------|
-| **Document** | — | — | no (uses `search_text`) | title/summary only |
+| **Document** | — | — | yes: the file card (`documents.card_embedding`, §3.4) | the card, when the catalog settled the question on it |
 | **Parent** (section) | 1,200–1,800 tokens | split at heading boundaries; a section > 1,800 tokens is split at paragraph boundaries, each part keeping the heading; parts < 300 tokens are merged with the previous sibling | optional (used by the section-level retriever for broad queries) | **yes** — this is what the model reads |
 | **Child** (passage) | 250–400 tokens | sentence-aware; no mid-sentence cuts; 1-sentence overlap with the previous child | **yes** (primary retrieval unit) | only through its parent |
 | **Table** | whole table ≤ 1,200 tokens, else row blocks with header repeated | never mid-row | yes (embedding of `summary + header + first rows`) | whole table HTML |
@@ -136,14 +136,17 @@ Every node carries `language` (per page/segment); a document in two languages yi
 Every embedded text is prefixed with a short header that is **not** part of the stored `content` (stored separately as `embed_text`):
 
 ```
-Doc: Test Report 37 — Hot Fire Campaign (test_report, internal, TP37, 2024-05-02)
-Section: 3 Hot Fire Results › 3.2 Chamber Pressure
+Doc: Test Report 37 — Hot Fire Campaign (test_report, internal, 2024-05-02)
+Test: plan TP37 · run T04 · hardware INJ14
+Type: table · page 11
+Path: 3 Hot Fire Results › 3.2 Chamber Pressure
+About: <first sentence of the file's summary>
 Entities: injector INJ-14, PT-101, C-103, HTP 90%
 ---
 <child text in its original language>
 ```
 
-The header is always English (titles are kept as written, entity names are the English canonicals). This is the "contextual retrieval" pattern: the child alone ("the pressure rose to 12.4 bar") is ambiguous; with the header it is retrievable by "TP37 chamber pressure". Headers are capped at ~80 tokens. For external documents the header includes the origin and publisher (`datasheet, external, Moog`).
+The header is always English (titles are kept as written, entity names are the English canonicals). This is the "contextual retrieval" pattern: the child alone ("the pressure rose to 12.4 bar") is ambiguous; with the header it is retrievable by "TP37 chamber pressure". The `Test` line holds only the labels the file has; `Type` names the piece and its locator (page, lines, time, cells); `About` is the first sentence of the file's summary (§3.4). Headers are capped at 120 tokens (user 2026-10-26); over the cap the entities go first, then the About line, then the start of the path. For external documents the header includes the origin and publisher (`datasheet, external, Moog`). The header is used three ways: embedded with the piece, indexed by BM25 (`embed_text`, §6), and read by the reranker; its identifiers join the piece's `content_codes`.
 
 ### 4.3 Token counting
 
@@ -175,7 +178,7 @@ No per-call cost. Measured on the project's RTX 5060 (shared with other containe
 
 ### 5.4 Optional second vector per parent (questions)
 
-`questions_answered[]` from enrichment are embedded as one extra node per parent (`node_type = question_proxy`, pointing to the parent). This helps short, question-shaped user queries land on long procedural sections, and because the questions are English it also gives non-English sections an English dense hook. Enable per `doc_kind` in config (default on for `test_report`, `standard`, `procedure`, `academic_paper`, `datasheet`).
+`questions_answered[]` from enrichment are embedded as one extra node per parent (`node_type = question_proxy`, pointing to the parent). This helps short, question-shaped user queries land on long procedural sections, and because the questions are English it also gives non-English sections an English dense hook. Made for every enriched section, whatever the document kind (user 2026-10-26: the questions come in the same enrichment reply, so the only cost is local embeddings).
 
 ### 5.5 Cross-lingual retrieval
 
@@ -183,7 +186,7 @@ The model embeds all languages into one space, so an English query retrieves Ger
 
 ## 6. Lexical index
 
-- BM25 (pg_search) over `document_nodes.content`, `breadcrumb`, `content_codes`, plus `documents.search_text` and `title`.
+- BM25 (pg_search) over `document_nodes.content`, `breadcrumb`, `content_codes` (the piece's and its header's identifiers) and `embed_text` (the header with the piece; migration 0020), plus the file cards: `documents.search_text`, `title`, `card_codes`, with the test labels, kind, status and route as exact fields.
 - **Per-language analysis.** pg_search allows several tokenizers on one column within one index. `content` is indexed with the ICU tokenizer plus a stemmer field per supported language (`english`, `german`, `french`, `spanish`, `italian`, `russian` via Snowball) and Lindera/Jieba dictionary tokenizers for Japanese, Chinese and Korean. The query is analyzed with the user's language **and** English; `document_nodes.language` lets the planner weight the right field.
 - **Identifier preservation.** Aerospace identifiers (`PT-104`, `ECSS-E-ST-35C`, `C-103`, `TP37`, `INJ-14`, `SV-1`) must match exactly. `content_codes` is a **plain text column computed in Python** at indexing time by the same `extract_identifiers()` function the Answer Engine applies to the user's query: it finds identifier-like tokens case-insensitively, keeps the full multi-segment form (`ECSS-E-ST-35C`, not `ST-35C`), and emits dash-less variants (`PT104`, `ECSSEST35C`) and uppercase normalization. It is indexed with a whitespace tokenizer, no stemming. One fixture test covers both the indexer and the query side. (A PostgreSQL generated column was rejected: `\b` is backspace in PG regex, set-returning functions are not allowed in generation expressions, and PG 16 cannot alter the expression without rewriting the table.)
 - Fallback without pg_search: `tsvector` with language-specific configurations chosen per node language, `simple` for `content_codes`, GIN indexes, `ts_rank_cd`.

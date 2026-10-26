@@ -4,13 +4,14 @@ import pytest
 
 from backend.indexing.chunker import (
     ChunkingConfig,
+    IndexNode,
     build_embed_texts,
     chunk_document,
     contextual_header,
     split_sentences,
 )
 from backend.indexing.tables import split_table, table_rows
-from backend.postgres.enums import NodeType
+from backend.postgres.enums import NodeSource, NodeType
 
 
 def sentences(n, start=0, words=12):
@@ -177,18 +178,75 @@ def test_header_matches_the_manual_shape(kit):
         kit.words,
     )
     assert header == (
-        "Doc: Test Report 37 (test_report, internal, TP37, 2024-05-02)\n"
-        "Section: 3 Hot Fire Results › 3.2 Chamber Pressure\n"
+        "Doc: Test Report 37 (test_report, internal, 2024-05-02)\n"
+        "Test: plan TP37\n"
+        "Path: 3 Hot Fire Results › 3.2 Chamber Pressure\n"
         "Entities: injector INJ-14, PT-101, C-103"
     )
 
 
-def test_header_drops_entities_first_to_stay_within_80_tokens(kit):
+def test_header_names_the_test_labels_the_piece_and_what_the_file_is_about(kit):
+    doc = kit.document().document.model_copy(update={"test_run_id": "T04", "hardware_item": "INJ14"})
+    header = contextual_header(
+        doc,
+        "Test Report 37 › 5 Results › Table 6",
+        [],
+        ChunkingConfig(),
+        kit.words,
+        piece="table · page 11",
+        about="Hot fire 4 of the INJ14 campaign.",
+    )
+    assert header == (
+        "Doc: Test Report 37 (test_report, internal)\n"
+        "Test: plan TP37 · run T04 · hardware INJ14\n"
+        "Type: table · page 11\n"
+        "Path: 5 Results › Table 6\n"
+        "About: Hot fire 4 of the INJ14 campaign."
+    )
+
+
+def test_header_drops_entities_then_about_then_the_path_start_to_stay_within_120_tokens(kit):
     doc = kit.document().document
     entities = [f"entity{i}" for i in range(200)]
-    header = contextual_header(doc, "Test Report 37 › 3 Results", entities, ChunkingConfig(), kit.words)
-    assert len(header.split()) <= 80
-    assert header.startswith("Doc: Test Report 37") and "Section: 3 Results" in header
+    about = " ".join(["word"] * 130)  # too long even alone: entities go, then the About line
+    header = contextual_header(
+        doc, "Test Report 37 › 3 Results", entities, ChunkingConfig(), kit.words, piece="text", about=about
+    )
+    assert len(header.split()) <= 120
+    assert "Entities" not in header and "About" not in header
+    assert header.startswith("Doc: Test Report 37") and "Type: text" in header and "Path: 3 Results" in header
+
+
+def test_the_piece_type_line_names_its_locator(kit):
+    from backend.indexing.chunker import piece_type
+
+    def node(**kw):
+        return IndexNode(
+            ref="x", parent_ref=None, level=0, ordinal=0, breadcrumb="", language="en", content="c",
+            content_codes="", content_sha256="0" * 64, token_count=1, source=NodeSource.PRINTED,
+            embed=True, **kw,
+        )  # fmt: skip
+
+    assert piece_type(node(node_type=NodeType.TABLE, page_no=11)) == "table · page 11"
+    assert piece_type(node(node_type=NodeType.CHILD, page_no=4, page_end=5)) == "text · pages 4–5"
+    assert piece_type(node(node_type=NodeType.VIDEO_EVENT, t_start_ms=14_000, t_end_ms=19_500)) == (
+        "video event · 00:14–00:19"
+    )
+    assert (
+        piece_type(node(node_type=NodeType.CODE_SYMBOL, line_start=40, line_end=62))
+        == "code symbol · lines 40–62"
+    )
+    assert piece_type(node(node_type=NodeType.TABLE_ROW, sheet_name="Data", cell_range="A2:F2")) == (
+        "table row · Data!A2:F2"
+    )
+
+
+def test_identifiers_of_the_header_join_the_piece_codes(kit):
+    doc = kit.document(kit.node("s1", "Pressure rose.", 0))
+    fields = doc.document.model_copy(update={"test_run_id": "T03", "hardware_item": "INJ14"})
+    nodes = build_embed_texts(chunk_document(doc, count_tokens=kit.words), fields, count_tokens=kit.words)
+    codes = nodes[1].content_codes.split()
+    assert {"TP37", "T03", "INJ14"} <= set(codes)
 
 
 def test_embed_text_hash_changes_with_the_title_but_not_with_ordinals(kit):

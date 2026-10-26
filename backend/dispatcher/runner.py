@@ -21,9 +21,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.dispatcher.contract import ProcessedDocument
-from backend.dispatcher.folder_context import FolderContext
+from backend.dispatcher.folder_context import FolderContext, with_folder_labels
 from backend.dispatcher.location import Location, primary_location
 from backend.dispatcher.routing import PROCESSED_MARK
+from backend.indexing.card import models_embedder, write_halted_card
 from backend.indexing.commit import Indexer, commit_document
 from backend.llm_engine.local_models import ModelServerUnavailable
 from backend.postgres.enums import DocumentSourceRole, DocumentStatus, DriveItemStatus, Route
@@ -186,8 +187,10 @@ def run_document(
         BucketStore(minio, ASSETS),
         f"{blob.sha256}/{route}/v{parser_version}/",
     )
-    processed = build(ctx)
+    processed = with_folder_labels(build(ctx), ctx.folder)
     result = gate(session, cir, document, processed, stale=_own_flag(route))
+    if result.halted:
+        write_halted_card(document, processed.document, embed=models_embedder())
     plan = _index(session, document, result, cloud_allowed, indexer)
     if plan is not None:
         committed = commit_document(
@@ -217,12 +220,15 @@ def resume_staged(session: Session, minio: Minio, doc_id: uuid.UUID, indexer: In
     if document.status != DocumentStatus.HALTED or document.route == Route.C:
         return Outcome(doc_id, document.status, 0, 0)
     cir = BucketStore(minio, CIR)
-    staged = load_staged(cir, document)
+    staged = with_folder_labels(
+        load_staged(cir, document), FolderContext.model_validate(document.folder_context)
+    )
     document.status = DocumentStatus.PROCESSING
     document.staged_payload_uri = None
     session.flush()
     result = gate(session, cir, document, staged)
     if result.halted:
+        write_halted_card(document, staged.document, embed=models_embedder())
         return Outcome(doc_id, document.status, result.hard, result.soft)
     where = primary_location(session, staged.blob_sha256)
     if where is None:

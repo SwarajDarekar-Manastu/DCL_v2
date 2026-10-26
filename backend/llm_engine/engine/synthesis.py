@@ -52,7 +52,7 @@ def evidence_items(results: list[ToolResult]) -> list[Evidence]:
                         f"E{len(items) + 1}",
                         result.call_id,
                         result.tool,
-                        hit["parent_text"][:EVIDENCE_CHARS],
+                        (_location(hit) + hit["parent_text"])[:EVIDENCE_CHARS],
                         source,
                     )
                 )
@@ -67,6 +67,18 @@ def evidence_items(results: list[ToolResult]) -> list[Evidence]:
                 )
             )
     return items
+
+
+def _location(hit: dict) -> str:
+    """Where a passage is from, as part of its text: the writer and the verifier both read it, so a claim may
+    name the document, page, sheet or table caption (the caption lives in the breadcrumb)."""
+    parts = [
+        hit.get("title") or "",
+        f"page {hit['page_no']}" if hit.get("page_no") else "",
+        hit.get("breadcrumb") or "",
+    ]
+    located = " · ".join(p for p in parts if p)
+    return f"Source: {located}\n" if located else ""
 
 
 def render_evidence(items: list[Evidence]) -> str:

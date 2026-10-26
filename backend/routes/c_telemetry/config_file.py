@@ -93,6 +93,7 @@ def process_config(
             test_run_id=context.test_run_id,
             hardware_item=context.hardware_item,
             catalog={"config_format": kind, "values": values},
+            summary=f"Configuration {name} ({kind}, {len(lines)} settings): " + "; ".join(lines[:8]),
         ),
         nodes=[
             ProcessedNode(

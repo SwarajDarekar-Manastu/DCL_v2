@@ -45,7 +45,7 @@ class ChunkingConfig:
     parent_min_part_tokens: int = 300
     child_max_tokens: int = 400
     table_max_tokens: int = 1200
-    header_max_tokens: int = 80
+    header_max_tokens: int = 120
     embed_parents: bool = True
 
 
@@ -463,27 +463,75 @@ def _section_path(breadcrumb: str, title: str) -> str:
     return BREADCRUMB_SEPARATOR.join(parts)
 
 
+TYPE_WORDS = {NodeType.PARENT: "section", NodeType.CHILD: "text", NodeType.QUESTION_PROXY: "questions"}
+
+
+def _clock(ms: int) -> str:
+    seconds = ms // 1000
+    return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+
+def piece_type(node: "IndexNode") -> str:
+    """What the piece is and where it sits: ``table · page 11``, ``video event · 00:14–00:19``."""
+    words = TYPE_WORDS.get(node.node_type, str(node.node_type).replace("_", " "))
+    if node.page_no is not None:
+        pages = f"{node.page_no}–{node.page_end}" if node.page_end and node.page_end != node.page_no else ""
+        where = f"pages {pages}" if pages else f"page {node.page_no}"
+    elif node.t_start_ms is not None:
+        end = f"–{_clock(node.t_end_ms)}" if node.t_end_ms is not None else ""
+        where = f"{_clock(node.t_start_ms)}{end}"
+    elif node.line_start is not None:
+        where = f"lines {node.line_start}–{node.line_end}" if node.line_end else f"line {node.line_start}"
+    elif node.sheet_name and node.cell_range:
+        where = f"{node.sheet_name}!{node.cell_range}"
+    else:
+        return words
+    return f"{words} · {where}"
+
+
+def test_line(document: DocumentFields) -> str | None:
+    labels = [
+        f"{word} {value}"
+        for word, value in (
+            ("plan", document.test_plan_id),
+            ("run", document.test_run_id),
+            ("hardware", document.hardware_item),
+        )
+        if value
+    ]
+    return "Test: " + " · ".join(labels) if labels else None
+
+
 def contextual_header(
     document: DocumentFields,
     breadcrumb: str,
     entities: list[str],
     config: ChunkingConfig,
     count_tokens: TokenCounter,
+    *,
+    piece: str | None = None,
+    about: str | None = None,
 ) -> str:
-    """The English header of §4.2, at most `header_max_tokens`: entities go first, then the section path."""
+    """The English header of §4.2, at most `header_max_tokens`: what the file is (title, kind, origin, date),
+    its test labels, what the piece is, where it sits, what the file is about, and the entities. Over the cap,
+    the entities go first, then the About line, then the start of the path."""
     facts = [str(document.doc_kind)]
     if document.source_origin:
         facts.append("external" if document.source_origin == SourceOrigin.EXTERNAL_KEPT else "internal")
     if document.publisher and document.source_origin == SourceOrigin.EXTERNAL_KEPT:
         facts.append(document.publisher)
-    facts += [x for x in (document.test_plan_id, document.doc_date and document.doc_date.isoformat()) if x]
+    if document.doc_date:
+        facts.append(document.doc_date.isoformat())
     doc_line = f"Doc: {document.title} ({', '.join(facts)})"
+    fixed = [line for line in (test_line(document), piece and f"Type: {piece}") if line]
     section = _section_path(breadcrumb, document.title)
     entities = list(entities)
     while True:
-        lines = [doc_line]
+        lines = [doc_line, *fixed]
         if section:
-            lines.append(f"Section: {section}")
+            lines.append(f"Path: {section}")
+        if about:
+            lines.append(f"About: {about}")
         if entities:
             lines.append(f"Entities: {', '.join(entities)}")
         header = "\n".join(lines)
@@ -491,12 +539,14 @@ def contextual_header(
             return header
         if entities:
             entities.pop()
+        elif about:
+            about = None
         elif BREADCRUMB_SEPARATOR in section:
             section = section.split(BREADCRUMB_SEPARATOR, 1)[1]
         elif section:
             section = ""
         else:
-            return fit_tokens(doc_line, config.header_max_tokens, count_tokens)
+            return fit_tokens("\n".join([doc_line, *fixed]), config.header_max_tokens, count_tokens)
 
 
 def fit_tokens(text: str, budget: int, count_tokens: TokenCounter) -> str:
@@ -529,6 +579,7 @@ def build_embed_texts(
     entities_by_ref: dict[str, list[str]] | None = None,
     config: ChunkingConfig | None = None,
     count_tokens: TokenCounter | None = None,
+    about: str | None = None,
 ) -> list[IndexNode]:
     """Set embed_title, embed_text (header, '---', body; at most 8,000 tokens) and embed_text_hash.
 
@@ -546,7 +597,10 @@ def build_embed_texts(
         if not node.embed:
             continue
         entities = entities_by_ref.get(node.ref) or entities_by_ref.get(node.parent_ref or "", [])
-        header = contextual_header(document, node.breadcrumb, entities, config, count_tokens)
+        header = contextual_header(
+            document, node.breadcrumb, entities, config, count_tokens, piece=piece_type(node), about=about
+        )
+        node.content_codes = content_codes(f"{header}\n{node.content}")
         section = _section_path(node.breadcrumb, document.title)
         node.embed_title = f"{document.title}{BREADCRUMB_SEPARATOR}{section}" if section else document.title
         head = f"{header}\n---\n"

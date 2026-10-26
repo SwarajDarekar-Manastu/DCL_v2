@@ -152,8 +152,10 @@ def _assert_indexed(session, document: Document, enriched: bool = True, entities
     if enriched:
         assert document.enrichment["doc_summary"].startswith("A real file, summarised by a fake.")
         assert mentions or not entities
-    else:  # no chunker parent, so no model call: the manual plans AST and graph nodes only (03 §6, §9)
-        assert not document.enrichment.get("doc_summary")
+    else:  # no chunker parent, so no model call (03 §6, §9): the summary is the route's own, written in code
+        assert not document.enrichment["doc_summary"].startswith("A real file, summarised by a fake.")
+        summary = " ".join(document.enrichment["doc_summary"].split())  # the card keeps it on one line
+        assert summary[:200] and summary[:200] in document.search_text
 
 
 def test_a_real_python_script_reaches_active_embedded_and_enriched(session, minio):

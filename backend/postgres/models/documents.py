@@ -8,6 +8,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
+from pgvector.sqlalchemy import HALFVEC
 from sqlalchemy import (
     ARRAY,
     CHAR,
@@ -95,6 +96,8 @@ class Document(Base):
         ARRAY(UUID(as_uuid=True)), server_default=text("'{}'::uuid[]")
     )
     search_text: Mapped[str | None] = mapped_column(Text)
+    card_codes: Mapped[str | None] = mapped_column(Text)  # the card's identifiers (indexing/card.py)
+    card_embedding: Mapped[Any | None] = mapped_column(HALFVEC(768))  # same space as document_nodes
     minhash: Mapped[bytes | None] = mapped_column(LargeBinary)  # 128 × uint32 (indexing/near_duplicates.py)
     cir_uri: Mapped[str | None] = mapped_column(Text)
     staged_payload_uri: Mapped[str | None] = mapped_column(Text)

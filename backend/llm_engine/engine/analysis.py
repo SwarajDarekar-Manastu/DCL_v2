@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.common.units import UnitError, parse_unit
 from backend.config import ThinkingLevel
@@ -22,9 +22,9 @@ from backend.llm_engine.enrichment.entities import AliasIndex
 from backend.llm_engine.gemini_types import CallContext, Message
 from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
-from backend.postgres.enums import EntityType
+from backend.postgres.enums import DocKind, EntityType, NodeType
 
-PROMPT_VERSION = "query_analysis.v1"
+PROMPT_VERSION = "query_analysis.v3"
 PURPOSE = "engine.query_analysis"
 
 
@@ -58,7 +58,6 @@ ToolName = Literal[
     "inspect_code_and_diagrams",
     "physics_calculator",
     "get_document",
-    "catalog_lookup",
     "external_search",
 ]
 
@@ -68,6 +67,31 @@ class EntityMentionQ(BaseModel):
     surface: str
 
 
+# The model's words for passage kinds -> the stored node types (a word outside the vocabulary matches nothing
+# and is dropped, never sent to search).
+NODE_TYPE_WORDS: dict[str, tuple[str, ...]] = {
+    "table": (NodeType.TABLE, NodeType.TABLE_ROW),
+    "figure": (NodeType.FIGURE, NodeType.DIAGRAM_SUMMARY),
+    "diagram": (NodeType.FIGURE, NodeType.DIAGRAM_SUMMARY),
+    "plot": (NodeType.FIGURE,),
+    "photo": (NodeType.PHOTO,),
+    "image": (NodeType.PHOTO, NodeType.FIGURE),
+    "video": (NodeType.VIDEO_EVENT,),
+    "video_event": (NodeType.VIDEO_EVENT,),
+    "run": (NodeType.RUN_SUMMARY,),
+    "run_summary": (NodeType.RUN_SUMMARY,),
+    "code": (NodeType.CODE_SYMBOL, NodeType.MODULE_HEADER, NodeType.CONFIG),
+    "code_symbol": (NodeType.CODE_SYMBOL,),
+    "config": (NodeType.CONFIG,),
+}
+DOC_KIND_VALUES = frozenset(str(k) for k in DocKind)
+
+
+def _word(value: str) -> str:
+    word = value.strip().lower().replace(" ", "_")
+    return word[:-1] if word.endswith("s") and word[:-1] in NODE_TYPE_WORDS else word
+
+
 class Filters(BaseModel):
     doc_kinds: list[str] = []
     date_from: str | None = None
@@ -75,6 +99,16 @@ class Filters(BaseModel):
     standards: list[str] = []
     include_superseded: bool = False
     node_types: list[str] = []
+
+    @field_validator("node_types")
+    @classmethod
+    def _stored_node_types(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(str(t) for v in values for t in NODE_TYPE_WORDS.get(_word(v), ())))
+
+    @field_validator("doc_kinds")
+    @classmethod
+    def _stored_doc_kinds(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(k for v in values if (k := v.strip().lower()) in DOC_KIND_VALUES))
 
 
 class NumericConstraint(BaseModel):
@@ -112,6 +146,10 @@ class QueryAnalysis(BaseModel):
     source_scope: SourceScope = SourceScope.INTERNAL_AND_LIBRARY
     sub_questions: list[SubQuestion] = []
     clarification: Clarification = Clarification()
+    # the catalog step (engine/catalog.py): the question with nothing left open, and what it refers to
+    reframed_question: str | None = None
+    resolution: Literal["clear", "ambiguous", "not_found"] = "clear"
+    subject_ids: list[str] = []
 
 
 @dataclass
@@ -127,6 +165,12 @@ class Analysis:
     constraints: list[dict]
     external_allowed: bool
     warnings: list[str] = field(default_factory=list)
+    catalog: dict = field(default_factory=dict)  # the catalog step's record (engine/catalog.Decision.record)
+
+    @property
+    def question(self) -> str:
+        """The question every tool works from: the reframed one when the catalog step settled it."""
+        return self.raw.reframed_question or self.catalog.get("question") or ""
 
     @property
     def chitchat(self) -> bool:
@@ -194,10 +238,14 @@ async def analyze(
     user_groups: list[str],
     external_allowed_groups: list[str],
     trace_id: str | None = None,
+    catalog: str = "",
 ) -> Analysis:
     prompt = load_prompt("engine", PROMPT_VERSION)
     user = prompt.render_user(
-        history=history or "none", state=json.dumps(state, default=str), question=question
+        history=history or "none",
+        state=json.dumps(state, default=str),
+        question=question,
+        catalog=catalog or "not searched",
     )
     result = await client.generate(
         model=model_id(),

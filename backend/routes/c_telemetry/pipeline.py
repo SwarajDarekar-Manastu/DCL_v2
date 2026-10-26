@@ -26,10 +26,11 @@ from backend.dispatcher.contract import (
     ProcessedDocument,
     SiblingUnit,
 )
-from backend.dispatcher.folder_context import FolderContext
+from backend.dispatcher.folder_context import FolderContext, with_folder_labels
 from backend.dispatcher.location import primary_location
 from backend.dispatcher.routing import PROCESSED_MARK
 from backend.dispatcher.type_resolution import HEAD_BYTES
+from backend.indexing.card import models_embedder, write_halted_card
 from backend.indexing.commit import Indexer, commit_document
 from backend.llm_engine.local_models import ModelServerUnavailable
 from backend.postgres import pipeline_config
@@ -209,8 +210,11 @@ def process_document(
         processed = _build(adapter_name, session, minio, store, item, inputs, series_args)
     propose = _unit_proposer(item, document) if cloud_allowed else None
     processed = processed.model_copy(update={"flags": [with_suggestion(f, propose) for f in processed.flags]})
+    processed = with_folder_labels(processed, context)
     _apply_fields(document, processed)
     result: GateResult = gate(session, cir, document, processed, stale=_route_c_flag)
+    if result.halted:
+        write_halted_card(document, processed.document, embed=models_embedder())
     refresh_proposals(session, [document.doc_id])  # a rule's units are shown, never applied
     plan = None
     if not result.halted and indexer is not None:

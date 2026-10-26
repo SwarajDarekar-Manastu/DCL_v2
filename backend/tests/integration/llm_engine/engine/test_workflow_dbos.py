@@ -51,6 +51,14 @@ def test_the_workflow_runs_durably_under_dbos(monkeypatch):
     from dbos import DBOS
 
     monkeypatch.setattr(wf, "search_documents", search)
+    monkeypatch.setattr(  # no file database here: the catalog step finds nothing
+        wf.catalog,
+        "search_catalog",
+        lambda session, question, vector, previous=None: wf.catalog.CatalogResult(
+            question, wf.catalog.Labels(), [], [], [], previous
+        ),
+    )
+    monkeypatch.setattr(wf.catalog, "previous_record", lambda session, chat, user: None)
     client = Client(
         {
             "query_analysis": {"intents": ["fact_lookup"], "test_plan_ids": ["TP07"]},
