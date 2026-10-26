@@ -570,7 +570,7 @@ def test_benchmark_answers_take_the_chat_path_and_mock_makes_no_network_call(sea
     client = external_client(["fact_lookup"], synthesis=SYNTH)
     logged = []
     answer = workflow_answer(deps(client, logged, ALLOWED))  # the benchmark caller is in the allowed group
-    done, trace = asyncio.run(answer("Search the web for catalyst preheat", "", "mock"))
+    done, trace = asyncio.run(answer("Search the web for catalyst preheat", "", "mock", "benchmark-chat"))
     assert done["mode"] == "answered" and trace is logged[0]  # captured and still logged like chat
     assert trace["external_queries"][0]["provider"] == "mock"
     assert "external_search" not in client.purposes  # no grounded Gemini search either

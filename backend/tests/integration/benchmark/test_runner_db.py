@@ -192,12 +192,12 @@ def test_cancel_stops_between_cases_and_drops_the_case_in_flight(engine, setup):
     deps.concurrency = 1
     inner = deps.answer
 
-    async def cancelling(question, history, mode):
+    async def cancelling(question, history, mode, chat_id):
         if not asked:
             with Session(engine) as s:
                 catalog.cancel_run(s, run_id)
                 s.commit()
-        return await inner(question, history, mode)
+        return await inner(question, history, mode, chat_id)
 
     deps.answer = cancelling
     assert asyncio.run(run_benchmark(run_id, deps)) == "cancelled"
