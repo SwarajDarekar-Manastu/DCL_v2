@@ -467,6 +467,7 @@ def commit_document(
     document.indexed_at = now or datetime.now(UTC)
     sources = dict(document.metadata_sources or {})
     sources.pop(PROCESSED_MARK, None)
+    sources.pop("error", None)  # an earlier failed run's error no longer describes this committed version
     if sources_ids:
         sources["test_plan_ids"] = sources_ids
     if plan.warnings:
