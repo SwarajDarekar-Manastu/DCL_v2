@@ -159,3 +159,32 @@ def test_halted_measured_data_is_named_the_way_the_benchmark_checks_it(monkeypat
     )  # fmt: skip
     checks = metrics.behaviour([ExpectedBehavior.MUST_MENTION_HALTED_CASE], observed)["checks"]
     assert checks["must_mention_halted_case"]["passed"]
+
+
+def test_a_longer_name_and_a_longer_folder_word_win():
+    files = [
+        _file("cfg", "Thruster Configuration", plan="TP23", folder="APU › Test Plan 23", kind="diagram"),
+        _file("t7", "Thruster", plan="TP07", folder="APU › Test Plan 7 › De-Integration"),
+        _file("t9", "Thruster", plan="TP09", folder="APU › Test Plan 9 › De-Integration"),
+        _file("m1", "Catalyst Monolith", plan="TP12", folder="APU › Test Plan 12 › Figures › Integration"),
+        _file("m2", "Catalyst Monolith", plan="TP12", folder="APU › Test Plan 12 › Figures › De-Integration"),
+    ]
+    drawing = "What material is the mesh made of in the thruster configuration Rev C drawing?"
+    assert same_name_options(files, drawing, Labels()) == ("", [])
+    photo = "What damage does the Test Plan 12 de-integration photo of the catalyst monolith show?"
+    assert same_name_options(files, photo, question_labels(photo)) == ("", [])
+
+
+def test_the_answer_picks_the_option_whose_folder_it_names_most_precisely():
+    previous = {
+        "ask": {
+            "question": "Which injector number is on the Test Plan 12 Inj VF photo?",
+            "options": [
+                {"id": "1", "owner": "TP12", "folder": "APU › Test Plan 12 › Figures › De-Integration"},
+                {"id": "2", "owner": "TP12", "folder": "APU › Test Plan 12 › Figures › Integration"},
+            ],
+        }
+    }
+    assert chosen_option(previous, "The de-integration photo.")["id"] == "1"
+    assert chosen_option(previous, "the integration one")["id"] == "2"
+    assert chosen_option(previous, "TP12") is None  # both are TP12: still open

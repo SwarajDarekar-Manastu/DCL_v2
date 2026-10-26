@@ -430,7 +430,9 @@ def same_name_options(files: list[CatalogFile], question: str, labels: Labels) -
     for f in files:
         if _named(name := _name(f.title), asked):
             by_name.setdefault(name, []).append(f)
-    for name in sorted(by_name, key=len, reverse=True):
+    # "thruster" inside "thruster configuration": the question names the longer file, not every "Thruster"
+    names = [n for n in by_name if not any(n != m and f" {n} " in f" {m} " for m in by_name)]
+    for name in sorted(names, key=len, reverse=True):
         same = [
             f
             for f in by_name[name]
@@ -438,10 +440,14 @@ def same_name_options(files: list[CatalogFile], question: str, labels: Labels) -
             and (not labels.hardware or f.hardware_item in labels.hardware)
             and (not labels.runs or f.test_run_id in labels.runs)
         ]
-        told = [
-            f for f in same if any(f" {_norm(p)} " in asked for p in f.folder.split(" › ")[1:] if _norm(p))
-        ]
-        same = told or same
+
+        def told(f: CatalogFile) -> int:
+            """The longest folder name of the file the question uses: "de-integration" beats "integration"."""
+            words = [_norm(part) for part in f.folder.split(" › ")[1:]]
+            return max((len(w) for w in words if w and f" {w} " in asked), default=0)
+
+        best = max((told(f) for f in same), default=0)
+        same = [f for f in same if told(f) == best]
         if len({f.folder for f in same}) >= 2:
             same.sort(key=lambda f: (f.owner or "", f.folder))
             return same[0].title, [Option("", "", f.owner, f.test_run_id, f.folder, [f.doc_id]) for f in same]
@@ -580,12 +586,20 @@ def chosen_option(previous: dict | None, message: str) -> dict | None:
     if len(numbers) == 1 and 1 <= int(numbers[0]) <= len(options) and len(message.split()) <= 3:
         return options[int(numbers[0]) - 1]
     labels = question_labels(message)
-    picked = [
-        o
-        for o in options
-        if (o.get("owner") and o["owner"] in [*labels.plans, *labels.hardware])
-        or (o.get("folder") and _norm(o["folder"].split(" › ")[-1]) in said)
-    ]
+
+    def fit(option: dict) -> int:
+        """How well the answer names the option: its owner, else the longest of its folder words it uses
+        ("the de-integration one" fits "De-Integration" better than "Integration")."""
+        if option.get("owner") and option["owner"] in [*labels.plans, *labels.hardware]:
+            score = 1000
+        else:
+            score = 0
+        folder = _norm((option.get("folder") or "").split(" › ")[-1])
+        return score + (len(folder) if folder and f" {folder} " in said else 0)
+
+    scores = [fit(o) for o in options]
+    best = max(scores)
+    picked = [o for o, s in zip(options, scores, strict=True) if s == best and s > 0]
     return picked[0] if len(picked) == 1 else None
 
 
