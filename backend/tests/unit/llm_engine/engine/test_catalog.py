@@ -133,3 +133,29 @@ def test_a_numbered_name_is_the_same_name_and_a_bare_word_needs_a_kind_of_file()
     assert same_name_options(files, "what happened to the thruster", Labels()) == ("", [])
     _, photos = same_name_options(files, "show the thruster photo", Labels())
     assert [o.doc_ids for o in photos] == [["t7"], ["t9"]]
+
+
+def test_halted_measured_data_is_named_the_way_the_benchmark_checks_it(monkeypatch):
+    from backend.benchmark import metrics
+    from backend.benchmark.catalog import ExpectedBehavior
+    from backend.llm_engine.engine import catalog
+
+    run = _file("c", "Test_08_06Bar_iii_0", hardware="INJ14", run="T08", kind="telemetry_run")
+    run.status, run.case_keys = "HALTED", ["22563376-b405-4e43-98a8-0264f4a0b09b:"]
+    monkeypatch.setattr(catalog, "subject_files", lambda session, owner, run_, folder: [run])
+    found = CatalogResult("chamber pressure in Injector 14 Test 08", Labels(), [], [], [])
+    decision = decide(
+        None,
+        found,
+        resolution="clear",
+        subject_ids=[],
+        intents=["telemetry_metric"],
+        forced={"owner": "INJ14", "run": "T08", "folder": None, "label": "INJ14 · Test 08"},
+    )
+    assert decision.kind == "halted"
+    observed = metrics.Observed(
+        answer=decision.text, mode="insufficient_evidence", tools=[], tool_warnings=[], tool_displays=[],
+        citations=[], claims=[], verdicts=[],
+    )  # fmt: skip
+    checks = metrics.behaviour([ExpectedBehavior.MUST_MENTION_HALTED_CASE], observed)["checks"]
+    assert checks["must_mention_halted_case"]["passed"]

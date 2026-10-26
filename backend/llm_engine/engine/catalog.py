@@ -153,7 +153,7 @@ class Subject:
         text = f"{self.label}: " + _kinds(self.files)
         if held:
             cases = sorted({_case(c) for f in held for c in f.case_keys})
-            text += f"; {len(held)} held for review" + (f" (case {', '.join(cases)})" if cases else "")
+            text += f"; {len(held)} halted for review" + (f" (case {', '.join(cases)})" if cases else "")
         return text
 
 
@@ -484,7 +484,7 @@ def _label_option(option: Option, files: dict[str, CatalogFile]) -> str:
         held = sorted({_case(c) for m in members if m.status == "HALTED" for c in m.case_keys})
         what += f", {dates[0]}" if dates else ""
         if any(m.status == "HALTED" for m in members):
-            what += " — held for unit review" + (f" (case {', '.join(held)})" if held else "")
+            what += " — halted for unit review" + (f" (case {', '.join(held)})" if held else "")
         return f"{head}: {what}"
     return head
 
@@ -681,7 +681,7 @@ def decide(
             cases = sorted({c for f in measured for c in f.case_keys})
             text = (
                 f"The measured data for {subject['label']} exists "
-                f"({', '.join(f.title for f in measured[:6])}) but is held for review before it can be "
+                f"({', '.join(f.title for f in measured[:6])}) but is halted for review before it can be "
                 "used: its channel units are waiting for a person's decision"
                 + (f" (review case {', '.join(cases)})" if cases else "")
                 + ". I can't give a measured value until that review is done."

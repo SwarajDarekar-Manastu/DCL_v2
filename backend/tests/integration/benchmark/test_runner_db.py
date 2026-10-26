@@ -116,7 +116,7 @@ def setup(engine):
         s.commit()
     events, asked, judged = [], [], []
 
-    async def answer(question, history, external_mode):
+    async def answer(question, history, external_mode, chat_id):
         asked.append((question, external_mode))
         return reply(question, history)
 

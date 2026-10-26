@@ -36,7 +36,9 @@ from backend.postgres.models import BenchmarkCase, BenchmarkResult, BenchmarkRun
 
 log = logging.getLogger(__name__)
 
-AnswerFn = Callable[[str, str, str], Awaitable[tuple[dict, dict | None]]]  # question, history, external mode
+# question, history, external mode, chat id (one per case, so a second turn finds the first: the engine's
+# chat memory is the chat's last trace)
+AnswerFn = Callable[[str, str, str, str], Awaitable[tuple[dict, dict | None]]]
 RetrieveFn = Callable[[Session, str], tuple[list[tuple[str, str]], list[tuple[str, str]], float | None]]
 JudgeFn = Callable[[str, str, str, list[dict]], Awaitable[dict]]  # expectation, question, answer, sources
 CLAIMABLE = (BenchmarkRunStatus.QUEUED, BenchmarkRunStatus.RUNNING)
@@ -254,11 +256,12 @@ def observed_from(done: dict, trace: dict | None, cited: list[metrics.CitedDoc])
 
 async def run_case(case: Case, deps: RunnerDeps) -> dict:
     question = case.question
-    done, trace = await deps.answer(question, "", deps.external_mode)
+    chat_id = f"benchmark-{uuid.uuid4()}"
+    done, trace = await deps.answer(question, "", deps.external_mode, chat_id)
     clarify = ExpectedBehavior.MUST_CLARIFY in case.spec.expected_behavior
     if done.get("mode") == "clarification" and case.spec.clarification_answer and not clarify:
         history = f"user: {question}\nassistant: {done.get('answer_markdown', '')}"
-        done, trace = await deps.answer(case.spec.clarification_answer, history, deps.external_mode)
+        done, trace = await deps.answer(case.spec.clarification_answer, history, deps.external_mode, chat_id)
     citations = (trace or {}).get("citations", [])
     with deps.session_factory() as session:
         cited = cited_documents(session, citations)
@@ -397,7 +400,9 @@ def workflow_answer(engine, timeout_s: float = ANSWER_TIMEOUT_S) -> AnswerFn:
     (`mock` by default: canned results, no network) decides what T6 does."""
     from backend.llm_engine.engine.workflow import AnswerWorkflow
 
-    async def answer(question: str, history: str, external_mode: str) -> tuple[dict, dict | None]:
+    async def answer(
+        question: str, history: str, external_mode: str, chat_id: str
+    ) -> tuple[dict, dict | None]:
         traces: list[dict] = []
         deps = dataclasses.replace(engine, save_trace=lambda t: (traces.append(t), engine.save_trace(t)))
         with engine.session_factory() as session:
@@ -408,6 +413,7 @@ def workflow_answer(engine, timeout_s: float = ANSWER_TIMEOUT_S) -> AnswerFn:
             history=history,
             groups=["dcl-benchmark", *allowed],
             external_mode=external_mode,
+            chat_id=chat_id,
         )
         done = await handler
         return done, traces[0] if traces else None
