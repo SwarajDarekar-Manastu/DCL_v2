@@ -239,6 +239,7 @@ def test_the_piece_type_line_names_its_locator(kit):
     assert piece_type(node(node_type=NodeType.TABLE_ROW, sheet_name="Data", cell_range="A2:F2")) == (
         "table row · Data!A2:F2"
     )
+    assert piece_type(node(node_type=NodeType.RUN_SUMMARY, t_start_ms=0, t_end_ms=0)) == "run summary"
 
 
 def test_identifiers_of_the_header_join_the_piece_codes(kit):

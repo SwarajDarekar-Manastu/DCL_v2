@@ -477,8 +477,14 @@ def piece_type(node: "IndexNode") -> str:
     if node.page_no is not None:
         pages = f"{node.page_no}–{node.page_end}" if node.page_end and node.page_end != node.page_no else ""
         where = f"pages {pages}" if pages else f"page {node.page_no}"
+    elif node.node_type is NodeType.RUN_SUMMARY:  # stands for the whole recording: no position
+        return words
     elif node.t_start_ms is not None:
-        end = f"–{_clock(node.t_end_ms)}" if node.t_end_ms is not None else ""
+        end = (
+            f"–{_clock(node.t_end_ms)}"
+            if node.t_end_ms is not None and node.t_end_ms > node.t_start_ms
+            else ""
+        )
         where = f"{_clock(node.t_start_ms)}{end}"
     elif node.line_start is not None:
         where = f"lines {node.line_start}–{node.line_end}" if node.line_end else f"line {node.line_start}"
