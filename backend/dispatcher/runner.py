@@ -29,7 +29,7 @@ from backend.indexing.commit import Indexer, commit_document
 from backend.llm_engine.local_models import ModelServerUnavailable
 from backend.postgres.enums import DocumentSourceRole, DocumentStatus, DriveItemStatus, Route
 from backend.postgres.models import Blob, Document, DocumentSource, DriveItem, SyncRoot
-from backend.review.staged import GateResult, gate, load_staged
+from backend.review.staged import GateResult, gate, load_staged, own_flags
 from backend.storage.minio import ASSETS, CIR, RAW, BucketStore, parse_uri
 
 PIPELINE_VERSION = 1
@@ -140,18 +140,6 @@ def file_metadata(ctx: "RunContext"):
     )
 
 
-def _own_flag(route: Route):
-    """A flag this route raised on an earlier run of the document. A re-run that does not raise it again (the
-    finding is gone, or its anchor moved) closes it as AUTO_RESOLVED instead of leaving it open beside the new
-    one. The dispatcher's assembler notes carry the route too but are not the route's (label "assembler")."""
-
-    def own(row) -> bool:
-        side = (row.evidence or {}).get("a") or {}
-        return row.route == str(route) and side.get("label") != "assembler"
-
-    return own
-
-
 def run_document(
     session: Session,
     minio: Minio,
@@ -188,7 +176,7 @@ def run_document(
         f"{blob.sha256}/{route}/v{parser_version}/",
     )
     processed = with_folder_labels(build(ctx), ctx.folder)
-    result = gate(session, cir, document, processed, stale=_own_flag(route))
+    result = gate(session, cir, document, processed, stale=own_flags(route))
     if result.halted:
         write_halted_card(document, processed.document, embed=models_embedder())
     plan = _index(session, document, result, cloud_allowed, indexer)

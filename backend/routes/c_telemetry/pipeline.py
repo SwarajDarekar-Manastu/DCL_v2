@@ -50,7 +50,7 @@ from backend.postgres.enums import (
 from backend.postgres.models import Blob, Document, DocumentSource, DriveFolder, DriveItem, Rule, SyncRoot
 from backend.review.proposals import refresh as refresh_proposals
 from backend.review.rules import RuleRecord, RuleScope, RuleTarget
-from backend.review.staged import GateResult, gate, load_staged
+from backend.review.staged import GateResult, gate, load_staged, own_flags
 from backend.routes.c_telemetry.config_file import process_config
 from backend.routes.c_telemetry.delimited import as_table, delimited_source, read_delimited, series_plan
 from backend.routes.c_telemetry.ljstream_cfg import parse_ljstream_cfg
@@ -213,7 +213,7 @@ def process_document(
     processed = processed.model_copy(update={"flags": [with_suggestion(f, propose) for f in processed.flags]})
     processed = with_folder_labels(processed, context)
     _apply_fields(document, processed)
-    result: GateResult = gate(session, cir, document, processed, stale=_route_c_flag)
+    result: GateResult = gate(session, cir, document, processed, stale=own_flags(Route.C))
     if result.halted:
         write_halted_card(document, processed.document, embed=models_embedder())
     refresh_proposals(session, [document.doc_id])  # a rule's units are shown, never applied
@@ -510,11 +510,6 @@ def sibling_units(session: Session, minio: Minio, item: DriveItem) -> list[Sibli
             if unit:
                 found.append(SiblingUnit(file_name=name, channel=cell, unit=unit, source="header"))
     return found
-
-
-def _route_c_flag(flag) -> bool:
-    """Route C's own flags point at a channel (unit, bounds, t0); dispatcher and commit flags do not."""
-    return bool((flag.anchor or {}).get("channel"))
 
 
 def _unit_proposer(item: DriveItem, document: Document):

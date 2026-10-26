@@ -55,6 +55,20 @@ def apply_severity_policy(session: Session, doc: ProcessedDocument) -> Processed
 OPEN_STATUSES = (FlagStatus.OPEN, FlagStatus.IN_PROGRESS, FlagStatus.REOPENED)
 
 
+def own_flags(route: str):
+    """``gate``'s ``stale``: a flag this route raised on an earlier run of the document. A re-run that does
+    not raise it again (the finding is gone, or its anchor moved) closes it as AUTO_RESOLVED instead of
+    leaving it open beside the new one. The dispatcher's assembler notes carry the route too but are not
+    the route's (label "assembler"). One rule for every route: Route C's own copy looked only at channel
+    anchors, so its table unit flags were never closed (2026-10-26)."""
+
+    def own(row) -> bool:
+        side = (row.evidence or {}).get("a") or {}
+        return row.route == str(route) and side.get("label") != "assembler"
+
+    return own
+
+
 def gate(
     session: Session,
     cir: BucketStore,
