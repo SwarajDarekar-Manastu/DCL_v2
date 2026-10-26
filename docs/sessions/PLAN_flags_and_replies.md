@@ -434,3 +434,70 @@ Wiki: `.wiki/platform/compose-stack.md`, `.wiki/backend/benchmark-runner.md`
 5. Run the retrieval replay (`retr/measure.py`, baseline run 9b468dcd) and the silver benchmark from the
    Console (compare with 43.2%). Check one repaired answer, one de-integration video and one vendor photo in
    Open WebUI.
+
+---
+
+## 5. Results (26 Oct, live data)
+
+Code: A 65ba910, C 35b18ed, B 741c9f8, D cf1f17b, D2 8a35b57, reindex `--doc` 7b03163. All deployed.
+
+**A bug the pilot found (d0aac19).** On re-run, the C pilot's table unit flags stayed OPEN although the route no
+longer raised them. Route C had its own copy of the "route's own flag" rule, and that copy looked only at channel
+anchors. There is now one rule, `review/staged.own_flags`, for every route.
+
+| Route | Before | After | Paid |
+|---|---|---|---|
+| C (13 table files) | 51 open SOFT unit flags; "[ C ]" saved as coulomb | 10 open, each for a person (6 Injector 10 columns, 5 with a guess; 3 instrument-list "Error"; 1 unnamed "column 5"); "[ C ]" saved as degC | $0.003 |
+| A2 (11 files) | 8 SCHEMA_UNKNOWN + 7 C_F unit flags | 0 open; all 23 A2 files ACTIVE | $0.14 (15 plot re-reads) |
+| F (4 videos) | 2 "no ignition found" on de-integration clips | 0; inspection clips have no t0; firings keep 27.69 s and 26.44 s | $0.05 |
+| D (84 photos) | – | all ACTIVE, no open photo flags | ≈ $0.45 |
+| A1 Moog brochure | 3 product shots with "discoloration" | 14 of 14 `product_image`, no damage | $0.05 |
+| A1 ECSS-E-ST-32-02C | flowchart boxes stored as parts | 14 of 14 `flowchart` with steps | $0.10 |
+| A1 batches 1–2 (13 files) | – | patents' drawings mechanical/schematic, ecaps datasheet 11 product images, ECSS flowcharts read as flowcharts | $0.22 |
+
+Step A worked live: two replies ran away (12,274 and about 25,000 output tokens). Each was logged as "reply cut
+at the output cap" and fixed by the one retry with low thinking.
+
+Not re-run: the Rafael datasheet (81 pages, 97 figures) waits for free memory; ECSS-E-ST-35-06C (one bar chart)
+was skipped as not worth 91 pages of CPU. Two photo kinds are debatable (a gasket read as assembly, broken
+catalyst pellets read as inspection, not material sample); neither raised a flag.
+
+**Retrieval replay** (`retr/measure.py`, baseline run 9b468dcd):
+
+| Cases | recall@8 | recall@30 |
+|---|---|---|
+| All 58 | 0.789 → 0.860 | 0.912 → 0.895 |
+| 54, without the 4 citing files the user marked junk | 0.792 → 0.925 | 0.906 → 0.962 |
+
+The only losses are the 4 cases citing the two QUARANTINED files (TP24 clamp heater, TP07 DE integration sheet).
+
+**Silver set correction.** Two video cases pointed at event pieces that the re-read replaced. Their new references
+are set, and the TP01 ignition time was corrected from the frames: 22.66 s cold, 26.44 s a glow and a small jet,
+28.58 s a full plume. The 24 Oct value of 28.58 s came from a reading that missed the small glow. Imported as a new
+silver version (2 versioned, 79 unchanged).
+
+**Silver benchmark** (Console run 95532297, 81 cases, about $1.9): **69.1 %** (56 passed), against 43.2 % this
+morning (run 9b468dcd). That baseline came before the metadata, catalog and repair work too, so the gain is not
+from this plan alone. INSUFFICIENT_EVIDENCE 7 → 0, SYNTHESIS_ERROR 12 → 6, RETRIEVAL_MISS 6 → 4, RERANK_MISS 5 → 1.
+- The 4 MISSING_DOCUMENT failures are the cases citing the two junk-marked files.
+- The 3 UNIT_ERROR failures are better answers that fail the strict number check: "590.30 [°C ]" copied from the
+  table header, and two LabJack scan rates (500, 1000) without "Hz", which the config files do not state either.
+
+**Open WebUI, live** (screenshots `data/benchmark/live/owui_8`, `owui_9`):
+- The TP09 de-integration video is answered as a post-firing inspection: the spoon's events at 0.00, 2.49, 4.56
+  and 6.22 s, and the whole video inline with a seek button per event.
+- "Test 02 pre-heat at CW near flange" asks back between INJ10, INJ14 and TP12 Test 02 (correct), then answers
+  348.5 from the workbook and 348.50 °C from the report.
+- "Damage on the Moog brochure thrusters?" answers heat tint visible, no structural damage, with the source
+  labelled "vendor claim".
+
+**Follow-ups found**
+1. The evidence text of a table row still shows the raw header ("Pre Heat Temperature [ C ]: 348.5"), so the
+   answer writes "348.5 C". The resolved unit (`metadata.units`, degC) should go into the row text or the
+   evidence location.
+2. The brochure answer cited page 5 for observations on pages 2 and 4 (answer-time "look again" evidence), and
+   added a guess ("suggests prior hot-fire testing").
+3. A runaway plot reply costs up to its 24,576-token cap (about $0.09); 16,384 would halve that and still be 1.7x
+   the largest real plot reading.
+4. A Route D burst member copies its representative's saved reading; a member re-run before its representative
+   keeps the old reading. One photo (DBS C) needed a second run.
