@@ -692,7 +692,7 @@ def decide(
     if set(intents) & MEASURED:
         measured = [f for f in files if f.doc_kind == "telemetry_run"]
         if measured and all(f.status == "HALTED" for f in measured):
-            cases = sorted({c for f in measured for c in f.case_keys})
+            cases = sorted({_case(c) for f in measured for c in f.case_keys})
             text = (
                 f"The measured data for {subject['label']} exists "
                 f"({', '.join(f.title for f in measured[:6])}) but is halted for review before it can be "
