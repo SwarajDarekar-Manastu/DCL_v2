@@ -181,7 +181,7 @@ def test_a_rounded_number_is_repaired_alone_and_removed_if_it_persists():
         "engine.verify",
     ]
     assert "Claim 0: Steady-state mean 12 bar(a)." in repair_prompt and "[E1] TP07_T04" in repair_prompt
-    assert str(client.calls[2][2]["thinking"]) == "medium"
+    assert str(client.calls[2][2]["thinking"]) == "low"
     assert out.claims == [] and "12 bar(a)" not in out.markdown
     # left out quietly: the trace keeps it, the answer carries no warning about it
     assert out.removed == ["Steady-state mean 12 bar(a)."] and not any("verified" in c for c in out.caveats)
@@ -239,4 +239,4 @@ def test_a_failed_or_cut_repair_removes_the_claim_instead_of_failing_the_answer(
     )
     out = asyncio.run(answer(client, "q", {}, [TELEMETRY]))
     assert out.claims == [] and "12 bar(a)" not in out.markdown
-    assert client.calls[2][2]["max_output_tokens"] == 2048
+    assert client.calls[2][2]["max_output_tokens"] == 8192

@@ -108,8 +108,18 @@ def parse_structured(text: str, schema: SchemaArg, gateway_parsed: Any = None) -
         return json.loads(payload) if isinstance(schema, dict) else schema.model_validate_json(payload)
     except (json.JSONDecodeError, ValidationError) as exc:
         raise StructuredOutputError(
-            f"response does not match the schema: {type(exc).__name__}", raw_text=text
+            f"response does not match the schema: {type(exc).__name__}: {_what_broke(exc)}", raw_text=text
         ) from None
+
+
+def _what_broke(exc: json.JSONDecodeError | ValidationError) -> str:
+    """The first three broken fields of a reply, or where its JSON stops parsing."""
+    if isinstance(exc, ValidationError):
+        return "; ".join(
+            f"{'.'.join(str(part) for part in error['loc']) or 'reply'}: {error['msg']}"
+            for error in exc.errors()[:3]
+        )
+    return f"{exc.msg} at character {exc.pos}"
 
 
 def drops_temperature(model: str) -> bool:

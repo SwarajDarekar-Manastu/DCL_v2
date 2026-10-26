@@ -36,7 +36,7 @@ from typing import Any
 import httpx
 
 from backend.common.telemetry import METRICS
-from backend.config import FORBIDDEN_NAMES, ConfigError, Group, Settings, get_settings
+from backend.config import FORBIDDEN_NAMES, ConfigError, Group, Settings, ThinkingLevel, get_settings
 from backend.llm_engine.gemini_adapters import (
     ADAPTERS,
     Adapter,
@@ -47,6 +47,7 @@ from backend.llm_engine.gemini_adapters import (
     parse_structured,
 )
 from backend.llm_engine.gemini_types import (
+    CUT_FINISH_REASONS,
     BudgetExhausted,
     CallContext,
     Capabilities,
@@ -61,11 +62,13 @@ from backend.llm_engine.gemini_types import (
     LlmCallRecord,
     Message,
     ModelPrice,
+    OutputCutError,
     Pdf,
     RequestTooLarge,
     SchemaArg,
     StreamDone,
     StreamEvent,
+    StructuredOutputError,
     Text,
     TextDelta,
     Usage,
@@ -181,6 +184,7 @@ class _Call:
 
 PRICE_REFRESH_S = 300.0
 RESULT_CACHE_PREFIX = "_result_cache"
+MAX_OUTPUT_TOKENS = 65_536  # Gemini 3.x output limit
 UNCACHED_PURPOSES = ("engine.", "console.", "benchmark.")
 
 
@@ -191,8 +195,25 @@ def result_cache_store(settings: Settings | None = None):
     return BucketStore(client_from_settings(settings or get_settings()), CIR)
 
 
+# The output cap stays out of the cache key: only complete replies are cached, so the cap that allowed them
+# does not change them, and adding a cap must not turn every earlier reply into a miss.
+CAP_KEYS = frozenset({"max_tokens", "max_output_tokens", "maxOutputTokens"})
+
+
+def _without_cap(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _without_cap(v) for k, v in value.items() if k not in CAP_KEYS}
+    if isinstance(value, list):
+        return [_without_cap(v) for v in value]
+    return value
+
+
 def result_key(call: "_Call") -> str:
-    material = {"model": call.req.model, "prompt_version": call.context.prompt_version, "body": call.body}
+    material = {
+        "model": call.req.model,
+        "prompt_version": call.context.prompt_version,
+        "body": _without_cap(call.body),
+    }
     digest = hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode("utf-8")).hexdigest()
     version = call.context.prompt_version or "none"
     return f"{RESULT_CACHE_PREFIX}/{call.req.model}/{version}/{digest}.json"
@@ -534,6 +555,14 @@ class GeminiClient:
             structured = None
             if call.req.schema is not None and not parsed.tool_calls:
                 structured = parse_structured(parsed.text, call.req.schema, parsed.structured)
+        except StructuredOutputError as exc:
+            if (parsed.finish_reason or "").upper() in CUT_FINISH_REASONS:
+                exc = OutputCutError(
+                    f"reply cut at the output cap after {usage.output_tokens} output tokens",
+                    raw_text=exc.raw_text,
+                )
+            self._record(call, usage, request_id, exc)
+            raise exc from None
         except GeminiError as exc:
             self._record(call, usage, request_id, exc)
             raise
@@ -643,6 +672,15 @@ class GeminiClient:
         pass gemini_types.EXTRACTION_SAFETY when their config flag is on), google_search (only with an
         already-sanitized query: the model writes the Google queries from the whole prompt; they come
         back in result.grounding.queries)."""
+        try:
+            return await self._generate_once(model, messages, context, schema, options)
+        except StructuredOutputError as exc:
+            again = self._second_try(exc, messages, options)
+            if again is None:
+                raise
+            return await self._generate_once(model, again[0], context, schema, again[1])
+
+    async def _generate_once(self, model, messages, context, schema, options) -> GenerateResult:
         call = self._prepare(model, messages, context, schema, False, **options)
         if (hit := self._cached(call)) is not None:
             return hit
@@ -660,6 +698,15 @@ class GeminiClient:
         schema: SchemaArg = None,
         **options: Any,
     ) -> GenerateResult:
+        try:
+            return self._generate_sync_once(model, messages, context, schema, options)
+        except StructuredOutputError as exc:
+            again = self._second_try(exc, messages, options)
+            if again is None:
+                raise
+            return self._generate_sync_once(model, again[0], context, schema, again[1])
+
+    def _generate_sync_once(self, model, messages, context, schema, options) -> GenerateResult:
         call = self._prepare(model, messages, context, schema, False, **options)
         if (hit := self._cached(call)) is not None:
             return hit
@@ -667,6 +714,29 @@ class GeminiClient:
         with self._limits.sync(model):
             response = self._post(call)
         return self._finish(call, response)
+
+    def _second_try(
+        self, exc: StructuredOutputError, messages: list[Message], options: dict[str, Any]
+    ) -> tuple[list[Message], dict[str, Any]] | None:
+        """The one retry of a reply that failed its schema; a second failure is raised. A cut reply is asked
+        again with twice the cap and the least thinking, unless no cap was set: then it already ran to the
+        model's limit. A reply that broke a field rule is asked again with what broke."""
+        if isinstance(exc, OutputCutError):
+            cap = options.get("max_output_tokens")
+            if cap is None:
+                return None
+            thinking = options.get("thinking") or self._default_thinking
+            least = ThinkingLevel.MINIMAL if thinking == ThinkingLevel.MINIMAL else ThinkingLevel.LOW
+            return messages, {
+                **options,
+                "max_output_tokens": min(2 * cap, MAX_OUTPUT_TOKENS),
+                "thinking": least,
+            }
+        note = (
+            f"Your previous reply did not match the required JSON schema ({exc}). "
+            "Reply again with one JSON object that matches the schema exactly."
+        )
+        return [*messages, Message.user(note)], options
 
     async def stream(
         self, *, model: str, messages: list[Message], context: CallContext, **options: Any

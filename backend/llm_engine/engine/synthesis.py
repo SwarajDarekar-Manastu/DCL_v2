@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 SYNTHESIS_PROMPT = "synthesis.v2"
 VERIFY_PROMPT = "verify.v1"
 REPAIR_PROMPT = "repair.v1"
-REPAIR_MAX_OUTPUT_TOKENS = 2048  # a repair is a few sentences; one stack repair ran 208 s / 4,198 tokens
+REPAIR_MAX_OUTPUT_TOKENS = 8192  # thinking counts toward it: 15 repairs were cut at 2,048 (26 Oct)
 EVIDENCE_CHARS = 9000
 
 
@@ -221,7 +221,7 @@ async def _repair(
             ],
             context=CallContext(purpose="engine.repair", prompt_version=REPAIR_PROMPT, trace_id=trace_id),
             schema=Repair,
-            thinking=ThinkingLevel.MEDIUM,
+            thinking=ThinkingLevel.LOW,
             max_output_tokens=REPAIR_MAX_OUTPUT_TOKENS,
         )
     except GeminiError as exc:  # a cut or failed repair: the rejected claims are removed as before

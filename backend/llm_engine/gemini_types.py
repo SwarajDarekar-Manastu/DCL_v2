@@ -96,6 +96,14 @@ class StructuredOutputError(GeminiError):
         self.raw_text = raw_text
 
 
+class OutputCutError(StructuredOutputError):
+    """The reply stopped at its output cap, so its JSON is incomplete (thinking counts toward the cap)."""
+
+
+# Gemini's finish reason for a reply stopped by max_output_tokens; "length" in the OpenAI style
+CUT_FINISH_REASONS = frozenset({"MAX_TOKENS", "LENGTH"})
+
+
 @dataclass(frozen=True)
 class Text:
     text: str

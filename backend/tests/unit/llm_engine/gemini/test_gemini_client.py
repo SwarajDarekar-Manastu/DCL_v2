@@ -21,6 +21,7 @@ from backend.llm_engine.gemini_types import (
     Image,
     Message,
     ModelPrice,
+    OutputCutError,
     Pdf,
     StreamDone,
     StructuredOutputError,
@@ -191,13 +192,69 @@ async def test_dict_schema_returns_plain_json():
     assert result.parsed == {"city": "Tokyo", "population_millions": 37.1}
 
 
-async def test_schema_mismatch_raises_and_is_logged_as_error(records):
-    client = client_for(Gateway(ok("structured_invalid.json")), records)
+async def test_schema_mismatch_is_retried_once_then_raised_and_both_are_logged(records):
+    gateway = Gateway(ok("structured_invalid.json"))
+    client = client_for(gateway, records)
     with pytest.raises(StructuredOutputError) as exc:
         await client.generate(model=MODEL, messages=[Message.user("q")], context=CTX, schema=Answer)
     assert exc.value.raw_text == '{"city": "Tokyo"}'
-    assert [r.status for r in records] == ["error"]
+    assert "population_millions: Field required" in str(exc.value)
+    assert [r.status for r in records] == ["error", "error"]
     assert records[0].input_tokens == 120
+    assert len(gateway.requests) == 2
+
+
+def test_the_retry_of_a_broken_reply_says_what_broke():
+    gateway = Gateway(ok("structured_invalid.json"), ok("structured.json"))
+    result = client_for(gateway).generate_sync(
+        model=MODEL, messages=[Message.user("q")], context=CTX, schema=Answer
+    )
+    assert result.parsed == Answer(city="Tokyo", population_millions=37.1)
+    first, second = gateway.bodies
+    assert len(second["messages"]) == len(first["messages"]) + 1
+    note = second["messages"][-1]["content"]
+    assert "did not match the required JSON schema" in note and "population_millions" in note
+
+
+def cut(text: str = '{"city": "Tok') -> httpx.Response:
+    body = fixture("structured_invalid.json")
+    body["choices"][0]["message"]["content"] = text
+    body["choices"][0]["finish_reason"] = "length"
+    return httpx.Response(200, json=body)
+
+
+def test_a_cut_reply_is_retried_once_with_twice_the_cap_and_low_thinking(records):
+    gateway = Gateway(cut(), ok("structured.json"))
+    result = client_for(gateway, records).generate_sync(
+        model=MODEL,
+        messages=[Message.user("q")],
+        context=CTX,
+        schema=Answer,
+        max_output_tokens=100,
+        thinking=ThinkingLevel.MEDIUM,
+    )
+    assert result.parsed.city == "Tokyo"
+    first, second = gateway.bodies
+    assert (first["max_tokens"], first["reasoning_effort"]) == (100, "medium")
+    assert (second["max_tokens"], second["reasoning_effort"]) == (200, "low")
+    assert records[0].error.startswith("reply cut at the output cap")
+
+
+def test_a_cut_reply_without_a_cap_already_ran_to_the_limit_and_is_not_retried():
+    gateway = Gateway(cut())
+    with pytest.raises(OutputCutError):
+        client_for(gateway).generate_sync(
+            model=MODEL, messages=[Message.user("q")], context=CTX, schema=Answer
+        )
+    assert len(gateway.requests) == 1
+
+
+def test_the_output_cap_stays_out_of_the_result_cache_key():
+    client = client_for(Gateway(ok()))
+    plain = client._prepare(MODEL, [Message.user("q")], CTX, Answer, False)
+    capped = client._prepare(MODEL, [Message.user("q")], CTX, Answer, False, max_output_tokens=512)
+    assert capped.body != plain.body
+    assert gc.result_key(capped) == gc.result_key(plain)
 
 
 async def test_function_calling_round_trip():

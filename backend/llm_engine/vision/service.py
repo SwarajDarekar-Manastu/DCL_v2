@@ -119,6 +119,7 @@ class Task:
     tier: Tier
     media_resolution: str
     thinking: ThinkingLevel
+    max_output_tokens: int  # about 2-3x the largest complete reply in llm_calls (26 Oct): stops only runaways
 
     @property
     def model(self) -> str:
@@ -128,32 +129,34 @@ class Task:
 
 TASKS: dict[VisionCapability, Task] = {
     VisionCapability.TRIAGE_PAGE: Task(
-        "triage_page.v1", PageTriage, FLASH_LITE, "low", ThinkingLevel.MINIMAL
+        "triage_page.v1", PageTriage, FLASH_LITE, "low", ThinkingLevel.MINIMAL, 12_288
     ),
     VisionCapability.TRANSCRIBE_PAGE: Task(
-        "transcribe_page.v2", PageTranscription, FLASH, "high", ThinkingLevel.LOW
+        "transcribe_page.v2", PageTranscription, FLASH, "high", ThinkingLevel.LOW, 16_384
     ),
     VisionCapability.TRANSCRIBE_HANDWRITING: Task(
-        "transcribe_handwriting.v1", HandwritingReading, FLASH, "high", ThinkingLevel.LOW
+        "transcribe_handwriting.v1", HandwritingReading, FLASH, "high", ThinkingLevel.LOW, 12_288
     ),
     VisionCapability.READ_TABLE_IMAGE: Task(
-        "read_table_image.v1", TableReading, FLASH, "high", ThinkingLevel.LOW
+        "read_table_image.v1", TableReading, FLASH, "high", ThinkingLevel.LOW, 16_384
     ),
-    VisionCapability.DIGITIZE_PLOT: Task("digitize_plot.v1", PlotReading, FLASH, "high", ThinkingLevel.LOW),
+    VisionCapability.DIGITIZE_PLOT: Task(
+        "digitize_plot.v1", PlotReading, FLASH, "high", ThinkingLevel.LOW, 24_576
+    ),
     VisionCapability.READ_SCHEMATIC: Task(
-        "read_schematic.v2", SchematicReading, FLASH, "high", ThinkingLevel.LOW
+        "read_schematic.v2", SchematicReading, FLASH, "high", ThinkingLevel.LOW, 12_288
     ),
     VisionCapability.INSPECT_HARDWARE_PHOTO: Task(
-        "inspect_hardware_photo.v1", HardwarePhotoReading, FLASH, "medium", ThinkingLevel.LOW
+        "inspect_hardware_photo.v1", HardwarePhotoReading, FLASH, "medium", ThinkingLevel.LOW, 12_288
     ),
     VisionCapability.DESCRIBE_SLIDE: Task(
-        "describe_slide.v1", SlideReading, FLASH, "medium", ThinkingLevel.LOW
+        "describe_slide.v1", SlideReading, FLASH, "medium", ThinkingLevel.LOW, 8_192
     ),
     VisionCapability.VIDEO_TIMELINE: Task(
-        "video_timeline.v2", VideoTimeline, FLASH, "medium", ThinkingLevel.LOW
+        "video_timeline.v2", VideoTimeline, FLASH, "medium", ThinkingLevel.LOW, 8_192
     ),
     VisionCapability.CLASSIFY_IMAGE: Task(
-        "classify_image.v1", ImageClassification, FLASH_LITE, "low", ThinkingLevel.MINIMAL
+        "classify_image.v1", ImageClassification, FLASH_LITE, "low", ThinkingLevel.MINIMAL, 1_024
     ),
 }
 
@@ -404,6 +407,7 @@ class VisionService:
             context=context,
             schema=task.schema,
             thinking=task.thinking,
+            max_output_tokens=task.max_output_tokens,
             media_resolution=task.media_resolution,
             temperature=0.0,
             **({"safety_settings": EXTRACTION_SAFETY} if capability in self._safety else {}),

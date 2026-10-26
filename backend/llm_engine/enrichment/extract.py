@@ -24,6 +24,7 @@ from backend.postgres.enums import EntityType, Quantity
 PROMPT_VERSION = "parent.v2"
 PURPOSE = "enrichment.parent"
 MAX_DROP_RATE = 0.10
+MAX_OUTPUT_TOKENS = 16_384  # the largest complete reply in llm_calls used 5,255 (26 Oct): stops only runaways
 
 
 class StatusMarker(StrEnum):
@@ -172,6 +173,7 @@ def enrich_parent(
         ),
         schema=ParentEnrichment,
         thinking=ThinkingLevel.LOW,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
         temperature=0.0,
     )
     grounded, drops = ground(result.parsed, parent_text)

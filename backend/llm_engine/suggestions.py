@@ -18,6 +18,7 @@ UNIT_PROMPT = "unit.v1"
 UNIT_PURPOSE = "suggest.unit"
 UNIT_TIER = Tier.FLASH  # plan task 5 (2026-10-24): lite answered 2 of 24, flash 16 of 24
 MAX_CONFIDENCE = 0.5  # a model proposal never reaches the 0.9 auto-apply line (file 06 §5)
+MAX_OUTPUT_TOKENS = 1024  # a proposal is a few short fields; the largest complete one used 553
 
 
 class UnitProposal(BaseModel):
@@ -27,7 +28,7 @@ class UnitProposal(BaseModel):
     unit: str | None = None
     gauge_or_abs: str | None = Field(default=None, description="gauge, absolute, unknown or n/a")
     confidence: float = 0.0
-    rationale: str = ""
+    rationale: str = Field(default="", max_length=300)
 
 
 def _enum(kind, value: str | None):
@@ -83,6 +84,7 @@ def propose_unit(
         thinking=ThinkingLevel.MINIMAL
         if model == model_id(Tier.LITE)
         else ThinkingLevel.LOW,  # flash: no minimal
+        max_output_tokens=MAX_OUTPUT_TOKENS,  # one Flash-Lite trial ran to 65,520 tokens (24 Oct)
         temperature=0.0,
     )
     proposal: UnitProposal = result.parsed
