@@ -38,7 +38,7 @@ export const PAGE: ViewerView = {
 	height: 1754,
 	regions: [
 		{ bbox: [0.1, 0.25, 0.6, 0.3], kind: 'cited', label: 'cited passage', confidence: null },
-		{ bbox: [0.7, 0.8, 0.9, 0.85], kind: 'handwriting', label: 'run note', confidence: 0.62 }
+		{ bbox: [0.7, 0.8, 0.9, 0.85], kind: 'flag', label: 'run note', confidence: 0.62 }
 	],
 	text: 'Chamber pressure peaked at 12.4 bar(a).'
 };

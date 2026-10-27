@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import DocumentViewer from '../../src/lib/components/viewer/DocumentViewer.svelte';
 import { PAGE, payload } from './fixtures';
@@ -80,22 +80,5 @@ describe('DocumentViewer', () => {
 			'/review?case=0b6f1d3e-2a4c-4e8f-9c1a-5d7e3f2b1a90%3A12'
 		);
 		expect(screen.queryByRole('button', { name: 'Translate' })).toBeNull();
-	});
-});
-
-describe('DocumentViewer handwriting pane', () => {
-	it('lists the handwritten readings with confidence and focuses a box on click', async () => {
-		show();
-		const pane = screen.getByRole('region', { name: 'Handwritten on this page' });
-		const entry = within(pane).getByRole('button', { name: /run note/ });
-		expect(pane.textContent).toContain('62%');
-		await fireEvent.click(entry);
-		expect(document.activeElement?.getAttribute('aria-label')).toBe('handwriting region: run note (confidence 0.62)');
-	});
-
-	it('has no pane when nothing on the page is handwritten', () => {
-		const cited = { ...PAGE, regions: PAGE.kind === 'page' ? PAGE.regions.filter((r) => r.kind !== 'handwriting') : [] } as typeof PAGE;
-		show(payload(cited));
-		expect(screen.queryByRole('region', { name: 'Handwritten on this page' })).toBeNull();
 	});
 });

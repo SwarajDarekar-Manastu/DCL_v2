@@ -16,7 +16,7 @@ the gateway's wire format (S4's adapters) never leaks in here.
 Safety settings (DECISIONS 2026-10-22): the extraction capabilities may send
 `gemini_types.EXTRACTION_SAFETY` (DANGEROUS_CONTENT at BLOCK_ONLY_HIGH), because propellant-chemistry pages
 were blocked with the gateway defaults. It is off unless `pipeline_config` `vision.extraction_safety` turns it
-on: `true` for all seven extraction capabilities, or a list of capability names. Other capabilities never send
+on: `true` for all six extraction capabilities, or a list of capability names. Other capabilities never send
 it. Refusals are not cached, so switching the flag on lets a refused page through on the next run.
 
 Every call starts with the shared preamble `image_context.v2` (what the library is, how to use a file's
@@ -42,7 +42,6 @@ from backend.llm_engine.gemini_types import EXTRACTION_SAFETY, CallContext, Imag
 from backend.llm_engine.model_ids import Tier, model_id
 from backend.llm_engine.prompts import load_prompt
 from backend.llm_engine.vision.schemas import (
-    HandwritingReading,
     HardwarePhotoReading,
     ImageClassification,
     PageTranscription,
@@ -65,7 +64,6 @@ PROMPT_AREA = "vision"
 class VisionCapability(StrEnum):
     TRIAGE_PAGE = "triage_page"
     TRANSCRIBE_PAGE = "transcribe_page"
-    TRANSCRIBE_HANDWRITING = "transcribe_handwriting"
     READ_TABLE_IMAGE = "read_table_image"
     DIGITIZE_PLOT = "digitize_plot"
     READ_SCHEMATIC = "read_schematic"
@@ -78,7 +76,6 @@ class VisionCapability(StrEnum):
 EXTRACTION_CAPABILITIES = frozenset(
     {
         VisionCapability.TRANSCRIBE_PAGE,
-        VisionCapability.TRANSCRIBE_HANDWRITING,
         VisionCapability.READ_TABLE_IMAGE,
         VisionCapability.DIGITIZE_PLOT,
         VisionCapability.READ_SCHEMATIC,
@@ -130,13 +127,10 @@ class Task:
 
 TASKS: dict[VisionCapability, Task] = {
     VisionCapability.TRIAGE_PAGE: Task(
-        "triage_page.v1", PageTriage, FLASH_LITE, "low", ThinkingLevel.MINIMAL, 12_288
+        "triage_page.v2", PageTriage, FLASH_LITE, "low", ThinkingLevel.MINIMAL, 1_024
     ),
     VisionCapability.TRANSCRIBE_PAGE: Task(
-        "transcribe_page.v2", PageTranscription, FLASH, "high", ThinkingLevel.LOW, 16_384
-    ),
-    VisionCapability.TRANSCRIBE_HANDWRITING: Task(
-        "transcribe_handwriting.v1", HandwritingReading, FLASH, "high", ThinkingLevel.LOW, 12_288
+        "transcribe_page.v3", PageTranscription, FLASH, "high", ThinkingLevel.LOW, 16_384
     ),
     VisionCapability.READ_TABLE_IMAGE: Task(
         "read_table_image.v1", TableReading, FLASH, "high", ThinkingLevel.LOW, 16_384
@@ -278,23 +272,6 @@ class VisionService:
     ) -> VisionOutput[PageTranscription]:
         variables = {"context": context, "language_hint": _or_none(language_hint)}
         return self._run(VisionCapability.TRANSCRIBE_PAGE, [page], variables, doc_id, anchor)
-
-    def transcribe_handwriting(
-        self,
-        crop: Image,
-        *,
-        field_label: str | None,
-        allowed_units: list[str],
-        context: str,
-        doc_id: str | None = None,
-        anchor: str | None = None,
-    ) -> VisionOutput[HandwritingReading]:
-        variables = {
-            "field_label": _or_none(field_label),
-            "allowed_units": ", ".join(allowed_units) or "none stated",
-            "context": context,
-        }
-        return self._run(VisionCapability.TRANSCRIBE_HANDWRITING, [crop], variables, doc_id, anchor)
 
     def read_table_image(
         self,

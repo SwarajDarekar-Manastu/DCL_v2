@@ -182,8 +182,6 @@
 	--info: var(--ds-blue-900);
 	--info-bg: var(--ds-blue-100);
 	--info-border: var(--ds-blue-400);
-	--handwriting: var(--ds-purple-900);
-	--handwriting-bg: var(--ds-purple-400);
 
 	--chart-1: var(--ds-gray-1000);
 	--chart-2: var(--ds-gray-900);
@@ -248,8 +246,6 @@
 	--color-info: var(--info);
 	--color-info-bg: var(--info-bg);
 	--color-info-border: var(--info-border);
-	--color-handwriting: var(--handwriting);
-	--color-handwriting-bg: var(--handwriting-bg);
 
 	--color-chart-1: var(--chart-1);
 	--color-chart-2: var(--chart-2);

@@ -75,16 +75,18 @@ def test_leave_as_text_keeps_the_number_unitless_and_decided():
     assert (plan.facts[0].unit_raw, plan.facts[0].needs_unit) == (None, False)
 
 
+KEY = "ab" * 16
+
+
 def test_a_typed_handwriting_value_replaces_the_model_reading_in_text_and_numbers():
-    box = {"x0": 0.215, "y0": 0.603, "x1": 0.475, "y1": 0.623}
     node = _node(
         "p8",
         "Orifice dia: 0.8? mm",
         page_no=8,
-        metadata={"handwriting": [{"bbox": {**box, "page_no": 8}, "value_raw": "0.8?", "label": "Orifice"}]},
+        metadata={"handwriting": [{"key": KEY, "value_raw": "0.8?", "label": "Orifice"}]},
     )
     plan = _plan([node], [_fact("p8", "0.8?", "mm")])
-    flag = SimpleNamespace(anchor={"page": 8, "bbox": box}, evidence={})
+    flag = SimpleNamespace(anchor={"page": 8, "content_sha256": KEY}, evidence={})
     _set_value(plan, flag, {"action": "set_value", "value": "0.85", "unit": "mm", "illegible": False})
     (reading,) = plan.nodes[0].metadata["handwriting"]
     assert (plan.nodes[0].content, reading["value_raw"], reading["source"]) == (
@@ -93,6 +95,21 @@ def test_a_typed_handwriting_value_replaces_the_model_reading_in_text_and_number
         "human",
     )
     assert (plan.facts[0].value_raw, plan.facts[0].source) == ("0.85", NumericFactSource.HUMAN)
+
+
+def test_a_value_typed_for_an_illegible_entry_replaces_the_illegible_mark():
+    node = _node(
+        "p2",
+        "<td>Tare weight (g)</td><td>[illegible]</td>",
+        page_no=2,
+        metadata={
+            "handwriting": [{"key": KEY, "value_raw": None, "label": "Tare weight (g)", "illegible": True}]
+        },
+    )
+    plan = _plan([node], [])
+    flag = SimpleNamespace(anchor={"page": 2, "content_sha256": KEY}, evidence={})
+    _set_value(plan, flag, {"action": "set_value", "value": "36.706", "unit": "g", "illegible": False})
+    assert plan.nodes[0].content == "<td>Tare weight (g)</td><td>36.706</td>"
 
 
 def test_choosing_table_b_puts_version_b_in_the_table_node():

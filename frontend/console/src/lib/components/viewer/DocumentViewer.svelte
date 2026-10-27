@@ -31,15 +31,6 @@
 	const KIND_LABEL = { page: 'Page', image: 'Image', table: 'Table', code: 'Code', text: 'Text', video: 'Video' } as const;
 	let hasImage = $derived((view.kind === 'page' && !showText) || view.kind === 'image');
 	let regionCount = $derived(view.kind === 'page' || view.kind === 'image' ? view.regions.length : 0);
-	/** Handwritten readings on the page, with their index among the regions so a click can focus the box. */
-	let handwriting = $derived(
-		view.kind === 'page' || view.kind === 'image'
-			? view.regions.map((r, index) => ({ ...r, index })).filter((r) => r.kind === 'handwriting')
-			: []
-	);
-	let contentEl = $state<HTMLElement | null>(null);
-	const focusRegion = (index: number) => contentEl?.querySelector<HTMLElement>(`[data-region-index="${index}"]`)?.focus();
-	const percent = (c: number | null | undefined) => (c === null || c === undefined ? '' : `${Math.round(c * 100)}%`);
 	const pagerLink =
 		'text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 items-center gap-1 rounded-md px-2 text-[0.8rem] font-medium no-underline transition-colors hover:no-underline';
 </script>
@@ -89,9 +80,6 @@
 				{#if regionCount}
 					<span class="text-muted-foreground flex items-center gap-3 text-xs">
 						<span class="flex items-center gap-1.5"><span class="border-info bg-info-bg size-2.5 rounded-[2px] border-2" aria-hidden="true"></span>cited</span>
-						<span class="flex items-center gap-1.5"
-							><span class="border-handwriting bg-handwriting-bg size-2.5 rounded-[2px] border-2" aria-hidden="true"></span>handwriting</span
-						>
 						<span class="flex items-center gap-1.5"><span class="border-hard bg-hard-bg size-2.5 rounded-[2px] border-2" aria-hidden="true"></span>flag</span>
 					</span>
 				{/if}
@@ -119,7 +107,7 @@
 				</span>
 			</div>
 
-			<div class={cn('bg-muted/40 p-4', hasImage && 'overflow-auto')} bind:this={contentEl}>
+			<div class={cn('bg-muted/40 p-4', hasImage && 'overflow-auto')}>
 				{#if view.kind === 'page'}
 					{#if showText}
 						<pre class="code-block bg-background m-0 text-[13px] leading-6">{view.text}</pre>
@@ -166,28 +154,6 @@
 					<p class="text-muted-foreground num m-0 mt-2 text-center text-xs">Starts at {seconds(view.t_ms)} s</p>
 				{/if}
 			</div>
-			{#if handwriting.length && hasImage}
-				<section class="border-t px-4 py-3" aria-label="Handwritten on this page">
-					<h3 class="eyebrow mb-1.5">Handwritten on this page</h3>
-					<ul class="m-0 grid list-none gap-1 p-0 text-sm">
-						{#each handwriting as hw (hw.index)}
-							<li>
-								<button
-									type="button"
-									class="hover:bg-muted flex w-full cursor-pointer items-baseline gap-2 rounded border-0 bg-transparent px-1.5 py-0.5 text-left"
-									onclick={() => focusRegion(hw.index)}
-								>
-									<span class="border-handwriting bg-handwriting-bg mt-0.5 size-2.5 shrink-0 rounded-[2px] border-2" aria-hidden="true"></span>
-									<span>{hw.label}</span>
-									<span class={cn('num font-mono text-xs', hw.confidence !== null && hw.confidence !== undefined && hw.confidence < 0.7 ? 'text-warn' : 'text-muted-foreground')}
-										>{percent(hw.confidence)}</span
-									>
-								</button>
-							</li>
-						{/each}
-					</ul>
-				</section>
-			{/if}
 		</div>
 
 		{#if translating}

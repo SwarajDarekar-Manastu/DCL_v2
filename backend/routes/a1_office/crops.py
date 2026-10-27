@@ -1,11 +1,8 @@
-"""Crop geometry and quality for A1 (figures, tables, handwriting) and the per-document contact sheet.
+"""Crop geometry for A1 (figures and tables) and the per-document contact sheet.
 
 - `clip_to_layout`: a figure or table box loses any overlap with another layout item that is not inside it
   (Docling's picture regions sometimes reach into the neighbouring text column; seen on the Moog brochure).
 - `pad_into_whitespace`: padding grows each side only up to the nearest other layout item on that side.
-- `crop_quality`: a crop must be at least MIN_SIDE_PX on each side at the crop resolution, cover at least
-  MIN_AREA_FRACTION of the page and stay under MAX_ASPECT:1; handwriting candidates that fail are dropped and
-  counted (ECSS-E-ST-35-06C p. 90 produced 20×60 px slivers of a table cell's border).
 - `contact_sheet`: every crop of a document as a thumbnail with its class and node ref, one PNG at
   `qa/{sha256}/crops.png`, so a person judges a document's crops in one image.
 - A figure covering FULL_PAGE_FRACTION of the page is a `full_page_image` (S5's M5 check).
@@ -18,10 +15,6 @@ from dataclasses import dataclass
 from backend.dispatcher.contract import PageBox
 
 CROP_DPI = 200  # stored crops: Pillow from layout boxes at 150–200 dpi (DECISIONS 2026-10-23)
-MIN_SIDE_PX = 48  # measured at GATE_DPI: 48 px at 300 dpi ≈ 11.5 pt, a small handwritten digit
-GATE_DPI = 300
-MIN_AREA_FRACTION = 0.003
-MAX_ASPECT = 12.0
 CONTAINED = 0.8  # share of another item's area inside the box for it to count as part of the figure
 FULL_PAGE_FRACTION = 0.85
 THUMB_PX = 220
@@ -82,40 +75,6 @@ def pad_into_whitespace(box: PageBox, others: Iterable[PageBox], pad: float) -> 
             bottom = min(bottom, o.y0)
     clamp = lambda v: min(1.0, max(0.0, v))  # noqa: E731
     return _with(box, x0=clamp(left), y0=clamp(top), x1=clamp(right), y1=clamp(bottom))
-
-
-@dataclass(frozen=True)
-class Quality:
-    ok: bool
-    reason: str | None = None
-
-
-def crop_quality(box: PageBox, page_size_pt: tuple[float, float], dpi: int = GATE_DPI) -> Quality:
-    width_px = (box.x1 - box.x0) * page_size_pt[0] * dpi / 72
-    height_px = (box.y1 - box.y0) * page_size_pt[1] * dpi / 72
-    if min(width_px, height_px) < MIN_SIDE_PX:
-        return Quality(False, f"side {min(width_px, height_px):.0f} px < {MIN_SIDE_PX} px")
-    if _area(box) < MIN_AREA_FRACTION - 1e-9:
-        return Quality(False, f"area {_area(box) * 100:.2f} % of the page < {MIN_AREA_FRACTION * 100:.1f} %")
-    aspect = max(width_px, height_px) / min(width_px, height_px)
-    if aspect >= MAX_ASPECT:
-        return Quality(False, f"aspect {aspect:.0f}:1 ≥ {MAX_ASPECT:.0f}:1")
-    return Quality(True)
-
-
-def inside_any(box: PageBox, containers: Iterable[PageBox], share: float = 0.5) -> bool:
-    """True when at least `share` of the box lies inside one of the containers (a table cell region)."""
-    for container in containers:
-        if container.page_no != box.page_no:
-            continue
-        overlap = _overlap(box, container)
-        if (
-            overlap
-            and _area(box)
-            and (overlap[2] - overlap[0]) * (overlap[3] - overlap[1]) / _area(box) >= share
-        ):
-            return True
-    return False
 
 
 def is_full_page(box: PageBox) -> bool:

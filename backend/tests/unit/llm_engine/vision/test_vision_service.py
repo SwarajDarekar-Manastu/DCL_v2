@@ -8,7 +8,7 @@ from backend.llm_engine.gemini_types import (
     StructuredOutputError,
     Text,
 )
-from backend.llm_engine.vision.schemas import HandwritingReading, PageTriage
+from backend.llm_engine.vision.schemas import HandwritingDoubt, PageTranscription
 from backend.llm_engine.vision.service import (
     EXTRACTION_CAPABILITIES,
     TASKS,
@@ -20,7 +20,8 @@ from backend.llm_engine.vision.service import (
 )
 
 VERSIONS = {
-    VisionCapability.TRANSCRIBE_PAGE: 2,  # v2 (2026-10-22): page furniture as its own field
+    VisionCapability.TRIAGE_PAGE: 2,  # v2 (2026-10-27): no handwriting boxes, no unused flags
+    VisionCapability.TRANSCRIBE_PAGE: 3,  # v3 (2026-10-27): handwriting, and the entries it is not sure of
     VisionCapability.READ_SCHEMATIC: 3,  # v3 (2026-10-26): schematic, mechanical drawing or flowchart first
     VisionCapability.DIGITIZE_PLOT: 2,  # v2 (2026-10-26): panels and log axes
     VisionCapability.INSPECT_HARDWARE_PHOTO: 2,  # v2 (2026-10-26): what the photo is for first
@@ -32,29 +33,24 @@ OTHER_PNG = Image(b"\x89PNG another crop", "image/png")
 
 TRIAGE = {
     "page_type": "scanned_form_with_handwriting",
-    "has_handwriting": True,
-    "has_tables": False,
     "has_figures": False,
     "is_rotated": False,
     "language": "en",
     "script": "latin",
-    "handwriting_regions": [{"box_2d": [100, 200, 140, 380], "kind": "value"}],
 }
-HANDWRITING = {
+DOUBT = {
     "field_label": "Injector orifice dia (mm)",
     "value_raw": "0.85",
-    "value_number": 0.85,
     "unit": "mm",
-    "confidence": 0.92,
+    "confidence": 0.8,
     "alternatives": ["0.86"],
     "illegible": False,
-    "notes": None,
 }
+PAGE = {"markdown": "# Run sheet", "language": "de", "confidence": 0.8, "doubtful": [DOUBT]}
 IMAGE_METADATA = {"subject": "Injector face", "setting": "test cell", "hardware": ["INJ-14"]}
 READINGS = {
     VisionCapability.TRIAGE_PAGE: TRIAGE,
-    VisionCapability.TRANSCRIBE_PAGE: {"markdown": "# Run sheet", "language": "de", "confidence": 0.8},
-    VisionCapability.TRANSCRIBE_HANDWRITING: HANDWRITING,
+    VisionCapability.TRANSCRIBE_PAGE: PAGE,
     VisionCapability.READ_TABLE_IMAGE: {
         "html_table": "<table><tr><td>1</td></tr></table>",
         "n_rows": 1,
@@ -107,9 +103,6 @@ READINGS = {
 CALLS = {
     VisionCapability.TRIAGE_PAGE: lambda s: s.triage_page(PNG, context="TP37 run sheet p.1"),
     VisionCapability.TRANSCRIBE_PAGE: lambda s: s.transcribe_page(PNG, context="p.3", language_hint="de"),
-    VisionCapability.TRANSCRIBE_HANDWRITING: lambda s: s.transcribe_handwriting(
-        PNG, field_label="Injector orifice dia (mm)", allowed_units=["mm"], context="TP37"
-    ),
     VisionCapability.READ_TABLE_IMAGE: lambda s: s.read_table_image(PNG, caption="Table 3", context="TP37"),
     VisionCapability.DIGITIZE_PLOT: lambda s: s.digitize_plot(PNG, caption="Figure 4", context="TP37"),
     VisionCapability.READ_SCHEMATIC: lambda s: s.read_schematic(PNG, caption=None, context="Rev C"),
@@ -149,7 +142,7 @@ def test_identical_crops_cost_once(make_service):
     assert second.reading == first.reading
     assert len(client.calls) == 1
     assert list(cache.objects) == [
-        f"_vision_cache/gemini-3.1-flash-lite/triage_page.v1/{first.input_sha256}.json"
+        f"_vision_cache/gemini-3.1-flash-lite/triage_page.v2/{first.input_sha256}.json"
     ]
 
 
@@ -162,32 +155,22 @@ def test_different_bytes_or_context_are_new_calls(make_service):
 
 
 def test_every_call_carries_the_ledger_context_doc_reference_and_prompt_version(make_service):
-    service, client, _ = make_service(HANDWRITING)
-    service.transcribe_handwriting(
-        PNG,
-        field_label="dia (mm)",
-        allowed_units=["mm"],
-        context="TP37",
-        doc_id="doc-9",
-        anchor="page:3:ab12",
-    )
+    service, client, _ = make_service(PAGE)
+    service.transcribe_page(PNG, context="TP37", language_hint="en", doc_id="doc-9", anchor="page:3:ab12")
     (context,) = client.contexts
-    assert (context.purpose, context.prompt_version) == (
-        "vision.transcribe_handwriting",
-        "transcribe_handwriting.v1",
-    )
+    assert (context.purpose, context.prompt_version) == ("vision.transcribe_page", "transcribe_page.v3")
     assert (context.doc_id, context.node_anchor) == ("doc-9", "page:3:ab12")
 
 
-def test_call_sends_the_prompt_file_the_crop_resolution_thinking_and_temperature_zero(make_service):
-    service, client, _ = make_service(HANDWRITING)
-    service.transcribe_handwriting(PNG, field_label="dia (mm)", allowed_units=["mm", "bar"], context="TP37")
+def test_call_sends_the_prompt_file_the_page_resolution_thinking_and_temperature_zero(make_service):
+    service, client, _ = make_service(PAGE)
+    service.transcribe_page(PNG, context="TP37", language_hint="de")
     call = client.calls[0]
     system, user = call["messages"]
     assert (system.role, user.role) == ("system", "user")
-    assert "never invent or complete a digit" in system.parts[0].text
+    assert "Never guess a character" in system.parts[0].text
     assert user.parts[0] == Text("About this file:\nnot known")
-    assert isinstance(user.parts[1], Text) and "Allowed units for this page: mm, bar" in user.parts[1].text
+    assert isinstance(user.parts[1], Text) and "Language hint from triage: de" in user.parts[1].text
     assert user.parts[2] == PNG
     assert (call["media_resolution"], call["thinking"], call["temperature"]) == (
         "high",
@@ -218,39 +201,22 @@ def test_video_keyframes_are_sent_after_their_timestamps(make_service):
     assert [parts[2].text, parts[4].text] == ["t = 0.00 s", "t = 0.50 s"]
 
 
-@pytest.mark.parametrize(
-    ("reply", "expected_number"),
-    [
-        ({**HANDWRITING, "illegible": True}, None),
-        ({**HANDWRITING, "value_raw": "0.8?", "value_number": 0.85}, None),
-        ({**HANDWRITING, "value_raw": "0,85 mm", "value_number": 0.85}, 0.85),
-    ],
-)
-def test_handwriting_never_returns_a_guessed_digit(make_service, reply, expected_number):
-    service, _, _ = make_service(reply)
-    reading = service.transcribe_handwriting(
-        PNG, field_label="dia", allowed_units=["mm"], context="TP37"
-    ).reading
-    assert reading.value_number == expected_number
-    assert 0.0 <= reading.confidence <= 1.0
-    assert reading.alternatives == ["0.86"]
-
-
-def test_illegible_handwriting_drops_the_raw_value_and_caps_confidence():
-    reading = HandwritingReading.model_validate({**HANDWRITING, "illegible": True, "confidence": 0.9})
-    assert (reading.value_raw, reading.value_number, reading.confidence) == (None, None, 0.5)
-
-
-@pytest.mark.parametrize("box", [[0, 0, 1001, 10], [500, 0, 400, 10], [0, 0, 10]])
-def test_box_2d_must_be_ordered_and_within_0_1000(box):
-    with pytest.raises(ValueError):
-        PageTriage.model_validate({**TRIAGE, "handwriting_regions": [{"box_2d": box, "kind": "value"}]})
+def test_the_page_reader_lists_its_doubtful_entries_and_an_illegible_one_has_no_value(make_service):
+    service, _, _ = make_service(PAGE)
+    (doubt,) = service.transcribe_page(PNG, context="TP37").reading.doubtful
+    assert (doubt.field_label, doubt.value_raw, doubt.alternatives) == (
+        "Injector orifice dia (mm)",
+        "0.85",
+        ["0.86"],
+    )
+    illegible = HandwritingDoubt.model_validate({**DOUBT, "illegible": True, "confidence": 0.9})
+    assert (illegible.value_raw, illegible.confidence) == (None, 0.5)
+    assert PageTranscription.model_validate({**PAGE, "doubtful": []}).doubtful == []
 
 
 def test_media_resolution_per_capability_follows_file_03_section_3():
     expected = {
         "triage_page": "low",
-        "transcribe_handwriting": "high",
         "transcribe_page": "high",
         "read_table_image": "high",
         "digitize_plot": "high",
@@ -312,7 +278,7 @@ def test_the_flag_sends_extraction_safety_only_for_extraction_capabilities(make_
 
 
 def test_the_config_value_names_capabilities_and_refuses_typos():
-    assert len(extraction_safety(True)) == 7
+    assert len(extraction_safety(True)) == 6
     assert extraction_safety(None) == extraction_safety(False) == extraction_safety([]) == frozenset()
     assert extraction_safety(["transcribe_page"]) == {VisionCapability.TRANSCRIBE_PAGE}
     with pytest.raises(ValueError, match="triage_page"):

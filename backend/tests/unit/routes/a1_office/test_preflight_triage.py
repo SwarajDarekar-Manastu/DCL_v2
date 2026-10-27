@@ -49,6 +49,11 @@ def test_fixtures_split_into_digital_and_image_only(name, image_only):
     assert result.page(1).image_only is image_only
 
 
+def test_image_cover_is_the_share_of_the_page_under_images():
+    assert preflight(fixture("german_datasheet")).page(1).image_cover == 0.0
+    assert preflight(fixture("rotated_scan")).page(1).image_cover == 1.0
+
+
 def test_encrypted_pdf_fails_with_the_reason():
     with pytest.raises(PreflightFailure) as caught:
         preflight(blank_pdf(1, password="secret"))
@@ -95,8 +100,6 @@ def reading(page_type, script="latin", language="en", **kw):
     return PageTriage.model_validate(
         {
             "page_type": page_type,
-            "has_handwriting": False,
-            "has_tables": False,
             "has_figures": kw.get("figures", False),
             "is_rotated": kw.get("rotated", False),
             "language": language,
@@ -155,6 +158,15 @@ def test_digital_page_needs_no_ocr_and_the_call_names_the_page():
     assert (decision.page_type, decision.ocr_engine, decision.language) == (PageType.DIGITAL_TEXT, None, "de")
     assert vision.calls == [("APS - Library / MT-1 · page 1 of 1", "page:1:")]
     assert decision.meta()["prompt_version"] == "triage_page.v1"
+
+
+def test_a_photographed_form_is_read_whole_and_a_typed_page_called_a_form_is_not():
+    """Triage called typed pages handwritten forms (Integration Sheet p2): the image cover decides."""
+    form = reading("scanned_form_with_handwriting")
+    (scan,) = triage_pages(preflight(fixture("rotated_scan")), Vision([form]), context="TP07 / run sheet")
+    (typed,) = triage_pages(preflight(fixture("german_datasheet")), Vision([form]), context="APS - Library")
+    assert (scan.read_whole, typed.read_whole) == (True, False)
+    assert scan.meta()["read_whole"] is True and "handwriting_regions" not in scan.meta()
 
 
 def test_without_cloud_permission_no_triage_call_is_made():

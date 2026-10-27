@@ -30,9 +30,6 @@ class FakeVision:
     def transcribe_page(self, image, **kw):
         return self._out("transcribe_page", schemas.PageTranscription, **kw)
 
-    def transcribe_handwriting(self, image, **kw):
-        return self._out("transcribe_handwriting", schemas.HandwritingReading, **kw)
-
     def read_table_image(self, image, **kw):
         return self._out("read_table_image", schemas.TableReading, **kw)
 

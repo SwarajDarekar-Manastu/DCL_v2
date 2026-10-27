@@ -2895,7 +2895,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "cited" | "handwriting" | "flag";
+            kind: "cited" | "flag";
             /**
              * Label
              * @default

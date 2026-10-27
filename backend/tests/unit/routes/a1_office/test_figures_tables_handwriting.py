@@ -1,4 +1,5 @@
 import io
+import re
 
 import pytest
 
@@ -7,10 +8,10 @@ from reportlab.lib.pagesizes import A4  # noqa: E402
 from reportlab.pdfgen import canvas  # noqa: E402
 
 from backend.dispatcher.contract import PageBox, ProcessedNode  # noqa: E402
-from backend.llm_engine.vision.schemas import PageType, SchematicReading, Script  # noqa: E402
+from backend.llm_engine.vision.schemas import HandwritingDoubt, SchematicReading  # noqa: E402
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType  # noqa: E402
 from backend.routes.a1_office.figures import read_figures, render_schematic  # noqa: E402
-from backend.routes.a1_office.handwriting import nearest_label, region_box, transcribe_regions  # noqa: E402
+from backend.routes.a1_office.handwriting import page_doubts  # noqa: E402
 from backend.routes.a1_office.tables_qa import (  # noqa: E402
     agreement,
     check_tables,
@@ -19,7 +20,6 @@ from backend.routes.a1_office.tables_qa import (  # noqa: E402
     qa_reasons,
     units_by_column,
 )
-from backend.routes.a1_office.triage import PageDecision  # noqa: E402
 from backend.tests.unit.routes.vision_readings import with_image_metadata  # noqa: E402
 
 SHA = "c" * 64
@@ -335,143 +335,68 @@ def test_an_unusable_reading_keeps_the_figure_with_its_caption_and_flags_it(fake
     assert len(unusable_flags) == 1 and unusable_flags[0].flag_type is FlagType.LOW_CONFIDENCE_EXTRACTION
 
 
-# ---------------------------------------------------------------- handwriting
+# ---------------------------------------------------------------- handwritten pages
 
-LABELS = [
-    node("t0", NodeType.CHILD, "TEST CELL RUN SHEET", (0.1, 0.10, 0.45, 0.13), ordinal=0),
-    node("t1", NodeType.CHILD, "Injector orifice dia (mm):", (0.1, 0.22, 0.40, 0.25), ordinal=1),
-    node("t2", NodeType.CHILD, "Tare weight (g):", (0.1, 0.34, 0.30, 0.37), ordinal=2),
+PAGE_URI = f"s3://dcl-assets/pages/{SHA}/0002.png"
+PAGE_NODES = [
+    node("vlm/p2/0", NodeType.CHILD, "### Post analysis of Catalyst", page=2, source=NodeSource.VLM),
+    node(
+        "vlm/p2/1",
+        NodeType.CHILD,
+        "<table><tr><td>Loss % of Catalyst</td><td>6.8%</td></tr>"
+        "<tr><td>Tare weight (g)</td><td>[illegible]</td></tr></table>",
+        page=2,
+        source=NodeSource.VLM,
+    ),
 ]
 
 
-def triage(regions):
-    return [
-        PageDecision(
-            page_no=1,
-            page_type=PageType.SCANNED_FORM_WITH_HANDWRITING,
-            language="en",
-            script=Script.LATIN,
-            is_rotated=False,
-            image_only=True,
-            ocr_engine="tesseract",
-            handwriting_regions=regions,
-        )
+def doubt(label, value, confidence=0.85, illegible=False, alternatives=()):
+    return HandwritingDoubt(
+        field_label=label,
+        value_raw=value,
+        confidence=confidence,
+        illegible=illegible,
+        alternatives=list(alternatives),
+    )
+
+
+def test_each_doubtful_entry_is_one_flag_that_shows_the_page():
+    nodes, flags = page_doubts(
+        PAGE_NODES,
+        2,
+        [
+            doubt("Loss % of Catalyst", "6.8%", alternatives=["6.81 %"]),
+            doubt("Tare weight (g)", None, 0.3, True),
+        ],
+        page_uri=PAGE_URI,
+        critical=[re.compile(r"tare\s+weight", re.IGNORECASE)],
+    )
+    assert [(f.flag_type, f.severity, f.anchor.page) for f in flags] == [
+        (FlagType.LOW_CONFIDENCE_EXTRACTION, FlagSeverity.SOFT, 2),
+        (FlagType.LOW_CONFIDENCE_EXTRACTION, FlagSeverity.HARD, 2),
     ]
-
-
-def region(ymin, xmin, ymax, xmax, kind="value"):
-    from backend.llm_engine.vision.schemas import HandwritingRegion
-
-    return HandwritingRegion(box_2d=[ymin, xmin, ymax, xmax], kind=kind)
-
-
-def test_nearest_label_left_on_the_line_then_above():
-    assert nearest_label(region_box(1, [220, 420, 250, 520]), LABELS).ref == "t1"
-    assert nearest_label(region_box(1, [380, 100, 400, 300]), LABELS).ref == "t2"
-    assert nearest_label(region_box(1, [800, 600, 850, 900]), LABELS) is None
-
-
-def reading(value, confidence, illegible=False):
-    return {
-        "field_label": "x",
-        "value_raw": value,
-        "value_number": None,
-        "unit": None,
-        "confidence": confidence,
-        "alternatives": ["0.86"],
-        "illegible": illegible,
-        "notes": None,
-    }
-
-
-def run_hw(fake_vision, memory_store, readings, regions, critical=()):
-    vision = fake_vision(transcribe_handwriting=lambda kw: readings[kw["field_label"]])
-    return transcribe_regions(
-        LABELS,
-        triage(regions),
-        pdf_bytes=PDF,
-        blob_sha256=SHA,
-        vision=vision,
-        context="APU / TP07",
-        test_plan_id="TP07",
-        doc_id="d1",
-        cloud_allowed=True,
-        critical_field_patterns=critical,
-        put_asset=memory_store("s3://dcl-assets/"),
-    ), vision
-
-
-def test_handwritten_value_lands_after_its_label_with_confidence(fake_vision, memory_store):
-    result, vision = run_hw(
-        fake_vision,
-        memory_store,
-        {"Injector orifice dia (mm):": reading("0.85", 0.92)},
-        [region(220, 420, 250, 520)],
+    shown = flags[0].evidence.crops[0]
+    assert (shown.crop_uri, shown.printed_label, shown.model_value, shown.alternatives) == (
+        PAGE_URI,
+        "Loss % of Catalyst",
+        "6.8%",
+        ["6.81 %"],
     )
-    assert [n.ref for n in result.nodes] == ["t0", "t1", "hw/p1_hw0", "t2"]
-    hw = result.nodes[2]
-    assert hw.content == "Injector orifice dia (mm): [HW 0.85 | conf 0.92]"
-    assert (hw.source, hw.confidence, hw.breadcrumb) == (NodeSource.VLM, 0.92, "Run sheet")
-    assert vision.calls[0][1]["allowed_units"] == ["g", "mm"]
-    assert result.flags == [] and result.assets[0].kind is AssetKind.HANDWRITING_CROP
+    assert flags[1].suggested_resolution.resolution.illegible is True
+    assert [e["label"] for e in nodes[1].metadata["handwriting"]] == ["Loss % of Catalyst", "Tare weight (g)"]
+    assert [e["key"] for e in nodes[1].metadata["handwriting"]] == [f.anchor.content_sha256 for f in flags]
+    assert nodes[0].metadata == {}
 
 
-def test_low_confidence_is_soft_and_a_critical_field_is_hard(fake_vision, memory_store):
-    readings = {
-        "Injector orifice dia (mm):": reading("0.8?", 0.6),
-        "Tare weight (g):": reading(None, 0.2, True),
-    }
-    result, _ = run_hw(
-        fake_vision,
-        memory_store,
-        readings,
-        [region(220, 420, 250, 520), region(340, 320, 370, 420)],
-        critical=[r"tare\s+weight"],
-    )
-    severities = sorted(f.severity for f in result.flags)
-    assert severities == [FlagSeverity.HARD, FlagSeverity.SOFT]
-    hard = next(f for f in result.flags if f.severity == FlagSeverity.HARD)
-    assert hard.evidence.crops[0].printed_label == "Tare weight (g):"
-    assert hard.suggested_resolution.resolution.illegible is True
-    assert any(n.content == "Tare weight (g): [HW illegible]" for n in result.nodes)
+def test_an_entry_keeps_its_anchor_on_a_rebuild_and_a_repeated_label_gets_its_own():
+    entries = [doubt("Date", "30/05/2026"), doubt("Date", "31/05/2026")]
+    first = page_doubts(PAGE_NODES, 2, entries, page_uri=PAGE_URI, critical=[])[1]
+    again = page_doubts(PAGE_NODES, 2, entries, page_uri=PAGE_URI, critical=[])[1]
+    assert [f.fingerprint for f in first] == [f.fingerprint for f in again]
+    assert first[0].fingerprint != first[1].fingerprint
 
 
-def test_signatures_are_not_transcribed(fake_vision, memory_store):
-    result, vision = run_hw(fake_vision, memory_store, {}, [region(900, 100, 950, 400, kind="signature")])
-    assert vision.calls == [] and [n.ref for n in result.nodes] == ["t0", "t1", "t2"]
-
-
-def test_slivers_and_table_cells_are_not_handwriting(fake_vision, memory_store):
-    import dataclasses
-
-    from backend.dispatcher.contract import PageBox, ProcessedNode
-
-    sliver = region(500, 400, 560, 408)  # 8/1000 of the width: a cell border
-    in_table = region(620, 300, 680, 500)
-    table = ProcessedNode(
-        ref="tab1",
-        ordinal=9,
-        source=NodeSource.PRINTED,
-        node_type=NodeType.TABLE,
-        content="| a | b |",
-        page_no=1,
-        bboxes=[PageBox(page_no=1, x0=0.1, y0=0.6, x1=0.9, y1=0.8)],
-    )
-    vision = fake_vision(transcribe_handwriting=lambda kw: pytest.fail("no call for a rejected candidate"))
-    decisions = [dataclasses.replace(triage([sliver, in_table])[0], has_handwriting=False)]
-    result = transcribe_regions(
-        [*LABELS, table],
-        decisions,
-        pdf_bytes=PDF,
-        blob_sha256=SHA,
-        vision=vision,
-        context="ECSS",
-        test_plan_id=None,
-        doc_id="d1",
-        cloud_allowed=True,
-        critical_field_patterns=(),
-        put_asset=memory_store("s3://dcl-assets/"),
-    )
-    reasons = [r["reason"] for r in result.rejected]
-    assert len(reasons) == 2 and "px" in reasons[0] and "table" in reasons[1]
-    assert result.assets == [] and vision.calls == []
+def test_an_entry_whose_text_is_not_on_the_page_is_kept_on_its_first_node():
+    nodes, _ = page_doubts(PAGE_NODES, 2, [doubt("Remark", "see log")], page_uri=PAGE_URI, critical=[])
+    assert [e["value_raw"] for e in nodes[0].metadata["handwriting"]] == ["see log"]

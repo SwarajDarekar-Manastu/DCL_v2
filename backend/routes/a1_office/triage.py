@@ -1,10 +1,16 @@
 """A1.2 page triage (file 03 §A1.2): decide what each page costs and which OCR engine reads it.
 
-Signals per page: the pre-flight text layer (characters, garbage ratio) and one Flash-Lite `triage_page`
-call on a 768 px thumbnail, which also reports language, script, rotation and handwriting regions. The
+Signals per page: the pre-flight text layer (characters, garbage ratio, image cover) and one Flash-Lite
+`triage_page` call on a 768 px thumbnail, which also reports language, script and rotation. The
 deterministic signals bound the model: an image-only page is never `digital_*`, and a page whose text layer
 is good is never `scanned_printed` (the scan already carries usable text). Without cloud permission for the
 root the page type comes from the signals alone.
+
+`read_whole`: a page the model calls a handwritten form or notes whose images cover at least
+PAPER_IMAGE_MIN_COVER of it is a scan or photo of paper, read whole by `transcribe_page` (A1.7). The cover
+keeps typed pages out: triage called three typed pages handwritten forms (Thruster Integration Sheet p2,
+TP23 plan p1, Catalyst-3mm p1, image cover ≤ 0.07) while every photographed form covers ≥ 0.35 (TP24 p6–p12
+0.35, TP07 sheets 0.94; measured 2026-10-27).
 
 Scanned pages are grouped by OCR engine for A1.3, because Docling takes one engine and language list per
 run: Tesseract for Latin, Cyrillic, Devanagari and Arabic; RapidOCR for CJK
@@ -12,10 +18,10 @@ run: Tesseract for Latin, Cyrillic, Devanagari and Arabic; RapidOCR for CJK
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from backend.llm_engine.gemini_types import Image
-from backend.llm_engine.vision.schemas import HandwritingRegion, PageTriage, PageType, Script
+from backend.llm_engine.vision.schemas import PageTriage, PageType, Script
 from backend.routes.a1_office.preflight import Preflight, render_page
 
 THUMBNAIL_LONG_SIDE_PX = 768
@@ -31,6 +37,8 @@ DIGITAL_TYPES = frozenset({PageType.DIGITAL_TEXT, PageType.DIGITAL_WITH_FIGURES,
 OCR_TYPES = frozenset(
     {PageType.SCANNED_PRINTED, PageType.SCANNED_FORM_WITH_HANDWRITING, PageType.HANDWRITTEN_NOTES}
 )
+HANDWRITTEN_TYPES = frozenset({PageType.SCANNED_FORM_WITH_HANDWRITING, PageType.HANDWRITTEN_NOTES})
+PAPER_IMAGE_MIN_COVER = 0.25
 
 
 @dataclass(frozen=True)
@@ -42,10 +50,7 @@ class PageDecision:
     is_rotated: bool
     image_only: bool
     ocr_engine: str | None
-    handwriting_regions: list[HandwritingRegion] = field(default_factory=list)
-    has_handwriting: bool = False
-    has_tables: bool = False
-    has_figures: bool = False
+    read_whole: bool = False
     triage_source: str = "signals"
     prompt_version: str | None = None
 
@@ -58,9 +63,9 @@ class PageDecision:
             "is_rotated": self.is_rotated,
             "image_only": self.image_only,
             "ocr_engine": self.ocr_engine,
+            "read_whole": self.read_whole,
             "triage_source": self.triage_source,
             "prompt_version": self.prompt_version,
-            "handwriting_regions": [r.model_dump(mode="json") for r in self.handwriting_regions],
         }
 
 
@@ -117,10 +122,7 @@ def triage_pages(
                 is_rotated=reading.is_rotated if reading else False,
                 image_only=signals.image_only,
                 ocr_engine=ocr_engine(page_type, script, table),
-                handwriting_regions=list(reading.handwriting_regions) if reading else [],
-                has_handwriting=reading.has_handwriting if reading else False,
-                has_tables=reading.has_tables if reading else False,
-                has_figures=reading.has_figures if reading else False,
+                read_whole=page_type in HANDWRITTEN_TYPES and signals.image_cover >= PAPER_IMAGE_MIN_COVER,
                 triage_source="vision+signals" if reading else "signals",
                 prompt_version=prompt_version,
             )

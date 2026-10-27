@@ -71,7 +71,7 @@ class Region(BaseModel):
     """A box on an image, normalized to 0..1 of the rendered image, origin top-left."""
 
     bbox: tuple[float, float, float, float] = Field(description="x0, y0, x1, y1 in 0..1")
-    kind: Literal["cited", "handwriting", "flag"]
+    kind: Literal["cited", "flag"]
     label: str = ""
     confidence: float | None = None
 
@@ -324,34 +324,6 @@ def _first_nodes(session: Session, doc_id: UUID, limit: int = 3) -> list[Documen
     return list(session.scalars(stmt.limit(limit)))
 
 
-def _handwriting_regions(session: Session, doc_id: UUID, page_no: int) -> list[Region]:
-    """Every handwritten reading on the page (Route A1 writes them to node metadata `handwriting`)."""
-    rows = session.scalars(
-        select(DocumentNode).where(DocumentNode.doc_id == doc_id, DocumentNode.page_no == page_no)
-    )
-    regions = []
-    for node in rows:
-        for hw in (node.metadata_ or {}).get("handwriting") or []:
-            box = hw.get("bbox") or {}
-            if box.get("page_no", page_no) != page_no or not all(k in box for k in ("x0", "y0", "x1", "y1")):
-                continue
-            reading = (
-                "illegible"
-                if hw.get("illegible")
-                else " ".join(str(p) for p in (hw.get("value_raw"), hw.get("unit")) if p not in (None, ""))
-            )
-            label = f"{hw['label']}: {reading}" if hw.get("label") else reading
-            regions.append(
-                Region(
-                    bbox=(box["x0"], box["y0"], box["x1"], box["y1"]),
-                    kind="handwriting",
-                    label=label or "handwriting",
-                    confidence=hw.get("confidence"),
-                )
-            )
-    return regions
-
-
 def _image_view(asset: Asset, node: DocumentNode, presign: PresignFn) -> ImageView:
     figure_class = (node.metadata_ or {}).get("class")
     if asset.kind == AssetKind.DIAGRAM_RENDER or figure_class in SCHEMATIC_CLASSES:
@@ -398,7 +370,7 @@ def _view(
             image_url=presign(render.minio_uri),
             width=render.width,
             height=render.height,
-            regions=[*boxes, *_handwriting_regions(session, doc.doc_id, page_no or 1)],
+            regions=boxes,
             text=page_text,
         )
     first = nodes[0] if nodes else None

@@ -33,13 +33,10 @@ def fixture(name):
 def triage(page_type="digital_text", language="en", script="latin"):
     return {
         "page_type": page_type,
-        "has_handwriting": False,
-        "has_tables": True,
         "has_figures": False,
         "is_rotated": False,
         "language": language,
         "script": script,
-        "handwriting_regions": [],
     }
 
 
@@ -168,6 +165,69 @@ def test_scanned_page_with_low_ocr_goes_to_transcribe_page(fake_vision, memory_s
     assert [c[0] for c in vision.calls] == ["triage_page", "transcribe_page"]
     assert [n.content for n in doc.nodes] == ["# スラスタ仕様書", "推力 1.0 N、比推力 160 s"]
     assert {n.source for n in doc.nodes} == {NodeSource.VLM} and doc.document.language == "ja"
+
+
+LOSS_TABLE = "<table><tr><td>Loss % of Catalyst</td><td>6.8%</td></tr></table>"
+
+
+def test_a_photographed_form_is_read_whole_and_its_doubtful_entries_go_to_a_person(fake_vision, memory_store):
+    """TP07 DE p2: Docling's OCR passed the score but read a handwritten table as two header cells."""
+    from docling_core.types.doc import DoclingDocument
+
+    name, data = fixture("rotated_scan")  # an image-only page: images cover all of it
+    vision = fake_vision(
+        triage_page=triage("scanned_form_with_handwriting"),
+        transcribe_page={
+            "markdown": f"Post analysis of Catalyst\n\n{LOSS_TABLE}",
+            "language": "en",
+            "confidence": 0.95,
+            "doubtful": [
+                {
+                    "field_label": "Loss % of Catalyst",
+                    "value_raw": "6.8%",
+                    "unit": "%",
+                    "alternatives": ["6.81 %"],
+                    "confidence": 0.85,
+                    "illegible": False,
+                }
+            ],
+        },
+    )
+    doc = process_pdf(
+        data,
+        blob_sha256=SHA,
+        file_name=name,
+        folder=folder("APU", "Test Campaign 2/TP07", name),
+        vision=vision,
+        stores=stores(memory_store),
+        convert=lambda pdf, run, n: RunResult(run, DoclingDocument(name="form"), {1: {"ocr_score": 0.9}}),
+    )
+    assert [c[0] for c in vision.calls] == ["triage_page", "transcribe_page"]
+    assert [n.content for n in doc.nodes if n.node_type is NodeType.CHILD][-1].endswith(
+        "<td>6.8%</td></tr></table>"
+    )
+    (flag,) = [f for f in doc.flags if f.flag_type == FlagType.LOW_CONFIDENCE_EXTRACTION]
+    assert (flag.severity, flag.anchor.page, flag.evidence.crops[0].crop_uri) == (
+        FlagSeverity.SOFT,
+        1,
+        f"s3://dcl-assets/pages/{SHA}/0001.png",
+    )
+    assert not [a for a in doc.assets if a.kind is not AssetKind.PAGE_RENDER]  # nothing is cropped
+
+
+@docling_models
+def test_a_typed_page_triage_calls_a_form_stays_with_docling(fake_vision, memory_store):
+    name, data = fixture("german_datasheet")  # a text layer and no images
+    vision = fake_vision(triage_page=triage("scanned_form_with_handwriting", "de"))
+    process_pdf(
+        data,
+        blob_sha256=SHA,
+        file_name=name,
+        folder=folder("APS - Library", "Datasheets", name, SourceOrigin.EXTERNAL_KEPT),
+        vision=vision,
+        stores=stores(memory_store),
+    )
+    assert [c[0] for c in vision.calls] == ["triage_page"]
 
 
 def test_without_cloud_a_low_page_keeps_its_ocr_and_is_flagged(fake_vision, memory_store):
@@ -343,7 +403,7 @@ def test_formula_enrichment_beyond_the_cap_is_flagged_and_stage_timings_reach_th
     assert (flag.flag_type, flag.severity) == (FlagType.LOW_CONFIDENCE_EXTRACTION, FlagSeverity.SOFT)
     assert "skipped for 7 of 10 items (cap 3 per document)" in flag.suggested_resolution.rationale
     timings = json.loads(store.put_cir.objects["timings.json"])
-    assert {"preflight", "triage", "convert", "figures", "tables", "handwriting", "page_renders"} <= set(
+    assert {"preflight", "triage", "convert", "page_renders", "transcribe_page", "figures", "tables"} <= set(
         timings["stages"]
     )
     assert timings["enrichment"] == {"limit": 3, "used": 3, "skipped": 7}

@@ -114,7 +114,7 @@ Everything a parser learns is written to `dcl-cir/{blob_sha256}/{route}/v{parser
 
 | Route | CIR content |
 |-------|-------------|
-| A1 | `docling.json` (lossless DoclingDocument with provenance bboxes), `pages/{n}.txt`, `pages/{n}.meta.json` (page_type, confidence scores, OCR engine), `tables/{id}.html`, `figures/{id}.json` (classification + VLM output), `handwriting/{id}.json`, `page_hashes.json` |
+| A1 | `docling.json` (lossless DoclingDocument with provenance bboxes), `pages/{n}.txt`, `pages/{n}.meta.json` (page_type, confidence scores, OCR engine), `tables/{id}.html`, `figures/{id}.json` (classification + VLM output), `page_hashes.json` |
 | A2 | `assembled.md` (post-macro Markdown), `structure.json` (section tree with labels/refs), `source_map.json` (markdown line → source file:line), `page_map.json` (section → PDF page, when a twin exists) |
 | B | `ast.json` (symbols, ranges, parents, imports, docstrings), `module_header.md` |
 | C | `schema.json` (columns, raw units, mapped names, conversions, time base, t0), `stats.json`, Parquet lives in `dcl-telemetry` and is referenced |
@@ -133,9 +133,8 @@ All routes that need a vision model call the same component, `VisionService`, so
 
 | Capability | Model | Input | Output schema (structured output) |
 |-----------|-------|-------|------------------------------------|
-| `triage_page` | Flash-Lite | page thumbnail (≤ 768 px long side) + 1-line context | `{page_type, has_handwriting, has_tables, has_figures, is_rotated, language (BCP-47), script (latin · cyrillic · devanagari · arabic · cjk · mixed), handwriting_regions:[{box_2d, kind}]}` |
-| `transcribe_page` | 3.8 Flash, media_resolution high | full page image, any script; used when OCR stays below threshold after the second engine | `{markdown, language, confidence, illegible_regions:[box_2d]}` |
-| `transcribe_handwriting` | 3.8 Flash, media_resolution high | crop (+20 px padding) + nearest printed label + unit hint | `{field_label, value_raw, value_number, unit, confidence 0–1, alternatives[], illegible:boolean, notes}` |
+| `triage_page` | Flash-Lite | page thumbnail (≤ 768 px long side) + 1-line context | `{page_type, has_figures, is_rotated, language (BCP-47), script (latin · cyrillic · devanagari · arabic · cjk · mixed)}` (v2, 2026-10-27: no handwriting boxes; the box list ran away on TP24 p12 and failed the file) |
+| `transcribe_page` | 3.8 Flash, media_resolution high | full page image, printed and handwritten, any script; used when OCR stays below threshold after the second engine, and for a scan or photo of a hand-filled form (A1.7) | `{markdown, language, confidence, doubtful:[{field_label, value_raw, unit, alternatives[], confidence 0–1, illegible}], furniture[]}` (v3, 2026-10-27) |
 | `read_table_image` | 3.8 Flash | table crop | `{html_table, n_rows, n_cols, header_rows, units_by_column[], confidence}` |
 | `digitize_plot` | 3.8 Flash | figure crop + caption | `{plot_type, x_axis:{label,unit,range}, y_axes:[…], series:[{name, key_points:[{x,y}], trend}], annotations[], confidence}` |
 | `read_schematic` | 3.8 Flash | figure crop | `{components:[{tag, type, label}], connections:[{from,to,medium,label}], notes}` |
@@ -146,7 +145,7 @@ All routes that need a vision model call the same component, `VisionService`, so
 
 **One shared preamble and the file's own metadata (user, 2026-10-24).** Every capability prompt is preceded by one general prompt, `vision/image_context.v2` (what the library is, how a file's origin bears on what an image shows, the rules for every image), and by the metadata of the file the image belongs to, taken from its ingestion record: file name, folder path, site (synced root), the file it was taken out of, test plan, run and hardware from the folder, origin, created and last-modified dates, and up to five other folders holding the same bytes (owner is not recorded at ingestion). The runner builds this per document (`runner.file_metadata`) and hands it to the `VisionService` of that document run, so each file's calls carry its own metadata, never a shared block. Only facts the commit does not rewrite go in (the document title is derived at commit, so it would change the cache key between the first run and a re-run). Each capability keeps its own task, schema, model tier and resolution; the five that describe an image (`digitize_plot`, `read_schematic`, `inspect_hardware_photo`, `describe_slide`, `video_timeline`) always return `image_metadata {subject, setting, hardware[], test_context, from_metadata}` (a required field: v1 left it optional and the model dropped it on hardware photos), which stays with the image's node (in `structured_reading` for figures and photos, in the node metadata for slides and the video timeline, in the catalog for meeting slide frames). No call is added. Because the metadata is part of the input, the cache in rule 2 below dedupes identical images within a file, not across files.
 
-**Media resolution per capability** (Gemini 3 per-part `mediaResolution`; tokens per image low 280 / medium 560 / high 1120): `triage_page`, `classify_image` → `low`; `transcribe_handwriting`, `transcribe_page`, `read_table_image`, `digitize_plot`, `read_schematic` → `high`; `inspect_hardware_photo`, `describe_slide` → `medium` (a `relook` at answer time may use `high`); whole PDF pages (rare) → `medium`; `video_timeline` → `medium` (user, 2026-10-24: a small glow at the nozzle is the ignition the brightness check misses), `high` only when text in frames must be read. The M5 calibration study compares `medium` and `high` on the handwriting set and may lower the handwriting default.
+**Media resolution per capability** (Gemini 3 per-part `mediaResolution`; tokens per image low 280 / medium 560 / high 1120): `triage_page`, `classify_image` → `low`; `transcribe_page`, `read_table_image`, `digitize_plot`, `read_schematic` → `high`; `inspect_hardware_photo`, `describe_slide` → `medium` (a `relook` at answer time may use `high`); whole PDF pages (rare) → `medium`; `video_timeline` → `medium` (user, 2026-10-24: a small glow at the nozzle is the ignition the brightness check misses), `high` only when text in frames must be read. The handwriting calibration (2026-10-27, 18 reads of 5 handwritten pages, each disputed value checked against the image) keeps `transcribe_page` at `high`: `low` miscopied many digits of the TP24 p7 temperature table, `medium` three (283.53 → 289.53, a serial 2026 → 2020) and marked none of them doubtful, while `high` read every one right, for about 560 more input tokens (≈ $0.0003) a page.
 
 Rules:
 1. Every call is logged to `llm_calls` with `doc_id`, `purpose`, token counts.
@@ -169,8 +168,8 @@ flowchart TD
     S3 --> T[A1.4 Tables QA<br/>spans, continuation merge,<br/>units, VLM fallback]
     S3 --> E[A1.5 Equations → LaTeX]
     S3 --> F[A1.6 Figures<br/>classify → plot / schematic / photo / skip]
-    S2 --> H[A1.7 Handwriting regions<br/>crop → transcribe → associate label]
-    T & E & F & H --> M[A1.8 Merge into page model<br/>printed + HW annotations + figure nodes]
+    S2 --> H[A1.7 Handwritten pages<br/>scan or photo of a filled form → read whole]
+    T & E & F & H --> M[A1.8 Merge into page model<br/>printed + handwritten text + figure nodes]
     M --> SEC[A1.11 Section tree & breadcrumbs]
     SEC --> OUT[CIR + nodes + assets + flags]
 ```
@@ -201,8 +200,8 @@ Signals per page: text-layer density, Docling `confidence.pages[n]` (`layout_sco
 | `digital_with_figures` | reports with plots | Docling + figure sub-pipeline |
 | `table_dense` | data appendices | Docling TableFormer "accurate" mode + table QA |
 | `scanned_printed` | old ECSS scans, faxed reports, scanned foreign-language brochures | Docling with the OCR engine chosen by script (A1.3); second engine if `ocr_score < 0.6`; `transcribe_page` by Gemini if still low |
-| `scanned_form_with_handwriting` | test-cell run sheets, checklists | Docling OCR for printed + handwriting regions from triage boxes |
-| `handwritten_notes` | lab notebook pages | Whole page to `transcribe_handwriting` in region tiles (3×3 grid with overlap) — printed OCR skipped |
+| `scanned_form_with_handwriting` | test-cell run sheets, checklists | Read whole by `transcribe_page` (A1.7) when images cover ≥ 25 % of the page; Docling OCR stays as the fallback |
+| `handwritten_notes` | lab notebook pages | Same as `scanned_form_with_handwriting` |
 | `drawing_schematic` | P&IDs, CAD views in PDF | `read_schematic` on the page image; text layer kept if present |
 | `photo_page` | photo appendices | Each embedded image → Route D logic (`inspect_hardware_photo`) |
 | `blank_or_separator` | — | Skipped; recorded |
@@ -215,7 +214,7 @@ The page type and the three signals are written to `pages/{n}.meta.json` and sho
 - **OCR engine per script.** Docling takes one engine and one language list per conversion run, so scanned pages are grouped by the script the triage call reported and each group is converted separately: Tesseract (`osd` orientation/script detection plus the installed traineddata) for Latin, Cyrillic, Devanagari and Arabic scripts; RapidOCR PP-OCRv5/v6 for Chinese, Japanese and Korean. The language list passed to the engine comes from the triage result (`iso:` tags). Pages whose `ocr_score` stays below 0.6 are retried with EasyOCR (Latin scripts); pages that still fail go whole to `transcribe_page` (Gemini 3.8 Flash, any script). Engine, language and pass are recorded in `pages/{n}.meta.json`. Unsupported script with no engine configured → `LOW_CONFIDENCE_EXTRACTION` SOFT on the page with the Gemini transcription used as content.
 - `do_table_structure=True`, TableFormer mode `ACCURATE`.
 - Enrichments on: `do_formula_enrichment` (LaTeX), `do_code_enrichment`, `do_picture_classification`. Picture description via Docling's remote API option is **not** used; our `VisionService` calls Gemini directly so that prompts and schemas are ours and logged.
-- `generate_page_images=True` at 150 dpi for UI renders (stored as assets), and figure/handwriting crops are re-rendered from the PDF at 300 dpi for Gemini.
+- `generate_page_images=True` at 150 dpi for UI renders (stored as assets); figure and table crops are re-rendered from the PDF at 200 dpi, and a page read whole goes to Gemini at 200 dpi.
 - Headers/footers: Docling labels them; they are excluded from node text but the footer text is scanned for `document_id`, `revision`, `date`, `classification` tokens (e.g., `ECSS-E-ST-35C Rev.1`, `Issue 2 Rev 0`, `CONFIDENTIAL`) and written to deterministic metadata.
 
 ### A1.4 Tables
@@ -246,18 +245,20 @@ Docling's picture classifier labels each figure. Routing:
 
 Every figure crop is an asset (`dcl-assets/figures/{sha256}/{figure_id}.png`) so the UI shows the original next to the structured reading.
 
-### A1.7 Handwriting
+### A1.7 Handwritten pages (revised 2026-10-27)
 
-1. **Region detection** (three sources, unioned): Flash-Lite triage boxes (`handwriting_regions`, 0–1000 normalized → pixel bboxes); Docling OCR words with confidence < 0.80 clustered by proximity; Docling form/checkbox items.
-2. **Context label:** for each region find the nearest printed text to the left (same line band) or above (within 2 line heights); pass it as `field_label`. Also pass the page's known units (from the printed labels, e.g., `(bar)`), and the document's test plan id.
-3. **Transcription:** `transcribe_handwriting` on a 300 dpi crop with 20 px padding. Output is a value with confidence and alternatives.
-4. **Merge:** the value is inserted into the page text at the region's reading-order position as an annotated span: `Injector orifice dia (mm): [HW 0.85 | conf 0.92]`. The node metadata keeps the raw structure (`handwriting:[{bbox, label, value, unit, confidence, alternatives}]`).
-5. **Flags:** confidence < 0.75 or `illegible` → `LOW_CONFIDENCE_EXTRACTION`. **Severity:** SOFT by default (the page is indexed with the uncertain span marked); **HARD** when the value is the source of a catalog field (tare weight that feeds thrust calculation, a channel scaling factor on a calibration sheet) — the route knows this because the field label matches a `critical_field_patterns` list in config.
-6. **Corrections:** a strike-through printed value with a handwritten replacement (detected by the triage model returning `kind = correction`) yields `override: {printed, handwritten}`; the node text shows both: `preheat 28 W (struck through), handwritten: 18 W`.
+Handwriting is read where it lies, by a reader that sees all of it; nothing is cropped for handwriting.
+
+1. **Scan or photo of a hand-filled form or notes.** Triage calls the page `scanned_form_with_handwriting` or `handwritten_notes` **and** images cover at least 25 % of the page (pre-flight `image_cover`) → the whole page goes once to `transcribe_page` (high), which reads printed and handwritten text together, keeps tables as HTML tables with each handwritten entry in its cell, writes a struck-out value as `~~old~~ new` and an entry nobody can read as `[illegible]`. Its nodes replace Docling's for that page. The image cover keeps typed pages out: triage called three typed pages handwritten forms (Thruster Integration Sheet p2, TP23 plan p1, Catalyst-3mm p1, cover ≤ 0.07), while every photographed form covers ≥ 0.35. If the call is refused, the page keeps its OCR text with a `LOW_CONFIDENCE_EXTRACTION` SOFT flag, as in A1.3.
+2. **Handwriting inside a photo on a typed page** (labels on hardware, TP23 report): the figure step's photo reader reads it (`visible_text`, A1.6). A photographed handwritten table classified as a table image goes to `read_table_image` (A1.4 step 5).
+3. **Doubtful entries.** The reader lists each handwritten entry it is not sure of (`doubtful`). Each becomes one `LOW_CONFIDENCE_EXTRACTION` flag on the page, anchored by page and a key made from its label, with the page image, the printed label, the reading and its alternatives, and a `set_value` suggestion. **Severity:** SOFT by default; **HARD** when the label matches a `critical_field_patterns` entry (a tare weight that feeds a thrust calculation, a channel scaling factor). Every listed entry is flagged: in the calibration the reader gave its doubtful entries 0.80–0.90, so a 0.75 cut-off would have shown a person none of them. The doubtful list is the model's own judgment (a self-reported confidence, not a computed probability): it catches what the reader notices, such as scrawl, a 6 that could be an 8, a missing unit, not a confident misread. A second read compared cell by cell was considered and not taken (user, 2026-10-27: one read at `high` instead; a second read adds latency and cost).
+4. **A person's value** replaces the reading (or `[illegible]`) in the node text and its numbers, on every rebuild (file 06 §6). The node metadata keeps the entries (`handwriting:[{key, label, value_raw, unit, confidence, alternatives, illegible}]`).
+
+Why not crops (removed 2026-10-27): the boxes came from the triage thumbnail; about 5 of 25 crops reviewed showed handwriting, 8 of the 12 handwriting entries in search read "[HW illegible]", the crop reader could not say "nothing written here", and on TP07 DE p2 the crops missed the catalyst table the page reader reads in full. One page read costs $0.005–0.010; a crop read cost $0.0028 and TP24 p7 had 21 boxes.
 
 ### A1.8 Mixed pages (printed form + pen)
 
-Handled by A1.3 (printed) + A1.7 (regions). The association rule above binds each handwritten value to a printed label. Checkboxes: Docling form items give state; if unsure, the triage model is asked for `checked/unchecked` per box in one call per page.
+Handled by A1.7: the page reader reads the printed form and the pen together, so each handwritten value sits next to its printed label in the page text.
 
 ### A1.9 DOCX specifics
 
@@ -295,7 +296,7 @@ The library folders hold vendor brochures, datasheets, papers, articles and book
 | Flag | Severity | Trigger |
 |------|----------|---------|
 | `PARSE_FAILURE` | HARD | encrypted, unrepairable, zero extractable content |
-| `LOW_CONFIDENCE_EXTRACTION` | SOFT (HARD for critical fields) | OCR `low_grade = POOR` on a page, handwriting conf < 0.75 or illegible, table disagreement |
+| `LOW_CONFIDENCE_EXTRACTION` | SOFT (HARD for critical fields) | OCR `low_grade = POOR` on a page, a handwritten entry the page reader lists as doubtful or illegible, table disagreement, an unusable figure reading |
 | `UNIT_AMBIGUITY` | HARD only if the value feeds a catalog/calculation; SOFT in prose | a numeric table column without any unit in header/caption/first rows |
 | `CONFLICT` | SOFT | footer says `SUPERSEDED`/`DRAFT`/`OBSOLETE` watermark; two revisions of the same standard id both active |
 | `SENSITIVE_CONTENT` | HARD | classification marking `ITAR`/`EXPORT CONTROLLED`/`RESTRICTED` detected (configurable list) |

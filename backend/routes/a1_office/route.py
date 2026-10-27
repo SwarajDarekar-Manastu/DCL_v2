@@ -1,22 +1,25 @@
 """Route A1 for PDFs (file 03 §4): one landed PDF → `ProcessedDocument` (S1's contract) + CIR + assets.
 
 Order: pre-flight (A1.1) → page triage (A1.2) → Docling runs by OCR plan (A1.3) with the second pass →
-structure (A1.11, references) → figures (A1.6) → tables QA (A1.4) → handwriting (A1.7) → metadata (L1) →
-page renders and the CIR. The common tail (`backend/indexing/index_document`) takes it from there.
+structure (A1.11, references) → page renders → whole-page reading (A1.7) → figures (A1.6) → tables QA (A1.4)
+→ metadata (L1) → the CIR. The common tail (`backend/indexing/index_document`) takes it from there.
 
-Second pass: a scanned page whose `ocr_score` stays below 0.6 is converted again with EasyOCR when its script
-is Latin; if it is still low (or EasyOCR is not installed) it goes whole to `transcribe_page` when cloud
-processing is allowed, else it keeps its OCR text with a LOW_CONFIDENCE_EXTRACTION (SOFT) flag.
+Whole-page reading: a page goes whole to `transcribe_page` (printed and handwritten text) when triage marks
+it `read_whole` (a scan or photo of a hand-filled form), or when it is a scanned page whose `ocr_score` stays
+below 0.6 after EasyOCR (Latin scripts). Its nodes replace Docling's for that page, and the entries the reader
+was not sure of become flags (handwriting.py). Without cloud processing, or when the call is refused, the page
+keeps its OCR text with a LOW_CONFIDENCE_EXTRACTION (SOFT) flag.
 
 CIR (`dcl-cir/{sha256}/A1/v{parser_version}/`): `docling/{first}-{last}.json` per run, `pages/{n}.txt`,
 `pages/{n}.meta.json` (triage, signals, Docling confidence, OCR engine and pass), `page_hashes.json`.
-Assets: `pages/{sha256}/{page:04d}.png` at 150 dpi, figure and handwriting crops at 300 dpi.
-Not yet here: the visual-twin check and page map (A1.0), DOCX/PPTX (A1.9–A1.10), checkbox state calls.
+Assets: `pages/{sha256}/{page:04d}.png` at 150 dpi, figure and table crops at 200 dpi.
+Not yet here: the visual-twin check and page map (A1.0), DOCX/PPTX (A1.9–A1.10).
 """
 
 import hashlib
 import json
 import logging
+import re
 import time
 from collections.abc import Callable, Iterable
 from contextlib import contextmanager
@@ -57,7 +60,7 @@ from backend.routes.a1_office.crops import (
     pad_into_whitespace,
 )
 from backend.routes.a1_office.figures import read_figures
-from backend.routes.a1_office.handwriting import transcribe_regions
+from backend.routes.a1_office.handwriting import page_doubts
 from backend.routes.a1_office.metadata import extract_metadata, humanize, plan_conflicts
 from backend.routes.a1_office.preflight import (
     Preflight,
@@ -231,8 +234,26 @@ def process_pdf(
     flags: list[Flag] = []
     assets: list[ProcessedAsset] = []
 
+    render_started = time.monotonic()
+    page_uris: dict[int, str] = {}
+    for page_no in range(1, checked.page_count + 1):
+        png = render_page(pdf, page_no, dpi=RENDER_DPI)
+        page_uris[page_no] = stores.put_asset(f"pages/{blob_sha256}/{page_no:04d}.png", png)
+        assets.append(
+            ProcessedAsset(
+                ref=f"page:{page_no}",
+                kind=AssetKind.PAGE_RENDER,
+                minio_uri=page_uris[page_no],
+                page_no=page_no,
+                **image_fields(png),
+            )
+        )
+    clock.add("page_renders", time.monotonic() - render_started)
+
+    critical = [re.compile(p, re.IGNORECASE) for p in critical_field_patterns]
+    read_whole = sorted(set(still_low) | {d.page_no for d in decisions if d.read_whole})
     transcribe_started = time.monotonic()
-    for page_no in still_low:
+    for page_no in read_whole:
         reading = None
         if cloud_allowed:
             image = Image(render_page(pdf, page_no, dpi=200), "image/png")
@@ -252,20 +273,28 @@ def process_pdf(
                 (n.breadcrumb for n in nodes if n.page_no == page_no), structure.title or humanize(file_name)
             )
             paragraphs = [p.strip() for p in reading.markdown.split("\n\n") if p.strip()]
-            nodes = keep + [
-                ProcessedNode(
-                    ref=f"vlm/p{page_no}/{i}",
-                    node_type=NodeType.CHILD,
-                    ordinal=0,
-                    breadcrumb=crumb,
-                    language=reading.language,
-                    content=p,
-                    page_no=page_no,
-                    source=NodeSource.VLM,
-                    confidence=reading.confidence,
-                )
-                for i, p in enumerate(paragraphs)
-            ]
+            page_nodes, doubts = page_doubts(
+                [
+                    ProcessedNode(
+                        ref=f"vlm/p{page_no}/{i}",
+                        node_type=NodeType.CHILD,
+                        ordinal=0,
+                        breadcrumb=crumb,
+                        language=reading.language,
+                        content=p,
+                        page_no=page_no,
+                        source=NodeSource.VLM,
+                        confidence=reading.confidence,
+                    )
+                    for i, p in enumerate(paragraphs)
+                ],
+                page_no,
+                reading.doubtful,
+                page_uri=page_uris[page_no],
+                critical=critical,
+            )
+            nodes = keep + page_nodes
+            flags += doubts
             # v2: the model's headers and footers replace the failed OCR's, one printed line each
             furniture[page_no] = [line for f in reading.furniture for line in f.splitlines() if line.strip()]
             passes[page_no] = "transcribe_page"
@@ -305,37 +334,19 @@ def process_pdf(
             doc_id=doc_id,
             cloud_allowed=cloud_allowed,
         )
-    with clock("handwriting"):
-        handwriting = transcribe_regions(
-            tables.nodes,
-            decisions,
-            pdf_bytes=pdf,
-            blob_sha256=blob_sha256,
-            vision=vision,
-            context=context,
-            test_plan_id=folder.test_plan_id,
-            doc_id=doc_id,
-            cloud_allowed=cloud_allowed,
-            critical_field_patterns=critical_field_patterns,
-            put_asset=stores.put_asset,
-            page_sizes={p.page_no: (p.width_pt, p.height_pt) for p in checked.pages},
-        )
     with clock("table_crops"):
         cropped = table_crops(
-            handwriting.nodes, pdf_bytes=pdf, blob_sha256=blob_sha256, put_asset=stores.put_asset
+            tables.nodes, pdf_bytes=pdf, blob_sha256=blob_sha256, put_asset=stores.put_asset
         )
     nodes = [n.model_copy(update={"ordinal": i}) for i, n in enumerate(fill_empty_figures(cropped.nodes))]
-    flags += figures.flags + tables.flags + handwriting.flags
-    assets += figures.assets + handwriting.assets + cropped.assets
-    sheet = contact_sheet(
-        figures.crops + cropped.crops + handwriting.crops, f"{file_name} · {blob_sha256[:12]} · crops"
-    )
+    flags += figures.flags + tables.flags
+    assets += figures.assets + cropped.assets
+    sheet = contact_sheet(figures.crops + cropped.crops, f"{file_name} · {blob_sha256[:12]} · crops")
     qa = {
-        "crops": len(figures.crops) + len(cropped.crops) + len(handwriting.crops),
-        "handwriting_rejected": len(handwriting.rejected),
+        "crops": len(figures.crops) + len(cropped.crops),
         "contact_sheet": stores.put_asset(f"qa/{blob_sha256}/crops.png", sheet) if sheet else None,
     }
-    stores.put_cir("qa/crops.json", json.dumps({**qa, "rejected": handwriting.rejected}).encode())
+    stores.put_cir("qa/crops.json", json.dumps(qa).encode())
 
     page_text = {
         p: "\n".join(n.content for n in nodes if n.page_no == p) for p in range(1, checked.page_count + 1)
@@ -354,20 +365,6 @@ def process_pdf(
     flags += plan_conflicts(folder, furniture, page_text.get(1, ""))
     fields = metadata.fields.model_copy(update={"catalog": {**(metadata.fields.catalog or {}), "qa": qa}})
 
-    render_started = time.monotonic()
-    for page_no in range(1, checked.page_count + 1):
-        png = render_page(pdf, page_no, dpi=RENDER_DPI)
-        uri = stores.put_asset(f"pages/{blob_sha256}/{page_no:04d}.png", png)
-        assets.append(
-            ProcessedAsset(
-                ref=f"page:{page_no}",
-                kind=AssetKind.PAGE_RENDER,
-                minio_uri=uri,
-                page_no=page_no,
-                **image_fields(png),
-            )
-        )
-    clock.add("page_renders", time.monotonic() - render_started)
     for result in results:
         stores.put_cir(
             f"docling/{result.run.first}-{result.run.last}.json",

@@ -5,8 +5,9 @@ page, line, sheet/column, bbox or content hash, never a node id). The commit app
 
 - ``set_fact_unit``: the numbers of the flagged column or line get the unit (or stay unitless when the unit is
   null) and lose ``needs_unit``; a table's ``column_units`` records the decision.
-- ``set_value``: the handwritten reading at the flagged box is the person's value (source ``human``); the old
-  reading is replaced in the node text and in its numbers.
+- ``set_value``: the handwritten entry the flag names (``metadata.handwriting`` key = the anchor's
+  ``content_sha256``) is the person's value (source ``human``); the old reading, or ``[illegible]``, is
+  replaced in the node text and in its numbers.
 - ``choose_table``: the flagged table is version B or the edited cells instead of version A.
 - ``choose_source``: the document field the disagreement is about takes the chosen side's value.
 - ``mark_superseded``: the other document is SUPERSEDED by this one.
@@ -24,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.common.units import UnitError, parse_unit, to_canonical
+from backend.dispatcher.contract import ILLEGIBLE
 from backend.indexing.chunker import IndexNode
 from backend.indexing.index_document import IndexPlan
 from backend.llm_engine.enrichment.numeric_facts import FactDecision
@@ -106,7 +108,7 @@ def _set_fact_unit(plan: IndexPlan, flag: ReviewFlag, unit: str | None) -> None:
 
 def _set_value(plan: IndexPlan, flag: ReviewFlag, resolution: dict[str, Any]) -> None:
     anchor = flag.anchor or {}
-    box = _box(anchor.get("bbox"))
+    key = anchor.get("content_sha256")
     new = None if resolution.get("illegible") else resolution.get("value")
     for node in plan.nodes:
         if not _at(node, anchor):
@@ -114,13 +116,14 @@ def _set_value(plan: IndexPlan, flag: ReviewFlag, resolution: dict[str, Any]) ->
         readings = node.metadata.get("handwriting") or []
         touched = False
         for reading in readings:
-            if box is None or _box(reading.get("bbox")) != box:
+            if key is None or reading.get("key") != key:
                 continue
             old = reading.get("value_raw")
             reading.update(value_raw=new, unit=resolution.get("unit"), illegible=new is None, source="human")
             touched = True
-            if old and new and old in node.content:
-                node.content = node.content.replace(old, new)
+            shown = old or ILLEGIBLE
+            if new and shown in node.content:
+                node.content = node.content.replace(shown, new, 1)
             plan.facts = [
                 replace(f, value_raw=new, source=NumericFactSource.HUMAN, confidence=1.0)
                 if f.node_ref == node.ref and old and new and f.value_raw == old

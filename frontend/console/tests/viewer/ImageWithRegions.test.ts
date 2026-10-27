@@ -25,13 +25,13 @@ describe('ImageWithRegions keyboard access', () => {
 			height: 1400,
 			regions: [
 				{ bbox: [0.1, 0.1, 0.5, 0.2], kind: 'cited', label: 'Table 4', confidence: null },
-				{ bbox: [0.1, 0.5, 0.5, 0.6], kind: 'handwriting', label: 'operator note', confidence: 0.82 }
+				{ bbox: [0.1, 0.5, 0.5, 0.6], kind: 'flag', label: 'operator note', confidence: 0.82 }
 			]
 		});
 		const regions = screen.getAllByRole('button');
 		expect(regions.map((r) => r.getAttribute('aria-label'))).toEqual([
 			'cited region: Table 4',
-			'handwriting region: operator note (confidence 0.82)'
+			'flag region: operator note (confidence 0.82)'
 		]);
 		regions[1].focus();
 		expect(document.activeElement).toBe(regions[1]);

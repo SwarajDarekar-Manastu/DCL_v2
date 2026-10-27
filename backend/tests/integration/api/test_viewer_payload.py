@@ -128,10 +128,9 @@ def session():
                         bbox=[{"page_no": page, "x0": 0.1, "y0": 0.3, "x1": 0.9, "y1": 0.35}],
                     )
                 )
-            handwriting = {
-                "bbox": {"page_no": 8, "x0": 0.6, "y0": 0.7, "x1": 0.8, "y1": 0.74},
+            handwriting = {  # an entry the page reader was not sure of: no box, the page shows it
+                "key": "ab" * 16,
                 "label": "Tank P",
-                "kind": "value",
                 "value_raw": "13.5",
                 "unit": "barg",
                 "confidence": 0.62,
@@ -204,11 +203,7 @@ def test_exact_citation_opens_the_page_render_with_the_cited_box(session):
     view = payload.view
     assert view.kind == "page" and (view.page_no, view.page_count) == (8, 12)
     assert view.image_url == f"https://minio.test/dcl-assets/pages/{PDF_SHA}/0008.png?sig=1"
-    assert [(r.kind, r.bbox) for r in view.regions] == [
-        ("cited", (0.1, 0.3, 0.9, 0.35)),
-        ("handwriting", (0.6, 0.7, 0.8, 0.74)),
-    ]
-    assert (view.regions[1].label, view.regions[1].confidence) == ("Tank P: 13.5 barg", 0.62)
+    assert [(r.kind, r.bbox) for r in view.regions] == [("cited", (0.1, 0.3, 0.9, 0.35))]
     assert view.text == text_of(8)
     assert payload.document.test_ids == ["TP37"]
     assert [loc.path for loc in payload.links.onedrive] == [
@@ -224,7 +219,7 @@ def test_changed_content_falls_back_to_the_page_and_says_so(session):
     assert payload.resolution.status == "page_fallback"
     assert "changed after re-indexing" in payload.resolution.message
     assert payload.view.kind == "page" and payload.view.page_no == 8
-    assert [r.kind for r in payload.view.regions] == ["handwriting"]  # no cited box: the passage changed
+    assert payload.view.regions == []  # no cited box: the passage changed
 
 
 def test_a_reindex_that_moves_the_passage_still_finds_it(session):

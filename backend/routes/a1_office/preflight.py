@@ -4,7 +4,8 @@
   One that opens without a password (owner-password restrictions only, e.g. the ECSS standards) is decrypted
   in memory and processed (file 03 §A1.1 as amended 2026-10-23); `decrypted = True`.
 - A damaged file is repaired by rewriting it with pikepdf (`repaired = True`); unrepairable → failure.
-- Per page: characters in the text layer, a garbage ratio, embedded image count, rotation, size.
+- Per page: characters in the text layer, a garbage ratio, embedded image count and the share of the page
+  the images cover, rotation, size.
   A page with fewer than 50 characters or more than 40% garbage is image-only for triage. Garbage is counted
   by Unicode category (private use, unassigned, control, replacement character) and by "words" that carry no
   run of two letters, so Japanese or Cyrillic text is not garbage while a font without a ToUnicode map is.
@@ -42,6 +43,7 @@ class PageSignals:
     chars: int
     garbage_ratio: float
     image_count: int
+    image_cover: float = 0.0  # share of the page under image objects, 0..1
 
     @property
     def image_only(self) -> bool:
@@ -59,6 +61,15 @@ class Preflight:
 
     def page(self, page_no: int) -> PageSignals:
         return self.pages[page_no - 1]
+
+
+def image_cover(images, width: float, height: float) -> float:
+    """Share of the page under image objects (their bounds clipped to the page, overlaps counted twice)."""
+    area = 0.0
+    for image in images:
+        left, bottom, right, top = image.get_bounds()
+        area += max(0.0, min(right, width) - max(left, 0.0)) * max(0.0, min(top, height) - max(bottom, 0.0))
+    return min(1.0, area / (width * height)) if width and height else 0.0
 
 
 def garbage_ratio(text: str) -> float:
@@ -141,7 +152,7 @@ def preflight(pdf_bytes: bytes) -> Preflight:
             page = document[index]
             text = page.get_textpage().get_text_range()
             width, height = page.get_size()
-            images = sum(1 for obj in page.get_objects() if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE)
+            images = [obj for obj in page.get_objects() if obj.type == pdfium.raw.FPDF_PAGEOBJ_IMAGE]
             pages.append(
                 PageSignals(
                     page_no=index + 1,
@@ -150,7 +161,8 @@ def preflight(pdf_bytes: bytes) -> Preflight:
                     rotation=page.get_rotation(),
                     chars=len("".join(text.split())),
                     garbage_ratio=garbage_ratio(text),
-                    image_count=images,
+                    image_count=len(images),
+                    image_cover=image_cover(images, width, height),
                 )
             )
         return Preflight(usable, len(pages), repaired, pages, windows(len(pages)), decrypted)

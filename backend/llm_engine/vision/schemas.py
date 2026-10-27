@@ -1,24 +1,15 @@
 """Structured-output schemas of the shared vision sub-pipeline (file 03 §3).
 
-Each model is sent to Gemini as the response schema and validates the reply. Boxes are Gemini's
-`box_2d` = [ymin, xmin, ymax, xmax] normalized 0–1000 (top-left origin). Any number a vision call returns
+Each model is sent to Gemini as the response schema and validates the reply. Any number a vision call returns
 is data with a confidence, never merged silently into printed text (file 03 §3 rule 3).
 """
 
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Confidence = Annotated[float, Field(ge=0.0, le=1.0)]
-Box2D = Annotated[list[int], Field(min_length=4, max_length=4)]
-
-
-def check_box(box: list[int]) -> list[int]:
-    ymin, xmin, ymax, xmax = box
-    if not all(0 <= v <= 1000 for v in box) or ymin > ymax or xmin > xmax:
-        raise ValueError(f"box_2d must be [ymin, xmin, ymax, xmax] within 0..1000, got {box}")
-    return box
 
 
 class Reading(BaseModel):
@@ -57,92 +48,47 @@ class Script(StrEnum):
     MIXED = "mixed"
 
 
-class HandwritingKind(StrEnum):
-    VALUE = "value"
-    CORRECTION = "correction"
-    NOTE = "note"
-    CHECKBOX = "checkbox"
-    SIGNATURE = "signature"
-
-
-class HandwritingRegion(Reading):
-    box_2d: Box2D
-    kind: HandwritingKind
-
-    @field_validator("box_2d")
-    @classmethod
-    def _box(cls, value: list[int]) -> list[int]:
-        return check_box(value)
-
-
 class PageTriage(Reading):
     """`triage_page` (Flash-Lite, page thumbnail): decides what each page costs (file 03 §A1.2)."""
 
     page_type: PageType
-    has_handwriting: bool
-    has_tables: bool
     has_figures: bool
     is_rotated: bool
     language: str = Field(description="BCP-47 tag of the main language on the page, e.g. en, de, ja")
     script: Script
-    handwriting_regions: list[HandwritingRegion] = Field(default_factory=list)
+
+
+class HandwritingDoubt(Reading):
+    """A handwritten entry the page reader is not sure of. An illegible entry carries no value."""
+
+    field_label: str | None
+    value_raw: str | None
+    unit: str | None = None
+    alternatives: list[str] = Field(default_factory=list)
+    confidence: Confidence
+    illegible: bool
+
+    @model_validator(mode="after")
+    def _no_value_when_illegible(self) -> "HandwritingDoubt":
+        if self.illegible:
+            self.value_raw = None
+            self.confidence = min(self.confidence, 0.5)
+        return self
 
 
 class PageTranscription(Reading):
-    """`transcribe_page` (3.8 Flash, high resolution): whole page when OCR stays below threshold."""
+    """`transcribe_page` (3.8 Flash, high resolution): a whole page, printed and handwritten, when OCR stays
+    below threshold or the page is a scan or photo of a hand-filled form (file 03 §A1.7)."""
 
     markdown: str
     language: str
     confidence: Confidence
-    illegible_regions: list[Box2D] = Field(default_factory=list)
+    doubtful: list[HandwritingDoubt] = Field(
+        default_factory=list, description="handwritten entries the reader is not sure of, reading order (v3)"
+    )
     furniture: list[str] = Field(
         default_factory=list, description="printed headers, footers and margin identifiers, top first (v2)"
     )
-
-    @field_validator("illegible_regions")
-    @classmethod
-    def _boxes(cls, value: list[list[int]]) -> list[list[int]]:
-        return [check_box(box) for box in value]
-
-
-class HandwritingReading(Reading):
-    """`transcribe_handwriting` (3.8 Flash, high resolution, one crop).
-
-    Never a guessed digit: an illegible reading carries no value, and a value_number must be exactly what
-    value_raw says (locale decimal comma allowed); otherwise the number is dropped and only the raw text kept.
-    """
-
-    field_label: str | None
-    value_raw: str | None
-    value_number: float | None
-    unit: str | None
-    confidence: Confidence
-    alternatives: list[str] = Field(default_factory=list)
-    illegible: bool
-    notes: str | None = None
-
-    @model_validator(mode="after")
-    def _no_guessed_digits(self) -> "HandwritingReading":
-        if self.illegible:
-            self.value_raw = None
-            self.value_number = None
-            self.confidence = min(self.confidence, 0.5)
-        elif self.value_number is not None and not _raw_states_number(self.value_raw, self.value_number):
-            self.value_number = None
-        return self
-
-
-def _raw_states_number(raw: str | None, number: float) -> bool:
-    if not raw:
-        return False
-    digits = "".join(ch for ch in raw if ch.isdigit() or ch in ".,-")
-    for candidate in (digits, digits.replace(",", "."), digits.replace(",", "")):
-        try:
-            if float(candidate) == number:
-                return True
-        except ValueError:
-            continue
-    return False
 
 
 class TableReading(Reading):

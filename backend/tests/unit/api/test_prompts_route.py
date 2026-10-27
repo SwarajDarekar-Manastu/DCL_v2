@@ -24,7 +24,7 @@ def client(auth_config, key_resolver):
 
 def test_the_registry_lists_versions_and_marks_what_the_code_pins():
     by_version = {(p.area, p.version): p for p in registry.list_prompts()}
-    old, new = by_version[("vision", "transcribe_page.v1")], by_version[("vision", "transcribe_page.v2")]
+    old, new = by_version[("vision", "transcribe_page.v2")], by_version[("vision", "transcribe_page.v3")]
     assert (old.latest, old.in_use) == (False, False) and (new.latest, new.in_use) == (True, True)
     assert by_version[("engine", "telemetry_args.v1")].in_use  # named by stem in the workflow
     assert by_version[("engine", "synthesis.v1")].variables == ["analysis", "evidence", "question"]

@@ -14,10 +14,9 @@
 	let { src, alt, width, height, regions }: Props = $props();
 	const pct = (value: number) => `${(value * 100).toFixed(3)}%`;
 	const label = (region: ViewerRegion) => region.label + (region.confidence == null ? '' : ` (confidence ${region.confidence.toFixed(2)})`);
-	// Status colors: cited passage = info (blue), handwriting = purple, flagged region = hard (red).
+	// Status colors: cited passage = info (blue), flagged region = hard (red).
 	const KIND = {
 		cited: 'border-info bg-info/10',
-		handwriting: 'border-handwriting bg-handwriting/10 border-dashed',
 		flag: 'border-hard bg-hard/10'
 	} as const;
 </script>

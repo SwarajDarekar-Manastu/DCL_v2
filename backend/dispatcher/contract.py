@@ -239,6 +239,9 @@ class MapJsonKeys(_Model):
     save_as_schema: str | None = None
 
 
+ILLEGIBLE = "[illegible]"  # how a page reading writes an entry nobody can read (prompt transcribe_page.v3)
+
+
 class SetValue(_Model):
     """LOW_CONFIDENCE_EXTRACTION on a handwritten or OCR value."""
 
