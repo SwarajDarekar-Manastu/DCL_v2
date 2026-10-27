@@ -10,7 +10,6 @@ vi.mock('../../src/lib/api_endpoint', async (importOriginal) => {
 		...real,
 		dryRun: vi.fn(),
 		resolveCase: vi.fn(),
-		rejectCase: vi.fn(),
 		assignCase: vi.fn(),
 		undoCase: vi.fn(),
 		presignAsset: vi.fn(async () => ({ url: 'https://minio.example/x', expires_in_s: 900 }))
@@ -37,7 +36,6 @@ describe('CaseView', () => {
 	beforeEach(() => {
 		vi.mocked(api.dryRun).mockReset().mockResolvedValue(preview);
 		vi.mocked(api.resolveCase).mockReset().mockResolvedValue({ case_key: CASE_KEY, flags: [], rule: null, resumed_doc_ids: ['d1'], proposed_files: 0 });
-		vi.mocked(api.rejectCase).mockReset().mockResolvedValue(detail());
 	});
 
 	it('enables Apply only after a preview of the current draft', async () => {
@@ -91,12 +89,58 @@ describe('CaseView', () => {
 		expect((applyButton() as HTMLButtonElement).disabled).toBe(true);
 	});
 
-	it('marks the file as junk and reports backend errors in words', async () => {
-		vi.mocked(api.rejectCase).mockRejectedValueOnce(new api.ApiError(501, 'Not Implemented'));
+	it('offers no skip or junk on a case about values', () => {
 		render(CaseView, { detail: detail(), me: 'asha@manastuspace.com', onChanged: () => {} });
-		await fireEvent.click(screen.getByRole('button', { name: 'Mark junk' }));
+		expect(screen.queryByRole('button', { name: /junk|skip/i })).toBeNull();
+		expect(screen.queryByRole('option', { name: /junk|skip/i })).toBeNull();
+	});
+
+	it('junks one image without asking, as a decision on its flag', async () => {
+		const image = unitFlag({
+			flag_id: 'flag-figure',
+			flag_type: 'LOW_CONFIDENCE_EXTRACTION',
+			severity: 'SOFT',
+			anchor: { page: 41, bbox: { x0: 0.1, y0: 0.2, x1: 0.4, y1: 0.5 } },
+			subject: 'object',
+			allowed_actions: ['ignore', 'mark_junk'],
+			evidence: null,
+			suggested_resolution: null
+		});
+		render(CaseView, { detail: detail([image]), me: 'asha@manastuspace.com', onChanged: () => {} });
+		const options = [...(screen.getByRole('combobox', { name: 'Resolution' }) as HTMLSelectElement).options].map((o) => o.text);
+		expect(options).toEqual(['leave open', 'Keep as read', 'Junk this image']);
+		await fireEvent.change(screen.getByRole('combobox', { name: 'Resolution' }), { target: { value: 'mark_junk' } });
+		await fireEvent.click(applyButton());
+		await waitFor(() =>
+			expect(api.resolveCase).toHaveBeenCalledWith(CASE_KEY, {
+				resolutions: [{ flag_id: 'flag-figure', resolution: { action: 'mark_junk' } }],
+				rule_scope: null
+			})
+		);
+	});
+
+	it('asks before junking the whole file, naming it, and reports backend errors in words', async () => {
+		vi.mocked(api.resolveCase).mockRejectedValueOnce(new api.ApiError(501, 'Not Implemented'));
+		const unreadable = unitFlag({
+			flag_id: 'flag-parse',
+			flag_type: 'PARSE_FAILURE',
+			anchor: {},
+			subject: 'file',
+			allowed_actions: ['mark_junk', 'skip', 'use_replacement'],
+			evidence: null,
+			suggested_resolution: null
+		});
+		render(CaseView, { detail: detail([unreadable]), me: 'asha@manastuspace.com', onChanged: () => {} });
+		await fireEvent.change(screen.getByRole('combobox', { name: 'Resolution' }), { target: { value: 'mark_junk' } });
+		await fireEvent.click(applyButton());
+		expect(api.resolveCase).not.toHaveBeenCalled();
+		expect(screen.getByText(/It leaves search and is not processed again/).textContent).toContain('Junk the whole file Pressure_T07.dat?');
+		await fireEvent.click(screen.getByRole('button', { name: 'Yes, junk the whole file' }));
 		await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('The review backend is not connected yet.'));
-		expect(api.rejectCase).toHaveBeenCalledWith(CASE_KEY, { action: 'mark_junk' });
+		expect(api.resolveCase).toHaveBeenCalledWith(CASE_KEY, {
+			resolutions: [{ flag_id: 'flag-parse', resolution: { action: 'mark_junk' } }],
+			rule_scope: null
+		});
 	});
 
 	it('offers folder scopes only when the case has a folder id, and undo only after a resolution', async () => {

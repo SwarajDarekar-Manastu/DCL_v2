@@ -37,16 +37,18 @@ export const FLAG_GUIDE: Record<GuideKey, FlagGuide> = {
 		choices: [
 			{ action: 'map_columns', text: 'Map columns: name what each column holds.' },
 			{ action: 'map_json_keys', text: 'Map JSON keys: say which section each key belongs to.' },
-			{ action: 'mark_junk', text: 'Mark junk if the table is not useful for search.' }
+			{ action: 'mark_junk', text: 'Junk whole file if nothing in it is useful for search.' }
 		],
 		unsure: `Leave open: the rest of the file is still searchable. ${OPEN_HINT}`
 	},
 	LOW_CONFIDENCE_EXTRACTION: {
-		what: 'The system read text, a table or handwriting but is not sure it read it right.',
-		decide: 'Compare the reading with the picture and fix it if it is wrong.',
+		what: 'The system is not sure it read a page, image, table or handwritten entry right.',
+		decide: 'Compare the reading with the picture.',
 		choices: [
-			{ action: 'set_value', text: 'Type the value, or tick illegible if nobody can read it.' },
-			{ action: 'choose_table', text: 'Choose table version A or B when two readings of a table differ.' }
+			{ action: 'set_value', text: 'Type the value (its label is on the page), or tick illegible.' },
+			{ action: 'choose_table', text: 'Choose table version A or B when two readings differ.' },
+			{ action: 'ignore', text: 'Keep as read if it is right.' },
+			{ action: 'mark_junk', text: 'Junk the page, image or table if it shows nothing useful; only it leaves search.' }
 		],
 		unsure: 'Leave open: answers will mark this value as uncertain.'
 	},
@@ -54,8 +56,8 @@ export const FLAG_GUIDE: Record<GuideKey, FlagGuide> = {
 		what: 'The file could not be opened or read.',
 		decide: 'Decide whether the file is worth fixing.',
 		choices: [
-			{ action: 'skip', text: 'Skip file if it is not needed.' },
-			{ action: 'mark_junk', text: 'Mark junk if it should never be indexed.' }
+			{ action: 'skip', text: 'Skip whole file if it is not needed.' },
+			{ action: 'mark_junk', text: 'Junk whole file if it should never be indexed.' }
 		],
 		unsure: `Uploading a readable copy is not possible from the console yet; ask the team. ${OPEN_HINT}`
 	},
@@ -64,8 +66,8 @@ export const FLAG_GUIDE: Record<GuideKey, FlagGuide> = {
 		decide: 'Decide whether it matters.',
 		choices: [
 			{ action: 'watch', text: 'Notify when an adapter exists, if you want it indexed later.' },
-			{ action: 'skip', text: 'Skip file if it does not matter.' },
-			{ action: 'mark_junk', text: 'Mark junk if it never will.' }
+			{ action: 'skip', text: 'Skip whole file if it does not matter.' },
+			{ action: 'mark_junk', text: 'Junk whole file if it never will.' }
 		],
 		unsure: 'Leave open: nothing else is blocked.'
 	},
@@ -112,7 +114,7 @@ export const FLAG_GUIDE: Record<GuideKey, FlagGuide> = {
 		decide: 'Decide whether to fetch it.',
 		choices: [
 			{ action: 'approve_download', text: 'Approve download to fetch and index it.' },
-			{ action: 'skip', text: 'Skip file to leave it out.' }
+			{ action: 'skip', text: 'Skip whole file to leave it out.' }
 		],
 		unsure: 'Leave open: nothing else is blocked.'
 	},

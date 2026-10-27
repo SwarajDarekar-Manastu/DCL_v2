@@ -200,7 +200,7 @@ describe('ChannelMapView', () => {
 		it('shows who proposed it, checks the numbers at once and applies only the proposed columns', async () => {
 			converted();
 			vi.mocked(api.resolveCase).mockResolvedValue({ case_key: 'k', flags: [], rule: null, resumed_doc_ids: ['d'], proposed_files: 0 } as unknown as api.ResolveResponse);
-			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn(), onReject: vi.fn() });
+			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn() });
 			expect(screen.getByRole('region', { name: 'Proposed by a rule' }).textContent).toContain('A rule proposes the units of 2 of 3 columns.');
 			expect(screen.getByText(/Proposed by a rule that asha saved on 2026-10-23/)).toBeTruthy();
 			expect(screen.getAllByText('proposed by a rule')).toHaveLength(2);
@@ -220,7 +220,7 @@ describe('ChannelMapView', () => {
 
 		it('will not apply numbers that look wrong once converted, and says which', async () => {
 			converted((channel) => channel !== 'y1');
-			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn(), onReject: vi.fn() });
+			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn() });
 			expect(await screen.findByText(/These look wrong once converted: y1/)).toBeTruthy();
 			const button = screen.getByRole('button', { name: /Apply proposed rule/ }) as HTMLButtonElement;
 			expect(button.disabled).toBe(true);
@@ -229,7 +229,7 @@ describe('ChannelMapView', () => {
 
 		it('hands over to "Apply all and resume" once a proposed unit is changed, and can go back', async () => {
 			converted();
-			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn(), onReject: vi.fn() });
+			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn() });
 			await waitFor(() => expect(api.dryRun).toHaveBeenCalledTimes(2));
 			await fireEvent.change(screen.getByLabelText('Unit of y0'), { target: { value: 'psia' } });
 			expect(screen.queryByRole('button', { name: /Apply proposed rule/ })).toBeNull();
@@ -239,19 +239,11 @@ describe('ChannelMapView', () => {
 			expect(await screen.findByRole('button', { name: /Apply proposed rule/ })).toBeTruthy();
 		});
 
-		it('lets the reviewer skip the file instead', async () => {
-			converted();
-			const onReject = vi.fn();
-			render(ChannelMapView, { detail: proposed, onChanged: vi.fn(), onDetails: vi.fn(), onReject });
-			await fireEvent.click(screen.getByRole('button', { name: 'Skip file' }));
-			expect(onReject).toHaveBeenCalledWith('skip');
-		});
-
 		it('keeps the file halted when no rule proposes anything: no banner, no proposed-rule button', () => {
-			render(ChannelMapView, { detail: LABJACK, onChanged: vi.fn(), onDetails: vi.fn(), onReject: vi.fn() });
+			render(ChannelMapView, { detail: LABJACK, onChanged: vi.fn(), onDetails: vi.fn() });
 			expect(screen.queryByRole('region', { name: 'Proposed by a rule' })).toBeNull();
 			expect(screen.queryByRole('button', { name: /Apply proposed rule/ })).toBeNull();
-			expect(screen.getByRole('button', { name: 'Skip file' })).toBeTruthy();
+			expect(screen.queryByRole('button', { name: /skip|junk/i })).toBeNull(); // a unit question never takes the file out
 		});
 	});
 

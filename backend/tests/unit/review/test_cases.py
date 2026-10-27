@@ -1,5 +1,5 @@
 """Review cases on a real database: queue, filters, impact sort, detail, resolve (rule + flags + audit),
-reject, assign. Needs DCL_TEST_DATABASE_URL."""
+skip and junk by what a flag is about, assign. Needs DCL_TEST_DATABASE_URL."""
 
 import uuid
 from datetime import timedelta
@@ -10,8 +10,10 @@ from sqlalchemy import select
 from backend.dispatcher.contract import (
     ConflictEvidence,
     ConflictSide,
+    ExtractionCrop,
     Flag,
     FlagAnchor,
+    LowConfidenceEvidence,
     Suggestion,
     UnitTelemetryEvidence,
 )
@@ -27,7 +29,7 @@ from backend.postgres.models import (
     Rule,
 )
 from backend.review import cases
-from backend.review.api_models import CaseFilters, FlagResolution, RejectRequest, ResolveRequest
+from backend.review.api_models import CaseFilters, FlagResolution, ResolveRequest
 from backend.review.flags import upsert_document_flag
 
 ROOT = "APU Injector"
@@ -208,25 +210,78 @@ def test_wrong_action_is_refused_and_soft_resolution_settles_the_document(sessio
     outcome = cases.resolve_case(session, key, ok, "r@x", is_admin=False)
     session.commit()
     assert (outcome.rule, outcome.resume_rule_id) == (None, None)
-    assert session.get(Document, seeded["sheet"].doc_id).status == "ACTIVE"
+    # the decision reaches search at once: the committed file is rebuilt with it
+    assert outcome.rebuild_doc_id == seeded["sheet"].doc_id
+    assert session.get(Document, seeded["sheet"].doc_id).status == "PROCESSING"
 
 
-def test_assign_then_reject_as_junk(session, seeded):
-    key = f"{seeded['other'].doc_id}:"
+def _resolve(session, key, flag, action):
+    request = ResolveRequest(
+        resolutions=[FlagResolution(flag_id=flag.flag_id, resolution={"action": action})]
+    )
+    return cases.resolve_case(session, key, request, "lead@x", is_admin=False)
+
+
+def _unreadable(session):
+    doc = _doc(session, "broken.pdf", "HALTED", "F-E9", route="A1")
+    upsert_document_flag(session, doc.doc_id, Flag(flag_type="PARSE_FAILURE", severity="HARD"), "A1")
+    session.commit()
+    (flag,) = session.scalars(select(ReviewFlag).where(ReviewFlag.doc_id == doc.doc_id)).all()
+    return doc, flag
+
+
+def test_assign_then_junk_the_whole_file_from_its_file_flag(session, seeded):
+    doc, flag = _unreadable(session)
+    key = flag.case_key
     cases.assign_case(session, key, "ravi@manastu.space", "lead@x")
     assert cases.summary_of(session, cases._case(session, key)).status == "IN_PROGRESS"
     cases.assign_case(session, key, None, "lead@x")
     assert cases.summary_of(session, cases._case(session, key)).status == "OPEN"
-    case = cases.reject_case(session, key, RejectRequest(action="mark_junk"), "lead@x")
+    outcome = _resolve(session, key, flag, "mark_junk")
     session.commit()
-    document = session.get(Document, seeded["other"].doc_id)
-    item = session.scalars(select(DriveItem).where(DriveItem.name == "T02.dat")).one()
-    assert (document.status, document.staged_payload_uri) == ("QUARANTINED", None)
+    document = session.get(Document, doc.doc_id)
+    item = session.scalars(select(DriveItem).where(DriveItem.name == "broken.pdf")).one()
+    assert (document.status, document.staged_payload_uri, outcome.rebuild_doc_id) == (
+        "QUARANTINED",
+        None,
+        None,
+    )
     assert (item.status, item.gate_reason) == ("QUARANTINED", "REVIEW:mark_junk")
-    assert cases.summary_of(session, case).status == "REJECTED_FILE"
+    assert cases.summary_of(session, cases._case(session, key)).status == "REJECTED_FILE"
     assert [c.title for c in cases.list_cases(session, CaseFilters(status="REJECTED_FILE")).items] == [
-        "T02.dat"
+        "broken.pdf"
     ]
+
+
+def test_a_value_flag_can_never_skip_or_junk_its_file(session, seeded):
+    key = f"{seeded['other'].doc_id}:"
+    (flag,) = session.scalars(select(ReviewFlag).where(ReviewFlag.case_key == key)).all()
+    for action in ("mark_junk", "skip"):
+        with pytest.raises(cases.InvalidAction, match="not allowed"):
+            _resolve(session, key, flag, action)
+    session.rollback()
+    assert session.get(Document, seeded["other"].doc_id).status == "HALTED"
+
+
+def test_junking_one_image_keeps_the_file_and_rebuilds_it_without_the_image(session, seeded):
+    doc = _doc(session, "report.docx", "ACTIVE_WITH_SOFT_FLAGS", "F-E9", route="A1")
+    image = Flag(
+        flag_type="LOW_CONFIDENCE_EXTRACTION",
+        severity="SOFT",
+        anchor=FlagAnchor(page=44, bbox={"x0": 0.1, "y0": 0.2, "x1": 0.4, "y1": 0.5}),
+        evidence=LowConfidenceEvidence(crops=[ExtractionCrop(crop_uri="s3://dcl-assets/figures/x/f1.png")]),
+    )
+    upsert_document_flag(session, doc.doc_id, image, "A1")
+    session.commit()
+    (flag,) = session.scalars(select(ReviewFlag).where(ReviewFlag.doc_id == doc.doc_id)).all()
+    detail = cases.flag_view(flag, is_admin=False)
+    assert (detail.subject, detail.allowed_actions) == ("object", ["ignore", "mark_junk"])
+    outcome = _resolve(session, flag.case_key, flag, "mark_junk")
+    session.commit()
+    item = session.scalars(select(DriveItem).where(DriveItem.name == "report.docx")).one()
+    assert (session.get(Document, doc.doc_id).status, outcome.rebuild_doc_id) == ("PROCESSING", doc.doc_id)
+    assert (item.status, item.gate_reason) == ("LANDED", None)
+    assert (flag.status, flag.resolution) == ("RESOLVED", {"action": "mark_junk"})
 
 
 def test_simulate_counts_the_files_that_wait_for_a_folder_rule(session, seeded):
@@ -318,15 +373,15 @@ def test_undo_reopens_the_last_resolution_and_retires_its_file_rule(session, see
 
 
 def test_undo_of_mark_junk_restores_the_file_and_rebuilds(session, seeded):
-    key = f"{seeded['other'].doc_id}:"
-    cases.reject_case(session, key, RejectRequest(action="mark_junk"), "lead@x")
+    doc, flag = _unreadable(session)
+    _resolve(session, flag.case_key, flag, "mark_junk")
     session.commit()
-    undone = cases.undo_case(session, key, "lead@x")
+    undone = cases.undo_case(session, flag.case_key, "lead@x")
     session.commit()
-    item = session.scalars(select(DriveItem).where(DriveItem.name == "T02.dat")).one()
+    item = session.scalars(select(DriveItem).where(DriveItem.name == "broken.pdf")).one()
     assert (item.status, item.gate_reason) == ("LANDED", None)
-    assert undone.rebuild_doc_id == seeded["other"].doc_id
-    assert session.get(Document, seeded["other"].doc_id).status == "PROCESSING"
+    assert undone.rebuild_doc_id == doc.doc_id
+    assert session.get(Document, doc.doc_id).status == "PROCESSING"
 
 
 def test_a_flag_with_an_unknown_route_still_opens(session, seeded):

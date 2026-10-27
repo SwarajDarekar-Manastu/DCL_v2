@@ -355,7 +355,7 @@ Resolution = Annotated[
 ALLOWED_ACTIONS: dict[FlagType, frozenset[str]] = {
     FlagType.UNIT_AMBIGUITY: frozenset({"set_unit", "set_fact_unit"}),
     FlagType.SCHEMA_UNKNOWN: frozenset({"map_columns", "map_json_keys", "mark_junk"}),
-    FlagType.LOW_CONFIDENCE_EXTRACTION: frozenset({"set_value", "choose_table"}),
+    FlagType.LOW_CONFIDENCE_EXTRACTION: frozenset({"set_value", "choose_table", "ignore", "mark_junk"}),
     FlagType.PARSE_FAILURE: frozenset({"use_replacement", "skip", "mark_junk"}),
     FlagType.UNSUPPORTED_FORMAT: frozenset({"skip", "mark_junk", "watch"}),
     FlagType.CONFLICT: frozenset({"choose_source", "mark_superseded", "accept_both", "ignore"}),
@@ -364,6 +364,44 @@ ALLOWED_ACTIONS: dict[FlagType, frozenset[str]] = {
     FlagType.CLOUD_RESTRICTED: frozenset({"ignore"}),
 }
 ADMIN_ONLY_ACTIONS = frozenset({"approve_internal"})
+
+FlagSubject = Literal["file", "page", "object", "value"]
+FILE_FLAGS = frozenset(
+    {FlagType.PARSE_FAILURE, FlagType.UNSUPPORTED_FORMAT, FlagType.HELD_LARGE_FILE, FlagType.SCHEMA_UNKNOWN}
+)
+
+
+def flag_subject(flag_type: FlagType, anchor: dict[str, Any] | None) -> FlagSubject:
+    """What a flag is about, which decides where skip and junk act (file 06 §6): only a file flag can take
+    the file out of search. A LOW_CONFIDENCE_EXTRACTION is about one page (anchored by page alone), one figure
+    or table (page and box) or one value (a handwritten entry: page and key); every other flag is a value."""
+    anchor = anchor or {}
+    if flag_type in FILE_FLAGS:
+        return "file"
+    if flag_type != FlagType.LOW_CONFIDENCE_EXTRACTION or anchor.get("page") is None:
+        return "value"
+    if anchor.get("bbox"):
+        return "object"
+    return "value" if anchor.get("content_sha256") else "page"
+
+
+def allowed_actions(
+    flag_type: FlagType, anchor: dict[str, Any] | None = None, evidence: dict[str, Any] | None = None
+) -> frozenset[str]:
+    """ALLOWED_ACTIONS narrowed to what the flag is about: a page or a figure is kept as read or junked, a
+    table is chosen or junked, a handwritten entry is typed, and a LOW_CONFIDENCE_EXTRACTION about nothing
+    on a page (the formula cap) is only acknowledged."""
+    if flag_type != FlagType.LOW_CONFIDENCE_EXTRACTION:
+        return ALLOWED_ACTIONS[flag_type]
+    subject = flag_subject(flag_type, anchor)
+    if subject == "page":
+        return frozenset({"ignore", "mark_junk"})
+    if subject == "object":
+        is_table = bool((evidence or {}).get("table_a_html"))
+        return frozenset({"choose_table" if is_table else "ignore", "mark_junk"})
+    if (anchor or {}).get("page") is not None:
+        return frozenset({"set_value"})
+    return frozenset({"ignore"})
 
 
 # ---------------------------------------------------------------- evidence (file 06 §3, §5)

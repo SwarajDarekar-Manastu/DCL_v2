@@ -35,6 +35,7 @@ export function unitFlag(overrides: Partial<FlagView> = {}): FlagView {
 		status: 'OPEN',
 		route: 'C',
 		anchor: { channel: 'AIN0' },
+		subject: 'value',
 		allowed_actions: ['set_unit', 'set_fact_unit'],
 		evidence: {
 			kind: 'unit_telemetry',

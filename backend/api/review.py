@@ -30,7 +30,6 @@ from backend.review.api_models import (
     EditRequest,
     EditResponse,
     FolderList,
-    RejectRequest,
     ReopenRequest,
     ReopenResponse,
     ResolveRequest,
@@ -128,6 +127,10 @@ def resolve_case(user: Reviewer, session: Db, case_key: str, body: ResolveReques
             start_resume(outcome.resume_rule_id)
     elif outcome.resume_doc_id is not None and start_resume_staged(outcome.resume_doc_id):
         resumed = [outcome.resume_doc_id]
+    if outcome.rebuild_doc_id is not None:
+        from backend.postgres.models import Document
+
+        start_rebuild(outcome.rebuild_doc_id, session.get(Document, outcome.rebuild_doc_id).route)
     return ResolveResponse(
         case_key=case_key,
         flags=[cases.flag_view(f, admin) for f in outcome.flags],
@@ -135,16 +138,6 @@ def resolve_case(user: Reviewer, session: Db, case_key: str, body: ResolveReques
         resumed_doc_ids=resumed,
         proposed_files=outcome.proposed_files,
     )
-
-
-@router.post("/cases/{case_key}/reject")
-def reject_case(user: Reviewer, session: Db, case_key: str, body: RejectRequest) -> CaseSummary:
-    try:
-        case = cases.reject_case(session, case_key, body, _actor(user))
-    except cases.CaseNotFound as exc:
-        raise _not_found(exc) from exc
-    session.commit()
-    return cases.summary_of(session, case)
 
 
 def start_rebuild(doc_id: uuid.UUID, route: str | None) -> bool:

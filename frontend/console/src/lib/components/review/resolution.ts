@@ -19,8 +19,8 @@ export const ACTION_LABEL: Record<ResolutionAction, string> = {
 	approve_internal: 'Approve for internal indexing',
 	approve_download: 'Approve download',
 	watch: 'Notify when an adapter exists',
-	skip: 'Skip file',
-	mark_junk: 'Mark junk',
+	skip: 'Skip whole file',
+	mark_junk: 'Junk whole file',
 	exclude: 'Exclude permanently'
 };
 
@@ -55,11 +55,27 @@ export function allowedActions(flag: Pick<FlagView, 'allowed_actions'> & Partial
 	});
 }
 
-/** The label of an action for this flag: on a failed check or a note "accept both" reads "Accept as it is". */
-export function actionLabel(action: ResolutionAction, flag: Pick<FlagView, 'evidence'>): string {
+/**
+ * The label of an action for this flag. Skip and junk name what they act on, the flag's subject: only a file
+ * flag offers the whole file; junk on a page or an image or table drops just that from search. On a failed
+ * check or a note "accept both" reads "Accept as it is".
+ */
+export function actionLabel(action: ResolutionAction, flag: Pick<FlagView, 'evidence' | 'subject' | 'anchor'>): string {
 	const conflict = conflictOf(flag);
 	if (conflict && conflict.relation !== 'sources_disagree' && action === 'accept_both') return 'Accept as it is';
+	if (flag.subject === 'page' && action === 'mark_junk') return `Junk page ${flag.anchor.page}`;
+	if (flag.subject === 'object' && action === 'mark_junk') return isTable(flag) ? 'Junk this table' : 'Junk this image';
+	if ((flag.subject === 'page' || flag.subject === 'object') && action === 'ignore') return 'Keep as read';
 	return ACTION_LABEL[action];
+}
+
+function isTable(flag: Pick<FlagView, 'evidence'>): boolean {
+	return flag.evidence?.kind === 'low_confidence' && !!flag.evidence.table_a_html;
+}
+
+/** Whether a chosen resolution takes the whole file out of search (asked before it is applied). */
+export function takesFileOut(flag: Pick<FlagView, 'subject'>, action: ResolutionAction): boolean {
+	return flag.subject === 'file' && (action === 'skip' || action === 'mark_junk');
 }
 
 /** Pressure units offered for UNIT_AMBIGUITY on telemetry (file 06 §6), as unit + gauge/abs. */

@@ -3,7 +3,6 @@
 		ApiError,
 		assignCase,
 		dryRun,
-		rejectCase,
 		resolveCase,
 		undoCase,
 		type CaseDetail,
@@ -18,7 +17,7 @@
 	import FlagConsole from './FlagConsole.svelte';
 	import RuleFromDecision from './RuleFromDecision.svelte';
 	import { isChannelMapCase } from './channel_map';
-	import { canBecomeRule, caseRuleScope, missing, needsPreview, type ScopeChoice } from './resolution';
+	import { canBecomeRule, caseRuleScope, missing, needsPreview, takesFileOut, type ScopeChoice } from './resolution';
 	import { offersFor, type RuleOffer } from './rule_from_decision';
 
 	interface Props {
@@ -46,6 +45,8 @@
 	let error = $state('');
 	let notice = $state('');
 	let details = $state(false);
+	// A choice that takes the whole file out of search waits for a second click.
+	let confirming = $state(false);
 	// "Make a rule from this decision": the rules that would repeat what was just applied.
 	let offers = $state<RuleOffer[]>([]);
 
@@ -60,6 +61,7 @@
 		error = '';
 		notice = '';
 		details = false;
+		confirming = false;
 		offers = [];
 	});
 
@@ -68,6 +70,12 @@
 		Object.entries(drafts).filter((entry): entry is [string, Resolution] => entry[1] !== null)
 	);
 	let ruleCandidates = $derived(chosen.filter(([, r]) => canBecomeRule(r.action)));
+	let wholeFile = $derived(
+		chosen.find(([flagId, r]) => {
+			const flag = detail.flags.find((f) => f.flag_id === flagId);
+			return !!flag && takesFileOut(flag, r.action);
+		})?.[1].action ?? null
+	);
 	// "Also propose to": the scope of the proposal rule saved with this approval; null is this file only.
 	let ruleScope = $derived.by(() => {
 		try {
@@ -145,8 +153,13 @@
 		}
 	}
 
-	const apply = () =>
-		run(async () => {
+	function apply() {
+		if (wholeFile && !confirming) {
+			confirming = true;
+			return;
+		}
+		confirming = false;
+		void run(async () => {
 			const repeatable = offersFor(detail.flags, chosen, where?.file_name ?? '');
 			const response = await resolveCase(caseKey, {
 				resolutions: chosen.map(([flag_id, resolution]) => ({ flag_id, resolution })),
@@ -156,11 +169,8 @@
 			const proposed = response.proposed_files;
 			return `Resolved${response.resumed_doc_ids.length ? '. This file is resuming' : ''}${proposed ? `. ${proposed} other file${proposed === 1 ? '' : 's'} now show${proposed === 1 ? 's' : ''} these units as a proposal` : ''}.`;
 		});
-	const reject = (action: 'skip' | 'mark_junk') =>
-		run(async () => {
-			await rejectCase(caseKey, { action });
-			return action === 'skip' ? 'File skipped.' : 'File marked as junk.';
-		});
+	}
+
 	const assign = (assignee: string | null) =>
 		run(async () => {
 			await assignCase(caseKey, assignee);
@@ -177,7 +187,7 @@
 	<CaseHeader {detail} {me} {busy} onAssign={assign} onUndo={undo} />
 
 	{#if isChannelMapCase(detail) && !details}
-		<ChannelMapView {detail} {onChanged} onDetails={() => (details = true)} onReject={reject} locked={busy} />
+		<ChannelMapView {detail} {onChanged} onDetails={() => (details = true)} locked={busy} />
 	{:else}
 	{#if isChannelMapCase(detail)}
 		<button type="button" class="text-link w-fit cursor-pointer border-0 bg-transparent p-0 text-xs" onclick={() => (details = false)}>Back to the channel map</button>
@@ -209,10 +219,20 @@
 			<Button disabled={busy || !!blocker} onclick={apply}>
 				<CheckIcon />Apply & resume
 			</Button>
-			<Button variant="outline" disabled={busy} onclick={() => reject('mark_junk')}>Mark junk</Button>
-			<Button variant="outline" disabled={busy} onclick={() => reject('skip')}>Skip file</Button>
 			{#if blocker}<p class="text-muted-foreground m-0 ml-1 text-xs">{blocker}</p>{/if}
 		</div>
+		{#if confirming && wholeFile}
+			<Notice tone="warning"
+				>{wholeFile === 'mark_junk' ? 'Junk' : 'Skip'} the whole file <strong>{where?.file_name ?? 'of this case'}</strong>? It leaves search{wholeFile ===
+				'mark_junk'
+					? ' and is not processed again'
+					: ''}. Undo brings it back.</Notice
+			>
+			<div class="flex flex-wrap items-center gap-2">
+				<Button variant="destructive" disabled={busy} onclick={apply}>Yes, {wholeFile === 'mark_junk' ? 'junk' : 'skip'} the whole file</Button>
+				<Button variant="outline" disabled={busy} onclick={() => (confirming = false)}>Cancel</Button>
+			</div>
+		{/if}
 		{#if error}<Notice tone="error">{error}</Notice>{/if}
 		{#if notice}<Notice tone="success">{notice}</Notice>{/if}
 	</footer>

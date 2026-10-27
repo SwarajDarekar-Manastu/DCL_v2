@@ -97,7 +97,6 @@ export type FolderList = Schemas['FolderList'];
 export type OpenChannel = Schemas['OpenChannel'];
 export type ResolveRequest = Schemas['ResolveRequest'];
 export type ResolveResponse = Schemas['ResolveResponse'];
-export type RejectRequest = Schemas['RejectRequest'];
 export type UndoResponse = Schemas['UndoResponse'];
 export type EditRequest = Schemas['EditRequest'];
 export type EditResponse = Schemas['EditResponse'];
@@ -377,11 +376,6 @@ export function assignCase(caseKey: string, assignee: string | null): Promise<Ca
 /** POST /review/cases/{case_key}/resolve */
 export function resolveCase(caseKey: string, body: ResolveRequest): Promise<ResolveResponse> {
 	return request<ResolveResponse>('POST', `${casePath(caseKey)}/resolve`, body);
-}
-
-/** POST /review/cases/{case_key}/reject */
-export function rejectCase(caseKey: string, body: RejectRequest): Promise<CaseDetail> {
-	return request<CaseDetail>('POST', `${casePath(caseKey)}/reject`, body);
 }
 
 /** POST /review/cases/{case_key}/undo */

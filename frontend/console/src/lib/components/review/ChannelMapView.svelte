@@ -31,13 +31,11 @@
 		detail: CaseDetail;
 		onChanged: () => void;
 		onDetails: () => void;
-		/** skip the file or mark it junk (the case view owns the call) */
-		onReject?: (action: 'skip' | 'mark_junk') => void;
 		/** the case view is busy with another action */
 		locked?: boolean;
 	}
 
-	let { detail, onChanged, onDetails, onReject, locked = false }: Props = $props();
+	let { detail, onChanged, onDetails, locked = false }: Props = $props();
 	let rows = $derived(channelRows(detail));
 	let picked = $state<Record<string, string>>({});
 	let ambient = $state<Ambient>('SEA_LEVEL');
@@ -201,7 +199,6 @@
 					<Button variant="outline" disabled={busy || locked} onclick={restoreProposal}>Back to the proposed units</Button>
 					<span class="text-muted-foreground text-xs">You changed a proposed unit, so apply with "Apply all and resume" below.</span>
 				{/if}
-				{#if onReject}<Button variant="outline" disabled={busy || locked} onclick={() => onReject('skip')}>Skip file</Button>{/if}
 			</div>
 		</div>
 	{/if}
@@ -319,7 +316,6 @@
 	<footer class="flex flex-wrap items-center gap-2">
 		<Button variant="outline" disabled={busy || !chosen.length} onclick={previewAll}>Preview all</Button>
 		<Button disabled={busy || locked || !previewed || scopeMissing} onclick={applyAll}><CheckIcon />Apply all and resume</Button>
-		{#if onReject && !proposed.length}<Button variant="outline" disabled={busy || locked} onclick={() => onReject('skip')}>Skip file</Button>{/if}
 		<span class="text-muted-foreground text-xs">
 			{chosen.length} of {rows.length} channels have a unit{!previewed && chosen.length ? '; preview first to see the converted values' : ''}.
 		</span>

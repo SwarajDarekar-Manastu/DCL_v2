@@ -577,23 +577,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/review/cases/{case_key}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reject Case */
-        post: operations["reject_case_review_cases__case_key__reject_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/review/cases/{case_key}/reopen": {
         parameters: {
             query?: never;
@@ -2306,7 +2289,7 @@ export interface components {
         FlagView: {
             /**
              * Allowed Actions
-             * @description ALLOWED_ACTIONS for this flag type, minus ADMIN_ONLY_ACTIONS for non-admins
+             * @description allowed_actions for this flag, minus ADMIN_ONLY_ACTIONS for non-admins
              */
             allowed_actions: string[];
             anchor: components["schemas"]["FlagAnchor"];
@@ -2342,6 +2325,12 @@ export interface components {
             route: components["schemas"]["Route"] | null;
             severity: components["schemas"]["FlagSeverity"];
             status: components["schemas"]["FlagStatus"];
+            /**
+             * Subject
+             * @description what the flag is about: skip and junk act on the whole file only for a file flag
+             * @enum {string}
+             */
+            subject: "file" | "page" | "object" | "value";
             suggested_resolution: components["schemas"]["Suggestion"] | null;
         };
         /** FolderChoice */
@@ -2901,16 +2890,6 @@ export interface components {
              * @default
              */
             label: string;
-        };
-        /** RejectRequest */
-        RejectRequest: {
-            /**
-             * Action
-             * @enum {string}
-             */
-            action: "skip" | "mark_junk";
-            /** Comment */
-            comment?: string | null;
         };
         /**
          * ReopenRequest
@@ -5415,41 +5394,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EditResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reject_case_review_cases__case_key__reject_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                case_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RejectRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseSummary"];
                 };
             };
             /** @description Validation Error */

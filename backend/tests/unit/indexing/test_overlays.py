@@ -3,9 +3,10 @@
 import uuid
 from types import SimpleNamespace
 
+from backend.dispatcher.contract import PageBox
 from backend.indexing.chunker import IndexNode
 from backend.indexing.index_document import IndexPlan
-from backend.indexing.overlays import _choose_table, _set_fact_unit, _set_value
+from backend.indexing.overlays import _choose_table, _junk, _set_fact_unit, _set_value
 from backend.llm_engine.enrichment.entities import EntityDecisions
 from backend.llm_engine.enrichment.numeric_facts import FactDecision
 from backend.postgres.enums import GaugeOrAbs, NodeSource, NodeType, NumericFactSource, Quantity
@@ -110,6 +111,51 @@ def test_a_value_typed_for_an_illegible_entry_replaces_the_illegible_mark():
     flag = SimpleNamespace(anchor={"page": 2, "content_sha256": KEY}, evidence={})
     _set_value(plan, flag, {"action": "set_value", "value": "36.706", "unit": "g", "illegible": False})
     assert plan.nodes[0].content == "<td>Tare weight (g)</td><td>36.706</td>"
+
+
+def _box(page, x0, y0, x1, y1):
+    return PageBox(page_no=page, x0=x0, y0=y0, x1=x1, y1=y1)
+
+
+def _report():
+    """Page 41: text, a photo (Docling's box) with a question proxy; page 42: text."""
+    return _plan(
+        [
+            _node("t41", "Injector INJ-09 after the firing.", page_no=41, origin_refs=["t41"]),
+            _node(
+                "fig",
+                "Photo: eroded injector face",
+                NodeType.FIGURE,
+                page_no=41,
+                bboxes=[_box(41, 0.12, 0.22, 0.38, 0.48)],
+                origin_refs=["fig"],
+            ),
+            _node(
+                "fig-q",
+                "What does the injector face show?",
+                NodeType.QUESTION_PROXY,
+                page_no=41,
+                origin_refs=["fig"],
+            ),
+            _node("t42", "Throat 11.36 mm", page_no=42, origin_refs=["t42"]),
+        ],
+        [_fact("fig", "11.32", "mm"), _fact("t42", "11.36", "mm")],
+    )
+
+
+def test_junking_an_image_drops_only_that_image_its_proxy_and_its_numbers():
+    plan = _report()
+    crop = {"x0": 0.1, "y0": 0.2, "x1": 0.4, "y1": 0.5}  # the flag's box is the padded crop around Docling's
+    _junk(plan, SimpleNamespace(anchor={"page": 41, "bbox": crop}))
+    assert [n.ref for n in plan.nodes] == ["t41", "t42"]
+    assert [f.node_ref for f in plan.facts] == ["t42"]
+
+
+def test_junking_a_page_drops_that_page_and_keeps_the_rest_of_the_file():
+    plan = _report()
+    _junk(plan, SimpleNamespace(anchor={"page": 41}))
+    assert [n.ref for n in plan.nodes] == ["t42"]
+    assert [f.node_ref for f in plan.facts] == ["t42"]
 
 
 def test_choosing_table_b_puts_version_b_in_the_table_node():

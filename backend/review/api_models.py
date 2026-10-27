@@ -2,8 +2,9 @@
 
 A case is the group of flags sharing ``case_key`` = ``{doc_id or location_id}:{page_or_sheet}``
 (file 06 §5); it is identified by that key in URLs (percent-encoded). A resolution is one of the
-file 06 §6 actions, picked by its ``action`` field; ``ALLOWED_ACTIONS`` says which actions a flag
-type accepts and ``check_actions`` enforces it on the server.
+file 06 §6 actions, picked by its ``action`` field; ``allowed_actions`` says which actions a flag
+accepts (its type, narrowed by what it is about: ``flag_subject``) and ``check_actions`` enforces it on
+the server.
 """
 
 import uuid
@@ -14,11 +15,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.dispatcher.contract import (  # resolution actions live with the flags they resolve
     ADMIN_ONLY_ACTIONS,
-    ALLOWED_ACTIONS,
     Evidence,
     FlagAnchor,
+    FlagSubject,
     Resolution,
     Suggestion,
+    allowed_actions,
 )
 from backend.postgres.enums import (
     CaseStatus,
@@ -115,8 +117,11 @@ class FlagView(_Model):
     resolved_at: datetime | None
     due_at: datetime | None
     created_at: datetime
+    subject: FlagSubject = Field(
+        description="what the flag is about: skip and junk act on the whole file only for a file flag"
+    )
     allowed_actions: list[str] = Field(
-        description="ALLOWED_ACTIONS for this flag type, minus ADMIN_ONLY_ACTIONS for non-admins"
+        description="allowed_actions for this flag, minus ADMIN_ONLY_ACTIONS for non-admins"
     )
 
 
@@ -133,9 +138,14 @@ class CaseLocation(_Model):
     extension: str | None
 
 
-def allowed_actions_for(flag_type: FlagType, is_admin: bool) -> list[str]:
-    actions = ALLOWED_ACTIONS[flag_type] if is_admin else ALLOWED_ACTIONS[flag_type] - ADMIN_ONLY_ACTIONS
-    return sorted(actions)
+def allowed_actions_for(
+    flag_type: FlagType,
+    is_admin: bool,
+    anchor: dict[str, Any] | None = None,
+    evidence: dict[str, Any] | None = None,
+) -> list[str]:
+    actions = allowed_actions(flag_type, anchor, evidence)
+    return sorted(actions if is_admin else actions - ADMIN_ONLY_ACTIONS)
 
 
 class AppliedUnit(_Model):
@@ -171,14 +181,15 @@ class FlagResolution(_Model):
     resolution: Resolution
 
 
-def check_actions(resolutions: list[FlagResolution], flag_types: dict[uuid.UUID, FlagType]) -> None:
-    """Raise ``ValueError`` for an unknown flag or an action its flag type does not allow."""
+def check_actions(resolutions: list[FlagResolution], allowed: dict[uuid.UUID, frozenset[str]]) -> None:
+    """Raise ``ValueError`` for an unknown flag or an action the flag does not allow (``allowed``: each
+    flag's ``allowed_actions``)."""
     for item in resolutions:
-        flag_type = flag_types.get(item.flag_id)
-        if flag_type is None:
+        actions = allowed.get(item.flag_id)
+        if actions is None:
             raise ValueError(f"flag {item.flag_id} is not part of this case")
-        if item.resolution.action not in ALLOWED_ACTIONS[flag_type]:
-            raise ValueError(f"action {item.resolution.action!r} is not allowed for {flag_type}")
+        if item.resolution.action not in actions:
+            raise ValueError(f"action {item.resolution.action!r} is not allowed for this flag")
 
 
 # ---------------------------------------------------------------- rules (file 06 §8)
@@ -324,11 +335,6 @@ class ResolveResponse(_Model):
         description="this document, when its approval lets it resume; never another file"
     )
     proposed_files: int = Field(default=0, description="other files that now show the saved proposal")
-
-
-class RejectRequest(_Model):
-    action: Literal["skip", "mark_junk"]
-    comment: str | None = None
 
 
 class UndoResponse(_Model):

@@ -149,7 +149,7 @@ Every change records actor/time/before/after; a "rollback to version" button exi
 
 ### 4.4 API (Console backend)
 
-- `GET /review/cases?filters…` · `GET /review/cases/{id}` · `POST /review/cases/{id}/assign` · `POST /review/cases/{id}/resolve` (array of per-flag resolutions, optional rule) · `POST /review/cases/{id}/reject` · `POST /review/cases/{id}/undo`
+- `GET /review/cases?filters…` · `GET /review/cases/{id}` · `POST /review/cases/{id}/assign` · `POST /review/cases/{id}/resolve` (array of per-flag resolutions, optional rule; skip and junk are resolutions too and act on what the flag is about, file 06 §6) · `POST /review/cases/{id}/undo`
 - `POST /review/dry-run` (apply a candidate resolution to the staged payload and return converted stats/preview)
 - `GET /review/rules` · `POST /review/rules` · `POST /review/rules/{id}/simulate` · `POST /review/rules/{id}/deactivate`
 - `GET /assets/url?uri=s3://dcl-assets/…` (presign; viewer role; `dcl-assets` only, never `dcl-raw` or telemetry; path traversal refused) · `POST /assets/upload` (owner S3: returns a presigned PUT into the `dcl-exports/uploads/{user}/{uuid}` prefix with a 24-hour lifecycle, used by the Pipe for chat attachments; uploads are answer-time inputs and are never indexed) · `GET /docs/{id}/pages/{n}/render` · `GET /docs/{id}/viewer?anchor=…` (deep-link page used by chat citations; the anchor is `page` + `content_sha256`, resolved to the current node, falling back to the page)

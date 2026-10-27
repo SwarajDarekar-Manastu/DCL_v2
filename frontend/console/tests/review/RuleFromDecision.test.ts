@@ -6,7 +6,7 @@ import { conflictFlag, detail, factUnitFlag, jsonSchemaFlag, unitFlag } from './
 
 vi.mock('../../src/lib/api_endpoint', async (importOriginal) => {
 	const real = await importOriginal<typeof import('../../src/lib/api_endpoint')>();
-	return { ...real, dryRun: vi.fn(), resolveCase: vi.fn(), rejectCase: vi.fn(), assignCase: vi.fn(), undoCase: vi.fn(), previewRule: vi.fn(), createRule: vi.fn() };
+	return { ...real, dryRun: vi.fn(), resolveCase: vi.fn(), assignCase: vi.fn(), undoCase: vi.fn(), previewRule: vi.fn(), createRule: vi.fn() };
 });
 
 const answers = (flags: number, over: Partial<api.RulePreview> = {}): api.RulePreview => ({

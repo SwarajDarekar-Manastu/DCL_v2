@@ -8,7 +8,14 @@ from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
 from backend.api import auth, review
-from backend.dispatcher.contract import ALLOWED_ACTIONS, MapColumns, Resolution, SetUnit
+from backend.dispatcher.contract import (
+    ALLOWED_ACTIONS,
+    MapColumns,
+    Resolution,
+    SetUnit,
+    allowed_actions,
+    flag_subject,
+)
 from backend.postgres.enums import FlagType
 from backend.postgres.session import get_session
 from backend.review import cases
@@ -77,13 +84,46 @@ def test_resolve_request_carries_typed_resolutions():
         ResolveRequest.model_validate({"resolutions": []})
 
 
-def test_check_actions_enforces_the_flag_type():
+def test_check_actions_enforces_what_the_flag_allows():
     ok = [FlagResolution(flag_id=FLAG, resolution=MapColumns(columns=[{"index": 0, "canonical_name": "t"}]))]
-    check_actions(ok, {FLAG: FlagType.SCHEMA_UNKNOWN})
-    with pytest.raises(ValueError, match="not allowed for UNIT_AMBIGUITY"):
-        check_actions(ok, {FLAG: FlagType.UNIT_AMBIGUITY})
+    check_actions(ok, {FLAG: ALLOWED_ACTIONS[FlagType.SCHEMA_UNKNOWN]})
+    with pytest.raises(ValueError, match="not allowed for this flag"):
+        check_actions(ok, {FLAG: ALLOWED_ACTIONS[FlagType.UNIT_AMBIGUITY]})
     with pytest.raises(ValueError, match="not part of this case"):
         check_actions(ok, {})
+
+
+PAGE_ONLY = {"page": 8}
+FIGURE = {"page": 41, "bbox": {"x0": 0.1, "y0": 0.2, "x1": 0.4, "y1": 0.5}}
+ENTRY = {"page": 2, "content_sha256": "ab" * 16}
+
+
+@pytest.mark.parametrize(
+    ("flag_type", "anchor", "evidence", "subject", "actions"),
+    [
+        (FlagType.PARSE_FAILURE, {}, None, "file", {"use_replacement", "skip", "mark_junk"}),
+        (FlagType.SCHEMA_UNKNOWN, {"content_sha256": "ab" * 16}, None, "file", None),
+        (FlagType.LOW_CONFIDENCE_EXTRACTION, PAGE_ONLY, {}, "page", {"ignore", "mark_junk"}),
+        (FlagType.LOW_CONFIDENCE_EXTRACTION, FIGURE, {"crops": []}, "object", {"ignore", "mark_junk"}),
+        (
+            FlagType.LOW_CONFIDENCE_EXTRACTION,
+            FIGURE,
+            {"table_a_html": "<table/>"},
+            "object",
+            {"choose_table", "mark_junk"},
+        ),
+        (FlagType.LOW_CONFIDENCE_EXTRACTION, ENTRY, {}, "value", {"set_value"}),
+        (FlagType.LOW_CONFIDENCE_EXTRACTION, {"content_sha256": "cd" * 8}, {}, "value", {"ignore"}),
+        (FlagType.UNIT_AMBIGUITY, {"channel": "AIN0"}, {}, "value", {"set_unit", "set_fact_unit"}),
+        (FlagType.UNIT_AMBIGUITY, {"sheet": "Steady State", "column": "P1"}, {}, "value", None),
+    ],
+)
+def test_skip_and_junk_act_only_on_what_the_flag_is_about(flag_type, anchor, evidence, subject, actions):
+    assert flag_subject(flag_type, anchor) == subject
+    allowed = allowed_actions(flag_type, anchor, evidence)
+    assert allowed == (actions or ALLOWED_ACTIONS[flag_type])
+    if subject == "value":
+        assert not {"skip", "mark_junk"} & allowed  # a value question can never take anything out of search
 
 
 # ---------- published routes ----------
@@ -93,7 +133,6 @@ ROUTES = {
     ("get", "/review/cases/{case_key}"): "CaseDetail",
     ("post", "/review/cases/{case_key}/assign"): "CaseSummary",
     ("post", "/review/cases/{case_key}/resolve"): "ResolveResponse",
-    ("post", "/review/cases/{case_key}/reject"): "CaseSummary",
     ("post", "/review/cases/{case_key}/undo"): "UndoResponse",
     ("post", "/review/cases/{case_key}/reopen"): "ReopenResponse",
     ("post", "/review/cases/{case_key}/edit"): "EditResponse",

@@ -109,8 +109,8 @@ describe('FlagConsole', () => {
 	});
 
 	it('never offers what the console cannot carry out yet', () => {
-		show(unitFlag({ flag_type: 'PARSE_FAILURE', allowed_actions: ['use_replacement', 'skip', 'mark_junk'], evidence: null, suggested_resolution: null }));
-		expect(choices()).toEqual(['leave open', 'Skip file', 'Mark junk']);
+		show(unitFlag({ flag_type: 'PARSE_FAILURE', subject: 'file', allowed_actions: ['use_replacement', 'skip', 'mark_junk'], evidence: null, suggested_resolution: null }));
+		expect(choices()).toEqual(['leave open', 'Skip whole file', 'Junk whole file']);
 	});
 
 	it('shows how a closed flag was resolved instead of the console', () => {

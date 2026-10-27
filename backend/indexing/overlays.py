@@ -9,6 +9,9 @@ page, line, sheet/column, bbox or content hash, never a node id). The commit app
   ``content_sha256``) is the person's value (source ``human``); the old reading, or ``[illegible]``, is
   replaced in the node text and in its numbers.
 - ``choose_table``: the flagged table is version B or the edited cells instead of version A.
+- ``mark_junk`` on a page, or on a figure or table (a LOW_CONFIDENCE_EXTRACTION, file 06 §6): the nodes made
+  only from it leave search, with their question proxies, numbers and entity mentions. Junk on a file flag
+  takes the whole file out in review instead (review/cases.py) and has nothing to drop here.
 - ``choose_source``: the document field the disagreement is about takes the chosen side's value.
 - ``mark_superseded``: the other document is SUPERSEDED by this one.
 
@@ -167,7 +170,37 @@ def overlay_plan(session: Session, doc_id: uuid.UUID, plan: IndexPlan) -> list[R
             _set_value(plan, flag, resolution)
         elif action == "choose_table":
             _choose_table(plan, flag, resolution)
+        elif action == "mark_junk":
+            _junk(plan, flag)
     return flags
+
+
+JUNKABLE_OBJECTS = (NodeType.FIGURE, NodeType.PHOTO, NodeType.TABLE)
+
+
+def _junk(plan: IndexPlan, flag: ReviewFlag) -> None:
+    anchor = flag.anchor or {}
+    page, box = anchor.get("page"), _box(anchor.get("bbox"))
+    if page is None:
+        return
+
+    def junked(node: IndexNode) -> bool:
+        if node.page_no != page or (node.page_end or page) != page:
+            return False
+        if box is None:
+            return True
+        x0, y0, x1, y1 = box  # the flag's box is the padded crop: the object's centre lies inside it
+        return node.node_type in JUNKABLE_OBJECTS and any(
+            x0 <= (b.x0 + b.x1) / 2 <= x1 and y0 <= (b.y0 + b.y1) / 2 <= y1 for b in node.bboxes
+        )
+
+    origins = {ref for node in plan.nodes if junked(node) for ref in node.origin_refs}
+    gone = {n.ref for n in plan.nodes if junked(n) or (n.origin_refs and set(n.origin_refs) <= origins)}
+    while children := {n.ref for n in plan.nodes if n.parent_ref in gone and n.ref not in gone}:
+        gone |= children
+    plan.nodes = [n for n in plan.nodes if n.ref not in gone]
+    plan.facts = [f for f in plan.facts if f.node_ref not in gone]
+    plan.entities.mentions = [m for m in plan.entities.mentions if m.node_ref not in gone]
 
 
 def overlay_document(session: Session, document: Document) -> None:

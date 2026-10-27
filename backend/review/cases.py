@@ -1,6 +1,10 @@
-"""Review cases over ``review_flags`` (file 06 §5–§8, file 08 §4): queue, detail, resolve, reject, assign.
+"""Review cases over ``review_flags`` (file 06 §5–§8, file 08 §4): queue, detail, resolve, assign.
 
 A case is the group of flags sharing ``case_key``; its status is derived from its flags (file 08 §4.3).
+Skip and junk are decisions on one flag and act on what that flag is about (``flag_subject``): a file flag
+takes the whole file out of search (junk also quarantines its OneDrive locations); junk on a page or a
+figure or table drops only that from search. Any other decision on a committed file rebuilds it at once,
+so the decision reaches search (undo already did); a file mid-build picks it up when it commits.
 Every human action writes ``audit_events``. A telemetry ``set_unit`` always ends in an operator
 ``channel_map`` rule (file 06 §6): the reviewer's rule when given, else one scoped to this file; the
 caller then starts ``dcl.process.resume_for_rule`` so this document and every HALTED sibling the rule
@@ -19,7 +23,7 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.dispatcher.contract import SetUnit
+from backend.dispatcher.contract import SetUnit, allowed_actions, flag_subject
 from backend.postgres.enums import (
     AuditEntityType,
     CaseStatus,
@@ -52,7 +56,6 @@ from backend.review.api_models import (
     CaseSummary,
     EditRequest,
     FlagView,
-    RejectRequest,
     ResolveRequest,
     RuleDraft,
     RuleView,
@@ -304,13 +307,23 @@ def _case(session: Session, case_key: str) -> _Case:
 
 
 def flag_view(flag: ReviewFlag, is_admin: bool) -> FlagView:
+    flag_type = FlagType(flag.flag_type)
     return FlagView.model_validate(
         {
-            **{c: getattr(flag, c) for c in FlagView.model_fields if c not in ("allowed_actions", "route")},
+            **{
+                c: getattr(flag, c)
+                for c in FlagView.model_fields
+                if c not in ("allowed_actions", "route", "subject")
+            },
             "route": _route(flag.route, f"flag {flag.flag_id}"),
-            "allowed_actions": allowed_actions_for(FlagType(flag.flag_type), is_admin),
+            "subject": flag_subject(flag_type, flag.anchor),
+            "allowed_actions": allowed_actions_for(flag_type, is_admin, flag.anchor, flag.evidence),
         }
     )
+
+
+def _allowed(flags: list[ReviewFlag]) -> dict[uuid.UUID, frozenset[str]]:
+    return {f.flag_id: allowed_actions(FlagType(f.flag_type), f.anchor, f.evidence) for f in flags}
 
 
 def _applied_unit_of(rule: Rule, flag: ReviewFlag) -> SetUnit | None:
@@ -674,6 +687,7 @@ class ResolveOutcome:
     resume_rule_id: uuid.UUID | None  # this file's approval: resumes this file only
     proposed_files: int = 0
     resume_doc_id: uuid.UUID | None = None  # a HALTED file of another route whose HARD flags are all decided
+    rebuild_doc_id: uuid.UUID | None = None  # a committed file rebuilt so the decision reaches search
 
 
 def _settle_document(session: Session, doc_id: uuid.UUID | None) -> None:
@@ -696,7 +710,7 @@ def resolve_case(
     case = _case(session, case_key)
     by_id = {f.flag_id: f for f in case.flags}
     try:
-        check_actions(request.resolutions, {f.flag_id: FlagType(f.flag_type) for f in case.flags})
+        check_actions(request.resolutions, _allowed(case.flags))
     except ValueError as exc:
         raise InvalidAction(str(exc)) from exc
     for item in request.resolutions:
@@ -752,7 +766,21 @@ def resolve_case(
             "proposal_rule_id": str(proposal.rule_id) if proposal else None,
         },
     )
-    _settle_document(session, first.doc_id)
+    whole_file = next(
+        (
+            item.resolution.action
+            for item in request.resolutions
+            if item.resolution.action in ("skip", "mark_junk")
+            and flag_subject(FlagType(by_id[item.flag_id].flag_type), by_id[item.flag_id].anchor) == "file"
+        ),
+        None,
+    )
+    rebuild = None
+    if whole_file:
+        _take_file_out(session, case, whole_file, actor, now)
+    else:
+        _settle_document(session, first.doc_id)
+        rebuild = _rebuild_committed(session, first.doc_id)
     session.flush()
     proposed_files = propose_rule(session, proposal) if proposal is not None else 0
     return ResolveOutcome(
@@ -761,7 +789,19 @@ def resolve_case(
         approval.rule_id if approval else None,
         proposed_files,
         _resumable(session, first.doc_id),
+        rebuild,
     )
+
+
+def _rebuild_committed(session: Session, doc_id: uuid.UUID | None) -> uuid.UUID | None:
+    """A committed file is rebuilt at once so a decision reaches search (its overlays are applied on commit);
+    a file already PROCESSING applies it when that build commits, and a HALTED one resumes instead."""
+    document = session.get(Document, doc_id) if doc_id else None
+    committed = (DocumentStatus.ACTIVE, DocumentStatus.ACTIVE_WITH_SOFT_FLAGS)
+    if document is None or document.status not in committed:
+        return None
+    document.status = DocumentStatus.PROCESSING
+    return document.doc_id
 
 
 def _resumable(session: Session, doc_id: uuid.UUID | None) -> uuid.UUID | None:
@@ -782,21 +822,20 @@ def _resumable(session: Session, doc_id: uuid.UUID | None) -> uuid.UUID | None:
     return None if open_hard else doc_id
 
 
-def reject_case(session: Session, case_key: str, request: RejectRequest, actor: str) -> _Case:
-    """Skip or junk the file: every open flag REJECTED_FILE; the document leaves the index path
-    (QUARANTINED, staged payload released); ``mark_junk`` also quarantines its OneDrive locations."""
-    case = _case(session, case_key)
-    now = datetime.now(UTC)
-    for flag in case.open_flags:
-        flag.status, flag.resolved_by, flag.resolved_at = FlagStatus.REJECTED_FILE, actor, now
-        flag.resolution = {"action": request.action}
+def _take_file_out(session: Session, case: _Case, action: str, actor: str, now: datetime) -> None:
+    """Skip or junk on a file flag: every open flag of the case REJECTED_FILE; the document leaves the index
+    path (QUARANTINED, staged payload released); ``mark_junk`` also quarantines its OneDrive locations."""
+    for flag in case.flags:
+        if flag.status in OPEN or flag.resolved_at == now:
+            flag.status, flag.resolved_by, flag.resolved_at = FlagStatus.REJECTED_FILE, actor, now
+            flag.resolution = {"action": action}
     first = case.flags[0]
     document = session.get(Document, first.doc_id) if first.doc_id else None
     before = {"document_status": document.status if document else None}
     if document is not None:
         document.status = DocumentStatus.QUARANTINED
         document.staged_payload_uri = None
-    if request.action == "mark_junk":
+    if action == "mark_junk":
         if first.doc_id:
             items = session.scalars(
                 select(DriveItem)
@@ -814,16 +853,11 @@ def reject_case(session: Session, case_key: str, request: RejectRequest, actor: 
         session,
         actor,
         AuditEntityType.CASE,
-        case_key,
-        request.action,
+        case.key,
+        action,
         before,
-        {
-            "document_status": document.status if document else None,
-            "comment": request.comment,
-        },
+        {"document_status": document.status if document else None},
     )
-    session.flush()
-    return case
 
 
 def assign_case(session: Session, case_key: str, assignee: str | None, actor: str) -> _Case:
@@ -1164,7 +1198,7 @@ def dry_run(session: Session, request) -> "Any":
     flag = next((f for f in case.flags if f.flag_id == request.resolution.flag_id), None)
     if flag is None:
         raise InvalidAction(f"flag {request.resolution.flag_id} is not part of this case")
-    check_actions([request.resolution], {flag.flag_id: FlagType(flag.flag_type)})
+    check_actions([request.resolution], _allowed([flag]))
     resolution = request.resolution.resolution
     channels, messages = [], []
     if isinstance(resolution, SetUnit) and (flag.anchor or {}).get("channel"):
@@ -1413,7 +1447,7 @@ def edit_case(session: Session, case_key: str, request: EditRequest, actor: str)
     case = _case(session, case_key)
     by_id = {f.flag_id: f for f in case.flags}
     try:
-        check_actions(request.resolutions, {f.flag_id: FlagType(f.flag_type) for f in case.flags})
+        check_actions(request.resolutions, _allowed(case.flags))
     except ValueError as exc:
         raise InvalidAction(str(exc)) from exc
     edited: dict[uuid.UUID, SetUnit] = {}
