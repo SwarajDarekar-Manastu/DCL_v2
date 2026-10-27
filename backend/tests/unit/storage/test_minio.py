@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 from minio import Minio
+from minio.error import S3Error
 
 from backend.storage.minio import (
     CIR,
@@ -22,6 +23,7 @@ from backend.storage.minio import (
     presign_get,
     presign_put,
     raw_key,
+    unavailable,
     uri,
 )
 
@@ -140,3 +142,17 @@ def test_links_a_browser_opens_are_signed_for_the_public_address_without_a_netwo
     assert client_from_settings(settings)._base_url.host == "minio:9000"  # reads and writes stay inside
     settings.minio_public_endpoint = None
     assert browser_client_from_settings(settings)._base_url.host == "minio:9000"
+
+
+@pytest.mark.parametrize(
+    ("error", "passes"),
+    [
+        (S3Error(None, "XMinioStorageFull", "minimum free drive threshold", "k", "r", "h"), True),
+        (S3Error(None, "SlowDown", "busy", "k", "r", "h"), True),
+        (S3Error(None, "NoSuchKey", "gone", "k", "r", "h"), False),
+        (S3Error(None, "AccessDenied", "denied", "k", "r", "h"), False),
+        (ValueError("bad header"), False),
+    ],
+)
+def test_minio_full_or_busy_is_unavailable_and_a_real_error_is_not(error, passes):
+    assert unavailable(error) is passes

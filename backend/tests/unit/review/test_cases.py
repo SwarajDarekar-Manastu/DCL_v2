@@ -958,3 +958,15 @@ def test_reopening_what_a_rule_applied_asks_the_questions_again_and_switches_tha
     assert {f.status for f in flags.values()} == {"REOPENED"}
     assert result.rebuild_doc_id == seeded["dat"].doc_id
     assert session.get(Rule, rule.rule_id).active is False
+
+
+def test_a_decided_file_that_did_not_move_on_says_why(session, seeded):
+    doc, flag = _unreadable(session)
+    flag.status = "RESOLVED"
+    doc.metadata_sources = {"error": "S3Error: XMinioStorageFull", "error_transient": True}
+    session.commit()
+    detail = cases.case_detail(session, flag.case_key, is_admin=False)
+    assert (detail.document_status, detail.document_blocking, detail.document_retries) == ("HALTED", 0, True)
+    assert detail.document_error == "S3Error: XMinioStorageFull"
+    other = cases.case_detail(session, f"{seeded['dat'].doc_id}:", is_admin=False)
+    assert (other.document_blocking, other.document_error) == (2, None)  # two channel units still open

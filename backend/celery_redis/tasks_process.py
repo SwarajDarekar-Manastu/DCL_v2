@@ -1,7 +1,8 @@
 """Phase 2 tasks. ``dcl.process.dispatch`` turns landed blobs inside ``processing.scope`` into documents
 (backend/dispatcher/routing.py) and enqueues every PROCESSING document on its adapter's task;
 ``dcl.process.route_c`` runs Route C on ``telemetry_stream``; ``dcl.process.route_a1`` runs Route A1 (PDF)
-on ``cpu_parse``."""
+on ``cpu_parse``; ``dcl.process.reconcile`` sends again the files a decision should have moved on and did not
+(backend/dispatcher/reconcile.py)."""
 
 import uuid
 from collections.abc import Callable
@@ -13,7 +14,9 @@ from sqlalchemy.orm import Session
 
 from backend.celery_redis.app import app
 from backend.celery_redis.queues import POOLS, Queue
+from backend.common.telemetry import METRICS
 from backend.config import get_settings
+from backend.dispatcher.reconcile import stalled
 from backend.dispatcher.routing import Release, sweep_documents
 from backend.dispatcher.routing import dispatch as dispatch_scope
 from backend.indexing.commit import default_indexer
@@ -23,7 +26,7 @@ from backend.postgres.enums import DocumentStatus
 from backend.postgres.models import Document
 from backend.postgres.session import engine_from_settings
 from backend.routes.c_telemetry.pipeline import halted_documents_for_rule, process_document, resume_document
-from backend.storage.minio import client_from_settings
+from backend.storage.minio import client_from_settings, unavailable
 
 IO_LIGHT = str(Queue.IO_LIGHT)
 
@@ -44,6 +47,17 @@ def dispatch() -> dict[str, int]:
         "released": result.released,
         "enqueued": len(result.to_process),
     }
+
+
+@app.task(name="dcl.process.reconcile", queue=IO_LIGHT)
+def reconcile() -> dict[str, int]:
+    """Every 30 minutes: decided files that did not move on are sent again (reconcile.py)."""
+    with Session(_engine(), expire_on_commit=False) as session:
+        releases = stalled(session)
+        session.commit()
+    for release in releases:
+        enqueue_release(release)
+    return {"sent": len(releases)}
 
 
 @app.task(name="dcl.process.sweep_documents", queue=IO_LIGHT)
@@ -96,9 +110,13 @@ def route_c(doc_id: str) -> dict[str, object]:
     max_retries=POOLS[Queue.TELEMETRY_STREAM].max_retries,
 )
 def resume_route_c(doc_id: str) -> dict[str, object]:
-    """``resume_from_staged`` for a HALTED Route C run (file 06 §7): rebuilt from its raw.parquet."""
+    """``resume_from_staged`` for a HALTED Route C run (file 06 §7): rebuilt from its raw.parquet. A file that
+    is no longer HALTED (resumed by an earlier message) is left alone."""
     minio = client_from_settings(get_settings())
     with Session(_engine(), expire_on_commit=False) as session:
+        document = session.get(Document, uuid.UUID(doc_id))
+        if document is None or document.status != DocumentStatus.HALTED:
+            return {"doc_id": doc_id, "status": document.status if document else None, "hard_flags": 0}
         try:
             outcome = resume_document(session, minio, uuid.UUID(doc_id), indexer=_indexer(minio))
         except Exception as exc:
@@ -268,26 +286,36 @@ def _settle(
     session: Session, doc_id: uuid.UUID, exc: Exception, retryable: tuple[type[Exception], ...] = RETRYABLE
 ) -> None:
     """After a route raised: a transient error with retries left schedules a retry (the document stays
-    PROCESSING); any other error, or a transient one on the last retry, leaves the document FAILED."""
+    PROCESSING); any other error, or a transient one on the last retry, leaves the document FAILED. MinIO
+    full, busy or unreachable is transient too, and counted (alert DclStorageUnavailable)."""
     session.rollback()
-    transient = isinstance(exc, retryable) or (isinstance(exc, GatewayError) and exc.retryable)
+    storage = unavailable(exc)
+    if storage:
+        METRICS.storage_unavailable_total.add(1)
+    transient = storage or isinstance(exc, retryable) or (isinstance(exc, GatewayError) and exc.retryable)
     task = current_task
     if transient and task and not task.request.called_directly and task.request.retries < task.max_retries:
         countdown = min(RETRY_BACKOFF_S * 2**task.request.retries, RETRY_BACKOFF_MAX_S)
         raise task.retry(exc=exc, countdown=countdown)
-    _fail(session, doc_id, exc)
+    _fail(session, doc_id, exc, transient)
 
 
-def _fail(session: Session, doc_id: uuid.UUID, exc: Exception) -> None:
-    """An unexpected error leaves the document FAILED with the error recorded, never half-written."""
+def _fail(session: Session, doc_id: uuid.UUID, exc: Exception, transient: bool = False) -> None:
+    """An unexpected error leaves the document FAILED with the error recorded, never half-written. A resume
+    that failed has rolled its file back to HALTED: it stays HALTED with its staged payload, and the error is
+    kept so the case shows it and the reconciler resumes it again. ``error_transient`` lets the reconciler
+    run a FAILED file again once the cause has passed."""
     document = session.get(Document, doc_id)
-    if document is not None and document.status == DocumentStatus.PROCESSING:
+    if document is None or document.status not in (DocumentStatus.PROCESSING, DocumentStatus.HALTED):
+        return
+    if document.status == DocumentStatus.PROCESSING:
         document.status = DocumentStatus.FAILED
-        document.metadata_sources = {
-            **(document.metadata_sources or {}),
-            "error": f"{type(exc).__name__}: {exc}",
-        }
-        session.commit()
+    document.metadata_sources = {
+        **(document.metadata_sources or {}),
+        "error": f"{type(exc).__name__}: {exc}",
+        "error_transient": transient,
+    }
+    session.commit()
 
 
 def enqueue_release(release: Release) -> None:

@@ -1536,6 +1536,23 @@ export interface components {
              * @default []
              */
             applied_units: components["schemas"]["AppliedUnit"][];
+            /**
+             * Document Blocking
+             * @description open HARD flags of the whole file, in this case and its other cases
+             * @default 0
+             */
+            document_blocking: number;
+            /**
+             * Document Error
+             * @description the file's last processing error while it is HALTED or FAILED
+             */
+            document_error?: string | null;
+            /**
+             * Document Retries
+             * @description the reconciler sends the file again on its own (dispatcher/reconcile.py)
+             * @default false
+             */
+            document_retries: boolean;
             /** Document Status */
             document_status: string | null;
             /** Flags */

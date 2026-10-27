@@ -96,3 +96,27 @@ tests:
           - exp_labels: {severity: warning, root: APU Heater}
             exp_annotations:
               summary: "A 410 or forced resync started for root APU Heater"
+  - interval: 1m
+    input_series:
+      - series: 'storage_unavailable_total'
+        values: '0 0 2 4'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: DclStorageUnavailable
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "MinIO refused pipeline writes (drive full, busy or unreachable); work retries and then waits"
+              runbook: backend/devops/runbooks/stack.md (free disk; the reconciler resends stalled files)
+  - interval: 1m
+    input_series:
+      - series: 'storage_unavailable_total'
+        values: '_ _ _ 1 1'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: DclStorageUnavailable
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "MinIO refused pipeline writes (drive full, busy or unreachable); work retries and then waits"
+              runbook: backend/devops/runbooks/stack.md (free disk; the reconciler resends stalled files)

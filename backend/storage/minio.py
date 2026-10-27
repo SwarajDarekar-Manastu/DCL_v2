@@ -3,6 +3,10 @@
 Objects are addressed as ``s3://{bucket}/{key}`` in the database (``minio_uri`` columns).
 Keys never start with ``/`` and never contain empty or ``..`` segments. Originals are
 content-addressed: ``dcl-raw/{sha256[0:2]}/{sha256[2:4]}/{sha256}``.
+
+``unavailable(exc)``: MinIO could not take the request right now (drive full, busy, starting, unreachable), so
+the work is retried later instead of failing for good (2026-10-27: a full host disk turned 22 telemetry
+resumes into silent no-ops).
 """
 
 import io
@@ -12,7 +16,8 @@ from datetime import timedelta
 from urllib.parse import urlsplit
 
 from minio import Minio
-from minio.error import S3Error
+from minio.error import S3Error, ServerError
+from urllib3.exceptions import MaxRetryError, ProtocolError
 
 from backend.config import Group, Settings
 
@@ -24,11 +29,21 @@ EXPORTS = "dcl-exports"
 BUCKETS = (RAW, CIR, ASSETS, TELEMETRY, EXPORTS)
 PRESIGN_TTL = timedelta(minutes=15)
 MISSING_CODES = frozenset({"NoSuchKey", "NoSuchObject"})
+BUSY_CODES = frozenset(
+    {"XMinioStorageFull", "SlowDown", "ServiceUnavailable", "XMinioServerNotInitialized", "RequestTimeout"}
+)
 SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 
 
 class StorageError(ValueError):
     pass
+
+
+def unavailable(exc: BaseException) -> bool:
+    """True when MinIO refused or missed the request for a reason that passes (full, busy, starting, down)."""
+    if isinstance(exc, S3Error):
+        return exc.code in BUSY_CODES
+    return isinstance(exc, ServerError | MaxRetryError | ProtocolError)
 
 
 def client_from_settings(settings: Settings) -> Minio:

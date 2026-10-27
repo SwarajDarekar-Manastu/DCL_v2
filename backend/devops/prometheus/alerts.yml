@@ -51,3 +51,11 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "Gemini calls are being refused by the daily budget or the gateway quota"
+      - alert: DclStorageUnavailable
+        expr: |
+          sum(increase(storage_unavailable_total[15m])) > 0
+          or sum(storage_unavailable_total unless storage_unavailable_total offset 15m) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: "MinIO refused pipeline writes (drive full, busy or unreachable); work retries and then waits"
+          runbook: backend/devops/runbooks/stack.md (free disk; the reconciler resends stalled files)

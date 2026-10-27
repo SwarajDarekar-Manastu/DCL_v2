@@ -39,6 +39,11 @@ BEAT_SCHEDULE: dict[str, dict] = {
         "schedule": 30 * 60.0,
         "options": {"queue": str(Queue.IO_LIGHT)},
     },
+    "process-reconcile": {
+        "task": "dcl.process.reconcile",
+        "schedule": 30 * 60.0,
+        "options": {"queue": str(Queue.IO_LIGHT)},
+    },
     "process-sweep-documents-daily": {
         "task": "dcl.process.sweep_documents",
         "schedule": crontab(hour=3, minute=0),

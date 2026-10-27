@@ -169,6 +169,15 @@ class CaseDetail(_Model):
     summary: CaseSummary
     flags: list[FlagView]
     document_status: str | None
+    document_error: str | None = Field(
+        default=None, description="the file's last processing error while it is HALTED or FAILED"
+    )
+    document_retries: bool = Field(
+        default=False, description="the reconciler sends the file again on its own (dispatcher/reconcile.py)"
+    )
+    document_blocking: int = Field(
+        default=0, description="open HARD flags of the whole file, in this case and its other cases"
+    )
     locations: list[CaseLocation]
     siblings: list[str] = Field(default=[], description="file names in the same folder")
     applied_units: list[AppliedUnit] = Field(

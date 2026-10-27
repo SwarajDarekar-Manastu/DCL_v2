@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.dispatcher.contract import SetUnit, allowed_actions, flag_subject
@@ -422,10 +422,29 @@ def case_detail(session: Session, case_key: str, is_admin: bool) -> CaseDetail:
                 .limit(200)
             )
         )
+    meta = (document.metadata_sources or {}) if document else {}
+    stuck = document is not None and document.status in (DocumentStatus.HALTED, DocumentStatus.FAILED)
+    retries = stuck and (document.status == DocumentStatus.HALTED or bool(meta.get("error_transient")))
+    blocking = (
+        session.scalar(
+            select(func.count())
+            .select_from(ReviewFlag)
+            .where(
+                ReviewFlag.doc_id == document.doc_id,
+                ReviewFlag.severity == FlagSeverity.HARD,
+                ReviewFlag.status.in_(OPEN),
+            )
+        )
+        if document is not None
+        else 0
+    )
     return CaseDetail(
         summary=summary,
         flags=[flag_view(f, is_admin) for f in case.flags],
         document_status=document.status if document else None,
+        document_error=meta.get("error") if stuck else None,
+        document_retries=retries,
+        document_blocking=blocking or 0,
         locations=[
             CaseLocation(
                 root_name=i.root_name,

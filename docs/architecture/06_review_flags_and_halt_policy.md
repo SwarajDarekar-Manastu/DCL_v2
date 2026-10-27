@@ -148,6 +148,14 @@ sequenceDiagram
 
 Enrichment and embeddings are re-run **only** for nodes whose `embed_text_hash` changed, so resolving a unit on a 42-second run or a handwritten value on one page costs almost nothing.
 
+**When the next step does not happen (added 2026-10-27).** The resume is one task message, so a stopped worker, a full disk or a lost message can leave a decided file behind. On that day 22 telemetry files stayed HALTED after people approved all 176 of their units. Their resumes met a full disk and rolled back with no trace. The safety net has five parts:
+
+- **Retry.** MinIO full, busy or unreachable is a passing error: the task retries with backoff and counts it. The alert `DclStorageUnavailable` fires on the first refused write.
+- **A failed resume says so.** The file stays HALTED with its staged payload, and its error is kept in `metadata_sources.error`. A failed run is FAILED, with `error_transient` when the cause passes.
+- **Reconciler.** `dcl.process.reconcile` runs every 30 minutes. It sends again every HALTED file with no open HARD flag, and every FAILED file whose error passes. Each file is sent at most once per 2 hours and at most 6 times (`backend/dispatcher/reconcile.py`).
+- **The case says what became of the file.** "Decided. The file resumes on its own within 30 minutes"; "Decided, but resuming the file failed: the storage is full. It is tried again on its own"; "This file stays out of search until its other N blocking questions are answered"; or "Processing this file failed: … Re-run it from Ops".
+- **What is not covered yet.** A free-space gauge that warns *before* MinIO refuses writes needs MinIO's admin metrics.
+
 ## 8. Rules: scope, precedence, retroactivity
 
 - Scope is four **columns** (`scope_root`, `scope_folder_id`, `scope_filename_glob`, `scope_extension`), because scope is the matching key and the specificity order. Specificity, most to least: the file's own folder, a farther ancestor folder, no folder; then a filename glob, then an extension, then a root; a global rule last (so "this folder" beats a root-wide `*.dat`). Ties: `origin = operator` beats derived rules (`cfg`, `header`, `config_json`, `tdms_props`), then `precedence`, then newest.

@@ -65,6 +65,9 @@ class _Metrics:
         "llm_tokens_total", description="Gemini tokens by model and kind"
     )
     llm_cost_total = _meter.create_counter("llm_cost_total", description="Estimated Gemini cost by model")
+    storage_unavailable_total = _meter.create_counter(
+        "storage_unavailable_total", description="Pipeline tasks that met MinIO full, busy or unreachable"
+    )
     llm_budget_exhausted_total = _meter.create_counter(
         "llm_budget_exhausted_total", description="Calls refused by the daily budget or gateway quota"
     )

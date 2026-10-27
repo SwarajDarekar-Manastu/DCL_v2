@@ -88,6 +88,9 @@ export function detail(flags: FlagView[] = [unitFlag()], overrides: Partial<Case
 		summary: summary(),
 		flags,
 		document_status: 'HALTED',
+		document_error: null,
+		document_retries: false,
+		document_blocking: 1,
 		locations: [
 			{
 				root_name: 'APU Heater',

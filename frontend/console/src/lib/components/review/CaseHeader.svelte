@@ -5,8 +5,10 @@
 	import Undo2Icon from '@lucide/svelte/icons/undo-2';
 	import type { CaseDetail } from '$lib/api_endpoint';
 	import { Button } from '$lib/components/ui/button';
+	import Notice from '$lib/components/shell/Notice.svelte';
 	import ToneBadge from '$lib/components/shell/ToneBadge.svelte';
 	import { auditUrl, decisionsHref } from './audit';
+	import { fileStatusNote } from './file_status';
 	import { ageText, isAging } from './format';
 	import { groupLocations } from './locations';
 
@@ -24,6 +26,7 @@
 	let undoable = $derived(detail.flags.some((f) => f.status === 'RESOLVED' || f.status === 'REJECTED_FILE'));
 	let pageNo = $derived(/^\d+$/.test(summary.page_or_sheet) ? Number(summary.page_or_sheet) : null);
 	let places = $derived(groupLocations(detail.locations));
+	let fileNote = $derived(fileStatusNote(detail));
 	let historyHref = $derived(auditUrl({ entity_id: [summary.case_key, ...detail.flags.map((f) => f.flag_id)] }));
 	let viewerHref = $derived(
 		summary.doc_id ? `/docs/${summary.doc_id}/viewer${pageNo ? `?anchor=${encodeURIComponent(`page:${pageNo}:`)}` : ''}` : null
@@ -47,6 +50,7 @@
 			<span>· {summary.assignee ? `assigned to ${summary.assignee}` : 'unassigned'}</span>
 		</p>
 		{#if summary.path}<p class="text-muted-foreground m-0 mt-1 font-mono text-xs break-all">{summary.path}</p>{/if}
+		{#if fileNote}<div class="mt-2"><Notice tone={fileNote.tone}>{fileNote.text}</Notice></div>{/if}
 	</div>
 	<div class="flex flex-wrap items-center gap-1.5">
 		{#if summary.assignee === me}

@@ -68,6 +68,10 @@ Tasks are acknowledged late and rejected on worker loss, so the task returns to 
 - Change an alert: edit `alerts.yml`, add a case to `alerts_test.yml`, run `uv run pytest backend/tests/unit/devops/test_alert_rules.py`, then `docker compose -p dcl-v2 restart prometheus`.
 - No alerts arriving: check `docker compose -p dcl-v2 logs alertmanager` for `Notify attempt failed`. Alertmanager redacts the URL in its logs.
 
+## Storage full (alert DclStorageUnavailable)
+
+MinIO refused pipeline writes: drive full (`XMinioStorageFull`), busy, or unreachable. Tasks retry with backoff. A resume that still fails leaves its file HALTED with the error; a run that still fails leaves it FAILED with `error_transient`. Free space first; `docker builder prune` is usually the largest safe item, so check `docker system df`. The reconciler (`dcl.process.reconcile`, every 30 minutes) then sends the stalled files again on its own. To hurry it: `docker exec -w /app dcl-v2-api-1 celery -A backend.celery_redis.app call dcl.process.reconcile`.
+
 ## Re-auth (alert DclGraphAuthFailure)
 
 The delegated token expired or was revoked. Run S1's device-code sign-in CLI from the main checkout; it writes the encrypted cache into `DCL_TOKEN_DIR`. The next `dcl.sync.token_health` run (every 15 minutes) clears the alert.

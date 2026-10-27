@@ -187,6 +187,7 @@ def test_beat_schedule_runs_sync_on_io_light_and_the_benchmark_sweep_on_its_queu
         "dcl.sync.token_health",
         "dcl.sync.enqueue_downloads",
         "dcl.process.dispatch",
+        "dcl.process.reconcile",
         "dcl.process.sweep_documents",
         "dcl.benchmark.sweep",
     }
@@ -201,6 +202,7 @@ def test_beat_schedule_runs_sync_on_io_light_and_the_benchmark_sweep_on_its_queu
     assert schedule["sync-token-health"]["schedule"] == 900.0
     assert schedule["sync-enqueue-downloads"]["schedule"] == 600.0
     assert schedule["process-dispatch"]["schedule"] == 1800.0
+    assert schedule["process-reconcile"]["schedule"] == 1800.0
     sweep = schedule["process-sweep-documents-daily"]["schedule"]
     assert sweep.hour == {3} and sweep.minute == {0}
     assert schedule["benchmark-sweep"]["schedule"] == 60.0
