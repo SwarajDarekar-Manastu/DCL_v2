@@ -21,8 +21,9 @@
 	});
 
 	function onKeydown(event: KeyboardEvent) {
-		const target = event.target as HTMLElement | null;
-		if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
+		// Keys typed into a field, or pressed on a button (Enter on "Apply"), belong to that control.
+		const target = event.target;
+		if (target instanceof Element && target.closest('input, select, textarea, button, [contenteditable="true"]')) return;
 		if (!items.length) return;
 		if (event.key === 'j') cursor = Math.min(cursor + 1, items.length - 1);
 		else if (event.key === 'k') cursor = Math.max(cursor - 1, 0);

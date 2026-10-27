@@ -1559,6 +1559,8 @@ export interface components {
             flags: components["schemas"]["FlagView"][];
             /** Locations */
             locations: components["schemas"]["CaseLocation"][];
+            /** @description for a case of a page read whole: the reader's whole page beside its unsure entries */
+            page_reading?: components["schemas"]["PageReading"] | null;
             /**
              * Siblings
              * @description file names in the same folder
@@ -2112,6 +2114,21 @@ export interface components {
             mentions: number;
             type: components["schemas"]["EntityType"];
         };
+        /** EntryPlace */
+        EntryPlace: {
+            /** Block Key */
+            block_key: string;
+            /**
+             * Cell
+             * @description [row, col] in that table
+             */
+            cell?: number[] | null;
+            /**
+             * Table
+             * @description index of the table in the block, when in a cell
+             */
+            table?: number | null;
+        };
         /** Exclude */
         Exclude: {
             /**
@@ -2285,7 +2302,7 @@ export interface components {
              */
             flag_id: string;
             /** Resolution */
-            resolution: components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"];
+            resolution: components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["SetCell"] | components["schemas"]["SetText"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"];
         };
         /**
          * FlagSeverity
@@ -2332,7 +2349,7 @@ export interface components {
             /** Proposed By Rule Id */
             proposed_by_rule_id: string | null;
             /** Resolution */
-            resolution: (components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"]) | null;
+            resolution: (components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["SetCell"] | components["schemas"]["SetText"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"]) | null;
             /** Resolution Rule Id */
             resolution_rule_id: string | null;
             /** Resolved At */
@@ -2767,6 +2784,60 @@ export interface components {
             /** Queues */
             queues: components["schemas"]["QueueDepth"][] | null;
         };
+        /**
+         * PageEntry
+         * @description One handwritten entry the page reader was unsure of, and where it sits in the reading.
+         */
+        PageEntry: {
+            /**
+             * Alternatives
+             * @default []
+             */
+            alternatives: string[];
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Flag Id
+             * @description the entry's flag in this case
+             */
+            flag_id?: string | null;
+            /**
+             * Illegible
+             * @default false
+             */
+            illegible: boolean;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string | null;
+            /** @description null: its value is not found in the text */
+            located?: components["schemas"]["EntryPlace"] | null;
+            /** Unit */
+            unit?: string | null;
+            /** Value */
+            value: string | null;
+        };
+        /**
+         * PageReading
+         * @description The page check (review/page_reading.py): the reader's whole page, as plain-text blocks.
+         */
+        PageReading: {
+            /** Blocks */
+            blocks: components["schemas"]["ReadingBlock"][];
+            /** Entries */
+            entries: components["schemas"]["PageEntry"][];
+            /**
+             * Image Uri
+             * @description the page render, s3 (presigned by /assets/url)
+             */
+            image_uri?: string | null;
+            /** Page No */
+            page_no: number;
+            /** Prompt Version */
+            prompt_version?: string | null;
+            /** Reader Confidence */
+            reader_confidence?: number | null;
+        };
         /** PageView */
         PageView: {
             /** Height */
@@ -2840,6 +2911,61 @@ export interface components {
             queue: string;
             /** Waiting */
             waiting: number;
+        };
+        /** ReadingBlock */
+        ReadingBlock: {
+            /**
+             * Key
+             * @description sha256 of the block's source text, 16 hex: the anchor of a correction on it
+             */
+            key: string;
+            /** Parts */
+            parts: components["schemas"]["ReadingPart"][];
+        };
+        /** ReadingCell */
+        ReadingCell: {
+            /**
+             * Corrected
+             * @description a person's decision changed this cell
+             * @default false
+             */
+            corrected: boolean;
+            /**
+             * Span Of
+             * @description a position a rowspan/colspan covers: [row, col] of its origin cell
+             */
+            span_of?: number[] | null;
+            /**
+             * Struck
+             * @description crossed-out text in the cell (drawn struck through)
+             * @default []
+             */
+            struck: string[];
+            /** Text */
+            text: string;
+        };
+        /** ReadingPart */
+        ReadingPart: {
+            /**
+             * Corrected
+             * @description lines of this text a person corrected
+             * @default []
+             */
+            corrected: string[];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "heading" | "text" | "table";
+            /** Rows */
+            rows?: components["schemas"]["ReadingCell"][][] | null;
+            /**
+             * Struck
+             * @default []
+             */
+            struck: string[];
+            /** Text */
+            text?: string | null;
         };
         /**
          * Redact
@@ -2931,7 +3057,15 @@ export interface components {
         ResolveRequest: {
             /** Comment */
             comment?: string | null;
-            /** Resolutions */
+            /**
+             * Corrections
+             * @description the page check: cells or lines of the page read whole that the reader did not flag, corrected; each is kept as a decided flag of origin 'review' on the page
+             */
+            corrections?: (components["schemas"]["SetCell"] | components["schemas"]["SetText"])[] | null;
+            /**
+             * Resolutions
+             * @default []
+             */
             resolutions: components["schemas"]["FlagResolution"][];
             rule?: components["schemas"]["RuleDraft"] | null;
             /** @description with telemetry unit decisions: also propose them, as one rule with this scope, to the other waiting files it matches (they stay open until a person approves each). This file is always approved on its own. */
@@ -3541,6 +3675,31 @@ export interface components {
             redacted_preview: string;
         };
         /**
+         * SetCell
+         * @description The page check (review/page_reading.py): a cell of a page read whole that the reader did not flag,
+         *     corrected by a person. ``block_key`` names the paragraph of the reading, ``table`` the table in it;
+         *     applied only while the cell still reads ``old``.
+         */
+        SetCell: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            action: "set_cell";
+            /** Block Key */
+            block_key: string;
+            /** Col */
+            col: number;
+            /** Old */
+            old: string;
+            /** Row */
+            row: number;
+            /** Table */
+            table: number;
+            /** Value */
+            value: string;
+        };
+        /**
          * SetFactUnit
          * @description UNIT_AMBIGUITY on a number in prose or a table: a unit, or "no unit needed" (kept as text).
          */
@@ -3555,6 +3714,24 @@ export interface components {
              * @description null = no unit needed: not a measurement (ID, date, count, rating, ratio)
              */
             unit?: string | null;
+        };
+        /**
+         * SetText
+         * @description The page check: a line of a page read whole, outside its tables, corrected by a person; applied only
+         *     while the line still reads ``old``.
+         */
+        SetText: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            action: "set_text";
+            /** Block Key */
+            block_key: string;
+            /** Old */
+            old: string;
+            /** Text */
+            text: string;
         };
         /**
          * SetUnit
@@ -3689,7 +3866,7 @@ export interface components {
              * Resolution
              * @description None: no proposal; the rationale says why (an explicit 'no suggestion')
              */
-            resolution?: (components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"]) | null;
+            resolution?: (components["schemas"]["SetUnit"] | components["schemas"]["SetFactUnit"] | components["schemas"]["SetCell"] | components["schemas"]["SetText"] | components["schemas"]["MapColumns"] | components["schemas"]["MapJsonKeys"] | components["schemas"]["SetValue"] | components["schemas"]["ChooseTable"] | components["schemas"]["ChooseSource"] | components["schemas"]["MarkSuperseded"] | components["schemas"]["AcceptBoth"] | components["schemas"]["Ignore"] | components["schemas"]["UseReplacement"] | components["schemas"]["Redact"] | components["schemas"]["ApproveInternal"] | components["schemas"]["ApproveDownload"] | components["schemas"]["Watch"] | components["schemas"]["Skip"] | components["schemas"]["MarkJunk"] | components["schemas"]["Exclude"]) | null;
         };
         /** SuiteExport */
         SuiteExport: {
@@ -3902,6 +4079,12 @@ export interface components {
             case_key: string;
             /** Rebuild Doc Id */
             rebuild_doc_id: string | null;
+            /**
+             * Removed Corrections
+             * @description page-check corrections taken back (deleted)
+             * @default 0
+             */
+            removed_corrections: number;
             /** Reopened Flag Ids */
             reopened_flag_ids: string[];
         };

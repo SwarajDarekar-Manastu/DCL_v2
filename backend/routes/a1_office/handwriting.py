@@ -8,10 +8,12 @@ factor), with the page image, the printed label, the reading, its alternatives a
 
 The flag is anchored by page and a key made from the label, and the entry is kept under the same key in
 `metadata.handwriting` of the page node that holds its text, so a person's value replaces the reading there
-on every rebuild (indexing/overlays.py).
+on every rebuild (indexing/overlays.py). The whole reading, entries and keys included, is kept as
+`pages/{n}.reading.json` (`reading_record`): the review's page check shows it beside the page image.
 """
 
 import hashlib
+import json
 import re
 from collections import Counter
 from collections.abc import Iterable
@@ -26,13 +28,49 @@ from backend.dispatcher.contract import (
     SetValue,
     Suggestion,
 )
-from backend.llm_engine.vision.schemas import HandwritingDoubt
+from backend.llm_engine.vision.schemas import HandwritingDoubt, PageTranscription
 from backend.postgres.enums import FlagSeverity, FlagType
 
 
 def doubt_key(page_no: int, label: str | None, occurrence: int) -> str:
     """The anchor of one doubtful entry: the same label on the same page keeps its key across rebuilds."""
     return hashlib.sha256(f"handwriting|{page_no}|{label or ''}|{occurrence}".encode()).hexdigest()[:32]
+
+
+def keyed(page_no: int, doubts: list[HandwritingDoubt]) -> list[tuple[str, HandwritingDoubt]]:
+    """Each doubtful entry with its key, the n-th entry of a label getting occurrence n."""
+    seen: Counter[str] = Counter()
+    out = []
+    for doubt in doubts:
+        seen[doubt.field_label or ""] += 1
+        out.append((doubt_key(page_no, doubt.field_label, seen[doubt.field_label or ""]), doubt))
+    return out
+
+
+def reading_record(page_no: int, reading: PageTranscription, model: str, prompt_version: str) -> bytes:
+    """The page reader's whole output for `pages/{n}.reading.json`, its entries keyed as their flags."""
+    record = {
+        "page_no": page_no,
+        "model": model,
+        "prompt_version": prompt_version,
+        "language": reading.language,
+        "confidence": reading.confidence,
+        "markdown": reading.markdown,
+        "doubtful": [
+            {
+                "key": key,
+                "label": doubt.field_label,
+                "value_raw": doubt.value_raw,
+                "unit": doubt.unit,
+                "alternatives": doubt.alternatives,
+                "confidence": doubt.confidence,
+                "illegible": doubt.illegible,
+            }
+            for key, doubt in keyed(page_no, reading.doubtful)
+        ],
+        "furniture": reading.furniture,
+    }
+    return json.dumps(record, ensure_ascii=False).encode("utf-8")
 
 
 def page_doubts(
@@ -46,13 +84,10 @@ def page_doubts(
     """The page's nodes with each doubtful entry in the metadata of the node holding its text (the first
     node when the text is not found), and one flag per entry."""
     critical = list(critical)
-    seen: Counter[str] = Counter()
     entries: dict[int, list[dict]] = {}
     flags = []
-    for doubt in doubts:
+    for key, doubt in keyed(page_no, doubts):
         label = doubt.field_label
-        seen[label or ""] += 1
-        key = doubt_key(page_no, label, seen[label or ""])
         text = doubt.value_raw or ILLEGIBLE
         holder = next((i for i, n in enumerate(nodes) if text in n.content), 0)
         entries.setdefault(holder, []).append(

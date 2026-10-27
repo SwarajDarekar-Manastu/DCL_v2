@@ -2,7 +2,7 @@
 skip and junk by what a flag is about, assign. Needs DCL_TEST_DATABASE_URL."""
 
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -14,6 +14,7 @@ from backend.dispatcher.contract import (
     Flag,
     FlagAnchor,
     LowConfidenceEvidence,
+    SensitiveEvidence,
     Suggestion,
     UnitTelemetryEvidence,
 )
@@ -261,6 +262,30 @@ def test_a_value_flag_can_never_skip_or_junk_its_file(session, seeded):
             _resolve(session, key, flag, action)
     session.rollback()
     assert session.get(Document, seeded["other"].doc_id).status == "HALTED"
+
+
+def test_sensitive_content_is_excluded_like_a_skip_and_never_released_by_redact(session, seeded):
+    doc = _doc(session, "plan_itar.pdf", "HALTED", "F-E9", route="A1")
+    evidence = SensitiveEvidence(pattern="ITAR", redacted_preview="marking 'ITAR' on page 1", page=1)
+    flag = Flag(flag_type="SENSITIVE_CONTENT", severity="HARD", anchor=FlagAnchor(page=1), evidence=evidence)
+    upsert_document_flag(session, doc.doc_id, flag, "A1")
+    session.commit()
+    (row,) = session.scalars(select(ReviewFlag).where(ReviewFlag.doc_id == doc.doc_id)).all()
+    redact = {
+        "action": "redact",
+        "regions": [{"page": 1, "bbox": {"x0": 0.1, "y0": 0.1, "x1": 0.5, "y1": 0.2}}],
+    }
+    request = ResolveRequest(resolutions=[FlagResolution(flag_id=row.flag_id, resolution=redact)])
+    with pytest.raises(cases.InvalidAction, match="not allowed"):  # nothing makes a redacted copy yet
+        cases.resolve_case(session, row.case_key, request, "lead@x", is_admin=False)
+    session.rollback()
+    outcome = _resolve(session, row.case_key, row, "exclude")
+    session.commit()
+    document = session.get(Document, doc.doc_id)
+    item = session.scalars(select(DriveItem).where(DriveItem.name == "plan_itar.pdf")).one()
+    assert (document.status, document.staged_payload_uri) == ("QUARANTINED", None)
+    assert (outcome.resume_doc_id, outcome.rebuild_doc_id) == (None, None)
+    assert (session.get(ReviewFlag, row.flag_id).status, item.gate_reason) == ("REJECTED_FILE", None)
 
 
 def test_junking_one_image_keeps_the_file_and_rebuilds_it_without_the_image(session, seeded):
@@ -970,3 +995,213 @@ def test_a_decided_file_that_did_not_move_on_says_why(session, seeded):
     assert detail.document_error == "S3Error: XMinioStorageFull"
     other = cases.case_detail(session, f"{seeded['dat'].doc_id}:", is_admin=False)
     assert (other.document_blocking, other.document_error) == (2, None)  # two channel units still open
+
+
+def test_the_gate_hands_on_the_document_as_people_decided_it(session, seeded):
+    from backend.dispatcher.contract import DocumentFields, ProcessedDocument, ProcessedNode
+    from backend.review.staged import gate, own_flags
+
+    doc = _doc(session, "plan.pdf", "PROCESSING", "F-E9", route="A1")
+    key = "ab" * 16
+    flag = Flag(
+        flag_type="LOW_CONFIDENCE_EXTRACTION", severity="SOFT", anchor=FlagAnchor(page=8, content_sha256=key)
+    )
+    row = upsert_document_flag(session, doc.doc_id, flag, "A1")
+    row.status, row.resolution = "RESOLVED", {"action": "set_value", "value": "0.85", "illegible": False}
+    session.flush()
+    node = ProcessedNode(
+        ref="vlm/p8/0",
+        node_type="child",
+        ordinal=0,
+        content="Orifice dia: 0.8? mm",
+        page_no=8,
+        source="vlm",
+        metadata={"handwriting": [{"key": key, "value_raw": "0.8?"}]},
+    )
+    sha = "ef" * 32
+    processed = ProcessedDocument(
+        blob_sha256=sha,
+        route="A1",
+        parser_version=1,
+        cir_uri=f"s3://dcl-cir/{sha}/A1/v1/",
+        document=DocumentFields(title="plan"),
+        nodes=[node],
+        flags=[flag],  # the route raises the decided entry again on every run
+    )
+    result = gate(session, None, doc, processed, stale=own_flags("A1"))
+    assert (result.halted, result.document.nodes[0].content) == (False, "Orifice dia: 0.85 mm")
+    assert session.get(ReviewFlag, row.flag_id).status == "RESOLVED"
+
+
+def test_a_page_case_shows_the_whole_reading_with_its_entries(session, seeded):
+    import json
+    from pathlib import Path
+
+    doc = _doc(session, "trial.pdf", "ACTIVE_WITH_SOFT_FLAGS", "F-E9", route="A1")
+    doc.cir_uri = f"s3://dcl-cir/{'ab' * 32}/A1/v1/"
+    entries = [("990f59414aba02c459e88cc095c57f31", "Trial Name", "Trial 7.1 (warm-up run")]
+    entries.append(("bd38e744b6017b861d9e6754d0d40e7e", "Sample Name", "Sample B-12 (lot 4"))
+    for key, label, value in entries:
+        crop = ExtractionCrop(
+            crop_uri="s3://dcl-assets/pages/x/0011.png", model_value=value, printed_label=label
+        )
+        flag = Flag(
+            flag_type="LOW_CONFIDENCE_EXTRACTION",
+            severity="SOFT",
+            anchor=FlagAnchor(page=11, content_sha256=key),
+            evidence=LowConfidenceEvidence(crops=[crop]),
+        )
+        upsert_document_flag(session, doc.doc_id, flag, "A1")
+    session.commit()
+    page = (Path(__file__).parents[2] / "fixtures" / "review" / "sample_page.txt").read_text()
+    record = {
+        "markdown": page,
+        "confidence": 0.9,
+        "prompt_version": "transcribe_page.v3",
+        "doubtful": [
+            {"key": k, "label": label, "value_raw": v, "confidence": 0.9} for k, label, v in entries
+        ],
+    }
+    stored = {f"{doc.cir_uri}pages/11.reading.json": json.dumps(record).encode()}
+    detail = cases.case_detail(session, f"{doc.doc_id}:11", False, stored.get)
+    reading = detail.page_reading
+    assert (reading.page_no, reading.image_uri) == (11, "s3://dcl-assets/pages/x/0011.png")
+    assert [p.kind for p in reading.blocks[0].parts] == ["heading", "table", "table", "table", "text"]
+    flags = {f.flag_id for f in detail.flags}
+    assert [(e.label, e.flag_id in flags, e.located.cell) for e in reading.entries] == [
+        ("Trial Name", True, [0, 1]),
+        ("Sample Name", True, [7, 1]),
+    ]
+    assert (
+        cases.case_detail(session, f"{doc.doc_id}:11", False, {}.get).page_reading is None
+    )  # no reading yet
+
+
+def test_a_correction_is_kept_shown_survives_a_rerun_and_undo_removes_it(session, seeded):
+    import json
+
+    from backend.dispatcher.contract import DocumentFields, ProcessedDocument
+    from backend.review.page_reading import block_key
+    from backend.review.staged import gate, own_flags
+
+    doc = _doc(session, "sheet.pdf", "ACTIVE_WITH_SOFT_FLAGS", "F-E9", route="A1")
+    doc.cir_uri = f"s3://dcl-cir/{'cd' * 32}/A1/v1/"
+    table = "<table><tr><td>Time</td><td>T2 [C]</td></tr><tr><td>09:10</td><td>40.25</td></tr></table>"
+    entry = Flag(
+        flag_type="LOW_CONFIDENCE_EXTRACTION",
+        severity="SOFT",
+        anchor=FlagAnchor(page=3, content_sha256="ef" * 16),
+        evidence=LowConfidenceEvidence(crops=[ExtractionCrop(crop_uri="s3://dcl-assets/p/0003.png")]),
+    )
+    upsert_document_flag(session, doc.doc_id, entry, "A1")
+    session.commit()
+    key = f"{doc.doc_id}:3"
+    fix = {"action": "set_cell", "block_key": block_key(table), "table": 0, "row": 1, "col": 1}
+    fix |= {"old": "40.25", "value": "40.52"}
+    cases.resolve_case(session, key, ResolveRequest(corrections=[fix]), "asha@x", is_admin=False)
+    session.commit()
+    (row,) = session.scalars(select(ReviewFlag).where(ReviewFlag.route == "review")).all()
+    assert (row.status, row.case_key, row.resolution["value"]) == ("RESOLVED", key, "40.52")
+
+    stored = {f"{doc.cir_uri}pages/3.reading.json": json.dumps({"markdown": table, "doubtful": []}).encode()}
+    shown = cases.case_detail(session, key, False, stored.get).page_reading.blocks[0].parts[0].rows[1][1]
+    assert (shown.text, shown.corrected) == ("40.52", True)
+
+    sha = "cd" * 32
+    rerun = ProcessedDocument(
+        blob_sha256=sha, route="A1", parser_version=1, cir_uri=doc.cir_uri, document=DocumentFields(title="s")
+    )
+    gate(session, None, doc, rerun, stale=own_flags("A1"))
+    gate(session, None, doc, rerun, stale=own_flags("A1"))
+    assert session.get(ReviewFlag, row.flag_id).status == "RESOLVED"  # a re-run never closes a correction
+
+    undone = cases.undo_case(session, key, "asha@x")
+    session.commit()
+    assert (undone.reopened, undone.removed_corrections) == ([], 1)
+    assert session.scalars(select(ReviewFlag).where(ReviewFlag.route == "review")).all() == []
+
+
+def _indexed(session, name, route="A1"):
+    """A committed document with a chunk in the index."""
+    from backend.postgres.models import DocumentNode
+
+    doc = _doc(session, name, "ACTIVE", "F-E9", route=route)
+    doc.indexed_at, doc.search_text = datetime.now(UTC), "card text"
+    session.add(
+        DocumentNode(doc_id=doc.doc_id, node_type="parent", ordinal=0, content="ITAR text", source="printed")
+    )
+    session.flush()
+    return doc
+
+
+def _chunks(session, doc):
+    from backend.postgres.models import DocumentNode
+
+    return session.scalars(select(DocumentNode.content).where(DocumentNode.doc_id == doc.doc_id)).all()
+
+
+def test_taking_back_a_blocking_decision_takes_the_content_out_of_the_index_at_once(session, seeded):
+    doc = _indexed(session, "itar.pdf")
+    evidence = SensitiveEvidence(pattern="ITAR", redacted_preview="marking 'ITAR' on page 1", page=1)
+    flag = Flag(flag_type="SENSITIVE_CONTENT", severity="HARD", anchor=FlagAnchor(page=1), evidence=evidence)
+    row = upsert_document_flag(session, doc.doc_id, flag, "A1")
+    row.status, row.resolution = "RESOLVED", {"action": "approve_internal"}
+    row.resolved_by, row.resolved_at = "admin@x", datetime.now(UTC) - timedelta(minutes=1)
+    session.commit()
+    assert _chunks(session, doc) == ["ITAR text"]
+    outcome = cases.undo_case(session, row.case_key, "admin@x")
+    session.commit()
+    assert (_chunks(session, doc), doc.search_text, outcome.rebuild_doc_id) == ([], None, doc.doc_id)
+    assert doc.status == "PROCESSING"  # its rebuild raises the reopened flag and halts it
+
+
+def test_taking_back_a_non_blocking_decision_keeps_the_file_searchable_until_its_rebuild(session, seeded):
+    doc = _indexed(session, "sheet.pdf")
+    flag = Flag(
+        flag_type="LOW_CONFIDENCE_EXTRACTION",
+        severity="SOFT",
+        anchor=FlagAnchor(page=1, content_sha256="ab" * 16),
+    )
+    row = upsert_document_flag(session, doc.doc_id, flag, "A1")
+    row.status, row.resolution = "RESOLVED", {"action": "set_value", "value": "1.0"}
+    row.resolved_by, row.resolved_at = "asha@x", datetime.now(UTC) - timedelta(minutes=1)
+    session.commit()
+    cases.undo_case(session, row.case_key, "asha@x")
+    session.commit()
+    assert (_chunks(session, doc), doc.status) == (["ITAR text"], "PROCESSING")
+
+
+def test_a_file_that_halts_after_being_indexed_leaves_the_index(session, seeded):
+    from backend.dispatcher.contract import DocumentFields, ProcessedDocument
+    from backend.review.staged import gate
+
+    class Cir:
+        def put(self, key, data, content_type):
+            return f"s3://dcl-cir/{key}"
+
+    doc = _indexed(session, "itar2.pdf")
+    doc.status = "PROCESSING"
+    evidence = SensitiveEvidence(pattern="ITAR", redacted_preview="marking 'ITAR' on page 1", page=1)
+    flag = Flag(flag_type="SENSITIVE_CONTENT", severity="HARD", anchor=FlagAnchor(page=1), evidence=evidence)
+    sha = "ab" * 32
+    processed = ProcessedDocument(
+        blob_sha256=sha,
+        route="A1",
+        parser_version=1,
+        cir_uri=f"s3://dcl-cir/{sha}/A1/v1/",
+        document=DocumentFields(title="itar2"),
+        flags=[flag],
+    )
+    result = gate(session, Cir(), doc, processed)
+    assert (result.halted, doc.status, _chunks(session, doc)) == (True, "HALTED", [])
+
+
+def test_excluding_a_file_takes_its_content_out_of_the_index(session, seeded):
+    doc = _indexed(session, "itar3.pdf")
+    evidence = SensitiveEvidence(pattern="ITAR", redacted_preview="marking 'ITAR' on page 1", page=1)
+    flag = Flag(flag_type="SENSITIVE_CONTENT", severity="HARD", anchor=FlagAnchor(page=1), evidence=evidence)
+    row = upsert_document_flag(session, doc.doc_id, flag, "A1")
+    session.commit()
+    _resolve(session, row.case_key, row, "exclude")
+    session.commit()
+    assert (doc.status, _chunks(session, doc)) == ("QUARANTINED", [])

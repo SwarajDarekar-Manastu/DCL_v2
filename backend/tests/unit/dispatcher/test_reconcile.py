@@ -85,3 +85,21 @@ def test_a_run_that_fails_is_failed_with_its_error(session):
     tasks_process._fail(session, document.doc_id, ValueError("bad page tree"))
     session.refresh(document)
     assert (document.status, document.metadata_sources["error"]) == ("FAILED", "ValueError: bad page tree")
+
+
+def test_a_file_stuck_in_processing_is_run_again_once_per_two_hours(session):
+    from sqlalchemy import update
+
+    stuck = _doc(session, "A1", "PROCESSING")
+    fresh = _doc(session, "A1", "PROCESSING")
+    session.execute(
+        update(Document).where(Document.doc_id == stuck.doc_id).values(updated_at=NOW - timedelta(hours=3))
+    )
+    session.execute(update(Document).where(Document.doc_id == fresh.doc_id).values(updated_at=NOW))
+    session.expire_all()
+    (release,) = stalled(session, NOW)
+    assert (release.doc_id, release.task, release.queue) == (
+        stuck.doc_id,
+        "dcl.process.route_a1",
+        "cpu_parse",
+    )

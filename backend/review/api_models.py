@@ -19,6 +19,8 @@ from backend.dispatcher.contract import (  # resolution actions live with the fl
     FlagAnchor,
     FlagSubject,
     Resolution,
+    SetCell,
+    SetText,
     Suggestion,
     allowed_actions,
 )
@@ -165,6 +167,61 @@ class AppliedUnit(_Model):
     rule_active: bool
 
 
+class ReadingCell(_Model):
+    text: str
+    struck: list[str] = Field(default=[], description="crossed-out text in the cell (drawn struck through)")
+    span_of: list[int] | None = Field(
+        default=None, description="a position a rowspan/colspan covers: [row, col] of its origin cell"
+    )
+    corrected: bool = Field(default=False, description="a person's decision changed this cell")
+
+
+class ReadingPart(_Model):
+    kind: Literal["heading", "text", "table"]
+    text: str | None = None
+    struck: list[str] = []
+    rows: list[list[ReadingCell]] | None = None
+    corrected: list[str] = Field(default=[], description="lines of this text a person corrected")
+
+
+class ReadingBlock(_Model):
+    key: str = Field(
+        description="sha256 of the block's source text, 16 hex: the anchor of a correction on it"
+    )
+    parts: list[ReadingPart]
+
+
+class EntryPlace(_Model):
+    block_key: str
+    table: int | None = Field(default=None, description="index of the table in the block, when in a cell")
+    cell: list[int] | None = Field(default=None, description="[row, col] in that table")
+
+
+class PageEntry(_Model):
+    """One handwritten entry the page reader was unsure of, and where it sits in the reading."""
+
+    key: str
+    label: str | None
+    value: str | None
+    unit: str | None = None
+    alternatives: list[str] = []
+    confidence: float | None = None
+    illegible: bool = False
+    flag_id: uuid.UUID | None = Field(default=None, description="the entry's flag in this case")
+    located: EntryPlace | None = Field(default=None, description="null: its value is not found in the text")
+
+
+class PageReading(_Model):
+    """The page check (review/page_reading.py): the reader's whole page, as plain-text blocks."""
+
+    page_no: int
+    image_uri: str | None = Field(default=None, description="the page render, s3 (presigned by /assets/url)")
+    blocks: list[ReadingBlock]
+    entries: list[PageEntry]
+    reader_confidence: float | None = None
+    prompt_version: str | None = None
+
+
 class CaseDetail(_Model):
     summary: CaseSummary
     flags: list[FlagView]
@@ -182,6 +239,10 @@ class CaseDetail(_Model):
     siblings: list[str] = Field(default=[], description="file names in the same folder")
     applied_units: list[AppliedUnit] = Field(
         default=[], description="units a rule applied to flags that closed without a person (AUTO_RESOLVED)"
+    )
+    page_reading: PageReading | None = Field(
+        default=None,
+        description="for a case of a page read whole: the reader's whole page beside its unsure entries",
     )
 
 
@@ -325,7 +386,12 @@ class AssignRequest(_Model):
 
 
 class ResolveRequest(_Model):
-    resolutions: list[FlagResolution] = Field(min_length=1)
+    resolutions: list[FlagResolution] = []
+    corrections: list[SetCell | SetText] | None = Field(
+        default=None,
+        description="the page check: cells or lines of the page read whole that the reader did not flag, "
+        "corrected; each is kept as a decided flag of origin 'review' on the page",
+    )
     rule: RuleDraft | None = None
     rule_scope: RuleScope | None = Field(
         default=None,
@@ -334,6 +400,12 @@ class ResolveRequest(_Model):
         "approved on its own.",
     )
     comment: str | None = None
+
+    @model_validator(mode="after")
+    def _something_to_apply(self) -> "ResolveRequest":
+        if not self.resolutions and not self.corrections:
+            raise ValueError("nothing to apply: no resolution and no correction")
+        return self
 
 
 class ResolveResponse(_Model):
@@ -350,6 +422,7 @@ class UndoResponse(_Model):
     case_key: str
     reopened_flag_ids: list[uuid.UUID]
     rebuild_doc_id: uuid.UUID | None
+    removed_corrections: int = Field(default=0, description="page-check corrections taken back (deleted)")
 
 
 class EditRequest(_Model):

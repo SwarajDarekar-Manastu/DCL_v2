@@ -540,7 +540,7 @@ def dispatch(
             context = _context(primary, roots, folders, siblings_by_folder[primary.item.parent_item_id])
             _write_plan(session, plan, by_blob, context, gate, cir, heads[plan.primary.blob_sha256], result)
         session.commit()
-    result.superseded = apply_supersessions(session)
+    result.superseded = replace_older(session)
     dispatch_derived(session, minio, gate, cir, result)
     release_waiting(session, minio, gate, result)
     session.commit()
@@ -582,15 +582,28 @@ def _held_by_a_live_location(session: Session, blob_sha256: str) -> bool:
     return found is not None
 
 
-def apply_supersessions(session: Session) -> int:
-    """For each location whose content was replaced in place: SUPERSEDES new→old once the new content has
-    a document; the old document becomes SUPERSEDED only when no live location still holds the old blob."""
+LIVE = (DocumentStatus.ACTIVE, DocumentStatus.ACTIVE_WITH_SOFT_FLAGS)
+OPEN_FLAGS = ("OPEN", "IN_PROGRESS", "REOPENED")
+
+
+def replace_older(session: Session, blob_sha256: str | None = None) -> int:
+    """For each location whose content was replaced in place, once the new content's document is searchable:
+    SUPERSEDES new→old, and the old document becomes SUPERSEDED (out of search at once) with
+    ``metadata_sources.replaced_by``, so ``dispatcher/versions.py purge_replaced`` removes it. Until then the
+    old version stays searchable: search never goes blank while the new one is processed or reviewed
+    (until 2026-10-27 the old one was superseded at dispatch). It runs at dispatch and when a document is
+    committed (``blob_sha256``: that document's new content). A location reverted to an earlier version
+    that is not removed yet gets that version back."""
+    query = select(DriveItem).where(DriveItem.previous_blob_sha256.is_not(None))
+    if blob_sha256 is not None:
+        query = query.where(DriveItem.blob_sha256 == blob_sha256)
     superseded = 0
-    pending = session.scalars(select(DriveItem).where(DriveItem.previous_blob_sha256.is_not(None))).all()
-    for item in pending:
+    for item in session.scalars(query).all():
         new_doc = _primary_document(session, item.blob_sha256) if item.blob_sha256 else None
-        if new_doc is None:
-            continue  # the new content is not dispatched yet (scope, inspection): keep the value pending
+        if new_doc is not None and new_doc.status == DocumentStatus.SUPERSEDED:
+            _bring_back(session, new_doc)
+        if new_doc is None or new_doc.status not in LIVE:
+            continue  # the new content is not searchable yet (dispatch, route, review): the old one stays
         old_doc = _primary_document(session, item.previous_blob_sha256)
         if old_doc is not None and old_doc.doc_id != new_doc.doc_id:
             if session.get(DocumentRelation, (new_doc.doc_id, old_doc.doc_id, "SUPERSEDES")) is None:
@@ -601,10 +614,36 @@ def apply_supersessions(session: Session) -> int:
                 session, item.previous_blob_sha256
             ):
                 _set_status(old_doc, DocumentStatus.SUPERSEDED, item.previous_blob_sha256)
+                old_doc.metadata_sources = {
+                    **(old_doc.metadata_sources or {}),
+                    "replaced_by": str(new_doc.doc_id),
+                }
                 superseded += 1
         item.previous_blob_sha256 = None
     session.flush()
     return superseded
+
+
+def _bring_back(session: Session, document: Document) -> None:
+    """A location reverted to this version before its removal: it is searchable again and replaces the
+    version that replaced it (a removed one is gone: its bytes come back as new content instead)."""
+    if (document.metadata_sources or {}).get("purged_at"):
+        return
+    open_flags = session.scalar(
+        select(ReviewFlag.flag_id).where(
+            ReviewFlag.doc_id == document.doc_id, ReviewFlag.status.in_(OPEN_FLAGS)
+        )
+    )
+    document.status = DocumentStatus.ACTIVE_WITH_SOFT_FLAGS if open_flags else DocumentStatus.ACTIVE
+    document.metadata_sources = {
+        k: v for k, v in (document.metadata_sources or {}).items() if k != "replaced_by"
+    }
+    for relation in session.scalars(
+        select(DocumentRelation).where(
+            DocumentRelation.doc_id_b == document.doc_id, DocumentRelation.relation == "SUPERSEDES"
+        )
+    ):
+        session.delete(relation)
 
 
 def sweep_documents(session: Session) -> dict[str, int]:
@@ -617,7 +656,14 @@ def sweep_documents(session: Session) -> dict[str, int]:
         .join(DocumentSource, DocumentSource.doc_id == Document.doc_id)
         .where(DocumentSource.role == DocumentSourceRole.PRIMARY, Document.status != DocumentStatus.DELETED)
     ).all()
+    awaiting = set(  # an old version stays live until its replacement is searchable (replace_older)
+        session.scalars(
+            select(DriveItem.previous_blob_sha256).where(DriveItem.previous_blob_sha256.is_not(None))
+        )
+    )
     for document, blob_sha256 in rows:
+        if blob_sha256 in awaiting:
+            continue
         holders = set(
             session.scalars(
                 select(DriveItem.status).where(

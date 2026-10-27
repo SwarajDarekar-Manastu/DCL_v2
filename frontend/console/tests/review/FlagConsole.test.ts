@@ -69,16 +69,19 @@ describe('FlagConsole', () => {
 		expect(screen.queryByText(/Pipeline halted/)).toBeNull();
 	});
 
+	// allowed_actions as the server sends them (contract.py allowed_actions): a side only where it sets a document
+	// field, "superseded" only when a side is a document, a failed check or a note only accepted or ignored.
 	const conflict = (relation: 'sources_disagree' | 'check_failed' | 'note', docs = false) =>
 		unitFlag({
 			flag_id: 'c',
 			flag_type: 'CONFLICT',
 			severity: 'SOFT',
-			allowed_actions: ['choose_source', 'mark_superseded', 'accept_both', 'ignore'],
+			allowed_actions:
+				relation !== 'sources_disagree' ? ['accept_both', 'ignore'] : ['choose_source', ...(docs ? ['mark_superseded'] : []), 'accept_both', 'ignore'],
 			suggested_resolution: null,
 			evidence: {
 				kind: 'conflict',
-				subject: 'Main_Files',
+				subject: relation === 'sources_disagree' ? 'test_plan_id' : 'Main_Files',
 				relation,
 				a: { label: 'assembler', value: 'not included by any master', provenance: 'file 03 §1.3', doc_id: docs ? 'd1' : null },
 				b: relation === 'note' ? null : { label: 'expected', value: 'a sharp edge', provenance: 'file 03 §C.6', doc_id: docs ? 'd2' : null }
@@ -108,8 +111,8 @@ describe('FlagConsole', () => {
 		expect(choices()).toContain('Mark a document superseded');
 	});
 
-	it('never offers what the console cannot carry out yet', () => {
-		show(unitFlag({ flag_type: 'PARSE_FAILURE', subject: 'file', allowed_actions: ['use_replacement', 'skip', 'mark_junk'], evidence: null, suggested_resolution: null }));
+	it('offers only the answers the server allows that the console can name', () => {
+		show(unitFlag({ flag_type: 'PARSE_FAILURE', subject: 'file', allowed_actions: ['skip', 'mark_junk', 'future_action'], evidence: null, suggested_resolution: null }));
 		expect(choices()).toEqual(['leave open', 'Skip whole file', 'Junk whole file']);
 	});
 

@@ -22,7 +22,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.dispatcher.contract import ALLOWED_ACTIONS, Resolution
+from backend.dispatcher.contract import Resolution, allowed_actions, subject_key
 from backend.postgres.enums import FlagSeverity, FlagStatus, FlagType, RuleOrigin, RuleType
 from backend.postgres.models import Document, ReviewFlag, Rule
 from backend.review.rules import (
@@ -80,11 +80,6 @@ def load_acting(session: Session) -> list[ActingRule]:
         )
         for row in rows
     ]
-
-
-def subject_key(subject: str | None) -> str:
-    """A subject compared without case, underscores or extra spaces ("test_plan_id" == "test plan id")."""
-    return " ".join((subject or "").casefold().replace("_", " ").split())
 
 
 def _names(flag: ReviewFlag) -> list[str]:
@@ -145,18 +140,20 @@ def answer(rule_type: RuleType, body: Any, flag: ReviewFlag) -> dict[str, Any] |
             return {"action": "ignore"}
         if flag_type == FlagType.LOW_CONFIDENCE_EXTRACTION:  # the model's reading stands
             suggested = (flag.suggested_resolution or {}).get("resolution")
-            return suggested if suggested and suggested.get("action") in ALLOWED_ACTIONS[flag_type] else None
+            return suggested or None
     return None
 
 
 def best_answer(rules: list[ActingRule], target: RuleTarget, flag: ReviewFlag) -> Answer | None:
-    """The answer of the most specific matching rule of the first answering type that speaks to ``flag``."""
+    """The answer of the most specific matching rule of the first answering type that speaks to ``flag``;
+    a rule answers only with what the flag allows, the same gate a person's decision passes."""
+    allowed = allowed_actions(FlagType(flag.flag_type), flag.anchor, flag.evidence)
     for rule_type in ANSWERING:
         found: dict[uuid.UUID, dict[str, Any]] = {}
         for rule in rules:
             if rule.record.rule_type == rule_type:
                 resolution = answer(rule_type, rule.body, flag)
-                if resolution is not None:
+                if resolution is not None and resolution["action"] in allowed:
                     found[rule.record.rule_id] = resolution
         winner = resolve([r.record for r in rules if r.record.rule_id in found], target, rule_type)
         if winner is not None:

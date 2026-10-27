@@ -256,6 +256,22 @@ def test_a_burst_costs_one_classification_and_one_inspection(fake_vision, memory
     assert all(m.nodes[0].metadata["inherited"] for m in members)
 
 
+def test_every_photo_of_a_burst_carries_the_representatives_flags(fake_vision, memory_store):
+    shots = [photo(seed=7, taken=f"2024:05:02 10:15:{i * 5:02d}") for i in range(3)]
+    vision = fake_vision(
+        classify_image={"image_class": "hardware_photo", "confidence": 0.9, "shows_people": False},
+        inspect_hardware_photo={**HARDWARE, "visible_text": ["ITAR"]},
+    )
+    first, reading = run(shots[0], vision, memory_store("s3://dcl-assets/"), cluster_id="p0")
+    members = [
+        run(shot, vision, memory_store("s3://dcl-assets/"), representative=reading, cluster_id="p0")[0]
+        for shot in shots[1:]
+    ]
+    marked = [(f.flag_type, f.severity) for f in first.flags]
+    assert (FlagType.SENSITIVE_CONTENT, FlagSeverity.HARD) in marked
+    assert [[(f.flag_type, f.severity) for f in m.flags] for m in members] == [marked, marked]
+
+
 def test_undecodable_bytes_are_a_hard_parse_failure(fake_vision, memory_store):
     doc, reading = run(b"not an image", fake_vision(), memory_store("s3://dcl-assets/"))
     assert reading is None and [(f.flag_type, f.severity) for f in doc.flags] == [

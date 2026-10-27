@@ -113,6 +113,10 @@ export function resolutionText(r: Resolution | null | undefined): string {
 			return 'Marked a document as superseded';
 		case 'set_value':
 			return v.illegible ? 'Marked illegible' : `Value “${String(v.value ?? '')}”`;
+		case 'set_cell':
+			return `Cell corrected to “${String(v.value ?? '')}”`;
+		case 'set_text':
+			return `Line corrected to “${String(v.text ?? '')}”`;
 		case 'choose_table':
 			return v.choice === 'edited' ? 'Table cells edited' : `Table version ${String(v.choice)} chosen`;
 		case 'map_columns':
@@ -142,7 +146,7 @@ export function resolutionText(r: Resolution | null | undefined): string {
  *  answer names the rule. */
 export function decisionText(flag: FlagView): string {
 	const r = flag.resolution as (Resolution & Record<string, unknown>) | null;
-	if (flag.status === 'REJECTED_FILE') return r?.action === 'mark_junk' ? 'Whole file junked' : 'Whole file skipped';
+	if (flag.status === 'REJECTED_FILE') return `Whole file ${r?.action === 'mark_junk' ? 'junked' : r?.action === 'exclude' ? 'excluded' : 'skipped'}`;
 	if (flag.status === 'AUTO_RESOLVED') {
 		return flag.resolved_by?.startsWith('rule') ? `A rule answered it: ${resolutionText(r)}` : 'Closed: a re-run no longer raised it';
 	}
@@ -150,7 +154,7 @@ export function decisionText(flag: FlagView): string {
 }
 
 /** What a flag asks about, in a few words: "Unit of channel AIN0", "Reading of page 8", "Table on page 5". */
-export function subjectText(flag: Pick<FlagView, 'flag_type' | 'anchor' | 'evidence' | 'subject'>): string {
+export function subjectText(flag: Pick<FlagView, 'flag_type' | 'anchor' | 'evidence' | 'subject'> & Partial<Pick<FlagView, 'resolution'>>): string {
 	const a = flag.anchor;
 	const where = a.page ? ` on page ${a.page}` : a.sheet ? ` on sheet ${a.sheet}` : '';
 	switch (flag.flag_type) {
@@ -158,6 +162,8 @@ export function subjectText(flag: Pick<FlagView, 'flag_type' | 'anchor' | 'evide
 			return a.channel ? `Unit of channel ${a.channel}` : a.column ? `Unit of column ${a.column}${where}` : `Unit of a number${a.line ? ` (line ${a.line})` : where}`;
 		case 'LOW_CONFIDENCE_EXTRACTION': {
 			const ev = flag.evidence?.kind === 'low_confidence' ? flag.evidence : null;
+			const made = flag.resolution?.action;
+			if (made === 'set_cell' || made === 'set_text') return `Correction on page ${a.page}`;
 			if (flag.subject === 'page') return `Reading of page ${a.page}`;
 			if (flag.subject === 'object') return `${ev?.table_a_html ? 'Table' : 'Image'}${where}`;
 			const label = ev?.crops[0]?.printed_label;

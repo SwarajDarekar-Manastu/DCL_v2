@@ -21,11 +21,10 @@ export const ACTION_LABEL: Record<ResolutionAction, string> = {
 	watch: 'Notify when an adapter exists',
 	skip: 'Skip whole file',
 	mark_junk: 'Junk whole file',
-	exclude: 'Exclude permanently'
+	exclude: 'Exclude whole file',
+	set_cell: 'Correct a cell',
+	set_text: 'Correct a line'
 };
-
-/** Actions the server allows but the console cannot carry out yet: never offered. */
-export const NOT_BUILT: readonly ResolutionAction[] = ['use_replacement', 'redact'];
 
 type ConflictEvidence = Extract<NonNullable<FlagView['evidence']>, { kind: 'conflict' }>;
 
@@ -41,18 +40,11 @@ export function supersedable(flag: Partial<Pick<FlagView, 'evidence'>>): { doc_i
 }
 
 /**
- * What this user may do with the flag: the server's list (S1 allowed_actions_for), minus what the console
- * cannot do yet, minus what does not fit the kind of conflict: a failed check or a note has no source to pick
- * and no document to supersede.
+ * What this user may do with the flag: the server's list (allowed_actions_for), which already leaves out what
+ * nothing carries out and what does not fit the flag (contract.py allowed_actions).
  */
-export function allowedActions(flag: Pick<FlagView, 'allowed_actions'> & Partial<Pick<FlagView, 'evidence'>>): ResolutionAction[] {
-	const conflict = conflictOf(flag);
-	return flag.allowed_actions.filter((action): action is ResolutionAction => {
-		if (!(action in ACTION_LABEL) || NOT_BUILT.includes(action as ResolutionAction)) return false;
-		if (!conflict) return true;
-		if (conflict.relation !== 'sources_disagree') return action === 'accept_both' || action === 'ignore';
-		return action !== 'mark_superseded' || supersedable(flag).length > 0;
-	});
+export function allowedActions(flag: Pick<FlagView, 'allowed_actions'>): ResolutionAction[] {
+	return flag.allowed_actions.filter((action): action is ResolutionAction => action in ACTION_LABEL);
 }
 
 /**
@@ -75,7 +67,7 @@ function isTable(flag: Pick<FlagView, 'evidence'>): boolean {
 
 /** Whether a chosen resolution takes the whole file out of search (asked before it is applied). */
 export function takesFileOut(flag: Pick<FlagView, 'subject'>, action: ResolutionAction): boolean {
-	return flag.subject === 'file' && (action === 'skip' || action === 'mark_junk');
+	return action === 'exclude' || (flag.subject === 'file' && (action === 'skip' || action === 'mark_junk'));
 }
 
 /** Pressure units offered for UNIT_AMBIGUITY on telemetry (file 06 §6), as unit + gauge/abs. */

@@ -188,12 +188,14 @@ def _modify_in_place(session, minio, item_id, new_data):
     return item
 
 
-def test_content_modified_in_place_supersedes_the_old_document(session, minio):
+def test_content_modified_in_place_replaces_the_old_document_once_the_new_one_is_searchable(session, minio):
+    from backend.dispatcher.routing import replace_older
     from backend.postgres.models import DocumentRelation
 
     _seed(session, minio)
     dispatch(session, minio)
     old = _docs(session)["Test_Report_12"]
+    old_status = old.status
     item = _modify_in_place(session, minio, "html-pdf", b"%PDF-1.7\n% the real report now\n")
 
     result = dispatch(session, minio)
@@ -201,14 +203,18 @@ def test_content_modified_in_place_supersedes_the_old_document(session, minio):
     new = next(
         d for d in session.scalars(select(Document)) if d.doc_id != old.doc_id and d.title == "Test_Report_12"
     )
+    assert (new.route, new.status, result.superseded) == ("A1", "WAITING_FOR_ROUTE", 0)
+    session.refresh(old)
+    session.refresh(item)
+    assert (
+        old.status == old_status and item.previous_blob_sha256 is not None
+    )  # still live, replacement pending
+
+    new.status = "ACTIVE"  # its commit
+    assert replace_older(session, item.blob_sha256) == 1
     relation = session.scalars(select(DocumentRelation)).one()
     assert (relation.doc_id_a, relation.doc_id_b, relation.relation) == (new.doc_id, old.doc_id, "SUPERSEDES")
-    session.refresh(old)
-    assert old.status == "SUPERSEDED"
-    assert (new.route, new.status) == ("A1", "WAITING_FOR_ROUTE")
-    session.refresh(item)
-    assert item.previous_blob_sha256 is None
-    assert result.superseded == 1
+    assert (old.status, item.previous_blob_sha256) == ("SUPERSEDED", None)
 
 
 def test_a_copy_of_the_old_content_keeps_the_old_document_live(session, minio):

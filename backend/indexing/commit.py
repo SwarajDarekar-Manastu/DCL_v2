@@ -224,6 +224,15 @@ def strip_nul(value: Any) -> Any:
     return value
 
 
+# A run that finishes after its document was replaced by a newer version, deleted, or taken out by review must
+# not make it searchable again (2026-10-27: a late commit could undo a supersession).
+OVERTAKEN = (DocumentStatus.SUPERSEDED, DocumentStatus.DELETED, DocumentStatus.QUARANTINED)
+
+
+class OvertakenRun(RuntimeError):
+    pass
+
+
 def commit_document(
     session: Session,
     document: Document,
@@ -234,6 +243,11 @@ def commit_document(
     raw: Any = None,
 ) -> CommitResult:
     """``raw`` is the ``dcl-raw`` BucketStore; required when the document carries ``derived_blobs``."""
+    session.refresh(document, with_for_update=True)  # one writer of the row at a time (dispatch, review)
+    if document.status in OVERTAKEN:
+        raise OvertakenRun(
+            f"document {document.doc_id} became {document.status} during this run; nothing is committed"
+        )
     processed, plan = strip_nul(processed), strip_nul(plan)
     if processed.derived_blobs and raw is None:
         raise ValueError("derived_blobs need the dcl-raw store")
@@ -493,6 +507,9 @@ def commit_document(
         from backend.storage.derived import register_derived_blobs
 
         register_derived_blobs(session, raw, processed.blob_sha256, processed.derived_blobs)
+    from backend.dispatcher.routing import replace_older
+
+    replace_older(session, processed.blob_sha256)  # a new version is searchable: the one it replaces leaves
     session.flush()
     return result
 

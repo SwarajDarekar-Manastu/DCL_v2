@@ -193,3 +193,27 @@ def test_the_rules_loader_skips_proposed_files_and_subfolders(tmp_path):
     loaded = load_rules_dir(tmp_path)
     assert [path.name for path, _ in loaded] == ["confirmed.yaml"]
     assert loaded[0][1].scope.scope_folder_id == "F1"
+
+
+def test_a_rule_answers_only_with_what_the_flag_allows():
+    from backend.postgres.models import ReviewFlag
+    from backend.review.rule_answers import ActingRule, best_answer
+    from backend.review.rules import SourceChoiceBody
+
+    def conflict(subject):
+        sides = {"a": {"label": "folder", "value": "TP7"}, "b": {"label": "content", "value": "TP6"}}
+        evidence = {"kind": "conflict", "subject": subject, "relation": "sources_disagree", **sides}
+        return ReviewFlag(flag_type="CONFLICT", severity="SOFT", anchor={}, evidence=evidence)
+
+    def answer(subject):
+        acting = [
+            ActingRule(
+                rule("a", rule_type=RuleType.SOURCE_CHOICE),
+                SourceChoiceBody(subject=subject, prefer="folder"),
+            )
+        ]
+        found = best_answer(acting, TARGET, conflict(subject))
+        return found.resolution if found else None
+
+    assert answer("test_plan_id") == {"action": "choose_source", "choice": "A"}
+    assert answer("run label TP07_T01") is None  # choosing a side would change nothing

@@ -1,0 +1,73 @@
+### Bench Heater Trial
+<table>
+  <tbody>
+    <tr>
+      <td>Start Time</td>
+      <td>09:00</td>
+      <td>Stop Time</td>
+      <td>10:30</td>
+    </tr>
+  </tbody>
+</table>
+<table>
+  <tbody>
+    <tr>
+      <td>Trial Name</td>
+      <td colspan="3">Trial 7.1 (warm-up run</td>
+    </tr>
+    <tr>
+      <td>Date</td>
+      <td colspan="3">01/02/2026</td>
+    </tr>
+    <tr>
+      <td>Operator</td>
+      <td colspan="3">A. Example</td>
+    </tr>
+    <tr>
+      <td>Supply</td>
+      <td>V</td>
+      <td>12</td>
+      <td>A</td>
+      <td>0.5</td>
+    </tr>
+    <tr>
+      <td>Resistance Before</td>
+      <td colspan="3">~~old note~~ 42.0 Ω</td>
+    </tr>
+    <tr>
+      <td>Resistance After</td>
+      <td colspan="3">41.8 Ω</td>
+    </tr>
+    <tr>
+      <td>Rig</td>
+      <td colspan="3">RIG-01</td>
+    </tr>
+    <tr>
+      <td>Sample Name</td>
+      <td colspan="3">Sample B-12 (lot 4</td>
+    </tr>
+  </tbody>
+</table>
+<table>
+  <thead>
+    <tr>
+      <th>Time</th>
+      <th>T1<br>[C]</th>
+      <th>T2<br>[C]</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>09:00</td>
+      <td>21.50</td>
+      <td>22.10</td>
+    </tr>
+    <tr>
+      <td>09:10</td>
+      <td>40.25</td>
+      <td>39.80</td>
+    </tr>
+  </tbody>
+</table>
+- Heater off at 10:20.
+- Notes checked after 5 minutes.

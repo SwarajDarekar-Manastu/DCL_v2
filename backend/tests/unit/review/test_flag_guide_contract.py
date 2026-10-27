@@ -14,9 +14,6 @@ CONSOLE = (
     Path(__file__).resolve().parents[4] / "frontend" / "console" / "src" / "lib" / "components" / "review"
 )
 GUIDE = (CONSOLE / "flag_guide.ts").read_text(encoding="utf-8")
-NOT_BUILT = re.search(
-    r"NOT_BUILT[^=]*=\s*\[([^\]]*)\]", (CONSOLE / "resolution.ts").read_text(encoding="utf-8")
-)
 
 
 def guide_actions() -> dict[str, set[str]]:
@@ -35,11 +32,3 @@ def test_every_action_a_guide_names_is_allowed_for_that_flag_type():
     for key, actions in guide_actions().items():
         flag_type = FlagType("CONFLICT" if key.startswith("CONFLICT") else key)
         assert actions <= ALLOWED_ACTIONS[flag_type], (key, actions - ALLOWED_ACTIONS[flag_type])
-
-
-def test_no_guide_names_an_action_the_console_cannot_carry_out_yet():
-    assert NOT_BUILT is not None
-    not_built = set(re.findall(r"'([a-z_]+)'", NOT_BUILT.group(1)))
-    assert not_built == {"use_replacement", "redact"}
-    for key, actions in guide_actions().items():
-        assert not (actions & not_built), key

@@ -192,7 +192,12 @@ def upsert_page(
             row.last_seen_delta_at = now
             continue
         new_hash = ((raw.get("file") or {}).get("hashes") or {}).get("quickXorHash")
-        if row.status == DriveItemStatus.DELETED or (row.quick_xor_hash and new_hash != row.quick_xor_hash):
+        moved = raw.get("name", row.name) != row.name or parent != row.parent_item_id
+        if (
+            row.status == DriveItemStatus.DELETED
+            or (row.quick_xor_hash and new_hash != row.quick_xor_hash)
+            or moved  # renamed or moved: its path is computed and its folder gated again (finalize_root)
+        ):
             row.status = DriveItemStatus.SEEN
             row.deleted_at = None
         row.name = raw.get("name", row.name)

@@ -206,6 +206,23 @@ def test_changed_hash_on_a_landed_item_needs_a_download_but_a_metadata_change_do
     assert state(session)["i-dat"][0] == S.PENDING_DOWNLOAD
 
 
+def test_a_renamed_file_gets_its_new_path_without_a_download(session):
+    run(session, FakeGraph(crawl_pages()))
+    _land(session, "i-dat")
+    _delta(session, [file("i-dat", "TP30_T01_rev2.dat", "F-PRESSURE", qxh="QXH-DAT")])
+    item = state(session)["i-dat"]
+    assert item == (S.LANDED, None, "APU Injector/Test Plan 30/Pressure_Data_Files/TP30_T01_rev2.dat")
+
+
+def test_a_file_moved_into_an_existing_quarantine_folder_is_quarantined(session):
+    run(session, FakeGraph(crawl_pages()))
+    _land(session, "i-dat")
+    _delta(session, [folder("F-OLD", "Archive (old)", "ROOT")])  # the folder exists before the move
+    moved = file("i-dat", "TP30_T01.dat", "F-OLD", qxh="QXH-DAT")
+    run(session, FakeGraph({DELTA2: [(200, {"value": [moved], "@odata.deltaLink": DELTA}, None)]}))
+    assert state(session)["i-dat"][:2] == (S.QUARANTINED, "T1:quarantine:Archive (old)")
+
+
 def test_deleted_facet_marks_the_item_deleted_and_nothing_else(session):
     run(session, FakeGraph(crawl_pages()))
     before = state(session)

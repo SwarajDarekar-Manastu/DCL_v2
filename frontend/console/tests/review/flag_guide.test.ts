@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import FlagGuide from '../../src/lib/components/review/FlagGuide.svelte';
 import { FLAG_GUIDE, guideKeyFor, guideWords } from '../../src/lib/components/review/flag_guide';
-import { ACTION_LABEL, NOT_BUILT } from '../../src/lib/components/review/resolution';
+import { ACTION_LABEL } from '../../src/lib/components/review/resolution';
 import { groupLocations } from '../../src/lib/components/review/locations';
 import type { CaseLocation } from '../../src/lib/api_endpoint';
 
@@ -45,12 +45,11 @@ describe('flag guide text', () => {
 		for (const guide of Object.values(FLAG_GUIDE)) expect(guideWords(guide)).toBeLessThanOrEqual(75);
 	});
 
-	it('only names actions the console has, and never one it cannot carry out yet', () => {
+	it('only names actions the console has', () => {
 		for (const guide of Object.values(FLAG_GUIDE)) {
 			for (const { action } of guide.choices) {
 				if (action === null) continue;
 				expect(action in ACTION_LABEL).toBe(true);
-				expect(NOT_BUILT).not.toContain(action);
 			}
 		}
 	});
@@ -75,7 +74,7 @@ describe('flag guide text', () => {
 			})
 		);
 		expect(await screen.findByText(/Two sources state different values/)).toBeTruthy();
-		expect(screen.getByText(/Say which one is right/)).toBeTruthy();
+		expect(screen.getByText(/Decide which value stands/)).toBeTruthy();
 	});
 
 	it('explains a note in its own words, not as two sources', async () => {

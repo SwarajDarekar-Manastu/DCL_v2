@@ -60,7 +60,7 @@ from backend.routes.a1_office.crops import (
     pad_into_whitespace,
 )
 from backend.routes.a1_office.figures import read_figures
-from backend.routes.a1_office.handwriting import page_doubts
+from backend.routes.a1_office.handwriting import page_doubts, reading_record
 from backend.routes.a1_office.metadata import extract_metadata, humanize, plan_conflicts
 from backend.routes.a1_office.preflight import (
     Preflight,
@@ -258,13 +258,18 @@ def process_pdf(
         if cloud_allowed:
             image = Image(render_page(pdf, page_no, dpi=200), "image/png")
             try:
-                reading = vision.transcribe_page(
+                output = vision.transcribe_page(
                     image,
                     context=context,
                     language_hint=by_page[page_no].language,
                     doc_id=doc_id,
                     anchor=f"page:{page_no}:",
-                ).reading
+                )
+                reading = output.reading
+                stores.put_cir(
+                    f"pages/{page_no}.reading.json",
+                    reading_record(page_no, reading, output.model, output.prompt_version),
+                )
             except GeminiError as exc:  # e.g. a safety block on propellant chemistry: keep the OCR text
                 log.warning("transcribe_page failed on page %s of %s: %s", page_no, file_name, exc)
         if reading is not None:

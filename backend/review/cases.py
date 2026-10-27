@@ -11,11 +11,13 @@ caller then starts ``dcl.process.resume_for_rule`` so this document and every HA
 matches re-run from their staged data. Dry run and undo are not here yet (the router answers 501).
 """
 
+import hashlib
 import json
 import logging
 import re
 import uuid
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -23,7 +25,8 @@ from typing import Any, Literal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.dispatcher.contract import SetUnit, allowed_actions, flag_subject
+from backend.dispatcher.contract import Flag, FlagAnchor, SetUnit, allowed_actions, flag_subject
+from backend.indexing.withdraw import withdraw
 from backend.postgres.enums import (
     AuditEntityType,
     CaseStatus,
@@ -55,13 +58,21 @@ from backend.review.api_models import (
     CaseLocation,
     CaseSummary,
     EditRequest,
+    EntryPlace,
     FlagView,
+    PageEntry,
+    PageReading,
+    ReadingBlock,
+    ReadingCell,
+    ReadingPart,
     ResolveRequest,
     RuleDraft,
     RuleView,
     allowed_actions_for,
     check_actions,
 )
+from backend.review.flags import upsert_document_flag
+from backend.review.page_reading import locate, parse_block, parse_reading, set_cell, set_text
 from backend.review.proposals import refresh as refresh_proposals
 from backend.review.proposals import target_of as _target_of
 from backend.review.rules import RULE_BODIES, ChannelMapBody, RuleScope, UnitMappingBody
@@ -389,7 +400,10 @@ def _applied_units(session: Session, case: _Case) -> list[AppliedUnit]:
     return found
 
 
-def case_detail(session: Session, case_key: str, is_admin: bool) -> CaseDetail:
+def case_detail(
+    session: Session, case_key: str, is_admin: bool, read_cir: Callable[[str], bytes | None] | None = None
+) -> CaseDetail:
+    """``read_cir`` reads a CIR object by its s3 URI (the API's MinIO); without it there is no page check."""
     case = _case(session, case_key)
     ctx = _context(session, [case])
     summary = _summary(case, ctx)
@@ -458,7 +472,118 @@ def case_detail(session: Session, case_key: str, is_admin: bool) -> CaseDetail:
         ],
         siblings=siblings,
         applied_units=_applied_units(session, case),
+        page_reading=_page_reading(case, document, read_cir) if read_cir and document else None,
     )
+
+
+def _page_reading(
+    case: _Case, document: Document, read_cir: Callable[[str], bytes | None]
+) -> PageReading | None:
+    """The page check: the page reader's whole page (``pages/{n}.reading.json``, written by A1 since
+    2026-10-27) when the case holds that page's unsure handwritten entries, shown as people decided it:
+    corrections applied, decided values in their cells, and both marked."""
+    entries = [
+        f
+        for f in case.flags
+        if f.flag_type == FlagType.LOW_CONFIDENCE_EXTRACTION
+        and (f.anchor or {}).get("page")
+        and (f.anchor or {}).get("content_sha256")
+    ]
+    if not entries or not document.cir_uri:
+        return None
+    page = entries[0].anchor["page"]
+    raw = read_cir(f"{document.cir_uri.rstrip('/')}/pages/{page}.reading.json")
+    if raw is None:
+        return None
+    record = json.loads(raw)
+    doubtful = record.get("doubtful", [])
+    read = parse_reading(record["markdown"])  # as read: entries are located and corrections keyed on this
+    by_key = {f.anchor["content_sha256"]: f for f in entries}
+    decided = {
+        f.flag_id: f.resolution
+        for f in case.flags
+        if f.status in (FlagStatus.RESOLVED, FlagStatus.AUTO_RESOLVED) and f.resolution
+    }
+    places = {d["key"]: locate(read, d.get("label"), d.get("value_raw")) for d in doubtful}
+    cells: set[tuple[str, int, int, int]] = set()
+    lines: dict[str, list[str]] = {}
+    shown = []
+    for block in read:
+        source = block.source
+        for res in decided.values():
+            if res.get("block_key") != block.key:
+                continue
+            if res["action"] == "set_cell":
+                edited = set_cell(source, res["table"], res["row"], res["col"], res["old"], res["value"])
+                if edited is not None:
+                    source = edited
+                    cells.add((block.key, res["table"], res["row"], res["col"]))
+            elif (
+                res["action"] == "set_text"
+                and (edited := set_text(source, res["old"], res["text"])) is not None
+            ):
+                source = edited
+                lines.setdefault(block.key, []).append(res["text"])
+        shown.append(parse_block(source, block.key))
+    for d in doubtful:
+        flag, place = by_key.get(d["key"]), places[d["key"]]
+        res = decided.get(flag.flag_id) if flag else None
+        if not (res and res["action"] == "set_value" and place and place["cell"]):
+            continue
+        block = next(b for b in shown if b.key == place["block_key"])
+        r, c = place["cell"]
+        cell = [p for p in block.parts if p.kind == "table"][place["table"]].rows[r][c]
+        value = "[illegible]" if res.get("illegible") else (res.get("value") or "")
+        if cell.text != value:
+            cell.text, cell.struck = value, []
+            cells.add((block.key, place["table"], r, c))
+    image = next((c.get("crop_uri") for f in entries for c in (f.evidence or {}).get("crops", [])), None)
+    return PageReading(
+        page_no=page,
+        image_uri=image,
+        blocks=[_reading_block(b, cells, lines.get(b.key, [])) for b in shown],
+        entries=[
+            PageEntry(
+                key=d["key"],
+                label=d.get("label"),
+                value=d.get("value_raw"),
+                unit=d.get("unit"),
+                alternatives=d.get("alternatives") or [],
+                confidence=d.get("confidence"),
+                illegible=bool(d.get("illegible")),
+                flag_id=by_key[d["key"]].flag_id if d["key"] in by_key else None,
+                located=EntryPlace(**places[d["key"]]) if places[d["key"]] else None,
+            )
+            for d in doubtful
+        ],
+        reader_confidence=record.get("confidence"),
+        prompt_version=record.get("prompt_version"),
+    )
+
+
+def _reading_block(block, cells: set[tuple[str, int, int, int]], lines: list[str]) -> ReadingBlock:
+    parts, t = [], 0
+    for part in block.parts:
+        rows = None
+        if part.rows is not None:
+            rows = [
+                [
+                    ReadingCell(
+                        text=cell.text,
+                        struck=cell.struck,
+                        span_of=list(cell.span_of) if cell.span_of else None,
+                        corrected=(block.key, t, r, c) in cells,
+                    )
+                    for c, cell in enumerate(row)
+                ]
+                for r, row in enumerate(part.rows)
+            ]
+            t += 1
+        corrected = [line for line in lines if line in (part.text or "").split("\n")]
+        parts.append(
+            ReadingPart(kind=part.kind, text=part.text, struck=part.struck, rows=rows, corrected=corrected)
+        )
+    return ReadingBlock(key=block.key, parts=parts)
 
 
 # ---------------------------------------------------------------- rules
@@ -709,6 +834,32 @@ class ResolveOutcome:
     rebuild_doc_id: uuid.UUID | None = None  # a committed file rebuilt so the decision reaches search
 
 
+REVIEW_ORIGIN = "review"  # a decided flag a person raised on the page check (a cell or line correction)
+
+
+def _correction_row(session: Session, case: _Case, correction) -> ReviewFlag:
+    """The decided flag that keeps a page-check correction, one per cell or line: correcting it again
+    updates the same row."""
+    page = next(
+        (
+            f.anchor["page"]
+            for f in case.flags
+            if f.flag_type == FlagType.LOW_CONFIDENCE_EXTRACTION and (f.anchor or {}).get("page")
+        ),
+        None,
+    )
+    if page is None or not case.flags[0].doc_id:
+        raise InvalidAction("corrections are made on the page check of a page read whole")
+    where = (
+        f"{correction.block_key}|{correction.table}|{correction.row}|{correction.col}"
+        if correction.action == "set_cell"
+        else f"{correction.block_key}|text|{correction.old}"
+    )
+    anchor = FlagAnchor(page=page, content_sha256=hashlib.sha256(where.encode()).hexdigest()[:32])
+    flag = Flag(flag_type=FlagType.LOW_CONFIDENCE_EXTRACTION, severity=FlagSeverity.SOFT, anchor=anchor)
+    return upsert_document_flag(session, case.flags[0].doc_id, flag, REVIEW_ORIGIN)
+
+
 def _settle_document(session: Session, doc_id: uuid.UUID | None) -> None:
     """ACTIVE_WITH_SOFT_FLAGS with no open flag left becomes ACTIVE (file 06 status invariant)."""
     if doc_id is None:
@@ -772,6 +923,16 @@ def resolve_case(
         if flag.proposed_by_rule_id:
             after["proposed_by_rule_id"] = str(flag.proposed_by_rule_id)
         _audit(session, actor, AuditEntityType.FLAG, str(flag.flag_id), "resolve", before, after)
+    for correction in request.corrections or []:
+        row = _correction_row(session, case, correction)
+        before = {"status": row.status, "resolution": row.resolution}
+        if correction.action == "set_cell" and (row.resolution or {}).get("action") == "set_cell":
+            # a cell corrected again still names the text as read, which is what a rebuild finds
+            correction = correction.model_copy(update={"old": row.resolution["old"]})
+        row.status, row.resolution = FlagStatus.RESOLVED, correction.model_dump(mode="json")
+        row.resolved_by, row.resolved_at = actor, now
+        after = {"status": row.status, "resolution": row.resolution, "comment": request.comment}
+        _audit(session, actor, AuditEntityType.FLAG, str(row.flag_id), "resolve", before, after)
     _audit(
         session,
         actor,
@@ -789,8 +950,12 @@ def resolve_case(
         (
             item.resolution.action
             for item in request.resolutions
-            if item.resolution.action in ("skip", "mark_junk")
-            and flag_subject(FlagType(by_id[item.flag_id].flag_type), by_id[item.flag_id].anchor) == "file"
+            if item.resolution.action == "exclude"  # sensitive content: out like a skip, never resumed
+            or (
+                item.resolution.action in ("skip", "mark_junk")
+                and flag_subject(FlagType(by_id[item.flag_id].flag_type), by_id[item.flag_id].anchor)
+                == "file"
+            )
         ),
         None,
     )
@@ -842,8 +1007,9 @@ def _resumable(session: Session, doc_id: uuid.UUID | None) -> uuid.UUID | None:
 
 
 def _take_file_out(session: Session, case: _Case, action: str, actor: str, now: datetime) -> None:
-    """Skip or junk on a file flag: every open flag of the case REJECTED_FILE; the document leaves the index
-    path (QUARANTINED, staged payload released); ``mark_junk`` also quarantines its OneDrive locations."""
+    """Skip or junk on a file flag, or exclude on sensitive content: every open flag of the case
+    REJECTED_FILE; the document leaves the index path (QUARANTINED, staged payload released); ``mark_junk``
+    also quarantines its OneDrive locations."""
     for flag in case.flags:
         if flag.status in OPEN or flag.resolved_at == now:
             flag.status, flag.resolved_by, flag.resolved_at = FlagStatus.REJECTED_FILE, actor, now
@@ -852,6 +1018,7 @@ def _take_file_out(session: Session, case: _Case, action: str, actor: str, now: 
     document = session.get(Document, first.doc_id) if first.doc_id else None
     before = {"document_status": document.status if document else None}
     if document is not None:
+        withdraw(session, document)  # out of search means out of the index: nothing of it can be read
         document.status = DocumentStatus.QUARANTINED
         document.staged_payload_uri = None
     if action == "mark_junk":
@@ -1303,6 +1470,7 @@ class UndoOutcome:
     reopened: list[ReviewFlag]
     rebuild_doc_id: uuid.UUID | None
     deactivated_rule_id: uuid.UUID | None
+    removed_corrections: int = 0
 
 
 def _release_rule(session: Session, rule_id: uuid.UUID, actor: str) -> uuid.UUID | None:
@@ -1370,6 +1538,18 @@ def _reopen(
     why = {"reason": reason} if reason else {}
     for flag in batch:
         before = {"status": flag.status, "resolution": flag.resolution}
+        if flag.route == REVIEW_ORIGIN:  # a correction asked nothing: taking it back removes it
+            _audit(
+                session,
+                actor,
+                AuditEntityType.FLAG,
+                str(flag.flag_id),
+                action,
+                before,
+                {"deleted": True, **why},
+            )
+            session.delete(flag)
+            continue
         flag.status, flag.resolution, flag.resolution_rule_id = FlagStatus.REOPENED, None, None
         flag.resolved_by = flag.resolved_at = None
         _audit(
@@ -1398,6 +1578,10 @@ def _reopen(
         DocumentStatus.ACTIVE_WITH_SOFT_FLAGS,
         DocumentStatus.QUARANTINED,
     ):
+        if any(f.severity == FlagSeverity.HARD for f in batch):
+            # a blocking question is open again: the content leaves the index now, not when the rebuild
+            # (which halts it) gets its turn; a non-blocking one is rebuilt without the decision and stays
+            withdraw(session, document)
         document.status = DocumentStatus.PROCESSING
         rebuild = document.doc_id
     _audit(
@@ -1414,7 +1598,8 @@ def _reopen(
         },
     )
     session.flush()
-    return UndoOutcome(batch, rebuild, deactivated)
+    corrections = [f for f in batch if f.route == REVIEW_ORIGIN]
+    return UndoOutcome([f for f in batch if f not in corrections], rebuild, deactivated, len(corrections))
 
 
 def undo_case(session: Session, case_key: str, actor: str, now: datetime | None = None) -> UndoOutcome:

@@ -1,4 +1,5 @@
 import io
+import json
 import re
 
 import pytest
@@ -8,10 +9,10 @@ from reportlab.lib.pagesizes import A4  # noqa: E402
 from reportlab.pdfgen import canvas  # noqa: E402
 
 from backend.dispatcher.contract import PageBox, ProcessedNode  # noqa: E402
-from backend.llm_engine.vision.schemas import HandwritingDoubt, SchematicReading  # noqa: E402
+from backend.llm_engine.vision.schemas import HandwritingDoubt, PageTranscription, SchematicReading  # noqa: E402
 from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource, NodeType  # noqa: E402
 from backend.routes.a1_office.figures import read_figures, render_schematic  # noqa: E402
-from backend.routes.a1_office.handwriting import page_doubts  # noqa: E402
+from backend.routes.a1_office.handwriting import page_doubts, reading_record  # noqa: E402
 from backend.routes.a1_office.tables_qa import (  # noqa: E402
     agreement,
     check_tables,
@@ -400,3 +401,30 @@ def test_an_entry_keeps_its_anchor_on_a_rebuild_and_a_repeated_label_gets_its_ow
 def test_an_entry_whose_text_is_not_on_the_page_is_kept_on_its_first_node():
     nodes, _ = page_doubts(PAGE_NODES, 2, [doubt("Remark", "see log")], page_uri=PAGE_URI, critical=[])
     assert [e["value_raw"] for e in nodes[0].metadata["handwriting"]] == ["see log"]
+
+
+def test_the_stored_page_reading_keys_its_entries_as_their_flags():
+    entries = [
+        doubt("Date", "30/05/2026"),
+        doubt("Date", "31/05/2026"),
+        doubt("Tare weight (g)", None, 0.3, True),
+    ]
+    reading = PageTranscription(
+        markdown="### Post analysis\n\n<table><tr><td>Date</td><td>30/05/2026</td></tr></table>",
+        language="en",
+        confidence=0.9,
+        doubtful=entries,
+    )
+    record = json.loads(reading_record(2, reading, "gemini-3.8-flash", "transcribe_page.v3"))
+    flags = page_doubts(PAGE_NODES, 2, entries, page_uri=PAGE_URI, critical=[])[1]
+    assert [e["key"] for e in record["doubtful"]] == [f.anchor.content_sha256 for f in flags]
+    assert (record["page_no"], record["prompt_version"], record["markdown"]) == (
+        2,
+        "transcribe_page.v3",
+        reading.markdown,
+    )
+    assert [(e["label"], e["value_raw"], e["illegible"]) for e in record["doubtful"]] == [
+        ("Date", "30/05/2026", False),
+        ("Date", "31/05/2026", False),
+        ("Tare weight (g)", None, True),
+    ]

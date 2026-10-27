@@ -106,6 +106,8 @@ def _land(session: Session, item: DriveItem, sha256: str) -> None:
         item.previous_blob_sha256 = (
             item.blob_sha256
         )  # modified in place; a pending value is never overwritten
+    if item.blob_sha256 != sha256:  # new bytes are inspected again (type check, secret scan): inspect.py
+        item.detected_mime, item.ext_mime_mismatch = None, False
     item.blob_sha256 = sha256
     item.status = DriveItemStatus.LANDED
     item.error_last = None

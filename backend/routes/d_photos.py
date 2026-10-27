@@ -4,7 +4,7 @@
    from every derivative and never stored (the test site location is sensitive and not needed).
 2. pHash for burst clusters: `cluster_photos` groups photos of one folder taken within 60 s whose pHash
    distance is ≤ 6 (S1's assembler applies it, file 03 §1.3). A member gets its representative's reading
-   (`representative=`) and makes no vision call.
+   (`representative=`) and its flags, the export marking above all, and makes no vision call.
 3. Classify first (Flash-Lite `classify_image`): exported plots and screenshots go to `digitize_plot`,
    diagrams to `read_schematic`, phone photos of documents to `transcribe_page`, hardware photos to
    `inspect_hardware_photo` with the folder breadcrumb and file name. People/other: catalog only, no
@@ -20,7 +20,7 @@ cannot determine the component; SENSITIVE_CONTENT (HARD) when visible text carri
 import io
 import re
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -91,6 +91,7 @@ class PhotoReading:
     metadata: dict
     confidence: float | None
     summary: str | None = None  # the file's summary in its metadata (DocumentFields.summary)
+    flags: tuple[Flag, ...] = ()  # raised on the representative; every member of the burst carries them too
 
 
 def _register_heif() -> None:
@@ -345,10 +346,11 @@ def process_photo(
         ),
     ]
     context = photo_context(folder, file_name, normalized.taken_at)
-    flags: list[Flag] = []
     reading = representative
     if reading is None and cloud_allowed:
-        reading, flags = read_photo(vision, _for_model(normalized.image), context=context, doc_id=doc_id)
+        found, raised = read_photo(vision, _for_model(normalized.image), context=context, doc_id=doc_id)
+        reading = replace(found, flags=tuple(raised))
+    flags = list(reading.flags) if reading else []
     nodes: list[ProcessedNode] = []
     image_class = reading.image_class if reading else None
     if reading is not None and image_class != ImageClass.PEOPLE_OR_OTHER and reading.content:

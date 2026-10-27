@@ -15,11 +15,12 @@
 	import CaseHeader from './CaseHeader.svelte';
 	import ChannelMapView from './ChannelMapView.svelte';
 	import FlagConsole from './FlagConsole.svelte';
+	import PageCheck from './PageCheck.svelte';
 	import RuleFromDecision from './RuleFromDecision.svelte';
 	import { isChannelMapCase } from './channel_map';
 	import { tick, untrack } from 'svelte';
 	import { decisionText, subjectText } from './decisions';
-	import { loadDrafts, saveDrafts } from './drafts';
+	import { isCorrection, loadDrafts, saveDrafts } from './drafts';
 	import { canBecomeRule, caseRuleScope, missing, needsPreview, takesFileOut, type ScopeChoice } from './resolution';
 	import { offersFor, type RuleOffer } from './rule_from_decision';
 
@@ -58,6 +59,10 @@
 	let caseKey = $derived(detail.summary.case_key);
 	let openFlags = $derived(detail.flags.filter((f) => OPEN.includes(f.status)));
 	let decidedFlags = $derived(detail.flags.filter((f) => !OPEN.includes(f.status)));
+	// A page read whole is checked on one screen (PageCheck); its entries' flags are not shown one by one.
+	let reading = $derived(detail.page_reading ?? null);
+	let onPage = $derived(new Set((reading?.entries ?? []).flatMap((e) => (e.flag_id ? [e.flag_id] : []))));
+	let pageLeft = $derived(openFlags.filter((f) => onPage.has(f.flag_id) && !drafts[f.flag_id]).length);
 	let caseEl = $state<HTMLElement | null>(null);
 	$effect(() => {
 		void caseKey;
@@ -70,16 +75,21 @@
 		details = false;
 		confirming = false;
 		offers = [];
-		// Focus lands on the first open question's Resolution, so the keyboard can go on from the queue.
-		void tick().then(() => (caseEl?.querySelector<HTMLElement>('select[data-resolution]') ?? caseEl)?.focus());
+		// Focus lands on the first open question's answer, so the keyboard can go on from the queue.
+		void tick().then(() => (caseEl?.querySelector<HTMLElement>('[data-resolution]') ?? caseEl)?.focus());
 	});
 	$effect(() => saveDrafts(caseKey, drafts));
 
 	let where = $derived(detail.locations[0] ?? null);
+	// Answers to flags, and the page check's corrections of cells and lines nobody flagged.
 	let chosen = $derived(
-		Object.entries(drafts).filter((entry): entry is [string, Resolution] => entry[1] !== null)
+		Object.entries(drafts).filter((entry): entry is [string, Resolution] => entry[1] !== null && !isCorrection(entry[0]))
+	);
+	let corrections = $derived(
+		Object.entries(drafts).flatMap(([id, r]) => (r && isCorrection(id) && (r.action === 'set_cell' || r.action === 'set_text') ? [r] : []))
 	);
 	let ruleCandidates = $derived(chosen.filter(([, r]) => canBecomeRule(r.action)));
+	const verb: Record<string, string> = { mark_junk: 'Junk', skip: 'Skip', exclude: 'Exclude' };
 	let wholeFile = $derived(
 		chosen.find(([flagId, r]) => {
 			const flag = detail.flags.find((f) => f.flag_id === flagId);
@@ -131,7 +141,8 @@
 	}
 
 	let blocker = $derived.by((): string => {
-		if (!chosen.length) return 'Choose a resolution for at least one flag.';
+		if (pageLeft) return `Answer every highlighted entry: ${pageLeft} left.`;
+		if (!chosen.length && !corrections.length) return 'Choose a resolution for at least one flag.';
 		for (const [, r] of chosen) {
 			const gap = missing(r);
 			if (gap) return `Missing: ${gap}.`;
@@ -173,13 +184,20 @@
 			const repeatable = offersFor(detail.flags, chosen, where?.file_name ?? '');
 			const response = await resolveCase(caseKey, {
 				resolutions: chosen.map(([flag_id, resolution]) => ({ flag_id, resolution })),
+				...(corrections.length ? { corrections } : {}),
 				rule_scope: ruleScope
 			});
 			offers = repeatable;
 			saveDrafts(caseKey, {});
 			const proposed = response.proposed_files;
+			if (reading) return `Saved ${savedText(chosen.length, corrections.length)} for page ${reading.page_no}.`;
 			return `Resolved${response.resumed_doc_ids.length ? '. This file is resuming' : ''}${proposed ? `. ${proposed} other file${proposed === 1 ? '' : 's'} now show${proposed === 1 ? 's' : ''} these units as a proposal` : ''}.`;
 		});
+	}
+
+	function savedText(answers: number, fixes: number): string {
+		const parts = [answers && `${answers} answer${answers === 1 ? '' : 's'}`, fixes && `${fixes} correction${fixes === 1 ? '' : 's'}`];
+		return parts.filter(Boolean).join(' and ');
 	}
 
 	const assign = (assignee: string | null) =>
@@ -190,7 +208,11 @@
 	const undo = () =>
 		run(async () => {
 			const response = await undoCase(caseKey);
-			return `Reopened ${response.reopened_flag_ids.length} flag${response.reopened_flag_ids.length === 1 ? '' : 's'}.`;
+			const n = response.reopened_flag_ids.length;
+			const removed = response.removed_corrections ?? 0;
+			const parts = [n && `reopened ${n} flag${n === 1 ? '' : 's'}`, removed && `removed ${removed} correction${removed === 1 ? '' : 's'}`];
+			const said = parts.filter(Boolean).join(' and ');
+			return said ? `${said[0].toUpperCase()}${said.slice(1)}.` : 'Nothing to undo.';
 		});
 </script>
 
@@ -204,7 +226,8 @@
 		<button type="button" class="text-link w-fit cursor-pointer border-0 bg-transparent p-0 text-xs" onclick={() => (details = false)}>Back to the channel map</button>
 	{/if}
 	<div class="grid gap-3">
-		{#each openFlags as flag (flag.flag_id)}
+		{#if reading}<PageCheck {reading} flags={detail.flags} bind:drafts />{/if}
+		{#each openFlags.filter((f) => !onPage.has(f.flag_id)) as flag (flag.flag_id)}
 			<FlagConsole {flag} bind:draft={drafts[flag.flag_id]} preview={previewState(flag.flag_id)} onPreview={() => preview(flag.flag_id)} />
 		{/each}
 	</div>
@@ -243,20 +266,20 @@
 			{#if scope !== 'file'}<Notice tone="info">Saved as a proposal rule: the other waiting files show these units, and a person still checks and applies each one.</Notice>{/if}
 		{/if}
 		<div class="flex flex-wrap items-center gap-2">
-			<Button disabled={busy || !!blocker} onclick={apply}>
-				<CheckIcon />{detail.document_status === 'HALTED' ? 'Apply & resume' : 'Apply'}
+			<Button disabled={busy || !!blocker} onclick={apply} data-apply>
+				<CheckIcon />{reading ? `Apply page ${reading.page_no}` : 'Apply'}{detail.document_status === 'HALTED' ? ' & resume' : ''}
 			</Button>
 			{#if blocker}<p class="text-muted-foreground m-0 ml-1 text-xs">{blocker}</p>{/if}
 		</div>
 		{#if confirming && wholeFile}
 			<Notice tone="warning"
-				>{wholeFile === 'mark_junk' ? 'Junk' : 'Skip'} the whole file <strong>{where?.file_name ?? 'of this case'}</strong>? It leaves search{wholeFile ===
+				>{verb[wholeFile]} the whole file <strong>{where?.file_name ?? 'of this case'}</strong>? It leaves search{wholeFile ===
 				'mark_junk'
 					? ' and is not processed again'
 					: ''}. Undo brings it back.</Notice
 			>
 			<div class="flex flex-wrap items-center gap-2">
-				<Button variant="destructive" disabled={busy} onclick={apply}>Yes, {wholeFile === 'mark_junk' ? 'junk' : 'skip'} the whole file</Button>
+				<Button variant="destructive" disabled={busy} onclick={apply}>Yes, {verb[wholeFile].toLowerCase()} the whole file</Button>
 				<Button variant="outline" disabled={busy} onclick={() => (confirming = false)}>Cancel</Button>
 			</div>
 		{/if}

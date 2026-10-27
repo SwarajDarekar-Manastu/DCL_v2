@@ -251,6 +251,30 @@ class SetValue(_Model):
     illegible: bool = False
 
 
+class SetCell(_Model):
+    """The page check (review/page_reading.py): a cell of a page read whole that the reader did not flag,
+    corrected by a person. ``block_key`` names the paragraph of the reading, ``table`` the table in it;
+    applied only while the cell still reads ``old``."""
+
+    action: Literal["set_cell"] = "set_cell"
+    block_key: str = Field(pattern=r"^[0-9a-f]{16}$")
+    table: int = Field(ge=0)
+    row: int = Field(ge=0)
+    col: int = Field(ge=0)
+    old: str
+    value: str
+
+
+class SetText(_Model):
+    """The page check: a line of a page read whole, outside its tables, corrected by a person; applied only
+    while the line still reads ``old``."""
+
+    action: Literal["set_text"] = "set_text"
+    block_key: str = Field(pattern=r"^[0-9a-f]{16}$")
+    old: str = Field(min_length=1)
+    text: str
+
+
 class ChooseTable(_Model):
     """LOW_CONFIDENCE_EXTRACTION on a table: version A (TableFormer) or B (VLM), or edited cells."""
 
@@ -333,6 +357,8 @@ class Exclude(_Model):
 Resolution = Annotated[
     SetUnit
     | SetFactUnit
+    | SetCell
+    | SetText
     | MapColumns
     | MapJsonKeys
     | SetValue
@@ -352,16 +378,25 @@ Resolution = Annotated[
     Field(discriminator="action"),
 ]
 
+# Only answers that something applies (file 06 §6). use_replacement, watch, redact, approve_download and
+# map_columns have models but nothing that carries them out yet, so they are not offered (2026-10-27): an
+# accepted redact released the halted file unredacted.
 ALLOWED_ACTIONS: dict[FlagType, frozenset[str]] = {
     FlagType.UNIT_AMBIGUITY: frozenset({"set_unit", "set_fact_unit"}),
-    FlagType.SCHEMA_UNKNOWN: frozenset({"map_columns", "map_json_keys", "mark_junk"}),
+    FlagType.SCHEMA_UNKNOWN: frozenset({"map_json_keys", "mark_junk"}),
     FlagType.LOW_CONFIDENCE_EXTRACTION: frozenset({"set_value", "choose_table", "ignore", "mark_junk"}),
-    FlagType.PARSE_FAILURE: frozenset({"use_replacement", "skip", "mark_junk"}),
-    FlagType.UNSUPPORTED_FORMAT: frozenset({"skip", "mark_junk", "watch"}),
+    FlagType.PARSE_FAILURE: frozenset({"skip", "mark_junk"}),
+    FlagType.UNSUPPORTED_FORMAT: frozenset({"skip", "mark_junk"}),
     FlagType.CONFLICT: frozenset({"choose_source", "mark_superseded", "accept_both", "ignore"}),
-    FlagType.SENSITIVE_CONTENT: frozenset({"redact", "approve_internal", "exclude"}),
-    FlagType.HELD_LARGE_FILE: frozenset({"approve_download", "skip"}),
+    FlagType.SENSITIVE_CONTENT: frozenset({"approve_internal", "exclude"}),
+    FlagType.HELD_LARGE_FILE: frozenset({"skip"}),
     FlagType.CLOUD_RESTRICTED: frozenset({"ignore"}),
+}
+# The document fields a CONFLICT's chosen side can set (indexing/overlays.py overlay_document).
+FIELD_BY_SUBJECT = {
+    "test plan id": "test_plan_id",
+    "test run id": "test_run_id",
+    "hardware item": "hardware_item",
 }
 ADMIN_ONLY_ACTIONS = frozenset({"approve_internal"})
 
@@ -385,12 +420,31 @@ def flag_subject(flag_type: FlagType, anchor: dict[str, Any] | None) -> FlagSubj
     return "value" if anchor.get("content_sha256") else "page"
 
 
+def subject_key(subject: str | None) -> str:
+    """A subject compared without case, underscores or extra spaces ("test_plan_id" == "test plan id")."""
+    return " ".join((subject or "").casefold().replace("_", " ").split())
+
+
 def allowed_actions(
     flag_type: FlagType, anchor: dict[str, Any] | None = None, evidence: dict[str, Any] | None = None
 ) -> frozenset[str]:
     """ALLOWED_ACTIONS narrowed to what the flag is about: a page or a figure is kept as read or junked, a
     table is chosen or junked, a handwritten entry is typed, and a LOW_CONFIDENCE_EXTRACTION about nothing
-    on a page (the formula cap) is only acknowledged."""
+    on a page (the formula cap) is only acknowledged. Two sources that disagree offer a side only when the
+    side sets a document field, and "superseded" only when a side is another document; a failed check or a
+    note is accepted or ignored."""
+    if flag_type == FlagType.CONFLICT:
+        evidence = evidence or {}
+        sides = [evidence.get("a") or {}, evidence.get("b") or {}]
+        actions = {"accept_both", "ignore"}
+        if evidence.get("relation", "sources_disagree") == "sources_disagree":
+            if subject_key(evidence.get("subject")) in FIELD_BY_SUBJECT and any(
+                s.get("value") for s in sides
+            ):
+                actions.add("choose_source")
+            if any(s.get("doc_id") for s in sides):
+                actions.add("mark_superseded")
+        return frozenset(actions)
     if flag_type != FlagType.LOW_CONFIDENCE_EXTRACTION:
         return ALLOWED_ACTIONS[flag_type]
     subject = flag_subject(flag_type, anchor)

@@ -153,6 +153,17 @@ class BucketStore:
         )
         return uri(self.bucket, key)
 
+    def delete(self, key: str) -> None:
+        """Remove one object; a missing key is not an error (removing is idempotent)."""
+        self._client.remove_object(self.bucket, check_key(key))
+
+    def delete_prefix(self, prefix: str) -> int:
+        """Remove every object under ``prefix`` (a folder such as ``{sha256}/``); returns how many."""
+        names = [o.object_name for o in self._client.list_objects(self.bucket, prefix=prefix, recursive=True)]
+        for name in names:
+            self._client.remove_object(self.bucket, name)
+        return len(names)
+
     def put_file(self, key: str, path: str, content_type: str = "application/octet-stream") -> str:
         """Upload a local file (multipart for large ones); returns its ``s3://`` URI."""
         self._client.fput_object(self.bucket, check_key(key), path, content_type=content_type)

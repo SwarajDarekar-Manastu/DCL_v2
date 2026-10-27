@@ -144,6 +144,27 @@ describe('CaseView', () => {
 		});
 	});
 
+	it('asks before excluding a file with sensitive content, naming it', async () => {
+		const sensitive = unitFlag({
+			flag_id: 'flag-itar',
+			flag_type: 'SENSITIVE_CONTENT',
+			anchor: { page: 1 },
+			subject: 'value',
+			allowed_actions: ['exclude'],
+			evidence: null,
+			suggested_resolution: null
+		});
+		render(CaseView, { detail: detail([sensitive]), me: 'asha@manastuspace.com', onChanged: () => {} });
+		await fireEvent.change(screen.getByRole('combobox', { name: 'Resolution' }), { target: { value: 'exclude' } });
+		await fireEvent.click(applyButton());
+		expect(api.resolveCase).not.toHaveBeenCalled();
+		expect(screen.getByText(/It leaves search/).textContent).toContain('Exclude the whole file Pressure_T07.dat?');
+		await fireEvent.click(screen.getByRole('button', { name: 'Yes, exclude the whole file' }));
+		await waitFor(() =>
+			expect(api.resolveCase).toHaveBeenCalledWith(CASE_KEY, { resolutions: [{ flag_id: 'flag-itar', resolution: { action: 'exclude' } }], rule_scope: null })
+		);
+	});
+
 	it('offers folder scopes only when the case has a folder id, and undo only after a resolution', async () => {
 		const noFolder = detail([unitFlag()], { locations: [{ ...detail().locations[0], folder_id: null }] });
 		render(CaseView, { detail: noFolder, me: 'asha@manastuspace.com', onChanged: () => {} });

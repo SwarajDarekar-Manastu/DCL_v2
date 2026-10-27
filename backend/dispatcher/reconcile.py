@@ -10,6 +10,8 @@ minutes):
   ``metadata_sources.error``; it is resumed again here.
 - FAILED after an error that passes (storage full or unreachable, gateway or models down, retries spent:
   ``metadata_sources.error_transient``): its route runs it again.
+- PROCESSING for longer than RESEND_AFTER: its run or rebuild message was lost (a stopped worker, a rebuild
+  after an undo that never ran): its route runs it again.
 
 Each file is sent again at most MAX_RERUNS times (``metadata_sources.reruns``), so a file that keeps coming
 back to the same state stops costing work and waits for a person in Ops. A file that has moved on (ACTIVE)
@@ -49,6 +51,11 @@ def stalled(session: Session, now: datetime | None = None) -> list[Release]:
         select(Document).where(Document.status == DocumentStatus.HALTED, Document.doc_id.not_in(blocked))
     ).all()
     failed = session.scalars(select(Document).where(Document.status == DocumentStatus.FAILED)).all()
+    stuck = session.scalars(
+        select(Document).where(
+            Document.status == DocumentStatus.PROCESSING, Document.updated_at < now - RESEND_AFTER
+        )
+    ).all()
     releases = []
     for document in halted:
         if _due(document, now) and (document.metadata_sources or {}).get("reruns", 0) < MAX_RERUNS:
@@ -61,6 +68,10 @@ def stalled(session: Session, now: datetime | None = None) -> list[Release]:
         if found and again and _due(document, now):
             document.status = DocumentStatus.PROCESSING
             document.staged_payload_uri = None
+            releases.append(_send(document, *found, now))
+    for document in stuck:
+        found = task_for_route(Route(document.route)) if document.route else None
+        if found and _due(document, now) and (document.metadata_sources or {}).get("reruns", 0) < MAX_RERUNS:
             releases.append(_send(document, *found, now))
     for document in session.scalars(
         select(Document).where(Document.status.in_(MOVED_ON), Document.metadata_sources.has_key("reruns"))

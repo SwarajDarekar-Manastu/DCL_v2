@@ -89,10 +89,23 @@ def test_d_burst_members_wait_for_and_reuse_the_representative(session, minio, m
     monkeypatch.setattr(d, "burst_readings", lambda photos: {sha: ("0" * 16, None) for sha, _ in photos})
     seen = []
 
+    from backend.dispatcher.contract import Flag, FlagAnchor, SensitiveEvidence
+
+    marking = Flag(
+        flag_type="SENSITIVE_CONTENT",
+        severity="HARD",
+        anchor=FlagAnchor(page=1),
+        evidence=SensitiveEvidence(pattern="ITAR", redacted_preview="visible text 'ITAR'", page=1),
+    )
+
     def fake_photo(data, *, blob_sha256, representative, cluster_id, **kw):
         seen.append((blob_sha256, representative, cluster_id))
         reading = d.PhotoReading(
-            image_class=d.ImageClass.HARDWARE_PHOTO, content="valve body", metadata={}, confidence=0.9
+            image_class=d.ImageClass.HARDWARE_PHOTO,
+            content="valve body",
+            metadata={},
+            confidence=0.9,
+            flags=(marking,),
         )
         return _fake_doc(blob_sha256, "D"), None if representative else reading
 
@@ -109,6 +122,7 @@ def test_d_burst_members_wait_for_and_reuse_the_representative(session, minio, m
     assert seen[0] == (rep_sha, None, rep_sha)
     member_sha, reading, cluster = seen[1]
     assert (reading.content, cluster) == ("valve body", rep_sha) and member_sha != rep_sha
+    assert reading.flags == (marking,)  # the export marking travels with the reading in reading.json
 
 
 def _seed_folders_only(session):

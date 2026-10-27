@@ -14,8 +14,10 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from minio import Minio
 from sqlalchemy.orm import Session
 
+from backend.api.assets import get_minio
 from backend.api.auth import ConsoleRole, ConsoleUser, require_role
 from backend.postgres.session import get_session
 from backend.review import cases
@@ -43,6 +45,7 @@ from backend.review.api_models import (
     RuleView,
     UndoResponse,
 )
+from backend.storage.minio import BucketStore, parse_uri
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/review", tags=["review"])
@@ -89,9 +92,15 @@ def list_cases(user: Reviewer, session: Db, filters: Annotated[CaseFilters, Quer
 
 
 @router.get("/cases/{case_key}")
-def get_case(user: Reviewer, session: Db, case_key: str) -> CaseDetail:
+def get_case(
+    user: Reviewer, session: Db, case_key: str, minio: Annotated[Minio, Depends(get_minio)]
+) -> CaseDetail:
+    def read_cir(uri: str) -> bytes | None:
+        bucket, key = parse_uri(uri)
+        return BucketStore(minio, bucket).get(key)
+
     try:
-        return cases.case_detail(session, case_key, user.has(ConsoleRole.ADMIN))
+        return cases.case_detail(session, case_key, user.has(ConsoleRole.ADMIN), read_cir)
     except cases.CaseNotFound as exc:
         raise _not_found(exc) from exc
 
@@ -176,6 +185,7 @@ def undo_case(user: Reviewer, session: Db, case_key: str) -> UndoResponse:
         case_key=case_key,
         reopened_flag_ids=[f.flag_id for f in outcome.reopened],
         rebuild_doc_id=outcome.rebuild_doc_id,
+        removed_corrections=outcome.removed_corrections,
     )
 
 

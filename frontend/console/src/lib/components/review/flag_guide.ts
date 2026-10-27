@@ -33,9 +33,8 @@ export const FLAG_GUIDE: Record<GuideKey, FlagGuide> = {
 	},
 	SCHEMA_UNKNOWN: {
 		what: 'A table or data block has a layout the system does not recognise.',
-		decide: 'Say which column or key means what.',
+		decide: 'Say which section each key belongs to.',
 		choices: [
-			{ action: 'map_columns', text: 'Map columns: name what each column holds.' },
 			{ action: 'map_json_keys', text: 'Map JSON keys: say which section each key belongs to.' },
 			{ action: 'mark_junk', text: 'Junk whole file if nothing in it is useful for search.' }
 		],
@@ -65,7 +64,6 @@ export const FLAG_GUIDE: Record<GuideKey, FlagGuide> = {
 		what: 'The system has no reader for this kind of file yet.',
 		decide: 'Decide whether it matters.',
 		choices: [
-			{ action: 'watch', text: 'Notify when an adapter exists, if you want it indexed later.' },
 			{ action: 'skip', text: 'Skip whole file if it does not matter.' },
 			{ action: 'mark_junk', text: 'Junk whole file if it never will.' }
 		],
@@ -73,7 +71,7 @@ export const FLAG_GUIDE: Record<GuideKey, FlagGuide> = {
 	},
 	CONFLICT: {
 		what: 'Two sources state different values for the same thing, such as two plan numbers.',
-		decide: 'Say which one is right.',
+		decide: 'Decide which value stands.',
 		choices: [
 			{ action: 'choose_source', text: 'Pick the authoritative source: A or B.' },
 			{ action: 'mark_superseded', text: 'Mark a document superseded when one is just the older version.' },
@@ -105,15 +103,14 @@ export const FLAG_GUIDE: Record<GuideKey, FlagGuide> = {
 		decide: 'Decide whether it may be indexed.',
 		choices: [
 			{ action: 'approve_internal', text: 'Approve for internal indexing if it is safe (admin only).' },
-			{ action: 'exclude', text: 'Exclude permanently if it must never be searchable.' }
+			{ action: 'exclude', text: 'Exclude whole file if it must not be searchable. Undo brings it back.' }
 		],
 		unsure: 'Leave open: the file stays out of search until you decide.'
 	},
 	HELD_LARGE_FILE: {
 		what: 'A very large file was not downloaded automatically.',
-		decide: 'Decide whether to fetch it.',
+		decide: 'Fetching it from the console is not built yet: skip it, or leave it open and ask the team.',
 		choices: [
-			{ action: 'approve_download', text: 'Approve download to fetch and index it.' },
 			{ action: 'skip', text: 'Skip whole file to leave it out.' }
 		],
 		unsure: 'Leave open: nothing else is blocked.'

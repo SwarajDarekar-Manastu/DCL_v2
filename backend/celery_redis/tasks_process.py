@@ -26,7 +26,7 @@ from backend.postgres.enums import DocumentStatus
 from backend.postgres.models import Document
 from backend.postgres.session import engine_from_settings
 from backend.routes.c_telemetry.pipeline import halted_documents_for_rule, process_document, resume_document
-from backend.storage.minio import client_from_settings, unavailable
+from backend.storage.minio import ASSETS, CIR, RAW, BucketStore, client_from_settings, unavailable
 
 IO_LIGHT = str(Queue.IO_LIGHT)
 
@@ -51,13 +51,21 @@ def dispatch() -> dict[str, int]:
 
 @app.task(name="dcl.process.reconcile", queue=IO_LIGHT)
 def reconcile() -> dict[str, int]:
-    """Every 30 minutes: decided files that did not move on are sent again (reconcile.py)."""
+    """Every 30 minutes: decided files that did not move on are sent again (reconcile.py), and versions a
+    newer version of their file replaced are removed (versions.py)."""
+    from backend.dispatcher.versions import Stores, purge_replaced
+
     with Session(_engine(), expire_on_commit=False) as session:
         releases = stalled(session)
         session.commit()
     for release in releases:
         enqueue_release(release)
-    return {"sent": len(releases)}
+    minio = client_from_settings(get_settings())
+    stores = Stores(BucketStore(minio, RAW), BucketStore(minio, CIR), BucketStore(minio, ASSETS))
+    with Session(_engine(), expire_on_commit=False) as session:
+        purged = purge_replaced(session, stores)
+        session.commit()
+    return {"sent": len(releases), "purged": purged}
 
 
 @app.task(name="dcl.process.sweep_documents", queue=IO_LIGHT)

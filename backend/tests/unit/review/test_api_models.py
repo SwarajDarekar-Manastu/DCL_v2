@@ -10,7 +10,6 @@ from pydantic import TypeAdapter, ValidationError
 from backend.api import auth, review
 from backend.dispatcher.contract import (
     ALLOWED_ACTIONS,
-    MapColumns,
     Resolution,
     SetUnit,
     allowed_actions,
@@ -45,6 +44,8 @@ EXAMPLES = {
     "redact": {"regions": [{"page": 2, "bbox": {"x0": 0.1, "y0": 0.1, "x1": 0.5, "y1": 0.2}}]},
     "approve_internal": {},
     "approve_download": {},
+    "set_cell": {"block_key": "c909a46153e32d77", "table": 1, "row": 3, "col": 1, "old": "a", "value": "b"},
+    "set_text": {"block_key": "c909a46153e32d77", "old": "- Heater off at 10:20.", "text": "- off"},
     "watch": {},
     "skip": {},
     "mark_junk": {},
@@ -58,9 +59,12 @@ def test_every_action_parses_from_json_by_its_discriminator(action):
     assert parsed.action == action
 
 
-def test_every_allowed_action_has_a_model_and_every_model_is_allowed_somewhere():
+def test_every_allowed_action_has_a_model_and_only_the_unbuilt_ones_are_not_offered():
     allowed = set().union(*ALLOWED_ACTIONS.values())
-    assert allowed == set(EXAMPLES)
+    unbuilt = {"use_replacement", "watch", "redact", "approve_download", "map_columns"}
+    corrections = {"set_cell", "set_text"}  # made on the page check, not offered as an answer to a flag
+    assert set(EXAMPLES) - allowed == unbuilt | corrections
+    assert allowed <= set(EXAMPLES)
     assert set(ALLOWED_ACTIONS) == set(FlagType)
 
 
@@ -85,7 +89,7 @@ def test_resolve_request_carries_typed_resolutions():
 
 
 def test_check_actions_enforces_what_the_flag_allows():
-    ok = [FlagResolution(flag_id=FLAG, resolution=MapColumns(columns=[{"index": 0, "canonical_name": "t"}]))]
+    ok = [FlagResolution(flag_id=FLAG, resolution={"action": "map_json_keys", **EXAMPLES["map_json_keys"]})]
     check_actions(ok, {FLAG: ALLOWED_ACTIONS[FlagType.SCHEMA_UNKNOWN]})
     with pytest.raises(ValueError, match="not allowed for this flag"):
         check_actions(ok, {FLAG: ALLOWED_ACTIONS[FlagType.UNIT_AMBIGUITY]})
@@ -101,7 +105,7 @@ ENTRY = {"page": 2, "content_sha256": "ab" * 16}
 @pytest.mark.parametrize(
     ("flag_type", "anchor", "evidence", "subject", "actions"),
     [
-        (FlagType.PARSE_FAILURE, {}, None, "file", {"use_replacement", "skip", "mark_junk"}),
+        (FlagType.PARSE_FAILURE, {}, None, "file", {"skip", "mark_junk"}),
         (FlagType.SCHEMA_UNKNOWN, {"content_sha256": "ab" * 16}, None, "file", None),
         (FlagType.LOW_CONFIDENCE_EXTRACTION, PAGE_ONLY, {}, "page", {"ignore", "mark_junk"}),
         (FlagType.LOW_CONFIDENCE_EXTRACTION, FIGURE, {"crops": []}, "object", {"ignore", "mark_junk"}),
@@ -185,10 +189,46 @@ def test_viewer_cannot_use_review_routes_and_reviewers_may_deactivate_rules(monk
 
 
 def test_allowed_actions_hide_admin_only_actions_from_reviewers():
-    assert allowed_actions_for(FlagType.SENSITIVE_CONTENT, is_admin=True) == [
-        "approve_internal",
-        "exclude",
-        "redact",
-    ]
-    assert allowed_actions_for(FlagType.SENSITIVE_CONTENT, is_admin=False) == ["exclude", "redact"]
+    assert allowed_actions_for(FlagType.SENSITIVE_CONTENT, is_admin=True) == ["approve_internal", "exclude"]
+    assert allowed_actions_for(FlagType.SENSITIVE_CONTENT, is_admin=False) == ["exclude"]
     assert allowed_actions_for(FlagType.UNIT_AMBIGUITY, is_admin=False) == ["set_fact_unit", "set_unit"]
+
+
+RUN_A, RUN_B = {"label": "this run", "value": "TP07_T01_2"}, {"label": "existing run", "value": "TP07_T01"}
+
+
+@pytest.mark.parametrize(
+    ("evidence", "actions"),
+    [
+        ({"subject": "run label TP07_T01", "relation": "sources_disagree", "a": RUN_A, "b": RUN_B}, set()),
+        (
+            {
+                "subject": "test_plan_id",
+                "a": {"label": "folder", "value": "TP7"},
+                "b": {"label": "content", "value": "TP6"},
+            },
+            {"choose_source"},
+        ),
+        (
+            {"subject": "same revision", "a": RUN_A, "b": {**RUN_B, "doc_id": str(uuid.uuid4())}},
+            {"mark_superseded"},
+        ),
+        (
+            {
+                "subject": "test plan id",
+                "relation": "check_failed",
+                "a": RUN_A,
+                "b": {**RUN_B, "doc_id": "x"},
+            },
+            set(),
+        ),
+    ],
+    ids=["run label", "test plan id", "another document", "failed check"],
+)
+def test_a_conflict_offers_a_side_or_superseded_only_where_it_changes_something(evidence, actions):
+    assert allowed_actions(FlagType.CONFLICT, {}, evidence) == {"accept_both", "ignore"} | actions
+
+
+def test_answers_that_nothing_carries_out_are_not_offered():
+    offered = set().union(*(allowed_actions(t) for t in FlagType if t != FlagType.CONFLICT))
+    assert offered & {"use_replacement", "watch", "redact", "approve_download", "map_columns"} == set()

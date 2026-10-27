@@ -3,7 +3,8 @@
 After a route returns its ``ProcessedDocument``, the gate applies the severity policy
 (``flags.severity_overrides`` per route and flag type, ``flags.strict_mode``), upserts every flag by
 fingerprint, and decides: any HARD flag → the document is HALTED, the payload is staged at
-``dcl-cir/{sha256}/staged.json`` and nothing reaches the index; otherwise the commit path runs.
+``dcl-cir/{sha256}/staged.json`` and nothing reaches the index; otherwise the commit path runs with the
+document as people and rules decided it (``apply_decisions``: every later step builds from it).
 ``load_staged`` reads the payload back for ``resume_from_staged`` (resolution never re-parses).
 """
 
@@ -15,9 +16,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.dispatcher.contract import Flag, ProcessedDocument
+from backend.indexing.overlays import apply_decisions, decided_flags
+from backend.indexing.withdraw import withdraw
 from backend.postgres import pipeline_config
 from backend.postgres.enums import DocumentStatus, FlagSeverity, FlagStatus
 from backend.postgres.models import Document, ReviewFlag
+from backend.review.carry_over import carry_over
 from backend.review.flags import upsert_document_flag
 from backend.review.rule_answers import answer_flags
 from backend.storage.minio import BucketStore, parse_uri
@@ -91,6 +95,7 @@ def gate(
         if row.status == FlagStatus.AUTO_RESOLVED and row.resolved_by == "pipeline":
             row.status, row.resolved_by, row.resolved_at = FlagStatus.OPEN, None, None
         rows.append(row)
+    carry_over(session, document.doc_id, doc.blob_sha256, rows)  # a new version keeps unchanged decisions
     answer_flags(session, document, rows)  # a rule answers a flag the way a person would (rule_answers.py)
     if stale is not None:
         current = {flag.fingerprint for flag in doc.flags}
@@ -112,8 +117,10 @@ def gate(
     hard = sum(flag.severity == FlagSeverity.HARD for flag in doc.flags)
     soft = len(doc.flags) - hard
     if not hard:
+        doc = apply_decisions(doc, decided_flags(session, document.doc_id))
         return GateResult(halted=False, hard=0, soft=soft, document=doc)
     staged_uri = cir.put(staged_key(doc.blob_sha256), doc.model_dump_json().encode(), "application/json")
+    withdraw(session, document)  # a file indexed before halts: its old content leaves the index
     document.status = DocumentStatus.HALTED
     document.staged_payload_uri = staged_uri
     session.flush()

@@ -1,15 +1,16 @@
-"""Decisions change the data (file 06 principle 8): the overlays the commit applies to the plan it writes."""
+"""Decisions change the data (file 06 principle 8): applied to the route's document before it is chunked
+(``apply_decisions``), so what is indexed is the decided content; units on the extracted numbers after."""
 
 import uuid
 from types import SimpleNamespace
 
-from backend.dispatcher.contract import PageBox
-from backend.indexing.chunker import IndexNode
+from backend.dispatcher.contract import DocumentFields, Mention, PageBox, ProcessedDocument, ProcessedNode
+from backend.indexing.chunker import IndexNode, chunk_document
 from backend.indexing.index_document import IndexPlan
-from backend.indexing.overlays import _choose_table, _junk, _set_fact_unit, _set_value
+from backend.indexing.overlays import _set_fact_unit, apply_decisions, overlay_plan
 from backend.llm_engine.enrichment.entities import EntityDecisions
 from backend.llm_engine.enrichment.numeric_facts import FactDecision
-from backend.postgres.enums import GaugeOrAbs, NodeSource, NodeType, NumericFactSource, Quantity
+from backend.postgres.enums import GaugeOrAbs, NodeSource, NodeType, NumericFactSource, Quantity, Route
 
 
 def _node(ref, content, node_type=NodeType.CHILD, **kw) -> IndexNode:
@@ -79,38 +80,86 @@ def test_leave_as_text_keeps_the_number_unitless_and_decided():
 KEY = "ab" * 16
 
 
-def test_a_typed_handwriting_value_replaces_the_model_reading_in_text_and_numbers():
-    node = _node(
-        "p8",
+def words(texts):
+    return [len(text.split()) for text in texts]
+
+
+def _route_node(ref, content, node_type=NodeType.CHILD, **kw) -> ProcessedNode:
+    return ProcessedNode(
+        ref=ref,
+        node_type=node_type,
+        ordinal=0,
+        breadcrumb="Report",
+        content=content,
+        source=NodeSource.VLM,
+        **kw,
+    )
+
+
+def _document(nodes, mentions=()) -> ProcessedDocument:
+    sha = "cd" * 32
+    return ProcessedDocument(
+        blob_sha256=sha,
+        route=Route.A1,
+        parser_version=1,
+        cir_uri=f"s3://dcl-cir/{sha}/A1/v1/",
+        document=DocumentFields(title="Report", test_plan_id="TP6"),
+        nodes=nodes,
+        mentions=list(mentions),
+    )
+
+
+def _decided(action, anchor, evidence=None, **resolution):
+    return SimpleNamespace(
+        anchor=anchor, evidence=evidence or {}, resolution={"action": action, **resolution}, resolved_at=None
+    )
+
+
+def test_a_typed_handwriting_value_is_what_gets_chunked_not_the_model_reading():
+    node = _route_node(
+        "vlm/p8/0",
         "Orifice dia: 0.8? mm",
         page_no=8,
         metadata={"handwriting": [{"key": KEY, "value_raw": "0.8?", "label": "Orifice"}]},
     )
-    plan = _plan([node], [_fact("p8", "0.8?", "mm")])
-    flag = SimpleNamespace(anchor={"page": 8, "content_sha256": KEY}, evidence={})
-    _set_value(plan, flag, {"action": "set_value", "value": "0.85", "unit": "mm", "illegible": False})
-    (reading,) = plan.nodes[0].metadata["handwriting"]
-    assert (plan.nodes[0].content, reading["value_raw"], reading["source"]) == (
+    flag = _decided("set_value", {"page": 8, "content_sha256": KEY}, value="0.85", unit="mm", illegible=False)
+    decided = apply_decisions(_document([node]), [flag])
+    (reading,) = decided.nodes[0].metadata["handwriting"]
+    assert (decided.nodes[0].content, reading["value_raw"], reading["source"]) == (
         "Orifice dia: 0.85 mm",
         "0.85",
         "human",
     )
-    assert (plan.facts[0].value_raw, plan.facts[0].source) == ("0.85", NumericFactSource.HUMAN)
+    chunks = [n.content for n in chunk_document(decided, count_tokens=words)]
+    assert any("0.85 mm" in c for c in chunks) and not any("0.8?" in c for c in chunks)
 
 
 def test_a_value_typed_for_an_illegible_entry_replaces_the_illegible_mark():
-    node = _node(
-        "p2",
+    node = _route_node(
+        "vlm/p2/0",
         "<td>Tare weight (g)</td><td>[illegible]</td>",
         page_no=2,
         metadata={
             "handwriting": [{"key": KEY, "value_raw": None, "label": "Tare weight (g)", "illegible": True}]
         },
     )
-    plan = _plan([node], [])
-    flag = SimpleNamespace(anchor={"page": 2, "content_sha256": KEY}, evidence={})
-    _set_value(plan, flag, {"action": "set_value", "value": "36.706", "unit": "g", "illegible": False})
-    assert plan.nodes[0].content == "<td>Tare weight (g)</td><td>36.706</td>"
+    flag = _decided(
+        "set_value", {"page": 2, "content_sha256": KEY}, value="36.706", unit="g", illegible=False
+    )
+    assert (
+        apply_decisions(_document([node]), [flag]).nodes[0].content
+        == "<td>Tare weight (g)</td><td>36.706</td>"
+    )
+
+
+def test_the_numbers_of_a_typed_value_are_the_persons():
+    plan = _plan(
+        [_node("p8", "Orifice dia: 0.85 mm", page_no=8)], [_fact("p8", "0.85", "mm"), _fact("p8", "3.2")]
+    )
+    flag = _decided("set_value", {"page": 8, "content_sha256": KEY}, value="0.85", unit="mm", illegible=False)
+    session = SimpleNamespace(scalars=lambda _: [SimpleNamespace(**vars(flag), status="RESOLVED")])
+    overlay_plan(session, plan.doc_id, plan)
+    assert [f.source for f in plan.facts] == [NumericFactSource.HUMAN, NumericFactSource.TABLE]
 
 
 def _box(page, x0, y0, x1, y1):
@@ -118,48 +167,105 @@ def _box(page, x0, y0, x1, y1):
 
 
 def _report():
-    """Page 41: text, a photo (Docling's box) with a question proxy; page 42: text."""
-    return _plan(
+    """Page 41: text and a photo (Docling's box) with a caption under it and a mention; page 42: text."""
+    return _document(
         [
-            _node("t41", "Injector INJ-09 after the firing.", page_no=41, origin_refs=["t41"]),
-            _node(
+            _route_node("t41", "Injector INJ-09 after the firing.", page_no=41),
+            _route_node(
                 "fig",
                 "Photo: eroded injector face",
                 NodeType.FIGURE,
                 page_no=41,
                 bboxes=[_box(41, 0.12, 0.22, 0.38, 0.48)],
-                origin_refs=["fig"],
             ),
-            _node(
-                "fig-q",
-                "What does the injector face show?",
-                NodeType.QUESTION_PROXY,
-                page_no=41,
-                origin_refs=["fig"],
-            ),
-            _node("t42", "Throat 11.36 mm", page_no=42, origin_refs=["t42"]),
+            _route_node("fig-cap", "Figure 7: injector face", parent_ref="fig", page_no=41),
+            _route_node("t42", "Throat 11.36 mm", page_no=42),
         ],
-        [_fact("fig", "11.32", "mm"), _fact("t42", "11.36", "mm")],
+        [
+            Mention(node_ref="fig", kind="part_number", surface="INJ-09"),
+            Mention(node_ref="t42", kind="part_number", surface="INJ-10"),
+        ],
     )
 
 
-def test_junking_an_image_drops_only_that_image_its_proxy_and_its_numbers():
-    plan = _report()
+def test_junking_an_image_drops_only_that_image_what_hangs_under_it_and_its_mentions():
     crop = {"x0": 0.1, "y0": 0.2, "x1": 0.4, "y1": 0.5}  # the flag's box is the padded crop around Docling's
-    _junk(plan, SimpleNamespace(anchor={"page": 41, "bbox": crop}))
-    assert [n.ref for n in plan.nodes] == ["t41", "t42"]
-    assert [f.node_ref for f in plan.facts] == ["t42"]
+    decided = apply_decisions(_report(), [_decided("mark_junk", {"page": 41, "bbox": crop})])
+    assert [n.ref for n in decided.nodes] == ["t41", "t42"]
+    assert [m.node_ref for m in decided.mentions] == ["t42"]
 
 
-def test_junking_a_page_drops_that_page_and_keeps_the_rest_of_the_file():
-    plan = _report()
-    _junk(plan, SimpleNamespace(anchor={"page": 41}))
-    assert [n.ref for n in plan.nodes] == ["t42"]
-    assert [f.node_ref for f in plan.facts] == ["t42"]
+def test_junking_a_page_leaves_nothing_of_it_to_chunk():
+    decided = apply_decisions(_report(), [_decided("mark_junk", {"page": 41})])
+    assert [n.ref for n in decided.nodes] == ["t42"]
+    assert not any("INJ-09" in n.content for n in chunk_document(decided, count_tokens=words))
 
 
-def test_choosing_table_b_puts_version_b_in_the_table_node():
-    plan = _plan([_node("t", "<table>A</table>", node_type=NodeType.TABLE, page_no=1)], [])
-    flag = SimpleNamespace(anchor={"page": 1}, evidence={"table_b_html": "<table>B</table>"})
-    _choose_table(plan, flag, {"action": "choose_table", "choice": "B"})
-    assert (plan.nodes[0].content, plan.nodes[0].metadata["table_choice"]) == ("<table>B</table>", "B")
+def test_choosing_table_b_changes_only_the_flagged_table_and_is_what_gets_chunked():
+    flagged = _route_node(
+        "tA",
+        "<table><tr><td>austenic</td></tr></table>",
+        NodeType.TABLE,
+        page_no=33,
+        bboxes=[_box(33, 0.1, 0.1, 0.9, 0.5)],
+    )
+    other = _route_node(
+        "tB",
+        "<table><tr><td>other</td></tr></table>",
+        NodeType.TABLE,
+        page_no=33,
+        bboxes=[_box(33, 0.1, 0.6, 0.9, 0.9)],
+    )
+    flag = _decided(
+        "choose_table",
+        {"page": 33, "bbox": {"x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.5}},
+        {"table_b_html": "<table><tr><td>austenitic</td></tr></table>"},
+        choice="B",
+    )
+    decided = apply_decisions(_document([flagged, other]), [flag])
+    assert [n.content for n in decided.nodes] == [
+        "<table><tr><td>austenitic</td></tr></table>",
+        other.content,
+    ]
+    tables = [n.content for n in chunk_document(decided, count_tokens=words) if n.node_type == NodeType.TABLE]
+    assert any("austenitic" in c for c in tables) and not any("austenic<" in c for c in tables)
+
+
+def test_a_chosen_side_sets_the_document_field_every_node_row_is_written_from():
+    flag = _decided(
+        "choose_source",
+        {},
+        {
+            "subject": "test_plan_id",
+            "a": {"label": "folder", "value": "TP7"},
+            "b": {"label": "content", "value": "TP6"},
+        },
+        choice="A",
+    )
+    assert (
+        apply_decisions(_document([_route_node("t", "x", page_no=1)]), [flag]).document.test_plan_id == "TP7"
+    )
+
+
+def test_a_cell_corrected_on_the_page_check_is_what_gets_chunked_while_it_still_reads_the_same():
+    from backend.review.page_reading import block_key
+
+    table = "<table><tr><td>Time</td><td>T2 [C]</td></tr><tr><td>09:10</td><td>40.25</td></tr></table>"
+    node = _route_node("vlm/p11/2", table, page_no=11)
+    fix = _decided(
+        "set_cell",
+        {"page": 11},
+        block_key=block_key(table),
+        table=0,
+        row=1,
+        col=1,
+        old="40.25",
+        value="40.52",
+    )
+    stale = _decided(
+        "set_cell", {"page": 11}, block_key=block_key(table), table=0, row=1, col=1, old="1.0", value="x"
+    )
+    decided = apply_decisions(_document([node]), [fix, stale])
+    assert decided.nodes[0].content == table.replace("40.25", "40.52")
+    chunks = " ".join(n.content for n in chunk_document(decided, count_tokens=words))
+    assert "40.52" in chunks and "40.25" not in chunks

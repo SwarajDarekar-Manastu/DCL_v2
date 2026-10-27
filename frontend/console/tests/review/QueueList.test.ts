@@ -26,7 +26,7 @@ describe('QueueList', () => {
 		expect([...container.querySelectorAll('li.aging')].map((li) => li.id)).toEqual(['case-row-0']);
 	});
 
-	it('moves with j / k and opens with Enter, ignoring keys typed in filters', async () => {
+	it('moves with j / k and opens with Enter, ignoring keys typed in filters or pressed on buttons', async () => {
 		const onOpen = vi.fn();
 		render(QueueList, { items, selectedKey: null, onOpen, now });
 		await fireEvent.keyDown(window, { key: 'j' });
@@ -39,6 +39,11 @@ describe('QueueList', () => {
 		const input = document.createElement('input');
 		document.body.appendChild(input);
 		await fireEvent.keyDown(input, { key: 'Enter' });
+		expect(onOpen).toHaveBeenCalledTimes(1);
+
+		const apply = document.createElement('button'); // Enter on a focused "Apply" presses Apply
+		document.body.appendChild(apply);
+		await fireEvent.keyDown(apply, { key: 'Enter' });
 		expect(onOpen).toHaveBeenCalledTimes(1);
 	});
 

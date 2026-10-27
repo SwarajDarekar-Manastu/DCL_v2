@@ -3,6 +3,7 @@
 	// readings of one table side by side with the differing cells marked.
 	import type { Evidence } from '$lib/api_endpoint';
 	import AssetImage from './AssetImage.svelte';
+	import ImageZoom from './ImageZoom.svelte';
 	import { cellDiff, tableCells } from './evidence';
 
 	type LowConfidence = Extract<Evidence, { kind: 'low_confidence' }>;
@@ -13,8 +14,7 @@
 
 	let { evidence }: Props = $props();
 	let zoomed = $state<string | null>(null);
-	let closeButton = $state<HTMLButtonElement | null>(null);
-	// The zoom takes focus so Escape closes it, and gives it back to the crop that opened it.
+	// The zoom gives focus back to the crop that opened it.
 	let opener: HTMLElement | null = null;
 	function openZoom(uri: string, event: MouseEvent) {
 		opener = event.currentTarget as HTMLElement;
@@ -24,9 +24,6 @@
 		zoomed = null;
 		opener?.focus();
 	}
-	$effect(() => {
-		if (zoomed) closeButton?.focus();
-	});
 	let showOcr = $state(false);
 	let a = $derived(tableCells(evidence.table_a_html));
 	let b = $derived(tableCells(evidence.table_b_html));
@@ -89,16 +86,4 @@
 	</div>
 {/if}
 
-<svelte:window onkeydown={(e) => zoomed && e.key === 'Escape' && closeZoom()} />
-
-{#if zoomed}
-	<div class="fixed inset-0 z-50 overflow-auto bg-black/80 p-6" role="dialog" aria-modal="true" aria-label="Zoomed image">
-		<button
-			type="button"
-			bind:this={closeButton}
-			class="bg-background text-foreground focus-visible:ring-ring sticky top-0 z-10 float-right rounded-md border px-3 py-1 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
-			onclick={closeZoom}>Close (Esc)</button
-		>
-		<AssetImage uri={zoomed} alt="Zoomed image" class="mx-auto block h-auto max-w-full rounded bg-white" />
-	</div>
-{/if}
+<ImageZoom uri={zoomed} onClose={closeZoom} />

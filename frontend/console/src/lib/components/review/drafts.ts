@@ -7,10 +7,13 @@ type Drafts = Record<string, Resolution | null>;
 
 const key = (caseKey: string) => `dcl.review.drafts:${caseKey}`;
 
+/** A page-check correction (set_cell / set_text) is kept beside the answers, by cell or line, not by flag. */
+export const isCorrection = (id: string) => id.startsWith('cell:') || id.startsWith('text:');
+
 export function loadDrafts(caseKey: string, openFlagIds: string[]): Drafts {
 	try {
 		const saved = JSON.parse(sessionStorage.getItem(key(caseKey)) ?? '{}') as Drafts;
-		return Object.fromEntries(Object.entries(saved).filter(([id, draft]) => draft && openFlagIds.includes(id)));
+		return Object.fromEntries(Object.entries(saved).filter(([id, draft]) => draft && (isCorrection(id) || openFlagIds.includes(id))));
 	} catch {
 		return {};
 	}

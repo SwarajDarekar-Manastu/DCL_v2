@@ -17,6 +17,7 @@ from minio import Minio
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.dispatcher.contract import Flag
 from backend.dispatcher.location import primary_location
 from backend.dispatcher.runner import (
     Outcome,
@@ -107,6 +108,7 @@ def process_d_document(
                     metadata=value["metadata"],
                     confidence=value["confidence"],
                     summary=value.get("summary"),
+                    flags=tuple(Flag.model_validate(f) for f in value.get("flags", [])),
                 )
             elif _in_flight(ctx.session, representative):
                 raise RepresentativePending(f"photo {representative} has not been read yet")
@@ -129,6 +131,7 @@ def process_d_document(
                         "metadata": own.metadata,
                         "confidence": own.confidence,
                         "summary": own.summary,
+                        "flags": [f.model_dump(mode="json") for f in own.flags],
                     },
                     default=str,
                 ).encode(),
