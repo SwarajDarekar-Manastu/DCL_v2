@@ -20,8 +20,8 @@ describe('QueueList', () => {
 		const { container } = render(QueueList, { items, selectedKey: null, onOpen: () => {}, now });
 		const rows = screen.getAllByRole('listitem');
 		expect(rows[0].textContent).toContain('unblocks 116');
-		expect(rows[0].textContent).toContain('UNIT (1)');
-		expect(rows[2].textContent).toContain('CONFLICT (2)');
+		expect(rows[0].textContent).toContain('1 unit to set');
+		expect(rows[2].textContent).toContain('2 disagreements to settle');
 		expect(rows[2].textContent).not.toContain('unblocks');
 		expect([...container.querySelectorAll('li.aging')].map((li) => li.id)).toEqual(['case-row-0']);
 	});

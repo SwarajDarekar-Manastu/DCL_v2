@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ageText, caseHref, flagCountsText, isAging, workingDaysBetween } from '../../src/lib/components/review/format';
+import { ageText, caseHref, isAging, placeText, questionText, workingDaysBetween } from '../../src/lib/components/review/format';
 import { filtersFromUrl, urlFor } from '../../src/lib/components/review/filters';
 
 describe('format', () => {
@@ -19,7 +19,9 @@ describe('format', () => {
 		const now = new Date('2026-10-21T12:00:00Z');
 		expect(ageText('2026-10-21T11:15:00Z', now)).toBe('45m');
 		expect(ageText('2026-10-19T12:00:00Z', now)).toBe('2d');
-		expect(flagCountsText({ UNIT_AMBIGUITY: 116, CONFLICT: 0, SCHEMA_UNKNOWN: 1 })).toBe('UNIT (116) · SCHEMA (1)');
+		expect(questionText({ UNIT_AMBIGUITY: 116, CONFLICT: 0, SCHEMA_UNKNOWN: 1 })).toBe('116 units to set · file layout to map');
+		expect(questionText({ LOW_CONFIDENCE_EXTRACTION: 1 })).toBe('1 reading to check');
+		expect([placeText('9'), placeText('Steady State Values')]).toEqual(['page 9', 'Steady State Values']);
 		expect(caseHref('doc:Sheet 1')).toBe('/review?case=doc%3ASheet%201');
 	});
 });

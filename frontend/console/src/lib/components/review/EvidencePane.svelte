@@ -5,6 +5,7 @@
 	import AssetImage from './AssetImage.svelte';
 	import GenericEvidence from './GenericEvidence.svelte';
 	import LowConfidencePane from './LowConfidencePane.svelte';
+	import { resolutionText } from './decisions';
 	import { around, fmtBytes } from './evidence';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 
@@ -228,9 +229,9 @@
 	{#if suggestion}
 		<div class="bg-info-bg border-info-border grid gap-1 rounded-md border px-3 py-2">
 			<h4 class="text-info m-0 flex items-center gap-1.5 text-xs font-medium">
-				<SparklesIcon class="size-3.5" aria-hidden="true" /> Suggested ({suggestion.proposed_by}, confidence {suggestion.confidence.toFixed(2)})
+				<SparklesIcon class="size-3.5" aria-hidden="true" /> Suggested{suggestion.resolution ? `: ${resolutionText(suggestion.resolution)}` : ''}
 			</h4>
-			<p class="m-0 text-[13px]">{suggestion.rationale}</p>
+			<p class="m-0 text-[13px]">{suggestion.rationale} <span class="text-muted-foreground text-xs">({suggestion.proposed_by}, {Math.round(suggestion.confidence * 100)}%)</span></p>
 		</div>
 	{/if}
 </section>

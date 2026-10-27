@@ -13,6 +13,20 @@
 
 	let { evidence }: Props = $props();
 	let zoomed = $state<string | null>(null);
+	let closeButton = $state<HTMLButtonElement | null>(null);
+	// The zoom takes focus so Escape closes it, and gives it back to the crop that opened it.
+	let opener: HTMLElement | null = null;
+	function openZoom(uri: string, event: MouseEvent) {
+		opener = event.currentTarget as HTMLElement;
+		zoomed = uri;
+	}
+	function closeZoom() {
+		zoomed = null;
+		opener?.focus();
+	}
+	$effect(() => {
+		if (zoomed) closeButton?.focus();
+	});
 	let showOcr = $state(false);
 	let a = $derived(tableCells(evidence.table_a_html));
 	let b = $derived(tableCells(evidence.table_b_html));
@@ -28,7 +42,7 @@
 					type="button"
 					class="cursor-zoom-in rounded border-0 bg-transparent p-0"
 					aria-label="Zoom crop {i + 1}{crop.printed_label ? `: ${crop.printed_label}` : ''}"
-					onclick={() => (zoomed = crop.crop_uri)}
+					onclick={(e) => openZoom(crop.crop_uri, e)}
 				>
 					<AssetImage uri={crop.crop_uri} alt="Crop {i + 1}" class="max-h-40 w-full object-contain" />
 				</button>
@@ -75,16 +89,16 @@
 	</div>
 {/if}
 
+<svelte:window onkeydown={(e) => zoomed && e.key === 'Escape' && closeZoom()} />
+
 {#if zoomed}
-	<div
-		class="fixed inset-0 z-50 grid place-items-center bg-black/70 p-6"
-		role="dialog"
-		aria-modal="true"
-		aria-label="Zoomed crop"
-		tabindex="-1"
-		onclick={() => (zoomed = null)}
-		onkeydown={(e) => e.key === 'Escape' && (zoomed = null)}
-	>
-		<AssetImage uri={zoomed} alt="Zoomed crop" class="max-h-full max-w-full rounded bg-white object-contain" />
+	<div class="fixed inset-0 z-50 overflow-auto bg-black/80 p-6" role="dialog" aria-modal="true" aria-label="Zoomed image">
+		<button
+			type="button"
+			bind:this={closeButton}
+			class="bg-background text-foreground focus-visible:ring-ring sticky top-0 z-10 float-right rounded-md border px-3 py-1 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
+			onclick={closeZoom}>Close (Esc)</button
+		>
+		<AssetImage uri={zoomed} alt="Zoomed image" class="mx-auto block h-auto max-w-full rounded bg-white" />
 	</div>
 {/if}

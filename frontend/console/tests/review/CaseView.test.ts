@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../src/lib/api_endpoint';
 import CaseView from '../../src/lib/components/review/CaseView.svelte';
@@ -34,6 +34,7 @@ async function chooseSetUnit() {
 
 describe('CaseView', () => {
 	beforeEach(() => {
+		sessionStorage.clear();
 		vi.mocked(api.dryRun).mockReset().mockResolvedValue(preview);
 		vi.mocked(api.resolveCase).mockReset().mockResolvedValue({ case_key: CASE_KEY, flags: [], rule: null, resumed_doc_ids: ['d1'], proposed_files: 0 });
 	});
@@ -151,6 +152,34 @@ describe('CaseView', () => {
 		expect((screen.getByLabelText('no other file') as HTMLInputElement).disabled).toBe(false);
 		expect((screen.getByLabelText('the other files in this folder') as HTMLInputElement).disabled).toBe(true);
 		expect((screen.getByRole('button', { name: 'Undo last resolution' }) as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it('asks the open questions first, focused on the first answer, and folds what was decided earlier, in words', async () => {
+		const decided = unitFlag({ flag_id: 'flag-decided', anchor: { channel: 'AIN1' }, status: 'RESOLVED', resolution: { action: 'ignore' }, resolved_by: 'ravi@manastuspace.com', resolved_at: '2026-10-22T09:00:00Z' });
+		render(CaseView, { detail: detail([decided, unitFlag()]), me: 'a', onChanged: () => {} });
+		expect(screen.getAllByRole('combobox', { name: 'Resolution' })).toHaveLength(1);
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Resolution' })));
+		const earlier = screen.getByText('Decided earlier (1)').closest('details')!;
+		expect(earlier.open).toBe(false);
+		expect(within(earlier).getByRole('listitem').textContent).toBe('Unit of channel AIN1 Kept as it is ravi@manastuspace.com · 2026-10-22');
+	});
+
+	it('keeps an unsent answer when the case is opened again, and forgets it once applied', async () => {
+		const first = render(CaseView, { detail: detail(), me: 'a', onChanged: () => {} });
+		await chooseSetUnit();
+		first.unmount();
+		render(CaseView, { detail: detail(), me: 'a', onChanged: () => {} });
+		expect((screen.getByRole('combobox', { name: 'Resolution' }) as HTMLSelectElement).value).toBe('set_unit');
+		await fireEvent.click(screen.getByRole('button', { name: 'Preview conversion' }));
+		await waitFor(() => expect((applyButton() as HTMLButtonElement).disabled).toBe(false));
+		await fireEvent.click(applyButton());
+		await waitFor(() => expect(api.resolveCase).toHaveBeenCalledOnce());
+		expect(sessionStorage.length).toBe(0);
+	});
+
+	it('says Apply, not resume, on a file that is not halted', () => {
+		render(CaseView, { detail: detail([unitFlag()], { document_status: 'ACTIVE_WITH_SOFT_FLAGS' }), me: 'a', onChanged: () => {} });
+		expect(screen.getByRole('button', { name: 'Apply' })).toBeTruthy();
 	});
 
 	it('enables undo once a flag is resolved', () => {

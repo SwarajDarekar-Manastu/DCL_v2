@@ -29,23 +29,29 @@ export function ageText(iso: string, now = new Date()): string {
 	return `${Math.floor(minutes / (60 * 24))}d`;
 }
 
-const SHORT: Record<FlagType, string> = {
-	UNIT_AMBIGUITY: 'UNIT',
-	SCHEMA_UNKNOWN: 'SCHEMA',
-	LOW_CONFIDENCE_EXTRACTION: 'LOW CONF',
-	PARSE_FAILURE: 'PARSE',
-	UNSUPPORTED_FORMAT: 'FORMAT',
-	CONFLICT: 'CONFLICT',
-	SENSITIVE_CONTENT: 'SENSITIVE',
-	HELD_LARGE_FILE: 'LARGE',
-	CLOUD_RESTRICTED: 'CLOUD'
+/** What a case asks, per flag type and count, in words: "2 readings to check", "6 units to set". */
+const QUESTION: Record<FlagType, (n: number) => string> = {
+	UNIT_AMBIGUITY: (n) => `${n} unit${n === 1 ? '' : 's'} to set`,
+	SCHEMA_UNKNOWN: () => 'file layout to map',
+	LOW_CONFIDENCE_EXTRACTION: (n) => `${n} reading${n === 1 ? '' : 's'} to check`,
+	PARSE_FAILURE: () => 'file could not be read',
+	UNSUPPORTED_FORMAT: () => 'no reader for this file type',
+	CONFLICT: (n) => `${n} disagreement${n === 1 ? '' : 's'} to settle`,
+	SENSITIVE_CONTENT: (n) => `${n} possible secret${n === 1 ? '' : 's'}`,
+	HELD_LARGE_FILE: () => 'large file held',
+	CLOUD_RESTRICTED: () => 'cloud reading not allowed'
 };
 
-export function flagCountsText(counts: Partial<Record<string, number>>): string {
+export function questionText(counts: Partial<Record<string, number>>): string {
 	return Object.entries(counts)
 		.filter(([, n]) => (n ?? 0) > 0)
-		.map(([type, n]) => `${SHORT[type as FlagType] ?? type} (${n})`)
+		.map(([type, n]) => QUESTION[type as FlagType]?.(n ?? 0) ?? `${n} ${type}`)
 		.join(' · ');
+}
+
+/** Where in the file a case sits: "page 9", or the sheet's name. */
+export function placeText(pageOrSheet: string): string {
+	return /^\d+$/.test(pageOrSheet) ? `page ${pageOrSheet}` : pageOrSheet;
 }
 
 /** The Console link that opens a case beside the queue. */

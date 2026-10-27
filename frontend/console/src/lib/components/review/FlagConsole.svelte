@@ -48,7 +48,7 @@
 	<header class="panel-header bg-muted/40 flex-wrap justify-start gap-2">
 		<SeverityBadge severity={flag.severity} />
 		<h3 class="m-0 font-mono text-[13px] font-semibold">{flag.flag_type} <span class="sr-only">({flag.severity})</span></h3>
-		<FlagGuide topic={guideKeyFor(flag)} />
+		<FlagGuide topic={guideKeyFor(flag)} {actions} />
 		{#if where(flag.anchor)}<span class="text-muted-foreground text-xs">{where(flag.anchor)}</span>{/if}
 		<ToneBadge tone={open ? 'outline' : 'ok'} class="ml-auto">{flag.status}</ToneBadge>
 	</header>
@@ -67,6 +67,7 @@
 					><span class="field-label">Resolution</span>
 					<select
 						class="field"
+						data-resolution
 						value={draft?.action ?? ''}
 						onchange={(e) => choose((e.currentTarget as HTMLSelectElement).value as ResolutionAction | '')}
 					>

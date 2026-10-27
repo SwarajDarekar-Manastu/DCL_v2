@@ -5,9 +5,12 @@
 
 	interface Props {
 		topic: GuideKey;
+		/** The actions this flag offers: the guide lists only those, plus its explanations. */
+		actions?: string[];
 	}
-	let { topic }: Props = $props();
+	let { topic, actions }: Props = $props();
 	let guide = $derived(guideFor(topic));
+	let choices = $derived(guide.choices.filter((c) => !actions || c.action === null || actions.includes(c.action)));
 	let flagType = $derived(topic.startsWith('CONFLICT') ? 'CONFLICT' : topic);
 </script>
 
@@ -28,7 +31,7 @@
 			<p class="m-0"><strong>What is wrong:</strong> {guide.what}</p>
 			<p class="m-0"><strong>You decide:</strong> {guide.decide}</p>
 			<ul class="m-0 list-disc pl-4">
-				{#each guide.choices as choice (choice.text)}<li>{choice.text}</li>{/each}
+				{#each choices as choice (choice.text)}<li>{choice.text}</li>{/each}
 			</ul>
 			<p class="text-muted-foreground m-0"><strong>Not sure?</strong> {guide.unsure}</p>
 		</Popover.Content>

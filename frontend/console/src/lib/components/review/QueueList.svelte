@@ -3,7 +3,7 @@
 	import type { CaseSummary } from '$lib/api_endpoint';
 	import SeverityBadge from '$lib/components/shell/SeverityBadge.svelte';
 	import { cn } from '$lib/utils';
-	import { ageText, caseHref, flagCountsText, isAging } from './format';
+	import { ageText, caseHref, isAging, placeText, questionText } from './format';
 
 	interface Props {
 		items: CaseSummary[];
@@ -63,13 +63,13 @@
 					<span class="flex min-w-0 items-start gap-2">
 						<SeverityBadge severity={item.max_severity} class="mt-px" />
 						<span class="min-w-0 flex-1 text-[13px] leading-5 font-medium break-words"
-							>{item.title}{#if item.page_or_sheet}<span class="text-muted-foreground font-normal">{` · ${item.page_or_sheet}`}</span>{/if}</span
+							>{item.title}{#if item.page_or_sheet}<span class="text-muted-foreground font-normal">{` · ${placeText(item.page_or_sheet)}`}</span>{/if}</span
 						>
 						{#if item.has_suggestion}<span class="text-info mt-0.5" title={item.has_rule_proposal ? 'a rule proposes its units' : 'has a suggested resolution'}
 								><SparklesIcon class="size-3.5" aria-hidden="true" /><span class="sr-only">{item.has_rule_proposal ? 'rule proposal' : 'has suggestion'}</span></span
 							>{/if}
 					</span>
-					<span class="text-muted-foreground font-mono text-[11px] leading-4 tracking-tight">{flagCountsText(item.flag_counts)}</span>
+					<span class="text-muted-foreground text-xs leading-4">{questionText(item.flag_counts)}</span>
 					<span class="text-muted-foreground num flex flex-wrap gap-x-2 text-xs">
 						{#if item.files_unblocked}<span class="text-foreground font-medium">unblocks {item.files_unblocked}</span>{/if}
 						<span class={aging ? 'text-hard font-medium' : ''} title={item.oldest_created_at}>age {ageText(item.oldest_created_at, now)}</span>

@@ -39,9 +39,12 @@ describe('decisions on a file', () => {
 	});
 
 	it('keeps every other decision apart, in words, and the waiting flags apart again', () => {
-		expect(otherDecisions({ flags }).map((f) => decisionText(f))).toEqual(['Accepted as it is', 'Skipped']);
+		expect(otherDecisions({ flags }).map((f) => decisionText(f))).toEqual(['Accepted as it is', 'Whole file skipped']);
 		expect(waitingFlags({ flags }).map((f) => f.flag_id)).toEqual(['open']);
 		expect(decisionText(conflict('RESOLVED', { action: 'choose_source', choice: 'B' }))).toBe('Source B chosen');
+		expect(decisionText(conflict('RESOLVED', { action: 'ignore' }))).toBe('Kept as it is');
+		expect(decisionText({ ...conflict('AUTO_RESOLVED', null), resolved_by: 'rerun' })).toBe('Closed: a re-run no longer raised it');
+		expect(decisionText({ ...conflict('AUTO_RESOLVED', { action: 'accept_both' }), resolved_by: 'rule-3' })).toBe('A rule answered it: Accepted as it is');
 	});
 
 	it('knows a change from an untouched edit and builds the new resolution from it', () => {

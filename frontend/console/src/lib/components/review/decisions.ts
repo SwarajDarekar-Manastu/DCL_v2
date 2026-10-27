@@ -96,31 +96,35 @@ export function otherDecisions(detail: Pick<CaseDetail, 'flags'> & Partial<Pick<
 
 export const waitingFlags = (detail: Pick<CaseDetail, 'flags'>): FlagView[] => detail.flags.filter((f) => OPEN.has(f.status));
 
-/** Words for a decision that is not a unit, as a person would say it. */
-export function decisionText(flag: FlagView): string {
-	const r = flag.resolution as (Resolution & Record<string, unknown>) | null;
-	if (flag.status === 'REJECTED_FILE') return r?.action === 'mark_junk' ? 'Marked as junk' : 'Skipped';
-	if (flag.status === 'AUTO_RESOLVED') return 'Closed by the pipeline: a rule answered it';
+/** Words for an answer, as a person would say it (a decision on a flag, or a suggested one). */
+export function resolutionText(r: Resolution | null | undefined): string {
 	if (!r) return 'Decided';
+	const v = r as Resolution & Record<string, unknown>;
 	switch (r.action) {
+		case 'set_unit':
+			return `Unit ${unitLabel(r)}`;
 		case 'accept_both':
 			return 'Accepted as it is';
 		case 'ignore':
-			return 'Ignored';
+			return 'Kept as it is';
 		case 'choose_source':
-			return `Source ${String(r.choice)} chosen`;
+			return `Source ${String(v.choice)} chosen`;
 		case 'mark_superseded':
 			return 'Marked a document as superseded';
 		case 'set_value':
-			return r.illegible ? 'Marked illegible' : `Value typed: ${String(r.value ?? '')}`;
+			return v.illegible ? 'Marked illegible' : `Value “${String(v.value ?? '')}”`;
 		case 'choose_table':
-			return `Table version ${String(r.choice)} chosen`;
+			return v.choice === 'edited' ? 'Table cells edited' : `Table version ${String(v.choice)} chosen`;
 		case 'map_columns':
 			return 'Columns mapped';
 		case 'map_json_keys':
 			return 'JSON keys mapped';
 		case 'set_fact_unit':
-			return r.unit ? `Unit set to ${String(r.unit)}` : 'Kept as text';
+			return v.unit ? `Unit ${String(v.unit)}` : 'No unit needed';
+		case 'mark_junk':
+			return 'Junked';
+		case 'skip':
+			return 'Skipped';
 		case 'approve_download':
 			return 'Download approved';
 		case 'approve_internal':
@@ -131,6 +135,48 @@ export function decisionText(flag: FlagView): string {
 			return 'Redacted';
 		default:
 			return String(r.action).replace(/_/g, ' ');
+	}
+}
+
+/** Words for a decision on a flag. A flag closed by the pipeline was not raised again on a re-run; a rule's
+ *  answer names the rule. */
+export function decisionText(flag: FlagView): string {
+	const r = flag.resolution as (Resolution & Record<string, unknown>) | null;
+	if (flag.status === 'REJECTED_FILE') return r?.action === 'mark_junk' ? 'Whole file junked' : 'Whole file skipped';
+	if (flag.status === 'AUTO_RESOLVED') {
+		return flag.resolved_by?.startsWith('rule') ? `A rule answered it: ${resolutionText(r)}` : 'Closed: a re-run no longer raised it';
+	}
+	return resolutionText(r);
+}
+
+/** What a flag asks about, in a few words: "Unit of channel AIN0", "Reading of page 8", "Table on page 5". */
+export function subjectText(flag: Pick<FlagView, 'flag_type' | 'anchor' | 'evidence' | 'subject'>): string {
+	const a = flag.anchor;
+	const where = a.page ? ` on page ${a.page}` : a.sheet ? ` on sheet ${a.sheet}` : '';
+	switch (flag.flag_type) {
+		case 'UNIT_AMBIGUITY':
+			return a.channel ? `Unit of channel ${a.channel}` : a.column ? `Unit of column ${a.column}${where}` : `Unit of a number${a.line ? ` (line ${a.line})` : where}`;
+		case 'LOW_CONFIDENCE_EXTRACTION': {
+			const ev = flag.evidence?.kind === 'low_confidence' ? flag.evidence : null;
+			if (flag.subject === 'page') return `Reading of page ${a.page}`;
+			if (flag.subject === 'object') return `${ev?.table_a_html ? 'Table' : 'Image'}${where}`;
+			const label = ev?.crops[0]?.printed_label;
+			return label ? `Handwritten “${label}”${where}` : `Handwritten entry${where}`;
+		}
+		case 'CONFLICT':
+			return flag.evidence?.kind === 'conflict' ? `${flag.evidence.subject}${where}` : `Disagreement${where}`;
+		case 'SCHEMA_UNKNOWN':
+			return 'Layout of the file';
+		case 'PARSE_FAILURE':
+			return 'The file could not be read';
+		case 'UNSUPPORTED_FORMAT':
+			return 'No reader for this file type';
+		case 'SENSITIVE_CONTENT':
+			return `Possible secret${where}`;
+		case 'HELD_LARGE_FILE':
+			return 'Large file held';
+		default:
+			return 'Cloud reading not allowed';
 	}
 }
 

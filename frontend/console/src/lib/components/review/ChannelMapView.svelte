@@ -1,7 +1,7 @@
 <script lang="ts">
 	// One telemetry file with several channels without a unit, as a reviewer who never saw the pipeline needs it:
 	// what is wrong (banner), the file itself with the channel boxed, one row per channel with a unit picker,
-	// a preview of the converted values, and one "Apply all and resume".
+	// a preview of the converted values, and one "Apply all" (and resume, when the file is halted).
 	import { untrack } from 'svelte';
 	import { ApiError, dryRun, previewRule, resolveCase, type CaseDetail, type DryRunResponse, type RulePreview } from '$lib/api_endpoint';
 	import CheckIcon from '@lucide/svelte/icons/check';
@@ -52,6 +52,7 @@
 	// Start each channel on its suggestion; a new case starts clean. When a rule proposes units, show what they
 	// convert to at once, so the reviewer sees the numbers before applying.
 	let caseKey = $derived(detail.summary.case_key);
+	let applyLabel = $derived(detail.document_status === 'HALTED' ? 'Apply all and resume' : 'Apply all');
 	$effect(() => {
 		void caseKey;
 		picked = Object.fromEntries(rows.map((r) => [r.flag.flag_id, choiceFor(r)?.id ?? '']));
@@ -197,7 +198,7 @@
 					{#if !proposalChecked}<span class="text-muted-foreground text-xs">Checking the numbers…</span>{/if}
 				{:else}
 					<Button variant="outline" disabled={busy || locked} onclick={restoreProposal}>Back to the proposed units</Button>
-					<span class="text-muted-foreground text-xs">You changed a proposed unit, so apply with "Apply all and resume" below.</span>
+					<span class="text-muted-foreground text-xs">You changed a proposed unit, so apply with "{applyLabel}" below.</span>
 				{/if}
 			</div>
 		</div>
@@ -315,7 +316,7 @@
 
 	<footer class="flex flex-wrap items-center gap-2">
 		<Button variant="outline" disabled={busy || !chosen.length} onclick={previewAll}>Preview all</Button>
-		<Button disabled={busy || locked || !previewed || scopeMissing} onclick={applyAll}><CheckIcon />Apply all and resume</Button>
+		<Button disabled={busy || locked || !previewed || scopeMissing} onclick={applyAll}><CheckIcon />{applyLabel}</Button>
 		<span class="text-muted-foreground text-xs">
 			{chosen.length} of {rows.length} channels have a unit{!previewed && chosen.length ? '; preview first to see the converted values' : ''}.
 		</span>

@@ -17,6 +17,9 @@
 	import FlagConsole from './FlagConsole.svelte';
 	import RuleFromDecision from './RuleFromDecision.svelte';
 	import { isChannelMapCase } from './channel_map';
+	import { tick, untrack } from 'svelte';
+	import { decisionText, subjectText } from './decisions';
+	import { loadDrafts, saveDrafts } from './drafts';
 	import { canBecomeRule, caseRuleScope, missing, needsPreview, takesFileOut, type ScopeChoice } from './resolution';
 	import { offersFor, type RuleOffer } from './rule_from_decision';
 
@@ -29,6 +32,7 @@
 	}
 
 	let { detail, me, onChanged }: Props = $props();
+	const OPEN = ['OPEN', 'IN_PROGRESS', 'REOPENED'];
 
 	interface Preview {
 		result: DryRunResponse | null;
@@ -50,11 +54,14 @@
 	// "Make a rule from this decision": the rules that would repeat what was just applied.
 	let offers = $state<RuleOffer[]>([]);
 
-	// A different case starts clean.
+	// A different case starts with its own saved drafts (kept across a trip to the viewer or a reload).
 	let caseKey = $derived(detail.summary.case_key);
+	let openFlags = $derived(detail.flags.filter((f) => OPEN.includes(f.status)));
+	let decidedFlags = $derived(detail.flags.filter((f) => !OPEN.includes(f.status)));
+	let caseEl = $state<HTMLElement | null>(null);
 	$effect(() => {
 		void caseKey;
-		drafts = {};
+		drafts = loadDrafts(caseKey, untrack(() => openFlags.map((f) => f.flag_id)));
 		previews = {};
 		scope = 'file';
 		pattern = '';
@@ -63,7 +70,10 @@
 		details = false;
 		confirming = false;
 		offers = [];
+		// Focus lands on the first open question's Resolution, so the keyboard can go on from the queue.
+		void tick().then(() => (caseEl?.querySelector<HTMLElement>('select[data-resolution]') ?? caseEl)?.focus());
 	});
+	$effect(() => saveDrafts(caseKey, drafts));
 
 	let where = $derived(detail.locations[0] ?? null);
 	let chosen = $derived(
@@ -166,6 +176,7 @@
 				rule_scope: ruleScope
 			});
 			offers = repeatable;
+			saveDrafts(caseKey, {});
 			const proposed = response.proposed_files;
 			return `Resolved${response.resumed_doc_ids.length ? '. This file is resuming' : ''}${proposed ? `. ${proposed} other file${proposed === 1 ? '' : 's'} now show${proposed === 1 ? 's' : ''} these units as a proposal` : ''}.`;
 		});
@@ -183,7 +194,7 @@
 		});
 </script>
 
-<section class="grid gap-4" aria-label="Case">
+<section class="grid gap-4 outline-none" aria-label="Case" tabindex="-1" bind:this={caseEl}>
 	<CaseHeader {detail} {me} {busy} onAssign={assign} onUndo={undo} />
 
 	{#if isChannelMapCase(detail) && !details}
@@ -193,10 +204,26 @@
 		<button type="button" class="text-link w-fit cursor-pointer border-0 bg-transparent p-0 text-xs" onclick={() => (details = false)}>Back to the channel map</button>
 	{/if}
 	<div class="grid gap-3">
-		{#each detail.flags as flag (flag.flag_id)}
+		{#each openFlags as flag (flag.flag_id)}
 			<FlagConsole {flag} bind:draft={drafts[flag.flag_id]} preview={previewState(flag.flag_id)} onPreview={() => preview(flag.flag_id)} />
 		{/each}
 	</div>
+	{#if decidedFlags.length}
+		<details class="rounded-md border" open={!openFlags.length}>
+			<summary class="text-muted-foreground hover:text-foreground cursor-pointer px-3 py-2 text-[13px] font-medium">Decided earlier ({decidedFlags.length})</summary>
+			<ul class="m-0 grid list-none gap-0 border-t p-0 text-[13px]" aria-label="Decided earlier">
+				{#each decidedFlags as flag (flag.flag_id)}
+					<li class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b px-3 py-1.5 last:border-b-0">
+						<span class="min-w-48 font-medium">{subjectText(flag)}</span>
+						<span>{decisionText(flag)}</span>
+						<span class="text-muted-foreground ml-auto text-xs"
+							>{flag.resolved_by ?? ''}{flag.resolved_at ? ` · ${flag.resolved_at.slice(0, 10)}` : ''}</span
+						>
+					</li>
+				{/each}
+			</ul>
+		</details>
+	{/if}
 
 	{#if offers.length}
 		<RuleFromDecision {offers} {where} onSaved={onChanged} onDismiss={() => (offers = [])} />
@@ -217,7 +244,7 @@
 		{/if}
 		<div class="flex flex-wrap items-center gap-2">
 			<Button disabled={busy || !!blocker} onclick={apply}>
-				<CheckIcon />Apply & resume
+				<CheckIcon />{detail.document_status === 'HALTED' ? 'Apply & resume' : 'Apply'}
 			</Button>
 			{#if blocker}<p class="text-muted-foreground m-0 ml-1 text-xs">{blocker}</p>{/if}
 		</div>

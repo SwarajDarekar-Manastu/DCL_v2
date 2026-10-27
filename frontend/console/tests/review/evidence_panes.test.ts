@@ -40,7 +40,7 @@ describe('EvidencePane, remaining kinds', () => {
 		expect(readings.textContent).toContain('confidence 42%');
 		expect(readings.textContent).toContain('Also possible: 7.6, 1.5');
 		await fireEvent.click(screen.getByRole('button', { name: 'Zoom crop 1: Tank P (barg)' }));
-		expect(screen.getByRole('dialog', { name: 'Zoomed crop' })).toBeTruthy();
+		expect(screen.getByRole('dialog', { name: 'Zoomed image' })).toBeTruthy();
 		const marked = within(screen.getByRole('table', { name: 'Table reading B' })).getByText('15.5');
 		expect(marked.getAttribute('data-diff')).toBe('true');
 		expect(screen.getByText('1 cell differs between the two readings.')).toBeTruthy();
