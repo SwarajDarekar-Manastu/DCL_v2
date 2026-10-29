@@ -4,7 +4,6 @@ pytest.importorskip("rocketcea")
 
 from backend.llm_engine.engine.tools import Provenance  # noqa: E402
 from backend.llm_engine.engine.tools.physics import PhysicsArgs, physics_calculator  # noqa: E402
-from backend.llm_engine.engine.verifier import check_numeric_claims  # noqa: E402
 
 
 def calc(operation, **parameters):
@@ -16,8 +15,6 @@ def test_mass_flow_for_5_newton_at_225_seconds():
     assert out.result["mass_flow_g_s"] == pytest.approx(5 / (225 * 9.80665) * 1000)
     assert "2.266 g/s" in out.display
     assert out.provenance[0].provenance is Provenance.CALCULATION
-    assert check_numeric_claims(["The mass flow is 2.266 g/s."], [out.display]) == []
-    assert check_numeric_claims(["The mass flow is 2.27 g/s."], [out.display]) != []
 
 
 def test_inputs_in_other_units_are_converted_and_echoed_in_si():

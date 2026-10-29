@@ -245,12 +245,14 @@ class RecordingKind(StrEnum):
     ASSEMBLY = "assembly"
     SETUP = "setup"
     SCREEN = "screen"
+    MEETING = "meeting"
     OTHER = "other"
 
 
 class VideoTimeline(Reading):
     """`video_timeline` (3.8 Flash, timestamped frames of a short clip). v3 (2026-10-26, plan step D): the
-    model first says what kind of recording it is; ignition and shutdown belong to a firing only."""
+    model first says what kind of recording it is; ignition and shutdown belong to a firing only. v4
+    (2026-10-28): every video is read once, with its first minute of speech; a meeting is transcribed."""
 
     image_metadata: ImageMetadata
     recording_kind: RecordingKind

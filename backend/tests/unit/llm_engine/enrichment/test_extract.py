@@ -104,7 +104,7 @@ def test_one_call_per_parent_with_versioned_prompt_context_and_low_thinking():
     (call,) = client.calls
     assert call["model"] == "gemini-3.8-flash"
     assert (call["thinking"], call["temperature"]) == (ThinkingLevel.LOW, 0.0)
-    assert (call["context"].purpose, call["context"].prompt_version) == ("enrichment.parent", "parent.v2")
+    assert (call["context"].purpose, call["context"].prompt_version) == ("enrichment.parent", "parent.v3")
     assert (call["context"].doc_id, call["context"].node_anchor) == ("doc-1", "page:3:abcd1234abcd1234")
     system, user = call["messages"]
     assert "Write every free-text field in English" in system.parts[0].text

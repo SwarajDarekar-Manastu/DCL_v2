@@ -2,12 +2,12 @@
 
 Evidence is numbered (`E1`, `E2`, …): each search hit is its own item, every other tool result is one item.
 The model cites evidence ids, never anchors, so a citation can only point at a source a tool returned; code
-maps the ids back to `Source`s. Verification has two parts: every numeric claim must match a value and unit
-string of the evidence it cites (deterministic, `verifier.check_numeric_claims`), and every claim is judged
-entailed / contradicted / not_supported by a separate call that sees only that claim's evidence. A
-contradicted or unsupported claim triggers one re-synthesis with the verdicts; what still fails is left out of
-the answer quietly and kept in the trace (`removed_claims`), never shown as a warning in the text (user,
-2026-10-26).
+maps the ids back to `Source`s. Verification: every claim, its numbers and units included, is judged
+entailed / contradicted / not_supported by a separate call that sees only that claim's evidence. (The
+deterministic string match of numbers was removed, user 2026-10-28: it read words after a number as units and
+removed 37 correct claims in three silver runs while catching no wrong number.) A contradicted or unsupported
+claim triggers one re-synthesis with the verdicts; what still fails is left out of the answer quietly and kept
+in the trace (`removed_claims`), never shown as a warning in the text (user, 2026-10-26).
 """
 
 import json
@@ -20,7 +20,6 @@ from pydantic import BaseModel, Field
 
 from backend.config import ThinkingLevel
 from backend.llm_engine.engine.tools import Source, ToolResult
-from backend.llm_engine.engine.verifier import check_numeric_claim
 from backend.llm_engine.gemini_types import CallContext, GeminiError, Message
 from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
@@ -140,7 +139,6 @@ class Answer:
     caveats: list[str]
     followups: list[str]
     verdicts: list[Verdict] = field(default_factory=list)
-    numeric_mismatches: list[dict] = field(default_factory=list)
     passes: int = 1
     removed: list[str] = field(default_factory=list)  # claims left out after repair; kept in the trace
 
@@ -264,27 +262,8 @@ async def verify(client, claims: list[Claim], items: list[Evidence], trace_id: s
     return result.parsed.verdicts
 
 
-def numeric_mismatches(claims: list[Claim], items: list[Evidence]) -> list[dict]:
-    """A numeric claim must match the value and unit strings of its cited evidence (all evidence if none)."""
-    by_id = {e.id: e for e in items}
-    out = []
-    for i, claim in enumerate(claims):
-        if claim.kind != "numeric":
-            continue
-        texts = [by_id[eid].text for eid in claim.evidence_ids if eid in by_id] or [e.text for e in items]
-        for mismatch in check_numeric_claim(claim.text, texts):
-            out.append(
-                {"claim_index": i, "value": mismatch.value, "unit": mismatch.unit, "reason": mismatch.reason}
-            )
-    return out
-
-
-def _rejected(output: SynthesisOutput, verdicts: list[Verdict], mismatches: list[dict]) -> dict[int, str]:
+def _rejected(output: SynthesisOutput, verdicts: list[Verdict]) -> dict[int, str]:
     bad = {v.claim_index: f"{v.verdict}: {v.reason}" for v in verdicts if v.verdict != "entailed"}
-    for m in mismatches:
-        bad.setdefault(
-            m["claim_index"], f"number {m['value']} {m['unit'] or ''} is not in the cited evidence"
-        )
     return {i: r for i, r in bad.items() if 0 <= i < len(output.claims)}
 
 
@@ -333,8 +312,7 @@ async def answer(
     items = evidence_items(results)
     output = await _synthesize(client, question, analysis, items, language, None, trace_id)
     verdicts = await verify(client, output.claims, items, trace_id)
-    mismatches = numeric_mismatches(output.claims, items)
-    rejected = _rejected(output, verdicts, mismatches)
+    rejected = _rejected(output, verdicts)
     passes = 1
     if rejected:
         output, changed = await _repair(client, question, output, rejected, items, language, trace_id)
@@ -349,8 +327,7 @@ async def answer(
             verdicts = [renumbered.get(v.claim_index, v) for v in verdicts if v.claim_index not in changed]
             verdicts += list(renumbered.values())
             verdicts.sort(key=lambda v: v.claim_index)
-        mismatches = numeric_mismatches(output.claims, items)
-        rejected = _rejected(output, verdicts, mismatches)
+        rejected = _rejected(output, verdicts)
         passes = 2
     markdown, caveats = output.answer_markdown, list(output.caveats)
     removed: list[str] = []
@@ -370,6 +347,5 @@ async def answer(
         followups=output.followups,
         verdicts=verdicts,
         removed=removed,
-        numeric_mismatches=mismatches,
         passes=passes,
     )

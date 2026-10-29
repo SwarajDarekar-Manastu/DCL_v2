@@ -21,7 +21,7 @@ from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
 from backend.postgres.enums import EntityType, Quantity
 
-PROMPT_VERSION = "parent.v2"
+PROMPT_VERSION = "parent.v3"
 PURPOSE = "enrichment.parent"
 MAX_DROP_RATE = 0.10
 MAX_OUTPUT_TOKENS = 16_384  # the largest complete reply in llm_calls used 5,255 (26 Oct): stops only runaways
@@ -37,8 +37,14 @@ class StatusMarker(StrEnum):
     APPROVED = "approved"
 
 
+def _every_field_required(schema: dict) -> None:
+    """The schema the model gets lists every field as required (an empty list or null when the section has
+    none): left optional, Gemini skipped them in 67% of replies (2026-10-28). Defaults stay for parsing."""
+    schema["required"] = list(schema.get("properties", {}))
+
+
 class _Item(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", json_schema_extra=_every_field_required)
 
 
 class EntityExtract(_Item):

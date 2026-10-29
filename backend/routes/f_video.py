@@ -42,6 +42,7 @@ from backend.dispatcher.contract import (
 )
 from backend.dispatcher.folder_context import FolderContext
 from backend.llm_engine.gemini_types import Image
+from backend.llm_engine.vision.schemas import RecordingKind, VideoTimeline
 from backend.postgres.enums import AssetKind, DocKind, FlagSeverity, FlagType, NodeSource, NodeType, Route
 from backend.routes.a1_office.assets import image_fields
 
@@ -504,19 +505,30 @@ def process_video(
                 ]
             )
             probe_words = transcribe(audio, 0.0, min(SPEECH_PROBE_S, info.duration_s))
-            workshop = (
-                _speech_share(probe_words, min(SPEECH_PROBE_S, info.duration_s)) >= SPEECH_SHARE_WORKSHOP
-            )
-            if workshop and not (_hint_test_cell(folder, file_name) and info.duration_s < 300):
-                words = transcribe_parts(audio, info.duration_s, transcribe, parts)
+        else:
+            probe_words = []
+        look = _look(path, info, folder, file_name, vision, cloud_allowed, doc_id, _text(probe_words))
+        if look.reading is not None:  # the model says what the recording is; a meeting is read for its speech
+            meeting = look.reading.recording_kind == RecordingKind.MEETING
+        else:  # cloud processing not allowed: the share of speech in the first minute decides, as before
+            meeting = _speech_share(
+                probe_words, min(SPEECH_PROBE_S, info.duration_s)
+            ) >= SPEECH_SHARE_WORKSHOP and not (_hint_test_cell(folder, file_name) and info.duration_s < 300)
+        if meeting and probe_words:
+            words = transcribe_parts(audio, info.duration_s, transcribe, parts)
         if words:
             nodes, assets, flags, catalog = _workshop(
                 path, info, words, folder, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id
             )
+            if look.reading is not None:
+                catalog |= {
+                    "recording_kind": str(look.reading.recording_kind),
+                    "summary": look.reading.summary,
+                }
             kind = DocKind.VIDEO_TRANSCRIPT
         else:
             nodes, assets, flags, catalog = _test_cell(
-                path, info, folder, file_name, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id
+                path, info, folder, title, blob_sha256, put_asset, cloud_allowed, look
             )
             kind = DocKind.VIDEO_TIMELINE
     if put_cir is not None:
@@ -567,13 +579,11 @@ def _write_cir(put_cir, info: Probe, words: list[Word], catalog: dict, nodes: li
     put_cir("events.json", dump(events))
 
 
-def _frame_asset(path: Path, t_ms: int, blob_sha256: str, put_asset) -> tuple[ProcessedAsset, bytes]:
-    jpeg = frame_at(path, t_ms)
+def _frame_asset(t_ms: int, jpeg: bytes, blob_sha256: str, put_asset) -> ProcessedAsset:
     uri = put_asset(f"frames/{blob_sha256}/{t_ms}.jpg", jpeg)
-    size = image_fields(jpeg)
     return ProcessedAsset(
-        ref=f"frame:{t_ms}", kind=AssetKind.VIDEO_FRAME, minio_uri=uri, t_ms=t_ms, **size
-    ), jpeg
+        ref=f"frame:{t_ms}", kind=AssetKind.VIDEO_FRAME, minio_uri=uri, t_ms=t_ms, **image_fields(jpeg)
+    )
 
 
 def scan_times(duration_s: float, count: int = SCAN_FRAMES) -> list[int]:
@@ -587,7 +597,17 @@ def _first(events, kinds: tuple[str, ...]) -> int | None:
     return min(found) if found else None
 
 
-def _test_cell(path, info, folder, file_name, title, blob_sha256, vision, put_asset, cloud_allowed, doc_id):
+@dataclass
+class _Look:
+    """Frames of the whole clip and the model's one reading of them: what the recording is, what happens."""
+
+    ignition: Ignition
+    times: list[int]
+    frames: list[tuple[int, bytes]]
+    reading: VideoTimeline | None
+
+
+def _look(path, info, folder, file_name, vision, cloud_allowed, doc_id, speech: str) -> _Look:
     ignition = detect_ignition(luminance(path))
     missed = ignition.t_ignition_ms is None
     # The model reads frames of the whole clip in one call: the brightness check misses a small glow at the
@@ -604,11 +624,28 @@ def _test_cell(path, info, folder, file_name, title, blob_sha256, vision, put_as
         if not missed
         else " (no sudden brightness change)"
     )
-    assets, frames = [], []
-    for t_ms in times:
-        asset, jpeg = _frame_asset(path, t_ms, blob_sha256, put_asset)
-        assets.append(asset)
-        frames.append((t_ms, jpeg))
+    taken = [(t_ms, frame_at(path, t_ms)) for t_ms in times]
+    frames = [(t_ms, jpeg) for t_ms, jpeg in taken if jpeg]  # no frame past a low-rate clip's last one
+    reading = None
+    if cloud_allowed and frames:
+        reading = vision.video_timeline(
+            [(t / 1000, Image(j, "image/jpeg")) for t, j in frames],
+            folder_context=" / ".join([*folder.breadcrumb, file_name]),  # not the working copy's temp name
+            duration_s=info.duration_s,
+            has_audio=info.has_audio,
+            nearby_files=[s.name for s in folder.siblings if s.name != file_name][:15],
+            frame_plan=frame_plan,
+            first_minute_speech=speech,
+            doc_id=doc_id,
+            anchor=f"t:{times[0]}:",
+        ).reading
+    return _Look(ignition, times, frames, reading)
+
+
+def _test_cell(path, info, folder, title, blob_sha256, put_asset, cloud_allowed, look: _Look):
+    ignition, timeline = look.ignition, look.reading
+    missed = ignition.t_ignition_ms is None
+    assets = [_frame_asset(t_ms, jpeg, blob_sha256, put_asset) for t_ms, jpeg in look.frames]
     crumb = " › ".join([*folder.breadcrumb, title])
     events: list[tuple[int, str, str, NodeSource]] = []
     if ignition.t_ignition_ms is not None:
@@ -630,17 +667,7 @@ def _test_cell(path, info, folder, file_name, title, blob_sha256, vision, put_as
     anomalies: list[str] = []
     image_metadata = None
     recording_kind, model_summary = None, None
-    if cloud_allowed and frames:
-        timeline = vision.video_timeline(
-            [(t / 1000, Image(j, "image/jpeg")) for t, j in frames],
-            folder_context=" / ".join([*folder.breadcrumb, file_name]),  # not the working copy's temp name
-            duration_s=info.duration_s,
-            has_audio=info.has_audio,
-            nearby_files=[s.name for s in folder.siblings if s.name != file_name][:15],
-            frame_plan=frame_plan,
-            doc_id=doc_id,
-            anchor=f"t:{times[0]}:",
-        ).reading
+    if timeline is not None:
         recording_kind, model_summary = str(timeline.recording_kind), timeline.summary
         events += [(int(e.t_s * 1000), e.type, e.description, NodeSource.VLM) for e in timeline.events]
         anomalies = list(timeline.anomalies)
@@ -747,8 +774,8 @@ def _workshop(path, info, words, folder, title, blob_sha256, vision, put_asset, 
     crumb = " › ".join([*folder.breadcrumb, title])
     assets, slide_text, frame_metadata = [], {}, {}
     for t_ms in changes:
-        asset, jpeg = _frame_asset(path, t_ms, blob_sha256, put_asset)
-        assets.append(asset)
+        jpeg = frame_at(path, t_ms)
+        assets.append(_frame_asset(t_ms, jpeg, blob_sha256, put_asset))
         if cloud_allowed:
             reading = vision.describe_slide(
                 Image(jpeg, "image/jpeg"), slide_text="", context=crumb, doc_id=doc_id, anchor=f"t:{t_ms}:"

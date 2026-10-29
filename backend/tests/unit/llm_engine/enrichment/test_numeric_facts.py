@@ -92,7 +92,7 @@ def test_unit_of_the_wrong_dimension_drops_the_fact():
     assert isinstance(out, DroppedFact) and out.reason is DropReason.DIMENSION_MISMATCH
 
 
-@pytest.mark.parametrize("unit", [None, "Skt."])
+@pytest.mark.parametrize("unit", [None, "Skt.", "dB²", "dB^2"])  # dB²: Atlas, 2026-10-28
 def test_missing_or_unreadable_unit_keeps_the_number_with_needs_unit(unit):
     out = check(fact("12,4", unit))
     assert isinstance(out, FactDecision) and out.needs_unit and out.value_si is None

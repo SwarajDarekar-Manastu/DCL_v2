@@ -156,7 +156,12 @@ def parse_unit(text: str) -> ParsedUnit:
     except (pint.PintError, ValueError, TypeError, SyntaxError, tokenize.TokenError) as exc:
         raise UnitError(f"cannot parse unit {text!r}") from exc
     dimension = _dimension_name(unit)
-    return ParsedUnit(cleaned, expression, unit, dimension, _reference(expression, dimension))
+    parsed = ParsedUnit(cleaned, expression, unit, dimension, _reference(expression, dimension))
+    try:  # a unit with no form to convert to (a squared decibel, Atlas 2026-10-28) cannot be checked either
+        registry().Quantity(1, unit).to(parsed.canonical)
+    except (pint.PintError, ValueError, TypeError) as exc:
+        raise UnitError(f"cannot convert unit {text!r}") from exc
+    return parsed
 
 
 def to_canonical(value: float, unit: str | ParsedUnit) -> tuple[float, str]:

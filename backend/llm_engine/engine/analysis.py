@@ -13,18 +13,19 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.common.units import UnitError, parse_unit
 from backend.config import ThinkingLevel
 from backend.dispatcher.folder_context import HARDWARE_PATTERNS, PLAN_PATTERNS, RUN_PATTERNS
+from backend.llm_engine.engine.answer_routes import AnswerRoute
 from backend.llm_engine.enrichment.entities import AliasIndex
 from backend.llm_engine.gemini_types import CallContext, Message
 from backend.llm_engine.model_ids import model_id
 from backend.llm_engine.prompts import load_prompt
 from backend.postgres.enums import DocKind, EntityType, NodeType
 
-PROMPT_VERSION = "query_analysis.v3"
+PROMPT_VERSION = "query_analysis.v4"
 PURPOSE = "engine.query_analysis"
 
 
@@ -129,7 +130,15 @@ class Clarification(BaseModel):
     options: list[str] = []
 
 
+def _routes_answered(schema: dict) -> None:
+    """The model must always say which routes hold the answer (an empty list only for a calculation or small
+    talk): a field left optional is skipped (enrichment, 2026-10-28)."""
+    schema["required"] = [*schema.get("required", []), "routes"]
+
+
 class QueryAnalysis(BaseModel):
+    model_config = ConfigDict(json_schema_extra=_routes_answered)
+
     intents: list[Intent] = Field(min_length=1)
     entities: list[EntityMentionQ] = []
     test_plan_ids: list[str] = []
@@ -150,6 +159,8 @@ class QueryAnalysis(BaseModel):
     reframed_question: str | None = None
     resolution: Literal["clear", "ambiguous", "not_found"] = "clear"
     subject_ids: list[str] = []
+    # the kinds of data that hold the answer, most likely first; each searches its own way (playbooks)
+    routes: list[AnswerRoute] = Field(default=[], max_length=3)
 
 
 @dataclass

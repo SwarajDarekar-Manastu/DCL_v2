@@ -78,20 +78,77 @@ def test_same_name_files_in_different_folders_conflict_unless_the_question_tells
     assert [o.doc_ids for o in by_folder] == []
 
 
-def test_an_ambiguous_reading_asks_with_the_real_subjects_and_no_database():
-    subjects = group(
-        [
-            _file("a", "Test 04 Data Analysis", plan="TP12", run="T04", kind="engineering_table", score=0.3),
-            _file("c", "Test_04_04Bar_ii_0", hardware="INJ14", run="T04", kind="telemetry_run", score=0.29),
-        ]
+def _files_of(monkeypatch, *files):
+    """`subject_files` from the given files, by owner and run (no database)."""
+    from backend.llm_engine.engine import catalog
+
+    monkeypatch.setattr(
+        catalog,
+        "subject_files",
+        lambda session, owner, run, folder: [f for f in files if f.owner == owner and f.test_run_id == run],
     )
-    catalog = CatalogResult(
-        "peak pressure in test 4", question_labels("peak pressure in test 4"), subjects, [], []
-    )
+
+
+def test_an_ambiguous_reading_goes_on_with_both_close_subjects_and_says_so(monkeypatch):
+    files = [
+        _file("a", "Test 04 Data Analysis", plan="TP12", run="T04", kind="engineering_table", score=0.3),
+        _file("c", "Test_04_04Bar_ii_0", hardware="INJ14", run="T04", kind="telemetry_run", score=0.29),
+    ]
+    _files_of(monkeypatch, *files)
+    catalog = CatalogResult("peak pressure in the fourth run", Labels(), group(files), [], [])
     decision = decide(None, catalog, resolution="ambiguous", subject_ids=[], intents=["telemetry_metric"])
+    assert (decision.kind, decision.doc_ids, decision.pinned) == ("go", ["a", "c"], False)
+    assert decision.caveats == ["Assumed: the question is about TP12 · Test 04 and INJ14 · Test 04."]
+
+
+def test_copies_of_one_file_under_three_plans_answer_from_the_likeliest_and_name_the_others(monkeypatch):
+    files = [
+        _file("p7", "Test_plan_creator.py", plan="TP07", kind="code", score=0.5),
+        _file("p12", "Test_plan_creator.py", plan="TP12", kind="code", score=0.4),
+        _file("i10", "Test_plan_creator.py", hardware="INJ10", kind="code", score=0.38),
+    ]
+    _files_of(monkeypatch, *files)
+    question = "What makes the test-plan creator script run pdflatex again?"
+    catalog = CatalogResult(question, question_labels(question), group(files), [], [])
+    decision = decide(None, catalog, resolution="ambiguous", subject_ids=[], intents=["code_walkthrough"])
+    assert (decision.kind, decision.doc_ids, decision.pinned) == ("go", ["p7"], False)
+    assert decision.caveats == ["Assumed: the question is about TP07; other matches: TP12, INJ10."]
+
+
+def test_a_subject_the_model_picked_for_an_ambiguous_question_is_stated_too(monkeypatch):
+    files = [
+        _file("p7", "Test_plan_creator.py", plan="TP07", kind="code", score=0.5),
+        _file("p12", "Test_plan_creator.py", plan="TP12", kind="code", score=0.4),
+    ]
+    _files_of(monkeypatch, *files)
+    catalog = CatalogResult("what does the script write", Labels(), group(files), [], [])
+    decision = decide(None, catalog, resolution="ambiguous", subject_ids=["S2"], intents=["code_walkthrough"])
+    assert (decision.doc_ids, decision.pinned) == (["p12"], False)
+    assert decision.caveats == ["Assumed: the question is about TP12; other matches: TP07."]
+
+
+def test_a_typed_plan_pins_its_files(monkeypatch):
+    files = [
+        _file("a", "Test 04 Data Analysis", plan="TP12", run="T04", kind="engineering_table", score=0.29),
+        _file("c", "Test_04_04Bar_ii_0", hardware="INJ14", run="T04", kind="telemetry_run", score=0.3),
+    ]
+    _files_of(monkeypatch, *files)
+    question = "peak pressure in TP12 test 4"
+    catalog = CatalogResult(question, question_labels(question), group(files), [], [])
+    decision = decide(None, catalog, resolution="ambiguous", subject_ids=[], intents=["telemetry_metric"])
+    assert (decision.kind, decision.doc_ids, decision.pinned, decision.caveats) == ("go", ["a"], True, [])
+
+
+def test_a_run_under_two_owners_still_asks():
+    options = [
+        Option("1", "TP12 · Test 04: 1 engineering table", "TP12", "T04", None, ["a"]),
+        Option("2", "INJ14 · Test 04: 1 telemetry run", "INJ14", "T04", None, ["c"]),
+    ]
+    question = "peak pressure in test 4"
+    catalog = CatalogResult(question, question_labels(question), [], [], options)
+    decision = decide(None, catalog, resolution="clear", subject_ids=[], intents=["telemetry_metric"])
     assert decision.kind == "ask"
     assert "1. TP12 · Test 04: 1 engineering table" in decision.text
-    assert "2. INJ14 · Test 04: 1 telemetry run" in decision.text
 
 
 def test_a_question_that_needs_no_particular_file_goes_on_unfiltered():
@@ -188,3 +245,16 @@ def test_the_answer_picks_the_option_whose_folder_it_names_most_precisely():
     assert chosen_option(previous, "The de-integration photo.")["id"] == "1"
     assert chosen_option(previous, "the integration one")["id"] == "2"
     assert chosen_option(previous, "TP12") is None  # both are TP12: still open
+
+
+def test_each_file_the_analysis_reads_names_its_answer_route():
+    photo = _file("a", "Inj VF")
+    code = _file("b", "Test_plan_creator.py", kind="code")
+    code.route = "B"
+    book = _file("c", "ECSS-E-ST-35-10C", kind="standard")
+    book.route, book.folder_kind = "A1", "library"
+    assert [f.line() for f in (photo, code, book)] == [
+        "Inj VF (hardware_photo, route visual) in APU",
+        "Test_plan_creator.py (code, route source) in APU",
+        "ECSS-E-ST-35-10C (standard, route library) in APU",
+    ]

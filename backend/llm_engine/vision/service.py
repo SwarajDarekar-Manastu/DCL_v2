@@ -148,7 +148,7 @@ TASKS: dict[VisionCapability, Task] = {
         "describe_slide.v1", SlideReading, FLASH, "medium", ThinkingLevel.LOW, 8_192
     ),
     VisionCapability.VIDEO_TIMELINE: Task(
-        "video_timeline.v3", VideoTimeline, FLASH, "medium", ThinkingLevel.LOW, 8_192
+        "video_timeline.v4", VideoTimeline, FLASH, "medium", ThinkingLevel.LOW, 8_192
     ),
     VisionCapability.CLASSIFY_IMAGE: Task(
         "classify_image.v1", ImageClassification, FLASH_LITE, "low", ThinkingLevel.MINIMAL, 1_024
@@ -344,6 +344,7 @@ class VisionService:
         has_audio: bool | None = None,
         nearby_files: Sequence[str] = (),
         frame_plan: str = "",
+        first_minute_speech: str = "",
         doc_id: str | None = None,
         anchor: str | None = None,
     ) -> VisionOutput[VideoTimeline]:
@@ -358,6 +359,7 @@ class VisionService:
             "has_audio": {True: "yes", False: "no", None: "not known"}[has_audio],
             "nearby_files": ", ".join(nearby_files) or "none",
             "frame_plan": frame_plan or "not stated",
+            "first_minute_speech": first_minute_speech or "none",
         }
         return self._run(VisionCapability.VIDEO_TIMELINE, parts, variables, doc_id, anchor)
 

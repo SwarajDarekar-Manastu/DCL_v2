@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from backend.benchmark import metrics
 from backend.benchmark.catalog import CaseSpec, ExpectedBehavior
+from backend.llm_engine.engine.answer_routes import of_document
 from backend.postgres.enums import BenchmarkRunStatus, DocumentStatus, FailureClass
 from backend.postgres.models import BenchmarkCase, BenchmarkResult, BenchmarkRun, Document
 
@@ -178,6 +179,21 @@ def expected_documents(session: Session, spec: CaseSpec) -> tuple[set[str], list
     return found, missing
 
 
+def document_routes(session: Session, doc_ids: set[str]) -> dict[str, str]:
+    """The answer route of each document (`answer_routes.of_document`)."""
+    if not doc_ids:
+        return {}
+    rows = session.execute(
+        text(
+            "SELECT doc_id::text AS doc_id, route, doc_kind, folder_context ->> 'folder_kind' AS folder_kind "
+            "FROM documents WHERE doc_id::text = ANY(:ids)"
+        ),
+        {"ids": sorted(doc_ids)},
+    )
+    found = {r.doc_id: of_document(r.route, r.doc_kind, r.folder_kind) for r in rows}
+    return {doc_id: str(route) for doc_id, route in found.items() if route}
+
+
 def write_result(session: Session, run_id: uuid.UUID, case: Case, outcome: dict) -> None:
     session.merge(
         BenchmarkResult(
@@ -251,6 +267,9 @@ def observed_from(done: dict, trace: dict | None, cited: list[metrics.CitedDoc])
         cost=(done.get("usage") or {}).get("cost_estimate"),
         retrieved_docs={str(s["doc_id"]) for s in trace.get("retrieved", []) if s.get("doc_id")}
         | {c.doc_id for c in cited if c.doc_id},
+        routes_chosen=[
+            str(r) for r in ((trace.get("query_analysis") or {}).get("raw") or {}).get("routes", [])
+        ],
     )
 
 
@@ -267,6 +286,9 @@ async def run_case(case: Case, deps: RunnerDeps) -> dict:
         cited = cited_documents(session, citations)
         observed = observed_from(done, trace, cited)
         observed.expected_docs, observed.missing_documents = expected_documents(session, case.spec)
+        observed.doc_routes = document_routes(
+            session, observed.retrieved_docs | {c.doc_id for c in cited if c.doc_id}
+        )
         if case.spec.retrieval_gold_anchors and deps.retrieve is not None:
             observed.retrieved_30, observed.retrieved_8, observed.rerank_margin = await asyncio.to_thread(
                 deps.retrieve, session, question

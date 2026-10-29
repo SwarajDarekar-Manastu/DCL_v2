@@ -205,7 +205,7 @@ def test_header_names_the_test_labels_the_piece_and_what_the_file_is_about(kit):
     )
 
 
-def test_header_drops_entities_then_about_then_the_path_start_to_stay_within_120_tokens(kit):
+def test_header_drops_entities_then_the_path_start_then_about_to_stay_within_120_tokens(kit):
     doc = kit.document().document
     entities = [f"entity{i}" for i in range(200)]
     about = " ".join(["word"] * 130)  # too long even alone: entities go, then the About line
@@ -215,6 +215,13 @@ def test_header_drops_entities_then_about_then_the_path_start_to_stay_within_120
     assert len(header.split()) <= 120
     assert "Entities" not in header and "About" not in header
     assert header.startswith("Doc: Test Report 37") and "Type: text" in header and "Path: 3 Results" in header
+    deep = " › ".join(["Test Report 37", *(f"folder{i} " * 8 for i in range(14)), "3 Results"])
+    header = contextual_header(
+        doc, deep, [], ChunkingConfig(), kit.words, piece="text", about="The hot fire results of TP37."
+    )
+    assert len(header.split()) <= 120
+    assert "About: The hot fire results of TP37." in header
+    assert "3 Results" in header and "folder0" not in header
 
 
 def test_the_piece_type_line_names_its_locator(kit):

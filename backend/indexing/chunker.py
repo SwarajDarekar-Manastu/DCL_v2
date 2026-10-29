@@ -550,11 +550,14 @@ def contextual_header(
     *,
     piece: str | None = None,
     about: str | None = None,
+    category: str | None = None,
 ) -> str:
     """The English header of §4.2, at most `header_max_tokens`: what the file is (title, kind, origin, date),
     its test labels, what the piece is, where it sits, what the file is about, and the entities. Over the cap,
-    the entities go first, then the About line, then the start of the path."""
+    the entities go first, then the start of the path, then the About line."""
     facts = [str(document.doc_kind)]
+    if category and category != str(document.doc_kind):
+        facts.append(category.replace("_", " "))
     if document.source_origin:
         facts.append("external" if document.source_origin == SourceOrigin.EXTERNAL_KEPT else "internal")
     if document.publisher and document.source_origin == SourceOrigin.EXTERNAL_KEPT:
@@ -578,10 +581,10 @@ def contextual_header(
             return header
         if entities:
             entities.pop()
+        elif BREADCRUMB_SEPARATOR in section:  # the start of a deep path says least about the piece
+            section = section.split(BREADCRUMB_SEPARATOR, 1)[1]
         elif about:
             about = None
-        elif BREADCRUMB_SEPARATOR in section:
-            section = section.split(BREADCRUMB_SEPARATOR, 1)[1]
         elif section:
             section = ""
         else:
@@ -619,25 +622,37 @@ def build_embed_texts(
     config: ChunkingConfig | None = None,
     count_tokens: TokenCounter | None = None,
     about: str | None = None,
+    about_by_ref: dict[str, str] | None = None,
+    category: str | None = None,
 ) -> list[IndexNode]:
     """Set embed_title, embed_text (header, '---', body; at most 8,000 tokens) and embed_text_hash.
 
     Only nodes with embed=True are touched.
 
     `entities_by_ref` holds the English canonical entity names per node ref (from enrichment, file 04 §3);
-    a child without its own entry uses its parent's. The hash covers the exact model input, title included,
+    a child without its own entry uses its parent's. `about_by_ref` holds each section's summary the same way
+    (the About line; `about`, the file's, where a node has no section summary), and `category` the file's
+    kind of content for the Doc line. The hash covers the exact model input, title included,
     so the commit can reuse a vector only when the embedding would be identical.
     """
     if count_tokens is None:
         from backend.llm_engine.local_models import count_tokens
     config = config or ChunkingConfig()
-    entities_by_ref = entities_by_ref or {}
+    entities_by_ref, about_by_ref = entities_by_ref or {}, about_by_ref or {}
     for node in nodes:
         if not node.embed:
             continue
         entities = entities_by_ref.get(node.ref) or entities_by_ref.get(node.parent_ref or "", [])
+        section_about = about_by_ref.get(node.ref) or about_by_ref.get(node.parent_ref or "") or about
         header = contextual_header(
-            document, node.breadcrumb, entities, config, count_tokens, piece=piece_type(node), about=about
+            document,
+            node.breadcrumb,
+            entities,
+            config,
+            count_tokens,
+            piece=piece_type(node),
+            about=section_about,
+            category=category,
         )
         node.content_codes = content_codes(f"{header}\n{node.content}")
         section = _section_path(node.breadcrumb, document.title)

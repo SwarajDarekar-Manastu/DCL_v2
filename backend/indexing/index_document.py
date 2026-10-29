@@ -29,6 +29,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Session
 from sqlalchemy.types import Text
 
+from backend.common.parallel import map_parallel
 from backend.dispatcher.contract import ProcessedDocument
 from backend.indexing.anchors import content_hash
 from backend.indexing.card import card_codes, card_text, contents_of
@@ -259,25 +260,27 @@ def index_document(
         context = document_context(
             fields.title, str(fields.doc_kind), fields.source_origin, [fields.test_plan_id or ""]
         )
-        for parent in parents:
+
+        def enrich(parent: IndexNode) -> EnrichedParent | None:
             try:
-                enriched.append(
-                    (
-                        parent,
-                        enrich_parent(
-                            gemini,
-                            parent.content,
-                            context=context,
-                            language=parent.language,
-                            doc_id=str(doc_id),
-                            anchor=None,
-                        ),
-                    )
+                return enrich_parent(
+                    gemini,
+                    parent.content,
+                    context=context,
+                    language=parent.language,
+                    doc_id=str(doc_id),
+                    anchor=None,
                 )
             except StructuredOutputError:
+                return None
+
+        for parent, result in zip(parents, map_parallel(enrich, parents), strict=True):  # side by side
+            if result is None:
                 warnings.append(
                     f"enrichment reply for {parent.ref} failed the schema; parent left unenriched"
                 )
+            else:
+                enriched.append((parent, result))
 
     pairs: list[tuple[str, EntityExtract]] = []
     for parent, result in enriched:
@@ -337,9 +340,24 @@ def index_document(
             merged.extend(n for n in entities_by_ref.get(child.ref, []) if n not in merged)
     aggregated = _aggregate(doc, enriched, decisions, alias_index)
     about = first_sentence(aggregated["enrichment"]["doc_summary"])
-    build_embed_texts(nodes, fields, entities_by_ref, config, count_tokens, about=about)
+    # each piece carries its own section's summary as the model wrote it (the prompt keeps it short)
+    about_by_ref = {
+        p.ref: " ".join(r.enrichment.summary.split()) for p, r in enriched if r.enrichment.summary
+    }
+    category = (fields.catalog or {}).get("recording_kind") or aggregated["enrichment"]["doc_kind_llm"]
+    build_embed_texts(
+        nodes,
+        fields,
+        entities_by_ref,
+        config,
+        count_tokens,
+        about=about,
+        about_by_ref=about_by_ref,
+        category=category,
+    )
     card = card_text(
         fields,
+        category=category,
         folder_path=folder_path,
         summary=aggregated["enrichment"]["doc_summary"] or None,
         entities=aggregated.pop("entity_names"),

@@ -199,13 +199,35 @@ def test_question_proxies_for_every_enriched_kind(kit, run):
         assert [n for n in run(other).nodes if n.node_type is NodeType.QUESTION_PROXY]
 
 
+class SectionSummaries(Gemini):
+    """Each section gets its own summary, as a model reading only that section would write."""
+
+    def generate_sync(self, **kwargs):
+        result = super().generate_sync(**kwargs)
+        if "Scope of the test campaign" in kwargs["messages"][-1].parts[0].text:
+            result.parsed.summary = "The campaign scope."
+        return result
+
+
+def test_every_piece_carries_its_own_sections_summary_and_the_files_category(run):
+    plan = run(gemini=SectionSummaries())
+    about = {
+        n.parent_ref or n.ref: n.embed_text.split("---")[0]
+        for n in plan.nodes
+        if n.embed and n.node_type in (NodeType.CHILD, NodeType.PARENT)
+    }
+    assert sum("About: The campaign scope." in h for h in about.values()) == 1
+    assert sum("About: TP37 hot fire 3 reached 12.4 bar." in h for h in about.values()) == 1
+    assert all(h.startswith("Doc: Test Report 37 (test_report, results,") for h in about.values())
+
+
 def test_document_aggregation_and_search_text(run):
     plan = run()
     enrichment = plan.document["enrichment"]
     assert enrichment["test_ids"] == ["TP37"]
     assert "C-103" in enrichment["materials"] and "HTP" in enrichment["propellants"]
     assert plan.document["search_text"].startswith(
-        "Test Report 37\nKind: test_report · internal\nTest: plan TP37\n"
+        "Test Report 37\nKind: test_report · results · internal\nTest: plan TP37\n"
         "Summary: TP37 hot fire 3 reached 12.4 bar."
     )
     assert "Entities: INJ-14, HTP, C-103, PT-101" in plan.document["search_text"]

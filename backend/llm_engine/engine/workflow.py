@@ -30,7 +30,8 @@ from workflows.events import Event, StartEvent, StopEvent
 
 from backend.config import ThinkingLevel
 from backend.llm_engine.engine import catalog, playbooks, synthesis
-from backend.llm_engine.engine.analysis import Analysis, Intent, QueryAnalysis, analyze
+from backend.llm_engine.engine.analysis import Analysis, QueryAnalysis, analyze
+from backend.llm_engine.engine.answer_routes import AnswerRoute
 from backend.llm_engine.engine.playbooks import PlannedCall
 from backend.llm_engine.engine.tools import Source, ToolResult
 from backend.llm_engine.engine.tools import attachments as attachment_tools
@@ -251,8 +252,6 @@ class AnswerWorkflow(Workflow):
         if raw.reframed_question and not catalog.reframing_ok(raw.reframed_question, allowed):
             analysis.warnings.append(f"reframed question dropped (unknown id): {raw.reframed_question}")
             raw.reframed_question = None
-            if len(found.subjects) >= 2 and not picked:
-                raw.resolution = "ambiguous"
         forced = picked
         if forced is None and "S0" in raw.subject_ids and previous and previous.get("chosen"):
             forced = previous["chosen"]
@@ -262,7 +261,7 @@ class AnswerWorkflow(Workflow):
                 found,
                 resolution=raw.resolution,
                 subject_ids=raw.subject_ids,
-                intents=[str(i) for i in raw.intents],
+                intents=[*(str(i) for i in raw.intents), *(str(r) for r in raw.routes)],
                 forced=forced,
             )
 
@@ -323,7 +322,7 @@ class AnswerWorkflow(Workflow):
                 calls.insert(0, PlannedCall(telemetry_tools.NAME, args, "the measured run data"))
         trace_id = request["trace_id"]
         attached = await self._attachments(ctx, request)
-        visual = Intent.VISUAL_LOOKUP in analysis.raw.intents or analysis.raw.needs_visuals
+        visual = AnswerRoute.VISUAL in playbooks.routes_of(analysis) or analysis.raw.needs_visuals
         for item in attached:
             if item.is_image and visual and self.deps.embed_image is not None:
                 vector = await asyncio.to_thread(self.deps.embed_image, item.data)
@@ -577,6 +576,9 @@ class AnswerWorkflow(Workflow):
         )
         halted = [c for c in ev.caveats if HALTED.search(c)]
         markdown = draft.markdown + ("\n\n" + "\n".join(f"> Note: {c}" for c in halted) if halted else "")
+        # what the catalog step assumed for an ambiguous question leads the answer (PLAN_query_routing.md)
+        assumed = [c for c in ev.caveats if c.startswith(catalog.ASSUMED)]
+        markdown = "".join(f"*{c}*\n\n" for c in assumed) + markdown
         # sufficiency (file 07 §4): an answer none of whose claims the evidence entails did not find it
         supported = any(v.verdict == "entailed" for v in draft.verdicts)
         return self._finish(
@@ -712,7 +714,6 @@ class AnswerWorkflow(Workflow):
             "verifier_result": {
                 "summary": verifier,
                 "verdicts": [v.model_dump() for v in draft.verdicts],
-                "numeric_mismatches": draft.numeric_mismatches,
                 "removed_claims": draft.removed,
             }
             if draft

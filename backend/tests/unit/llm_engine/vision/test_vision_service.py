@@ -24,8 +24,8 @@ VERSIONS = {
     VisionCapability.TRANSCRIBE_PAGE: 3,  # v3 (2026-10-27): handwriting, and the entries it is not sure of
     VisionCapability.READ_SCHEMATIC: 3,  # v3 (2026-10-26): schematic, mechanical drawing or flowchart first
     VisionCapability.DIGITIZE_PLOT: 2,  # v2 (2026-10-26): panels and log axes
+    VisionCapability.VIDEO_TIMELINE: 4,  # v4 (2026-10-28): every video, first minute of speech, meeting
     VisionCapability.INSPECT_HARDWARE_PHOTO: 2,  # v2 (2026-10-26): what the photo is for first
-    VisionCapability.VIDEO_TIMELINE: 3,  # v3 (2026-10-26): kind of recording first; ignition if firing
 }
 
 PNG = Image(b"\x89PNG fake crop bytes", "image/png")

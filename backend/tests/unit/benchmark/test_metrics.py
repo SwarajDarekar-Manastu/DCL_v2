@@ -230,3 +230,36 @@ def test_halted_data_and_library_labels_from_the_s5_baseline():
         citations=[CitedDoc(DOC, provenance="vendor_claim")],
     )
     assert score_case("LIBRARY_VS_INTERNAL", library, vendor)["behavior"]["passed"]
+
+
+def test_routes_are_reported_by_what_the_answer_cited_and_never_fail_a_case():
+    spec = TELEMETRY.model_copy(update={"expected_routes": ["measured"]})
+    report = DOC
+    right = score_case(
+        "TELEMETRY_MATH", spec, answer(doc_routes={DOC: "measured"}, routes_chosen=["measured", "table"])
+    )
+    assert right["route"] == {
+        "expected": ["measured"],
+        "chosen": ["measured", "table"],
+        "chosen_ok": True,
+        "cited": ["measured"],
+        "retrieved": [],
+        "passed": True,
+    }
+    wrong = score_case(
+        "TELEMETRY_MATH",
+        spec,
+        answer(doc_routes={report: "document"}, retrieved_docs={report}),
+    )
+    assert wrong["route"]["passed"] is False and wrong["route"]["retrieved"] == ["document"]
+    assert wrong["passed"], "the route is reported next to the checks, not one of them"
+    asked = score_case("TELEMETRY_MATH", spec, answer(mode="clarification", citations=[]))
+    summary = aggregate(
+        [
+            {"case_id": c, "category": "TELEMETRY_MATH", "passed": m["passed"], "metrics": m, "cost": None}
+            for c, m in (("a", right), ("b", wrong), ("c", asked))
+        ],
+        total=3,
+    )
+    assert summary["by_route"] == {"measured": {"cases": 3, "passed": 2, "route_hit": 1, "route_chosen": 1}}
+    assert summary["clarifications"] == 1

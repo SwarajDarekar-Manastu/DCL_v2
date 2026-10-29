@@ -58,6 +58,9 @@ class InspectVisualsArgs(BaseModel):
     doc_ids: list[uuid.UUID] = Field(default=[], description="the files the question was resolved to")
     failure_modes: list[str] = []
     components: list[str] = []
+    prefer_doc_ids: list[uuid.UUID] = Field(
+        default_factory=list, description="files the question was resolved to, ranked higher"
+    )
     k: int = Field(default=6, ge=1, le=20)
     similar_to_asset_id: uuid.UUID | None = None
     similar_to_vector: list[float] | None = Field(
@@ -173,7 +176,10 @@ def _inspect_visuals(
     presign: Callable[[str], str] | None = None,
 ) -> ToolResult:
     filters = SearchFilters(
-        node_types=node_types(args.kinds), test_plan_ids=args.test_plan_ids, doc_ids=args.doc_ids
+        node_types=node_types(args.kinds),
+        test_plan_ids=args.test_plan_ids,
+        doc_ids=args.doc_ids,
+        prefer_doc_ids=args.prefer_doc_ids,
     )
     query = " ".join([args.query, *args.failure_modes, *args.components]).strip()
     warnings: list[str] = []

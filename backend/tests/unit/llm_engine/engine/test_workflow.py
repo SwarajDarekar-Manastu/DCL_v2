@@ -15,7 +15,6 @@ from backend.llm_engine.engine import workflow as wf
 from backend.llm_engine.engine.tools import Provenance, Source, ToolResult
 from backend.llm_engine.engine.tools import external as external_tools
 from backend.llm_engine.engine.tools.external import ExternalPolicy
-from backend.llm_engine.engine.verifier import check_numeric_claim
 from backend.llm_engine.enrichment.entities import AliasIndex
 from backend.llm_engine.gemini_types import GatewayError, GenerateResult, Grounding, GroundingSource, Usage
 
@@ -161,8 +160,6 @@ def test_fact_question_streams_steps_tokens_citations_and_done(searches):
     assert calls[0].filters.test_plan_ids == ["TP07"]
     text = "".join(e["text"] for e in of(events, "token"))
     assert text == done["answer_markdown"] == SYNTH["answer_markdown"]
-    # every number the answer states string-matches a tool result (citation markers excluded)
-    assert check_numeric_claim(re.sub(r"\[\d+\]", "", text), [PASSAGE]) == []
     [citation] = of(events, "citation")
     assert citation["doc_id"] == str(REPORT) and citation["page_no"] == 8
     assert citation["url_viewer"].startswith(f"/docs/{REPORT}/viewer")

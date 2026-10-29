@@ -36,6 +36,7 @@ from sqlalchemy.types import Date, Text
 from backend.dispatcher.folder_context import HARDWARE_PATTERNS, PLAN_PATTERNS, RUN_PATTERNS, path_date
 from backend.indexing.identifiers import extract_identifiers
 from backend.indexing.retrieval import Scope, SearchFilters, build_where, dense_leg, lexical_leg, rrf
+from backend.llm_engine.engine.answer_routes import AnswerRoute, of_document
 from backend.llm_engine.engine.tools import Source, ToolResult, provenance_of
 
 STATUSES = ("ACTIVE", "ACTIVE_WITH_SOFT_FLAGS", "HALTED", "PROCESSING")
@@ -44,9 +45,10 @@ LEG_LIMIT = 40
 TOP_FILES = 15
 TOP_SUBJECTS = 6
 CLOSE = 0.9  # second subject within 10 % of the first
+ASSUMED = "Assumed:"  # how the assumption for an ambiguous question starts (the answer leads with it)
 MAX_OPTIONS = 10
 MAX_SUBJECT_FILES = 400
-MEASURED = frozenset({"telemetry_metric", "run_comparison"})
+MEASURED = frozenset({"telemetry_metric", "run_comparison", str(AnswerRoute.MEASURED)})  # intents or route
 MONTHS = {m: i for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), start=1)}
 SPOKEN_DATE = re.compile(
     r"(?i)(?<!\d)(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+(20\d{2})"
@@ -114,6 +116,7 @@ class CatalogFile:
     summary: str
     card: str
     source_origin: str | None
+    folder_kind: str | None = None
     case_keys: list[str] = field(default_factory=list)
     run_labels: list[str] = field(default_factory=list)
     best_piece: str | None = None
@@ -125,7 +128,13 @@ class CatalogFile:
         return self.test_plan_id or self.hardware_item
 
     def line(self) -> str:
-        bits = [self.doc_kind, self.doc_date, self.status if self.status != "ACTIVE" else None]
+        route = of_document(self.route, self.doc_kind, self.folder_kind)
+        bits = [
+            self.doc_kind,
+            f"route {route}" if route else None,
+            self.doc_date,
+            self.status if self.status != "ACTIVE" else None,
+        ]
         if self.case_keys:
             bits.append("review case " + ", ".join(_case(c) for c in self.case_keys))
         where = f" in {self.folder}" if self.folder else ""
@@ -288,6 +297,7 @@ def _label_files(session: Session, labels: Labels) -> list[str]:
 FILE_SQL = (
     "SELECT d.doc_id, d.title, d.doc_kind, d.status, d.route, d.doc_date, d.test_plan_id, d.test_run_id, "
     "d.hardware_item, d.source_origin, d.folder_context -> 'breadcrumb' AS crumbs, "
+    "d.folder_context ->> 'folder_kind' AS folder_kind, "
     "coalesce(d.search_text, d.title) AS card, coalesce(d.enrichment ->> 'doc_summary', '') AS summary, "
     "(SELECT array_agg(DISTINCT f.case_key) FROM review_flags f WHERE f.doc_id = d.doc_id "
     " AND f.status = 'OPEN' AND f.severity = 'HARD') AS case_keys, "
@@ -317,6 +327,7 @@ def _files(session: Session, where: str, params: dict, *binds) -> list[CatalogFi
                 summary=" ".join((r.summary or "").split())[:600],
                 card=r.card or "",
                 source_origin=r.source_origin,
+                folder_kind=r.folder_kind,
                 case_keys=list(r.case_keys or []),
                 # a halted run was never committed: its label is the one its commit would write
                 run_labels=list(r.run_labels or [])
@@ -614,6 +625,7 @@ class Decision:
     run_labels: list[str] = field(default_factory=list)
     subject: dict | None = None
     caveats: list[str] = field(default_factory=list)
+    pinned: bool = False  # the user typed or picked the subject: its files are the only ones searched
 
     def record(self, catalog: CatalogResult, question: str) -> dict:
         """What the trace keeps for the next turn (and the Console shows)."""
@@ -624,6 +636,7 @@ class Decision:
             "conflicts": catalog.conflicts,
             "chosen": self.subject,
             "doc_ids": self.doc_ids[:MAX_SUBJECT_FILES],
+            "pinned": self.pinned,
             "run_labels": self.run_labels,
             "ask": {"question": question, "options": [asdict(o) for o in catalog.options]}
             if self.kind == "ask"
@@ -644,6 +657,31 @@ def _subject_dict(owner, run, folder, label) -> dict:
     return {"owner": owner, "run": run, "folder": folder, "label": label}
 
 
+def _typed(subject: Subject, labels: Labels) -> int:
+    """How many of this subject's labels (its plan or hardware, its run) the question names."""
+    return bool(subject.owner and subject.owner in [*labels.plans, *labels.hardware]) + bool(
+        subject.run and subject.run in labels.runs
+    )
+
+
+def _likeliest(catalog: CatalogResult) -> list[Subject]:
+    """The top subject, or the top two when they fit about equally well (PLAN_query_routing.md step 1)."""
+    found = [s for s in catalog.subjects if s.id != "S0"]
+    tied = len(found) >= 2 and found[1].score >= CLOSE * found[0].score
+    return found[: 2 if tied else 1]
+
+
+def _assumption(picked: list[Subject], catalog: CatalogResult) -> str:
+    """What the answer states it assumed: the subjects it goes on with and up to three others that fit."""
+
+    def name(s: Subject) -> str:
+        return s.label.split(" › ")[-1]  # a folder subject by its own folder name
+
+    others = [name(s) for s in catalog.subjects if s.id != "S0" and s not in picked][:3]
+    note = f"{ASSUMED} the question is about {' and '.join(name(s) for s in picked)}"
+    return note + (f"; other matches: {', '.join(others)}." if others else ".")
+
+
 def decide(
     session: Session,
     catalog: CatalogResult,
@@ -653,32 +691,33 @@ def decide(
     intents: Iterable[str],
     forced: dict | None = None,
 ) -> Decision:
-    """Go on, ask back or report halted data. `forced` is the option or subject the conversation settled."""
+    """Go on, ask back or report halted data. `forced` is the option or subject the conversation settled.
+
+    Only the code signals ask back (a run under two owners, a named file in two folders: `catalog.options`).
+    A question the model finds ambiguous goes on with the likeliest subject and says so (PLAN_query_routing.md
+    step 1). The subject's files are the only ones searched when the user typed or picked it; otherwise they
+    are ranked higher (`Decision.pinned`)."""
+    caveats: list[str] = []
     if forced is not None:
-        chosen = [forced]
+        chosen, pinned = [forced], True
     else:
         if catalog.options:
             return Decision("ask", ask_text(catalog.question, catalog.options))
         picked = [s for s in catalog.subjects if s.id in subject_ids]
-        if resolution == "ambiguous" and len(catalog.subjects) >= 2 and len(picked) != 1:
-            options = [
-                Option(str(n), s.describe(), s.owner, s.run, s.folder, [f.doc_id for f in s.files])
-                for n, s in enumerate(catalog.subjects[:MAX_OPTIONS], start=1)
-            ]
-            catalog.options = options
-            return Decision("ask", ask_text(catalog.question, options))
         labels = catalog.labels
         if not picked and labels.named and catalog.subjects:
-            pinned = [
-                s
-                for s in catalog.subjects
-                if (s.owner and s.owner in [*labels.plans, *labels.hardware])
-                or (s.run and s.run in labels.runs)
-            ]
-            picked = pinned[:1]
+            named = sorted(
+                (s for s in catalog.subjects if _typed(s, labels)), key=lambda s: -_typed(s, labels)
+            )
+            picked = named[:1]
+        if not picked and resolution == "ambiguous":
+            picked = _likeliest(catalog)
         if not picked:
             return Decision("go", caveats=[c for c in catalog.conflicts if c.startswith("Nothing")])
         chosen = [_subject_dict(s.owner, s.run, s.folder, s.label) for s in picked]
+        pinned = all(_typed(s, labels) for s in picked)
+        if resolution == "ambiguous" and not pinned:  # whoever picked them, the answer says what it assumed
+            caveats = [_assumption(picked, catalog)]
     files: list[CatalogFile] = []
     for c in chosen:
         if c.get("doc_ids") and c.get("folder"):  # one file or one folder's files the user picked
@@ -700,8 +739,8 @@ def decide(
                 + (f" (review case {', '.join(cases)})" if cases else "")
                 + ". I can't give a measured value until that review is done."
             )
-            return Decision("halted", text, [f.doc_id for f in files], [], subject)
-    return Decision("go", "", [f.doc_id for f in files], runs, subject)
+            return Decision("halted", text, [f.doc_id for f in files], [], subject, caveats, pinned)
+    return Decision("go", "", [f.doc_id for f in files], runs, subject, caveats, pinned)
 
 
 def catalog_evidence(session: Session, doc_ids: list[str], limit: int = 8) -> ToolResult | None:

@@ -73,6 +73,8 @@ The earlier design forced every subsystem/material/propellant into a closed enum
 
 ### 3.2 What is extracted (per parent node, one Gemini call, JSON schema enforced)
 
+Every field is answered (user, 2026-10-28, `parent.v3`): the schema the model gets lists every field as required. Summary, section kind and questions are always filled; the others are filled whenever the section contains them and are an empty list (or null) only when it contains none. Left optional, Gemini skipped them in 67% of replies (1,958 of 2,935, all with a normal finish).
+
 The prompt receives the parent text in its original language and the document's L1 context. **All free-text outputs are in English** regardless of the source language; `surface` strings are copied verbatim from the source.
 
 | Field | Content | Validation before storage |
@@ -140,13 +142,13 @@ Doc: Test Report 37 — Hot Fire Campaign (test_report, internal, 2024-05-02)
 Test: plan TP37 · run T04 · hardware INJ14
 Type: table · page 11
 Path: 3 Hot Fire Results › 3.2 Chamber Pressure
-About: <first sentence of the file's summary>
+About: <the section's summary, else the first sentence of the file's summary>
 Entities: injector INJ-14, PT-101, C-103, HTP 90%
 ---
 <child text in its original language>
 ```
 
-The header is always English (titles are kept as written, entity names are the English canonicals). This is the "contextual retrieval" pattern: the child alone ("the pressure rose to 12.4 bar") is ambiguous; with the header it is retrievable by "TP37 chamber pressure". The `Test` line holds only the labels the file has; `Type` names the piece and its locator (page, lines, time, cells); `About` is the first sentence of the file's summary (§3.4). Headers are capped at 120 tokens (user 2026-10-26); over the cap the entities go first, then the About line, then the start of the path. For external documents the header includes the origin and publisher (`datasheet, external, Moog`). The header is used three ways: embedded with the piece, indexed by BM25 (`embed_text`, §6), and read by the reranker; its identifiers join the piece's `content_codes`.
+The header is always English (titles are kept as written, entity names are the English canonicals). This is the "contextual retrieval" pattern: the child alone ("the pressure rose to 12.4 bar") is ambiguous; with the header it is retrievable by "TP37 chamber pressure". The `Test` line holds only the labels the file has; `Type` names the piece and its locator (page, lines, time, cells); `About` is the summary of the piece's own section as the model wrote it (the prompt asks for one sentence of at most 25 words so the header keeps it under its 120-token cap; code does not cut it), and the first sentence of the file's summary only where the piece has no enriched section (user, 2026-10-28: before, every piece of a file carried the first section's line). The `Doc` line also carries the file's category: a video's recording kind, else the most common section kind (`doc_kind_llm`), which the file card's Kind line shows too. Headers are capped at 120 tokens (user 2026-10-26); over the cap the entities go first, then the start of the path, then the About line (user, 2026-10-28: the section's description outlasts the top folders of a deep path). For external documents the header includes the origin and publisher (`datasheet, external, Moog`). The header is used three ways: embedded with the piece, indexed by BM25 (`embed_text`, §6), and read by the reranker; its identifiers join the piece's `content_codes`.
 
 ### 4.3 Token counting
 

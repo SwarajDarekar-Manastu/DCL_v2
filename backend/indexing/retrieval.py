@@ -100,6 +100,9 @@ class SearchFilters(BaseModel):
     # exclude nothing: a wrong guess must never hide the answer.
     prefer_doc_kinds: list[str] = Field(default_factory=list)
     prefer_node_types: list[str] = Field(default_factory=list)
+    # The files the catalog step resolved the question to, when the question did not type the label that pins
+    # them (PLAN_query_routing.md step 1): ranked higher, never the only files searched.
+    prefer_doc_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 @dataclass
@@ -402,6 +405,12 @@ def search(
         rankings += [
             dense_leg(session, query_vector, preferred)[0],
             lexical_leg(session, lexical_text, codes, [user_language, "en"], preferred),
+        ]
+    if filters.prefer_doc_ids and not filters.doc_ids:
+        files = build_where(filters.model_copy(update={"doc_ids": filters.prefer_doc_ids}), scope)
+        rankings += [
+            dense_leg(session, query_vector, files)[0],
+            lexical_leg(session, lexical_text, codes, [user_language, "en"], files),
         ]
     scores = rrf(rankings)
     rows = _load_nodes(session, scores)

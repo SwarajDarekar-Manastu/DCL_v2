@@ -23,16 +23,45 @@ def test_telemetry_asks_for_t2_arguments_and_cross_checks_report_tables():
     assert not plan_for(intents=["failure_investigation"]).needs_telemetry_args
 
 
-def test_failure_investigation_searches_reports_figures_and_diagram_neighbors():
+def test_failure_investigation_stands_for_reports_photos_and_diagrams():
     plan = plan_for(intents=["failure_investigation"], hardware_items=["Injector 14"])
     searches = [c.args.filters for c in plan.calls if c.tool == "search_documents"]
-    assert ["test_report", "failure_report"] in [f.prefer_doc_kinds for f in searches]  # ranks them higher
-    assert all(f.doc_kinds == [] for f in searches)  # a guessed kind hides nothing
+    assert searches and all(f.doc_kinds == [] and f.node_types == [] for f in searches)  # hide nothing
     [photos] = [c for c in plan.calls if c.tool == "inspect_visuals"]
-    assert photos.args.kinds == ["hardware_photo"] and photos.args.relook_question is None
     assert "INJ14" in photos.args.components or "Injector 14" in photos.args.components
     [diagram] = [c for c in plan.calls if c.tool == "inspect_code_and_diagrams"]
-    assert diagram.args.mode == "diagram_neighbors" and diagram.args.from_tag == "INJ14"
+    assert diagram.args.mode == "diagram_path" and diagram.args.from_tag == "INJ14"
+
+
+def test_each_route_the_planner_names_prefers_its_own_pieces_and_hides_nothing():
+    def search(routes):
+        plan = plan_for(intents=["fact_lookup"], routes=routes)
+        return [c for c in plan.calls if c.tool == "search_documents"]
+
+    [source] = search(["source"])
+    assert source.args.filters.node_types == [] and source.args.filters.doc_kinds == []
+    assert source.args.filters.prefer_doc_kinds == ["code", "tooling_doc", "config"]
+    assert source.args.filters.prefer_node_types == ["code_symbol", "module_header", "config"]
+    tables, runs = search(["measured"])
+    assert tables.args.scope == Scope.TABLES_ONLY and runs.args.filters.prefer_node_types == ["run_summary"]
+    [meeting] = search(["meeting"])
+    assert meeting.args.filters.prefer_node_types == ["transcript_window"]
+    assert meeting.args.filters.prefer_doc_kinds == ["video_transcript"]
+    [drawings] = search(["diagram"])
+    assert (
+        drawings.args.filters.doc_kinds == [] and "diagram_summary" in drawings.args.filters.prefer_node_types
+    )
+    [library] = search(["library"])
+    assert library.args.filters.test_plan_ids == [] and "standard" in library.args.filters.prefer_doc_kinds
+    visual = plan_for(intents=["fact_lookup"], routes=["visual"]).calls
+    assert [c.tool for c in visual] == ["inspect_visuals", "search_documents"]
+    assert visual[1].args.filters.prefer_node_types == ["photo", "figure", "video_event"]
+
+
+def test_routes_named_by_the_planner_win_over_what_its_intents_stand_for():
+    plan = plan_for(intents=["code_walkthrough"], routes=["document"])
+    assert [c.reason for c in plan.calls] == ["the passages that state it"]
+    assert [c.reason for c in plan_for(intents=["fact_lookup"]).calls] == ["the passages that state it"]
 
 
 def test_internal_only_scope_and_duplicate_calls():
@@ -95,11 +124,27 @@ def test_searches_stay_inside_the_files_the_question_was_resolved_to():
         external_allowed_groups=[],
     )
     doc = "00000000-0000-4000-8000-000000000012"
-    analysis.catalog = {"chosen": {"owner": "TP12", "run": "T04"}, "doc_ids": [doc]}
+    analysis.catalog = {"chosen": {"owner": "TP12", "run": "T04"}, "doc_ids": [doc], "pinned": True}
     plan = build_plan("Peak pressure in TP12 Test 04", analysis)
     filters = {c.reason: c.args.filters for c in plan.calls if c.tool == "search_documents"}
     assert [str(d) for d in filters["the passages that state it"].doc_ids] == [doc]
-    assert filters["the requirement clause"].doc_ids == []  # a standard is never inside the test's files
+    assert filters["the library: standards, datasheets and papers"].doc_ids == []  # never in the test's files
+
+
+def test_files_the_question_did_not_name_are_only_ranked_higher():
+    analysis = resolve(
+        QueryAnalysis(intents=["fact_lookup", "visual_lookup"]),
+        AliasIndex(),
+        user_groups=[],
+        external_allowed_groups=[],
+    )
+    doc = "00000000-0000-4000-8000-000000000012"
+    analysis.catalog = {"chosen": {"owner": "TP12", "run": None}, "doc_ids": [doc], "pinned": False}
+    plan = build_plan("What does the test-plan creator script write?", analysis)
+    [search] = [c.args.filters for c in plan.calls if c.reason == "the passages that state it"]
+    assert (search.doc_ids, [str(d) for d in search.prefer_doc_ids]) == ([], [doc])
+    [visual] = [c.args for c in plan.calls if c.tool == "inspect_visuals"]
+    assert (visual.doc_ids, [str(d) for d in visual.prefer_doc_ids]) == ([], [doc])
 
 
 def test_photos_ask_for_hardware_photos_only_and_no_kind_asks_for_all():

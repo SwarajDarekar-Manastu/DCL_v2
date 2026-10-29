@@ -157,7 +157,7 @@ def test_verified_answer_maps_evidence_ids_to_citations():
         ],
     )
     out = asyncio.run(answer(client, "steady state Pc of TP07 T04?", {}, [SEARCH, TELEMETRY]))
-    assert out.passes == 1 and out.numeric_mismatches == []
+    assert out.passes == 1
     assert [c.label for c in out.citations] == ["run TP07_T04", "Test Report 07, p. 8"]
     assert out.summary() == {"claims": 2, "entailed": 2, "contradicted": 0, "not_supported": 0}
     assert str(client.calls[0][2]["thinking"]) == "high"
@@ -165,11 +165,11 @@ def test_verified_answer_maps_evidence_ids_to_citations():
 
 def test_a_rounded_number_is_repaired_alone_and_removed_if_it_persists():
     rounded = [{"text": "Steady-state mean 12 bar(a).", "kind": "numeric", "evidence_ids": ["E3"]}]
-    entailed = {"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "ok"}]}
+    unsupported = {"verdicts": [{"claim_index": 0, "verdict": "not_supported", "reason": "12.41, not 12"}]}
     client = Client(
         synthesis=[synthesis(rounded, "Steady-state mean 12 bar(a). [E3]")],
         repair=[{"claims": [{"index": 0, "text": "Steady-state mean 12 bar(a).", "evidence_ids": ["E3"]}]}],
-        verify=[entailed] * 2,
+        verify=[unsupported] * 2,
     )
     out = asyncio.run(answer(client, "q", {}, [TELEMETRY]))
     assert out.passes == 2
@@ -231,12 +231,19 @@ def test_a_failed_or_cut_repair_removes_the_claim_instead_of_failing_the_answer(
     from backend.llm_engine.gemini_types import StructuredOutputError
 
     rounded = [{"text": "Steady-state mean 12 bar(a).", "kind": "numeric", "evidence_ids": ["E3"]}]
-    entailed = {"verdicts": [{"claim_index": 0, "verdict": "entailed", "reason": "ok"}]}
+    unsupported = {"verdicts": [{"claim_index": 0, "verdict": "not_supported", "reason": "12.41, not 12"}]}
     client = Client(
         synthesis=[synthesis(rounded, "Steady-state mean 12 bar(a). [E3]")],
         repair=[StructuredOutputError("cut at max_output_tokens", raw_text="{")],
-        verify=[entailed],
+        verify=[unsupported],
     )
     out = asyncio.run(answer(client, "q", {}, [TELEMETRY]))
     assert out.claims == [] and "12 bar(a)" not in out.markdown
     assert client.calls[2][2]["max_output_tokens"] == 8192
+
+
+def test_the_planner_must_always_answer_which_routes_hold_the_answer():
+    from backend.llm_engine.engine.analysis import QueryAnalysis
+
+    assert "routes" in QueryAnalysis.model_json_schema()["required"]
+    assert QueryAnalysis(intents=["fact_lookup"]).routes == []  # older replies still parse

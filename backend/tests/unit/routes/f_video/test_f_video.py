@@ -243,6 +243,42 @@ def test_workshop_recording_becomes_sections_and_windows(tmp_path, fake_vision, 
     assert " ".join(w.content for w in windows_).split() == [w.text for w in full]
 
 
+@needs_ffmpeg
+@pytest.mark.parametrize(
+    ("kind", "doc_kind"),
+    [("meeting", DocKind.VIDEO_TRANSCRIPT), ("inspection", DocKind.VIDEO_TIMELINE)],
+)
+def test_the_models_one_look_picks_the_reading(tmp_path, fake_vision, memory_store, kind, doc_kind):
+    data = clip(tmp_path, [("blue", 700)], audio=True, fps=1)
+    full = speech(700)
+
+    def transcribe(audio, start_s, end_s):
+        return [w for w in full if start_s <= w.start_s < end_s]
+
+    vision = fake_vision(
+        video_timeline={"recording_kind": kind, "summary": "What the recording shows.", "events": []},
+        describe_slide={"summary": "A slide."},
+    )
+    doc = process_video(
+        data,
+        blob_sha256=SHA,
+        file_name="recording.mp4",
+        folder=WORKSHOP,
+        vision=vision,
+        put_asset=memory_store("s3://dcl-assets/"),
+        transcribe=transcribe,
+    )
+    (look,) = [kw for name, kw in vision.calls if name == "video_timeline"]
+    assert look["first_minute_speech"].split() == [w.text for w in full if w.start_s < 60]
+    assert doc.document.doc_kind is doc_kind
+    assert (doc.document.catalog["recording_kind"], doc.document.summary) == (
+        kind,
+        "What the recording shows.",
+    )
+    transcript = [n for n in doc.nodes if n.node_type is NodeType.TRANSCRIPT_WINDOW]
+    assert bool(transcript) is (kind == "meeting")
+
+
 def big_clip(tmp_path: Path, segments: list[tuple[str, float]]) -> bytes:
     """1920x1080 at 60 fps with heavy noise and an audio tone: a phone-sized source well above 2 Mbit/s."""
     out = tmp_path / "big.mov"

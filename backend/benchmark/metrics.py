@@ -72,6 +72,8 @@ class Observed:
     )  # every document a tool returned (trace `retrieved`)
     expected_docs: set[str] = field(default_factory=set)  # indexed documents matching the expected citations
     missing_documents: list[str] = field(default_factory=list)  # expected citations with no indexed document
+    doc_routes: dict[str, str] = field(default_factory=dict)  # answer route of each cited or retrieved file
+    routes_chosen: list[str] = field(default_factory=list)  # the planner's routes, most likely first
 
 
 # ---------------------------------------------------------------- numbers
@@ -267,6 +269,22 @@ def behaviour(expected: list[ExpectedBehavior], observed: Observed) -> dict[str,
 JUDGED_BEHAVIOURS = frozenset({ExpectedBehavior.MUST_PRESENT_BOTH_CONFLICTING_VALUES})
 
 
+def route_hit(expected: list[str], observed: Observed) -> dict[str, Any]:
+    """Whether the answer cited a file of an expected answer route (PLAN_query_routing.md step 0)."""
+    cited = sorted(
+        {observed.doc_routes[c.doc_id] for c in observed.citations if c.doc_id in observed.doc_routes}
+    )
+    retrieved = sorted({observed.doc_routes[d] for d in observed.retrieved_docs if d in observed.doc_routes})
+    return {
+        "expected": [str(r) for r in expected],
+        "chosen": observed.routes_chosen,
+        "chosen_ok": bool({str(r) for r in expected} & set(observed.routes_chosen)),
+        "cited": cited,
+        "retrieved": retrieved,
+        "passed": bool({str(r) for r in expected} & set(cited)),
+    }
+
+
 def needs_judge(category: str, spec: CaseSpec) -> list[str]:
     """What the Gemini judge decides here (file 08 §5.4: behaviour checks and provenance labeling)."""
     asks = [str(b) for b in spec.expected_behavior if b in JUDGED_BEHAVIOURS]
@@ -317,6 +335,8 @@ def score_case(category: str, spec: CaseSpec, observed: Observed) -> dict[str, A
         "recall_at_8": retrieval_recall(gold, observed.retrieved_8),
         "rerank_margin": observed.rerank_margin,
     }
+    if spec.expected_routes:  # reported next to the checks, not one of them
+        metrics["route"] = route_hit(spec.expected_routes, observed)
     metrics["latency_ms"] = observed.latency_ms
     if observed.missing_documents:
         metrics["missing_documents"] = observed.missing_documents
@@ -399,6 +419,15 @@ def aggregate(results: list[dict], total: int) -> dict[str, Any]:
     for r in results:
         if r["metrics"].get("failure_class"):
             failures[r["metrics"]["failure_class"]] = failures.get(r["metrics"]["failure_class"], 0) + 1
+    routes: dict[str, dict[str, int]] = {}
+    for r in results:
+        route = r["metrics"].get("route")
+        for name in route["expected"] if route else []:
+            bucket = routes.setdefault(name, {"cases": 0, "passed": 0, "route_hit": 0, "route_chosen": 0})
+            bucket["cases"] += 1
+            bucket["passed"] += bool(r["passed"])
+            bucket["route_hit"] += bool(route["passed"])
+            bucket["route_chosen"] += bool(route.get("chosen_ok"))
     costs = [r["cost"] for r in results if r.get("cost") is not None]
     return {
         "cases_total": total,
@@ -414,4 +443,6 @@ def aggregate(results: list[dict], total: int) -> dict[str, Any]:
         "cost_total": round(sum(costs), 6) if costs else None,
         "failure_classes": failures,
         "by_category": categories,
+        "by_route": routes,
+        "clarifications": sum(r["metrics"].get("mode") == "clarification" for r in results),
     }

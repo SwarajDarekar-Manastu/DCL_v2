@@ -51,6 +51,7 @@ Input: the user message, the last 6 turns summarized, the conversation state, an
 | Field | Values / meaning |
 |-------|------------------|
 | `intents[]` | multi-label from: `telemetry_metric`, `run_comparison`, `fact_lookup`, `procedure_lookup`, `failure_investigation`, `standards_compliance`, `code_walkthrough`, `diagram_traversal`, `design_synthesis`, `document_summary`, `navigational` ("what do we have on…"), `physics_calc`, `visual_lookup`, `chitchat_or_out_of_scope` |
+| `routes[]` (required, 0–3, user 2026-10-29, `query_analysis.v4`) | the kinds of data that hold the answer, most likely first: `document`, `library`, `table`, `measured`, `source`, `visual`, `meeting`, `diagram`, `archive`, each described in general terms in the prompt; the catalog's file lines show each file's route (`answer_routes.of_document`). Each route runs its own search method (§5). Intents now add only what changes how the answer is built (telemetry statistics, a calculation, a whole-document summary, a design synthesis, a list of what exists); a search-only intent from an older reply or a Skill hint stands for its playbook's routes (`playbooks.INTENT_ROUTES`) |
 | `entities[]` | `{type, surface}` resolved through `entity_aliases` → canonical ids (so "C103" → `C-103`) |
 | `test_plan_ids[]`, `test_run_ids[]`, `hardware_items[]` | normalized (`TP7` → `TP07`) via the same regexes as ingestion |
 | `filters` | `doc_kinds[]`, `date_from/to`, `standards[]`, `include_superseded`, `node_types[]` |
@@ -135,6 +136,8 @@ Replaced by the catalog step (§3), which runs before the analysis instead of be
 ## 5. Playbooks (Skills) — how each question type is executed
 
 Server-side plan templates; the same content is published as Open WebUI **Skills** (markdown) so the model is primed with the procedure when a user toggles it, and so engineers can read and edit the playbook.
+
+Since 2026-10-29 (`docs/sessions/PLAN_route_retrieval.md`) the plan is built per route: `playbooks.ROUTE_METHODS` gives each route its search, which prefers the route's own kinds of files and pieces and excludes nothing (source: code, tooling and config files and every one of their pieces; measured: run summaries plus the telemetry tool; meeting: transcript windows; diagram: drawing pieces plus the graph tool; library: Library kinds, outside any test plan). The question types below are what the Skills describe; each maps to its routes.
 
 | Question type | Steps | Tools |
 |---------------|-------|-------|

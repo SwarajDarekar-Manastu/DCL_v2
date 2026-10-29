@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.dispatcher.contract import AnchorError, parse_anchor
+from backend.llm_engine.engine.answer_routes import AnswerRoute
 from backend.postgres.enums import (
     AuditEntityType,
     BenchmarkCaseStatus,
@@ -96,6 +97,8 @@ class CaseSpec(_Strict):
     retrieval_gold_anchors: list[GoldAnchor] = []
     expected_behavior: list[ExpectedBehavior] = []
     clarification_answer: str | None = None
+    # the answer routes the question is about (PLAN_query_routing.md step 0); reported, not a pass check
+    expected_routes: list[AnswerRoute] = []
 
 
 # ---------------------------------------------------------------- API models

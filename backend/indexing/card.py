@@ -63,8 +63,11 @@ def card_text(
     summary: str | None,
     entities: list[str],
     contents: list[str],
+    category: str | None = None,
 ) -> str:
     kind = [str(fields.doc_kind)]
+    if category and category != str(fields.doc_kind):
+        kind.append(category.replace("_", " "))
     if fields.source_origin:
         kind.append("external" if fields.source_origin == SourceOrigin.EXTERNAL_KEPT else "internal")
     if fields.publisher:
