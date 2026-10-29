@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import auth, ops
+from backend.api.file_steps import Jobs, Step, StepCount
 
 ADMINS = "group-admins"
 REVIEWERS = "group-reviewers"
@@ -105,6 +106,9 @@ def summary_client(auth_config, key_resolver, monkeypatch):
     monkeypatch.setattr(ops, "_documents_by_status", lambda s: {"ACTIVE": 7, "HALTED": 22})
     monkeypatch.setattr(ops, "_open_flags", lambda s: {"HARD": 176, "SOFT": 84})
     monkeypatch.setattr(ops, "_last_runs", lambda s: [])
+    monkeypatch.setattr(
+        ops, "count_steps", lambda s, jobs: [StepCount(step=Step.IN_LINE, count=len(jobs.held))]
+    )
 
     def no_ledger(s):
         raise LookupError("llm_calls is not available yet (S1 migration 0012)")
@@ -116,6 +120,9 @@ def summary_client(auth_config, key_resolver, monkeypatch):
     app.dependency_overrides[auth.get_key_resolver] = lambda: key_resolver
     app.dependency_overrides[get_session] = lambda: FakeSession()
     app.dependency_overrides[ops.get_queue_reader] = lambda: lambda: {"io_light": 3, "cpu_parse": 0}
+    app.dependency_overrides[ops.get_jobs_reader] = lambda: (
+        lambda waiting: Jobs(held={"d": "cpu_parse"}, waiting={})
+    )
     return app, TestClient(app)
 
 
@@ -126,6 +133,7 @@ def test_summary_is_for_any_signed_in_user_and_reports_each_part(summary_client,
     assert body["queues"] == [{"queue": "io_light", "waiting": 3}, {"queue": "cpu_parse", "waiting": 0}]
     assert body["documents_by_status"] == {"ACTIVE": 7, "HALTED": 22}
     assert body["open_flags"] == {"HARD": 176, "SOFT": 84}
+    assert body["steps"] == [{"step": "in_line", "count": 1}]
     assert body["llm_today"] is None
     assert body["notes"] == {"llm_today": "llm_calls is not available yet (S1 migration 0012)"}
 

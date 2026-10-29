@@ -65,6 +65,12 @@ Each screen is built from the reviewer's job, with no shared format. What is sha
   - a late commit cannot reactivate a replaced version.
   
   Unit-tested; no live edit has happened yet.
+- **Large files in turns** (user request: "if the queue works, the time limit should not matter"):
+  - A1 model calls (page checks, whole-page reads, figures, table checks) and enrichment run 8 at a time (`common/parallel.py`).
+  - An A1 task works in 30-minute turns; a file not done keeps its work (Docling runs of 100 pages, page renders, cached replies) and goes to the back of `cpu_parse` (`tasks_process.route_a1`).
+  - An unusable table reply keeps TableFormer's table and flags it, instead of failing the file.
+  - Atlas (420 pages, 246 figures): failed at the 60-minute limit with 53 figures read; now ACTIVE in 40 minutes (route 25, indexing 14), every figure read, $2.65.
+- **Ops page:** "Files by step" with a file list per step; the benchmark sweep no longer piles up while its worker is stopped.
 - **Still open:**
   - R3 (flags closed silently by rebuilds; decisions whose target is gone);
   - R4 ("decision newer than the last index" rebuild);
@@ -88,7 +94,6 @@ Re-runs start with a pilot of 3–5 files: HTRCHAR, PreHeat, one TP07 telemetry 
 ## Parked: found by the route audit, not part of this work
 Each is real; none blocks the review. To be decided later.
 - A whole-page read can fail a document whose references were attached to a removed node ([structure.py:229](../../backend/routes/a1_office/structure.py#L229) → [contract.py:918](../../backend/dispatcher/contract.py#L918)).
-- One unusable model reply fails a whole file (Atlas, 420 pages, failed on page 78).
 - A gateway outage during a whole-page read silently keeps the poor OCR ([route.py:268](../../backend/routes/a1_office/route.py#L268)).
 - Numbers in tables and figures never become numeric facts: 445 tables and 632 figures, 0 facts.
 - Telemetry:

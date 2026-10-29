@@ -4,16 +4,19 @@
 on ``cpu_parse``; ``dcl.process.reconcile`` sends again the files a decision should have moved on and did not
 (backend/dispatcher/reconcile.py)."""
 
+import time
 import uuid
 from collections.abc import Callable
 from functools import lru_cache
 
 from celery import current_task
 from celery.exceptions import SoftTimeLimitExceeded
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from backend.celery_redis.app import app
 from backend.celery_redis.queues import POOLS, Queue
+from backend.common.parallel import TurnOver
 from backend.common.telemetry import METRICS
 from backend.config import get_settings
 from backend.dispatcher.reconcile import stalled
@@ -83,7 +86,8 @@ TELEMETRY_STREAM = str(Queue.TELEMETRY_STREAM)
 # After the last retry the document is FAILED (file 02 §7: "PROCESSING -> FAILED: exception after retries").
 RETRYABLE = (ConnectionError, TimeoutError, ModelServerUnavailable, BudgetExhausted, GatewayUnavailable)
 RETRY_BACKOFF_S = 30
-MAX_CHECKPOINTS = 12  # Route F: twelve more task runs of up to an hour each for one recording
+MAX_CHECKPOINTS = 12  # Route F: twelve more task runs of up to an hour each for one recording; A1: more turns
+A1_TURN_S = 30 * 60  # file 03 time budget for one A1 turn; the queue's hard limits stay as a safety net
 RETRY_BACKOFF_MAX_S = 600
 
 
@@ -151,13 +155,14 @@ def _run(
     checkpoint: Callable[[], None] | None = None,
 ) -> dict[str, object]:
     """One document through a route runner; transient errors retry, anything else marks it FAILED. A route
-    that saves its progress (``checkpoint``) is sent again at its soft time limit (file 03 time budget)."""
+    that saves its progress (``checkpoint``) is sent again when its turn ends or at its soft time limit
+    (file 03 time budget)."""
     minio = client_from_settings(get_settings())
     with Session(_engine(), expire_on_commit=False) as session:
         try:
             outcome = process(session, minio, uuid.UUID(doc_id), _indexer(minio))
         except Exception as exc:
-            if checkpoint is not None and isinstance(exc, SoftTimeLimitExceeded):
+            if checkpoint is not None and isinstance(exc, (SoftTimeLimitExceeded, TurnOver)):
                 session.rollback()  # the document stays PROCESSING; the next run reads the saved parts
                 checkpoint()
                 return {"doc_id": doc_id, "status": "continued"}
@@ -184,12 +189,36 @@ def resume_staged(doc_id: str) -> dict[str, object]:
     return _run(doc_id, resume)
 
 
+def _touch(doc_id: str) -> None:
+    """A document going on in another turn is not stuck: the reconciler resends only after RESEND_AFTER."""
+    with Session(_engine()) as session:
+        session.execute(
+            update(Document).where(Document.doc_id == uuid.UUID(doc_id)).values(updated_at=func.now())
+        )
+        session.commit()
+
+
 @_route_task("dcl.process.route_a1", Queue.CPU_PARSE)
-def route_a1(doc_id: str) -> dict[str, object]:
-    """Route A1 (PDF, Word family, slides) through S2's ``process_office``."""
+def route_a1(doc_id: str, turn: int = 0) -> dict[str, object]:
+    """Route A1 (PDF, Word family, slides) through S2's ``process_office``, in turns of ``A1_TURN_S``
+    (common/parallel.py): a file not done by then keeps what it finished and goes to the back of the queue,
+    so other files are processed in between. After ``MAX_CHECKPOINTS`` turns the last one runs to the end."""
     from backend.dispatcher.office_run import process_a1_document
 
-    return _run(doc_id, lambda s, m, d, i: process_a1_document(s, m, d, _a1_build(), indexer=i))
+    last = turn >= MAX_CHECKPOINTS
+    deadline = None if last else time.monotonic() + A1_TURN_S
+
+    def again() -> None:
+        _touch(doc_id)
+        app.send_task(
+            "dcl.process.route_a1", args=[doc_id], kwargs={"turn": turn + 1}, queue=str(Queue.CPU_PARSE)
+        )
+
+    return _run(
+        doc_id,
+        lambda s, m, d, i: process_a1_document(s, m, d, _a1_build(), indexer=i, deadline=deadline, turn=turn),
+        checkpoint=None if last else again,
+    )
 
 
 @_route_task("dcl.process.route_a2", Queue.CPU_PARSE)

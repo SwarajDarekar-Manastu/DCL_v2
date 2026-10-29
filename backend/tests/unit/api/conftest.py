@@ -6,6 +6,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from backend.api.auth import AuthConfig
+from backend.tests.unit.sync.conftest import engine, session  # noqa: F401 (DB tests: disposable PostgreSQL)
 
 TENANT = "11111111-1111-1111-1111-111111111111"
 AUDIENCE = "api://dcl-console-api"

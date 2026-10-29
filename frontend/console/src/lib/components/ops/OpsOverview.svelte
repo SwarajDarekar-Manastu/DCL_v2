@@ -1,8 +1,11 @@
 <script lang="ts">
-	// The OpsPage counters of file 08 §4.2 that exist today: queue depths, documents by status, open flags,
-	// the latest run per benchmark suite, model calls and cost today. A part the API could not read shows its note.
-	import type { OpsSummary } from '$lib/api_endpoint';
+	// The OpsPage counters of file 08 §4.2 that exist today: files per pipeline step (a step opens its files),
+	// queue depths, documents by status, open flags, the latest run per benchmark suite, model calls and cost
+	// today. A part the API could not read shows its note.
+	import type { OpsSummary, Step } from '$lib/api_endpoint';
 	import { runHref } from '$lib/components/benchmark/links';
+	import StepFiles from './StepFiles.svelte';
+	import { STEP_GROUPS, STEP_HINT, STEP_LABEL } from './file_steps';
 
 	interface Props {
 		summary: OpsSummary;
@@ -19,20 +22,38 @@
 			return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
 		})
 	);
-	let busy = $derived((summary.queues ?? []).reduce((n, q) => n + q.waiting, 0));
+	let counts = $derived(new Map((summary.steps ?? []).map((s) => [s.step, s.count])));
+	let busy = $derived((summary.queues ?? []).filter((q) => q.waiting > 0));
+	let opened = $state<Step | null>(null);
 </script>
 
 <div class="grid gap-4 lg:grid-cols-2">
-	<section class="panel" aria-label="Queues">
-		<div class="panel-header"><h2 class="panel-title">Queues <span class="text-muted-foreground font-normal">{summary.queues ? `· ${int(busy)} waiting` : ''}</span></h2></div>
-		{#if summary.queues}
-			<ul class="m-0 grid list-none grid-cols-2 gap-x-6 gap-y-1 p-4 text-sm sm:grid-cols-3">
-				{#each summary.queues as q (q.queue)}
-					<li class="flex justify-between gap-2"><span class="font-mono text-xs">{q.queue}</span><strong class="num font-mono {q.waiting ? '' : 'text-muted-foreground font-normal'}">{int(q.waiting)}</strong></li>
+	<section class="panel" aria-label="Files by step">
+		<div class="panel-header"><h2 class="panel-title">Files by step</h2></div>
+		{#if summary.steps}
+			<div class="grid gap-x-6 gap-y-3 p-4 sm:grid-cols-2">
+				{#each STEP_GROUPS as group (group.title)}
+					<div>
+						<h3 class="text-muted-foreground m-0 mb-1 text-xs font-medium">{group.title}</h3>
+						<ul class="m-0 grid list-none gap-0.5 p-0 text-sm">
+							{#each group.steps as step (step)}
+								{@const n = counts.get(step) ?? 0}
+								<li>
+									<button type="button" class="hover:bg-muted flex w-full cursor-pointer justify-between gap-2 rounded px-1.5 py-0.5 text-left" title={STEP_HINT[step]} onclick={() => (opened = step)}>
+										<span class={step === 'failed' && n ? 'text-hard' : ''}>{STEP_LABEL[step]}</span><strong class="num font-mono {n ? '' : 'text-muted-foreground font-normal'}">{int(n)}</strong>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					</div>
 				{/each}
-			</ul>
-		{:else}<p class="text-muted-foreground m-0 p-4 text-sm">{summary.notes.queues ?? 'unavailable'}</p>{/if}
+			</div>
+		{:else}<p class="text-muted-foreground m-0 p-4 text-sm">{summary.notes.steps ?? 'unavailable'}</p>{/if}
+		<p class="text-muted-foreground m-0 border-t px-4 py-2 text-xs">
+			Jobs in queues: {#if !summary.queues}{summary.notes.queues ?? 'unavailable'}{:else if busy.length}{busy.map((q) => `${q.queue} ${int(q.waiting)}`).join(' · ')}{:else}none waiting{/if}
+		</p>
 	</section>
+	<StepFiles bind:step={opened} />
 
 	<section class="panel" aria-label="Review">
 		<div class="panel-header"><h2 class="panel-title">Open flags</h2></div>

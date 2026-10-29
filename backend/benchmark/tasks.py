@@ -3,9 +3,12 @@ task; one task per case).
 
 - `dcl.benchmark.start(run_id)`: claim a QUEUED run and enqueue one `dcl.benchmark.case` per pending case.
 - `dcl.benchmark.case(run_id, case_id)`: answer, score and record one case; the last one completes the run.
-- `dcl.benchmark.sweep()` (beat, every minute): start QUEUED runs, and re-enqueue the missing cases of a
+- `dcl.benchmark.sweep()`: start QUEUED runs, and re-enqueue the missing cases of a
   RUNNING run whose heartbeat (a Redis key refreshed at start and after every case, expiring after
   STALE_AFTER) is gone, i.e. a lost worker; results are per case, so a repeat only redoes cases without one.
+- `dcl.benchmark.tick()` (beat, every minute, on io_light): sends one sweep when nothing waits on the
+  benchmark queue. Redis keeps no expiry on queued messages, so beat sending the sweep itself left one per
+  minute behind while the worker was stopped (1,312 after 22 hours, 2026-10-27).
 
 The engine's clients are created once per worker process and hold asyncio objects (the gateway client's
 connection pool and rate limiter) bound to the loop they were first used on. The io_light pool runs tasks
@@ -29,6 +32,7 @@ from backend.postgres.enums import BenchmarkRunStatus
 from backend.postgres.models import BenchmarkRun
 
 BENCHMARK = str(Queue.BENCHMARK)
+IO_LIGHT = str(Queue.IO_LIGHT)
 STALE_AFTER = timedelta(minutes=30)  # longer than one case may take (hard limit 1000 s)
 START_LOCK = "dcl:benchmark:start:{}"
 START_LOCK_S = 600
@@ -106,3 +110,11 @@ def sweep() -> dict[str, int]:
         if not pending:
             runner.complete_if_done(run_id, deps)
     return {"started": started, "resumed": resumed}
+
+
+@app.task(name="dcl.benchmark.tick", queue=IO_LIGHT)
+def tick() -> bool:
+    if broker().llen(BENCHMARK):
+        return False
+    sweep.delay()
+    return True

@@ -14,10 +14,12 @@ import html as html_lib
 import re
 from dataclasses import dataclass, field
 
+from backend.common.parallel import map_parallel
 from backend.common.unit_reader import read_unit
 from backend.dispatcher.contract import Flag, FlagAnchor, LowConfidenceEvidence, ProcessedNode
 from backend.llm_engine.gemini_types import Image
 from backend.postgres.enums import FlagSeverity, FlagType, NodeSource, NodeType
+from backend.routes.a1_office.figures import readable
 from backend.routes.a1_office.preflight import render_crop
 
 ROW = re.compile(r"<tr\b.*?</tr>", re.DOTALL | re.IGNORECASE)
@@ -135,7 +137,35 @@ def check_tables(
     context: str,
     doc_id: str | None,
     cloud_allowed: bool,
+    deadline: float | None = None,
 ) -> TableQA:
+    """The tables that look wrong are read again by the model, side by side (common/parallel.py; past
+    `deadline` the task's turn ends). A reply that does not fit the schema keeps TableFormer's table, flagged
+    for a person."""
+
+    def doubtful(node: ProcessedNode) -> bool:
+        return (
+            node.node_type == NodeType.TABLE
+            and not node.metadata.get("from_image")
+            and cloud_allowed
+            and bool(node.bboxes)
+            and bool(qa_reasons(node.content, page_ocr.get(node.page_no or 0)))
+        )
+
+    def read(node: ProcessedNode):
+        return readable(
+            vision.read_table_image,
+            Image(render_crop(pdf_bytes, node.bboxes[0]), "image/png"),
+            caption=node.metadata.get("caption"),
+            context=context,
+            doc_id=doc_id,
+            anchor=f"page:{node.page_no}:",
+        )
+
+    to_read = [n for n in nodes if doubtful(n)]
+    readings = dict(
+        zip((n.ref for n in to_read), map_parallel(read, to_read, deadline=deadline), strict=True)
+    )
     out: list[ProcessedNode] = []
     result = TableQA(nodes=out)
     for node in nodes:
@@ -145,18 +175,29 @@ def check_tables(
         rows = parse_cells(node.content)
         metadata = {**node.metadata, "units_by_column": units_by_column(rows)}
         reasons = qa_reasons(node.content, page_ocr.get(node.page_no or 0))
-        if not reasons or not cloud_allowed or not node.bboxes:
+        if node.ref not in readings:
             out.append(node.model_copy(update={"metadata": {**metadata, "qa": reasons}}))
             continue
         result.checked += 1
         box = node.bboxes[0]
-        output = vision.read_table_image(
-            Image(render_crop(pdf_bytes, box), "image/png"),
-            caption=node.metadata.get("caption"),
-            context=context,
-            doc_id=doc_id,
-            anchor=f"page:{node.page_no}:",
-        )
+        output = readings[node.ref]
+        if output is None:
+            out.append(
+                node.model_copy(
+                    update={
+                        "metadata": {**metadata, "qa": reasons, "chosen": "tableformer", "needs_review": True}
+                    }
+                )
+            )
+            result.flags.append(
+                Flag(
+                    flag_type=FlagType.LOW_CONFIDENCE_EXTRACTION,
+                    severity=FlagSeverity.SOFT,
+                    anchor=FlagAnchor(page=node.page_no, bbox=box.model_dump(exclude={"page_no"})),
+                    evidence=LowConfidenceEvidence(table_a_html=node.content),
+                )
+            )
+            continue
         vlm = output.reading
         same_shape, share = agreement(node.content, vlm.html_table)
         page_score = page_ocr.get(node.page_no or 0)

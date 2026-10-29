@@ -489,6 +489,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ops/steps/{step}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Step Files */
+        get: operations["step_files_ops_steps__step__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ops/summary": {
         parameters: {
             query?: never;
@@ -2783,6 +2800,8 @@ export interface components {
             } | null;
             /** Queues */
             queues: components["schemas"]["QueueDepth"][] | null;
+            /** Steps */
+            steps: components["schemas"]["StepCount"][] | null;
         };
         /**
          * PageEntry
@@ -3842,6 +3861,40 @@ export interface components {
              * Format: uuid
              */
             entity_id: string;
+        };
+        /**
+         * Step
+         * @enum {string}
+         */
+        Step: "to_download" | "held" | "skipped" | "outside_scope" | "waiting" | "in_line" | "processing" | "review" | "failed" | "in_search" | "taken_out";
+        /** StepCount */
+        StepCount: {
+            /** Count */
+            count: number;
+            step: components["schemas"]["Step"];
+        };
+        /** StepFile */
+        StepFile: {
+            /** Detail */
+            detail: string | null;
+            /** Doc Id */
+            doc_id: string | null;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string | null;
+            /** Route */
+            route: string | null;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** StepFiles */
+        StepFiles: {
+            /** Files */
+            files: components["schemas"]["StepFile"][];
+            step: components["schemas"]["Step"];
+            /** Total */
+            total: number;
         };
         /**
          * Suggestion
@@ -5425,6 +5478,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LlmUsage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    step_files_ops_steps__step__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                step: components["schemas"]["Step"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepFiles"];
                 };
             };
             /** @description Validation Error */

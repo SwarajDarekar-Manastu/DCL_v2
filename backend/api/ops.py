@@ -1,8 +1,9 @@
 """Ops endpoints for the Console OpsPage (file 08 §4.2, §4.4; file 10 §4). Owner: S3.
 
 `GET /ops/summary` (viewer): Celery queue depths (Redis list lengths, as S4's `celery_queue_depth` gauge),
-documents by status, open HARD/SOFT flags, the latest run per benchmark suite, and tokens/cost today from
-`llm_calls` once S1's model exists (Lead ruling 2026-10-23: read-only reads of S1's tables, as viewer.py).
+files per pipeline step (`file_steps.py`; `GET /ops/steps/{step}` lists one step's files), documents by
+status, open HARD/SOFT flags, the latest run per benchmark suite, and tokens/cost today from `llm_calls`
+once S1's model exists (Lead ruling 2026-10-23: read-only reads of S1's tables, as viewer.py).
 Each part is read on its own; a part that cannot be read is null with a note, never a failed page.
 
 `GET /ops/failed-tasks` lists the Celery dead-letter list newest first, read through S4's
@@ -22,6 +23,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.api.auth import ConsoleRole, ConsoleUser, require_role
+from backend.api.file_steps import (
+    JobsReader,
+    Step,
+    StepCount,
+    StepFiles,
+    count_steps,
+    get_jobs_reader,
+    list_step,
+)
 from backend.postgres.session import get_session
 
 log = logging.getLogger(__name__)
@@ -109,6 +119,7 @@ class LlmToday(BaseModel):
 
 class OpsSummary(BaseModel):
     queues: list[QueueDepth] | None
+    steps: list[StepCount] | None
     documents_by_status: dict[str, int] | None
     open_flags: dict[str, int] | None
     last_runs: list[SuiteRun] | None
@@ -342,11 +353,13 @@ def summary(
     _: Annotated[ConsoleUser, Depends(require_role(ConsoleRole.VIEWER))],
     session: Annotated[Session, Depends(get_session)],
     read_queues: Annotated[QueueReader, Depends(get_queue_reader)],
+    read_jobs: Annotated[JobsReader, Depends(get_jobs_reader)],
 ) -> OpsSummary:
     notes: dict[str, str] = {}
     depths = _part(notes, "queues", read_queues)
     return OpsSummary(
         queues=[QueueDepth(queue=q, waiting=n) for q, n in depths.items()] if depths is not None else None,
+        steps=_part(notes, "steps", lambda: count_steps(session, read_jobs(False)), session),
         documents_by_status=_part(
             notes, "documents_by_status", lambda: _documents_by_status(session), session
         ),
@@ -355,3 +368,19 @@ def summary(
         llm_today=_part(notes, "llm_today", lambda: _llm_today(session), session),
         notes=notes,
     )
+
+
+@router.get("/steps/{step}", response_model=StepFiles)
+def step_files(
+    step: Step,
+    _: Annotated[ConsoleUser, Depends(require_role(ConsoleRole.VIEWER))],
+    session: Annotated[Session, Depends(get_session)],
+    read_jobs: Annotated[JobsReader, Depends(get_jobs_reader)],
+    limit: Annotated[int, Query(ge=1, le=1000)] = 500,
+) -> StepFiles:
+    try:
+        jobs = read_jobs(step == Step.IN_LINE)
+    except Exception as exc:  # Redis down: the list says so instead of a 500
+        log.warning("job list unavailable: %s", exc)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "the job list is unavailable") from exc
+    return list_step(session, step, jobs, limit)

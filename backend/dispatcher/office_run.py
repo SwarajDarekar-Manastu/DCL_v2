@@ -36,16 +36,33 @@ def default_build() -> BuildOffice:
 
 
 def process_a1_document(
-    session: Session, minio: Minio, doc_id: uuid.UUID, build: BuildOffice, indexer: Indexer | None = None
+    session: Session,
+    minio: Minio,
+    doc_id: uuid.UUID,
+    build: BuildOffice,
+    indexer: Indexer | None = None,
+    deadline: float | None = None,
+    turn: int = 0,
 ) -> Outcome:
+    """`deadline`: the end of the task's turn (common/parallel.py). The route keeps what it finished under
+    the CIR's `work/`, so the next turn goes on from there; the first turn starts it empty and the route's
+    end removes it, so a later run of the file reads it afresh."""
+    from backend.routes.a1_office.convert import WORK, convert_run, saved_runs
     from backend.routes.a1_office.route import PARSER_VERSION, Stores
 
     def a1(ctx: RunContext) -> ProcessedDocument:
-        return build(
+        def get_cir(key: str) -> bytes | None:
+            return ctx.cir.get(ctx.prefix + key)
+
+        if turn == 0:
+            ctx.cir.delete_prefix(ctx.prefix + WORK)
+        processed = build(
             ctx.data,
             session=ctx.session,
             file=file_metadata(ctx),
-            stores=Stores(put_cir=ctx.put_cir, put_asset=ctx.put_asset),
+            stores=Stores(put_cir=ctx.put_cir, put_asset=ctx.put_asset, get_cir=get_cir),
+            convert=saved_runs(convert_run, get_cir, ctx.put_cir, deadline),
+            deadline=deadline,
             folder=ctx.folder,
             critical_field_patterns=tuple(
                 pipeline_config.get(ctx.session, "critical_field_patterns", default=[]) or []
@@ -58,5 +75,7 @@ def process_a1_document(
             ),
             **common_options(ctx),
         )
+        ctx.cir.delete_prefix(ctx.prefix + WORK)
+        return processed
 
     return run_document(session, minio, doc_id, Route.A1, PARSER_VERSION, a1, indexer)

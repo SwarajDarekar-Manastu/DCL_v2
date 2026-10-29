@@ -176,7 +176,7 @@ def test_only_existing_task_modules_are_included(monkeypatch):
     assert celery_app.present_task_modules() == ["backend.celery_redis.tasks_sync"]
 
 
-def test_beat_schedule_runs_sync_on_io_light_and_the_benchmark_sweep_on_its_queue_in_local_time():
+def test_beat_schedule_runs_on_io_light_in_local_time():
     from celery.schedules import crontab
 
     schedule = celery_app.app.conf.beat_schedule
@@ -189,10 +189,9 @@ def test_beat_schedule_runs_sync_on_io_light_and_the_benchmark_sweep_on_its_queu
         "dcl.process.dispatch",
         "dcl.process.reconcile",
         "dcl.process.sweep_documents",
-        "dcl.benchmark.sweep",
+        "dcl.benchmark.tick",
     }
     queues = {name: e["options"]["queue"] for name, e in schedule.items()}
-    assert queues.pop("benchmark-sweep") == "benchmark"
     assert set(queues.values()) == {"io_light"}
     daily = schedule["sync-delta-all-daily"]["schedule"]
     assert isinstance(daily, crontab) and daily.hour == {2} and daily.minute == {0}

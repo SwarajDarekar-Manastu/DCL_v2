@@ -25,6 +25,7 @@ from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 
+from backend.common.parallel import check, map_parallel
 from backend.dispatcher.contract import (
     DocumentFields,
     Flag,
@@ -43,6 +44,7 @@ from backend.postgres.enums import AssetKind, FlagSeverity, FlagType, NodeSource
 from backend.routes.a1_office.assets import image_fields
 from backend.routes.a1_office.convert import (
     ENRICHMENT_MAX,
+    WORK,
     EnrichmentBudget,
     OcrPlan,
     Run,
@@ -82,10 +84,12 @@ log = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class Stores:
     """Where the route writes: `put_cir(relative_key, bytes) -> uri` under the document's CIR prefix and
-    `put_asset(key, bytes) -> uri` in dcl-assets (S1's BucketStore in the workers)."""
+    `put_asset(key, bytes) -> uri` in dcl-assets (S1's BucketStore in the workers); `get_cir` reads back what
+    an earlier turn of the task saved (common/parallel.py)."""
 
     put_cir: Callable[[str, bytes], str]
     put_asset: Callable[[str, bytes], str]
+    get_cir: Callable[[str], bytes | None] = lambda key: None
 
 
 def _strip_nul(value):
@@ -172,9 +176,12 @@ def process_pdf(
     engine_by_script: dict[str, str] | None = None,
     convert: Callable[..., RunResult] = convert_run,
     enrichment_max: int = ENRICHMENT_MAX,
+    deadline: float | None = None,
 ) -> ProcessedDocument:
     """`enrichment_max`: pipeline_config `routes.A1.formula_enrichment_max` (formula and code items per
-    document sent to Docling's CodeFormula model; the rest keep their layout text and are flagged)."""
+    document sent to Docling's CodeFormula model; the rest keep their layout text and are flagged).
+    `deadline`: the end of the task's turn (common/parallel.py). Model calls are made side by side; page
+    renders are saved, and `convert` keeps its runs (convert.saved_runs): a later turn goes on from them."""
     cir_uri = f"s3://dcl-cir/{blob_sha256}/A1/v{PARSER_VERSION}/"
     clock = StageClock()
     try:
@@ -192,6 +199,7 @@ def process_pdf(
             doc_id=doc_id,
             cloud_allowed=cloud_allowed,
             engine_by_script=engine_by_script,
+            deadline=deadline,
         )
     by_page = {d.page_no: d for d in decisions}
 
@@ -235,43 +243,54 @@ def process_pdf(
     assets: list[ProcessedAsset] = []
 
     render_started = time.monotonic()
-    page_uris: dict[int, str] = {}
-    for page_no in range(1, checked.page_count + 1):
-        png = render_page(pdf, page_no, dpi=RENDER_DPI)
-        page_uris[page_no] = stores.put_asset(f"pages/{blob_sha256}/{page_no:04d}.png", png)
-        assets.append(
-            ProcessedAsset(
-                ref=f"page:{page_no}",
-                kind=AssetKind.PAGE_RENDER,
-                minio_uri=page_uris[page_no],
-                page_no=page_no,
-                **image_fields(png),
+    renders_key = f"{WORK}renders-{RENDER_DPI}.json"
+    if (saved := stores.get_cir(renders_key)) is not None:
+        assets += [ProcessedAsset.model_validate(a) for a in json.loads(saved)]
+    else:
+        for page_no in range(1, checked.page_count + 1):
+            png = render_page(pdf, page_no, dpi=RENDER_DPI)
+            uri = stores.put_asset(f"pages/{blob_sha256}/{page_no:04d}.png", png)
+            assets.append(
+                ProcessedAsset(
+                    ref=f"page:{page_no}",
+                    kind=AssetKind.PAGE_RENDER,
+                    minio_uri=uri,
+                    page_no=page_no,
+                    **image_fields(png),
+                )
             )
-        )
+        stores.put_cir(renders_key, json.dumps([a.model_dump(mode="json") for a in assets]).encode())
+    page_uris = {a.page_no: a.minio_uri for a in assets}
     clock.add("page_renders", time.monotonic() - render_started)
+    check(deadline)
 
     critical = [re.compile(p, re.IGNORECASE) for p in critical_field_patterns]
     read_whole = sorted(set(still_low) | {d.page_no for d in decisions if d.read_whole})
     transcribe_started = time.monotonic()
-    for page_no in read_whole:
-        reading = None
-        if cloud_allowed:
-            image = Image(render_page(pdf, page_no, dpi=200), "image/png")
-            try:
-                output = vision.transcribe_page(
-                    image,
-                    context=context,
-                    language_hint=by_page[page_no].language,
-                    doc_id=doc_id,
-                    anchor=f"page:{page_no}:",
-                )
-                reading = output.reading
-                stores.put_cir(
-                    f"pages/{page_no}.reading.json",
-                    reading_record(page_no, reading, output.model, output.prompt_version),
-                )
-            except GeminiError as exc:  # e.g. a safety block on propellant chemistry: keep the OCR text
-                log.warning("transcribe_page failed on page %s of %s: %s", page_no, file_name, exc)
+
+    def transcribe(page_no: int):
+        image = Image(render_page(pdf, page_no, dpi=200), "image/png")
+        try:
+            output = vision.transcribe_page(
+                image,
+                context=context,
+                language_hint=by_page[page_no].language,
+                doc_id=doc_id,
+                anchor=f"page:{page_no}:",
+            )
+        except GeminiError as exc:  # e.g. a safety block on propellant chemistry: keep the OCR text
+            log.warning("transcribe_page failed on page %s of %s: %s", page_no, file_name, exc)
+            return None
+        stores.put_cir(
+            f"pages/{page_no}.reading.json",
+            reading_record(page_no, output.reading, output.model, output.prompt_version),
+        )
+        return output.reading
+
+    readings = (
+        map_parallel(transcribe, read_whole, deadline=deadline) if cloud_allowed else [None] * len(read_whole)
+    )
+    for page_no, reading in zip(read_whole, readings, strict=True):
         if reading is not None:
             keep = [n for n in nodes if n.page_no != page_no]
             crumb = next(
@@ -328,6 +347,7 @@ def process_pdf(
             doc_id=doc_id,
             cloud_allowed=cloud_allowed,
             put_asset=stores.put_asset,
+            deadline=deadline,
         )
     with clock("tables"):
         tables = check_tables(
@@ -338,6 +358,7 @@ def process_pdf(
             context=context,
             doc_id=doc_id,
             cloud_allowed=cloud_allowed,
+            deadline=deadline,
         )
     with clock("table_crops"):
         cropped = table_crops(

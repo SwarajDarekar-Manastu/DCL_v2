@@ -13,6 +13,7 @@
 """
 
 import io
+import threading
 import unicodedata
 from dataclasses import dataclass, field
 
@@ -24,6 +25,7 @@ GARBAGE_MAX_RATIO = 0.40
 WINDOW_PAGES = 100
 WINDOWED_ABOVE_PAGES = 400
 BAD_CATEGORIES = frozenset({"Co", "Cn", "Cs", "Cc"})
+PDFIUM = threading.Lock()  # pdfium is not thread-safe: renders for model calls made side by side take turns
 
 
 class PreflightFailure(ValueError):
@@ -174,34 +176,36 @@ def render_page(
     pdf_bytes: bytes, page_no: int, *, long_side_px: int | None = None, dpi: int | None = None
 ) -> bytes:
     """PNG of one page: thumbnail by long side (triage 768 px) or render at a dpi (150 assets, 300 crops)."""
-    document = pdfium.PdfDocument(pdf_bytes)
-    try:
-        page = document[page_no - 1]
-        width, height = page.get_size()
-        if long_side_px is not None:
-            scale = long_side_px / max(width, height)
-        else:
-            scale = (dpi or 150) / 72
-        image = page.render(scale=scale).to_pil()
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG")
-        return buffer.getvalue()
-    finally:
-        document.close()
+    with PDFIUM:
+        document = pdfium.PdfDocument(pdf_bytes)
+        try:
+            page = document[page_no - 1]
+            width, height = page.get_size()
+            if long_side_px is not None:
+                scale = long_side_px / max(width, height)
+            else:
+                scale = (dpi or 150) / 72
+            image = page.render(scale=scale).to_pil()
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            return buffer.getvalue()
+        finally:
+            document.close()
 
 
 def render_crop(pdf_bytes: bytes, box, *, dpi: int = 300, pad_px: int = 20) -> bytes:
     """PNG of a region (`PageBox`, 0..1 top-left) at `dpi` with `pad_px` padding, for Gemini (A1.3, A1.7)."""
-    document = pdfium.PdfDocument(pdf_bytes)
-    try:
-        image = document[box.page_no - 1].render(scale=dpi / 72).to_pil()
-        width, height = image.size
-        left = max(0, int(box.x0 * width) - pad_px)
-        top = max(0, int(box.y0 * height) - pad_px)
-        right = min(width, int(box.x1 * width) + pad_px)
-        bottom = min(height, int(box.y1 * height) + pad_px)
-        buffer = io.BytesIO()
-        image.crop((left, top, max(right, left + 1), max(bottom, top + 1))).save(buffer, format="PNG")
-        return buffer.getvalue()
-    finally:
-        document.close()
+    with PDFIUM:
+        document = pdfium.PdfDocument(pdf_bytes)
+        try:
+            image = document[box.page_no - 1].render(scale=dpi / 72).to_pil()
+            width, height = image.size
+            left = max(0, int(box.x0 * width) - pad_px)
+            top = max(0, int(box.y0 * height) - pad_px)
+            right = min(width, int(box.x1 * width) + pad_px)
+            bottom = min(height, int(box.y1 * height) + pad_px)
+            buffer = io.BytesIO()
+            image.crop((left, top, max(right, left + 1), max(bottom, top + 1))).save(buffer, format="PNG")
+            return buffer.getvalue()
+        finally:
+            document.close()

@@ -55,8 +55,8 @@ BEAT_SCHEDULE: dict[str, dict] = {
         "options": {"queue": str(Queue.IO_LIGHT)},
     },
     "benchmark-sweep": {
-        "task": "dcl.benchmark.sweep",
+        "task": "dcl.benchmark.tick",
         "schedule": 60.0,
-        "options": {"queue": str(Queue.BENCHMARK)},
+        "options": {"queue": str(Queue.IO_LIGHT)},
     },
 }

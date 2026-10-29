@@ -20,6 +20,7 @@ run: Tesseract for Latin, Cyrillic, Devanagari and Arabic; RapidOCR for CJK
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from backend.common.parallel import map_parallel
 from backend.llm_engine.gemini_types import Image
 from backend.llm_engine.vision.schemas import PageTriage, PageType, Script
 from backend.routes.a1_office.preflight import Preflight, render_page
@@ -95,22 +96,30 @@ def triage_pages(
     doc_id: str | None = None,
     cloud_allowed: bool = True,
     engine_by_script: Mapping[str, str] | None = None,
+    deadline: float | None = None,
 ) -> list[PageDecision]:
-    """One decision per page; `vision` is a VisionService (cached, logged)."""
+    """One decision per page; `vision` is a VisionService (cached, logged). The pages are read side by side
+    (common/parallel.py); past `deadline` the task's turn ends."""
     table = {**DEFAULT_OCR_ENGINE_BY_SCRIPT, **(engine_by_script or {})}
+
+    def read(signals):
+        thumbnail = render_page(preflight.pdf_bytes, signals.page_no, long_side_px=THUMBNAIL_LONG_SIDE_PX)
+        return vision.triage_page(
+            Image(thumbnail, "image/png"),
+            context=f"{context} · page {signals.page_no} of {preflight.page_count}",
+            doc_id=doc_id,
+            anchor=f"page:{signals.page_no}:",
+        )
+
+    outputs = (
+        map_parallel(read, preflight.pages, deadline=deadline)
+        if cloud_allowed
+        else [None] * len(preflight.pages)
+    )
     decisions = []
-    for signals in preflight.pages:
-        reading: PageTriage | None = None
-        prompt_version = None
-        if cloud_allowed:
-            thumbnail = render_page(preflight.pdf_bytes, signals.page_no, long_side_px=THUMBNAIL_LONG_SIDE_PX)
-            output = vision.triage_page(
-                Image(thumbnail, "image/png"),
-                context=f"{context} · page {signals.page_no} of {preflight.page_count}",
-                doc_id=doc_id,
-                anchor=f"page:{signals.page_no}:",
-            )
-            reading, prompt_version = output.reading, output.prompt_version
+    for signals, output in zip(preflight.pages, outputs, strict=True):
+        reading: PageTriage | None = output.reading if output else None
+        prompt_version = output.prompt_version if output else None
         page_type = combine(reading, signals.image_only)
         script = reading.script if reading else None
         decisions.append(

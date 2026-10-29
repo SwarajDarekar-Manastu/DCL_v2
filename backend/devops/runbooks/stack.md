@@ -87,7 +87,7 @@ docker compose -p dcl-v2 exec open-webui curl -fsS http://api:8200/healthz
 
 ## Benchmark worker (benchmark)
 
-`worker-benchmark` runs `dcl.benchmark.*` (S2's runner) with the Answer Engine in process: one prefork child, soft limit 950 s, hard limit 1000 s, 2 GB, child recycled past 1.5 GB. Beat sends `dcl.benchmark.sweep` to it every 60 s. A case that hits the hard limit is killed and redelivered; after `MAX_DELIVERIES` it is dead-lettered. Benchmark load never waits behind sync work on `io_light`.
+`worker-benchmark` runs `dcl.benchmark.*` (S2's runner) with the Answer Engine in process: one prefork child, soft limit 950 s, hard limit 1000 s, 2 GB, child recycled past 1.5 GB. Every 60 s beat runs `dcl.benchmark.tick` on `io_light`, which sends one `dcl.benchmark.sweep` when nothing waits on the `benchmark` queue, so a stopped worker comes back to one sweep, not one per minute it was away. A case that hits the hard limit is killed and redelivered; after `MAX_DELIVERIES` it is dead-lettered. Benchmark load never waits behind sync work on `io_light`.
 
 ```bash
 docker compose -p dcl-v2 logs --since 10m worker-benchmark
@@ -97,3 +97,5 @@ docker compose -p dcl-v2 exec worker-benchmark celery -A backend.celery_redis.ap
 ## Parse workers (cpu_parse)
 
 `worker-cpu-parse` runs the `parse` image: Docling, RapidOCR (models baked in) and Tesseract with OSD and the Latin, Cyrillic, Devanagari and Arabic script models, on CPU torch. Docling's layout and TableFormer models download into the `hf-cache` volume on first use with `HF_HUB_DISABLE_XET=1`, because Xet downloads stall on this network. The first conversion after a fresh volume takes about a minute longer.
+
+Large files go through in turns (`backend/common/parallel.py`, `route_a1`): a Route A1 task makes its model calls 8 at a time and works for 30 minutes (`A1_TURN_S`). A file not done by then keeps what it finished under the CIR's `work/` (Docling runs of at most 100 pages, the page renders; model replies are in the read cache) and is sent to the back of `cpu_parse`, so the files waiting behind it run first. It stays PROCESSING and shows on the Ops page as "In line". After 12 turns the last one runs to the end. `work/` is emptied when the file starts and when its route finishes.

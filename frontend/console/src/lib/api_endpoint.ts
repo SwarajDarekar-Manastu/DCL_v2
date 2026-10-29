@@ -65,6 +65,8 @@ export type AssetUrl = Schemas['AssetUrl'];
 export type FailedTask = Schemas['FailedTask'];
 export type FailedTasks = Schemas['FailedTasks'];
 export type OpsSummary = Schemas['OpsSummary'];
+export type Step = Schemas['Step'];
+export type StepFiles = Schemas['StepFiles'];
 export type LlmUsage = Schemas['LlmUsage'];
 
 /** backend/review/api_models.py and backend/dispatcher/contract.py (S1) */
@@ -328,6 +330,7 @@ export const rollbackSettings = (body: ConfigRollback) => request<ConfigApplied>
 export const getOpsSummary = () => request<OpsSummary>('GET', '/ops/summary');
 export const getLlmUsage = (days = 7) => request<LlmUsage>('GET', `/ops/llm-usage${query({ days })}`);
 export const listFailedTasks = (limit = 100) => request<FailedTasks>('GET', `/ops/failed-tasks${query({ limit })}`);
+export const getStepFiles = (step: Step, limit = 500) => request<StepFiles>('GET', `/ops/steps/${step}${query({ limit })}`);
 
 // ---------------------------------------------------------------- benchmark (backend/api/benchmark.py)
 

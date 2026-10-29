@@ -26,18 +26,23 @@ Second pass (A1.3): a scanned page whose `ocr_score` stays below 0.6 is converte
 its script is Latin; a page that is still low goes whole to `transcribe_page` (Gemini, any script).
 """
 
+import gzip
 import io
+import json
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
+from backend.common.parallel import check
 from backend.routes.a1_office.triage import PageDecision
 
 LOW_OCR_SCORE = 0.6
+MAX_RUN_PAGES = 100  # each run is saved when done, so a task's turn can end between runs (common/parallel.py)
+WORK = "work/"  # what one processing of a file keeps between its turns; cleared when it starts and ends
 TESSERACT_SCRIPT_MODELS = {  # the parse image ships Tesseract script models (S4), one per script group
     "latin": "Latin",
     "cyrillic": "Cyrillic",
@@ -91,8 +96,9 @@ def engine_languages(engine: str, language: str | None, script: str | None = Non
     return tuple(chosen)
 
 
-def plan_runs(decisions: Iterable[PageDecision]) -> list[Run]:
-    """Contiguous pages with the same plan form one run; blank pages stay in the surrounding run."""
+def plan_runs(decisions: Iterable[PageDecision], max_pages: int = MAX_RUN_PAGES) -> list[Run]:
+    """Contiguous pages with the same plan form one run of at most `max_pages`; blank pages stay in the
+    surrounding run. Docling reads page by page, so where a run ends does not change what it reads."""
     runs: list[Run] = []
     for decision in sorted(decisions, key=lambda d: d.page_no):
         plan = (
@@ -102,7 +108,8 @@ def plan_runs(decisions: Iterable[PageDecision]) -> list[Run]:
             if decision.ocr_engine
             else None
         )
-        if runs and runs[-1].ocr == plan and runs[-1].last == decision.page_no - 1:
+        last = runs[-1] if runs else None
+        if last and last.ocr == plan and last.last == decision.page_no - 1 and len(last.pages) < max_pages:
             runs[-1] = Run(runs[-1].first, decision.page_no, plan)
         else:
             runs.append(Run(decision.page_no, decision.page_no, plan))
@@ -240,6 +247,55 @@ def convert_run(pdf_bytes: bytes, run: Run, name: str = "document.pdf") -> RunRe
     )
     pages = result.confidence.model_dump(mode="json").get("pages", {}) if result.confidence else {}
     return RunResult(run, result.document, {int(k): v for k, v in pages.items()}, _timings(result))
+
+
+def run_key(run: Run) -> str:
+    plan = f"{run.ocr.engine}-{'+'.join(run.ocr.languages)}" if run.ocr else "text"
+    return f"{WORK}runs/{run.first:04d}-{run.last:04d}-{plan}.json.gz"
+
+
+def dump_run(result: RunResult) -> bytes:
+    return gzip.compress(
+        json.dumps(
+            {
+                "document": result.document.export_to_dict(),
+                "page_confidence": result.page_confidence,
+                "timings": result.timings,
+            }
+        ).encode()
+    )
+
+
+def load_run(run: Run, data: bytes) -> RunResult:
+    from docling_core.types.doc import DoclingDocument
+
+    saved = json.loads(gzip.decompress(data))
+    document = DoclingDocument.model_validate(saved["document"])
+    confidence = {int(page): scores for page, scores in saved["page_confidence"].items()}
+    return RunResult(run, document, confidence, saved["timings"])
+
+
+def saved_runs(
+    convert: Callable[..., RunResult],
+    get: Callable[[str], bytes | None],
+    put: Callable[[str, bytes], str],
+    deadline: float | None = None,
+    load: Callable[[Run, bytes], RunResult] = load_run,
+    dump: Callable[[RunResult], bytes] = dump_run,
+) -> Callable[..., RunResult]:
+    """`convert` keeping each run in the CIR (`work/runs/…`): a document whose task's turn ended between
+    runs goes on from the runs already done. A new run starts only within the turn (`deadline`)."""
+
+    def run(pdf_bytes: bytes, plan: Run, name: str = "document.pdf") -> RunResult:
+        key = run_key(plan)
+        if (data := get(key)) is not None:
+            return load(plan, data)
+        check(deadline)
+        result = convert(pdf_bytes, plan, name)
+        put(key, dump(result))
+        return result
+
+    return run
 
 
 def low_ocr_pages(result: RunResult) -> list[int]:
